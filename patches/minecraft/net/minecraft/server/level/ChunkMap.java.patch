@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
+@@ -46,6 +_,8 @@
+ import java.util.function.Supplier;
+ import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+ import net.minecraft.CrashReport;
+ import net.minecraft.CrashReportCategory;
+ import net.minecraft.ReportedException;
 @@ -385,6 +_,7 @@
              this.f_140140_ = true;
           }
@@ -64,3 +73,12 @@
     }
  
     protected PoiManager m_140424_() {
+@@ -1270,7 +_,7 @@
+       final Entity f_140472_;
+       private final int f_140473_;
+       SectionPos f_140474_;
+-      private final Set<ServerPlayerConnection> f_140475_ = Sets.newIdentityHashSet();
++      private final Set<ServerPlayerConnection> f_140475_ = new ReferenceOpenHashSet<>(); // Paper - optimise map impl
+ 
+       public TrackedEntity(Entity p_140478_, int p_140479_, int p_140480_, boolean p_140481_) {
+          this.f_140471_ = new ServerEntity(ChunkMap.this.f_140133_, p_140478_, p_140480_, p_140481_, this::m_140489_);

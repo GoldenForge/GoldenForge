@@ -1,0 +1,11 @@
+--- a/net/minecraft/server/players/GameProfileCache.java
++++ b/net/minecraft/server/players/GameProfileCache.java
+@@ -164,7 +_,7 @@
+          } else {
+             this.f_143957_.put(p_143968_, CompletableFuture.supplyAsync(() -> {
+                return this.m_10996_(p_143968_);
+-            }, Util.m_183991_()).whenCompleteAsync((p_143965_, p_143966_) -> {
++            }, Util.PROFILE_EXECUTOR).whenCompleteAsync((optional, throwable) -> { // Paper - not a good idea to use BLOCKING OPERATIONS on the worldgen executor
+                this.f_143957_.remove(p_143968_);
+             }, this.f_143958_).whenCompleteAsync((p_143978_, p_143979_) -> {
+                p_143969_.accept(p_143978_);

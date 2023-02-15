@@ -1,0 +1,37 @@
+--- a/net/minecraft/network/Varint21FrameDecoder.java
++++ b/net/minecraft/network/Varint21FrameDecoder.java
+@@ -8,19 +_,29 @@
+ import java.util.List;
+ 
+ public class Varint21FrameDecoder extends ByteToMessageDecoder {
++   private final byte[] lenBuf = new byte[3]; // Paper
+    protected void decode(ChannelHandlerContext p_130566_, ByteBuf p_130567_, List<Object> p_130568_) {
++      // Paper start - if channel is not active just discard the packet
++      if (!p_130566_.channel().isActive()) {
++         p_130567_.skipBytes(p_130567_.readableBytes());
++         return;
++      }
++      // Paper end
+       p_130567_.markReaderIndex();
+-      byte[] abyte = new byte[3];
++      // Paper start - reuse temporary length buffer
++      byte[] bs = lenBuf;
++      java.util.Arrays.fill(bs, (byte) 0);
++      // Paper end
+ 
+-      for(int i = 0; i < abyte.length; ++i) {
++      for(int i = 0; i < bs.length; ++i) {
+          if (!p_130567_.isReadable()) {
+             p_130567_.resetReaderIndex();
+             return;
+          }
+ 
+-         abyte[i] = p_130567_.readByte();
+-         if (abyte[i] >= 0) {
+-            FriendlyByteBuf friendlybytebuf = new FriendlyByteBuf(Unpooled.wrappedBuffer(abyte));
++         bs[i] = p_130567_.readByte();
++         if (bs[i] >= 0) {
++            FriendlyByteBuf friendlybytebuf = new FriendlyByteBuf(Unpooled.wrappedBuffer(bs));
+ 
+             try {
+                int j = friendlybytebuf.m_130242_();

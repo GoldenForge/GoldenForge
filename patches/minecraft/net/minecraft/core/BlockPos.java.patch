@@ -1,0 +1,101 @@
+--- a/net/minecraft/core/BlockPos.java
++++ b/net/minecraft/core/BlockPos.java
+@@ -123,56 +_,85 @@
+       }
+    }
+ 
++   @Override
+    public BlockPos m_7494_() {
+-      return this.m_121945_(Direction.UP);
++      return new BlockPos(this.m_123341_(), this.m_123342_() + 1, this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_6630_(int p_121972_) {
+-      return this.m_5484_(Direction.UP, p_121972_);
++      return p_121972_ == 0 ? this : new BlockPos(this.m_123341_(), this.m_123342_() + p_121972_, this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_7495_() {
+-      return this.m_121945_(Direction.DOWN);
++      return new BlockPos(this.m_123341_(), this.m_123342_() - 1, this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_6625_(int p_122000_) {
+-      return this.m_5484_(Direction.DOWN, p_122000_);
++      return p_122000_ == 0 ? this : new BlockPos(this.m_123341_(), this.m_123342_() - p_122000_, this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122012_() {
+-      return this.m_121945_(Direction.NORTH);
++      return new BlockPos(this.m_123341_(), this.m_123342_(), this.m_123343_() - 1); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122013_(int p_122014_) {
+-      return this.m_5484_(Direction.NORTH, p_122014_);
++      return p_122014_ == 0 ? this : new BlockPos(this.m_123341_(), this.m_123342_(), this.m_123343_() - p_122014_); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122019_() {
+-      return this.m_121945_(Direction.SOUTH);
++      return new BlockPos(this.m_123341_(), this.m_123342_(), this.m_123343_() + 1); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122020_(int p_122021_) {
+-      return this.m_5484_(Direction.SOUTH, p_122021_);
++      return p_122021_ == 0 ? this : new BlockPos(this.m_123341_(), this.m_123342_(), this.m_123343_() + p_122021_); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122024_() {
+-      return this.m_121945_(Direction.WEST);
++      return new BlockPos(this.m_123341_() - 1, this.m_123342_(), this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122025_(int p_122026_) {
+-      return this.m_5484_(Direction.WEST, p_122026_);
++      return p_122026_ == 0 ? this : new BlockPos(this.m_123341_() - p_122026_, this.m_123342_(), this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122029_() {
+-      return this.m_121945_(Direction.EAST);
++      return new BlockPos(this.m_123341_() + 1, this.m_123342_(), this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
++   @Override
+    public BlockPos m_122030_(int p_122031_) {
+-      return this.m_5484_(Direction.EAST, p_122031_);
++      return p_122031_ == 0 ? this : new BlockPos(this.m_123341_() + p_122031_, this.m_123342_(), this.m_123343_()); // Paper - Optimize BlockPosition
+    }
+ 
+    public BlockPos m_121945_(Direction p_121946_) {
+-      return new BlockPos(this.m_123341_() + p_121946_.m_122429_(), this.m_123342_() + p_121946_.m_122430_(), this.m_123343_() + p_121946_.m_122431_());
++      // Paper Start - Optimize BlockPosition
++      switch(p_121946_) {
++         case UP:
++            return new BlockPos(this.m_123341_(), this.m_123342_() + 1, this.m_123343_());
++         case DOWN:
++            return new BlockPos(this.m_123341_(), this.m_123342_() - 1, this.m_123343_());
++         case NORTH:
++            return new BlockPos(this.m_123341_(), this.m_123342_(), this.m_123343_() - 1);
++         case SOUTH:
++            return new BlockPos(this.m_123341_(), this.m_123342_(), this.m_123343_() + 1);
++         case WEST:
++            return new BlockPos(this.m_123341_() - 1, this.m_123342_(), this.m_123343_());
++         case EAST:
++            return new BlockPos(this.m_123341_() + 1, this.m_123342_(), this.m_123343_());
++         default:
++            return new BlockPos(this.m_123341_() + p_121946_.m_122429_(), this.m_123342_() + p_121946_.m_122430_(), this.m_123343_() + p_121946_.m_122431_());
++      }
++      // Paper End
+    }
+ 
+    public BlockPos m_5484_(Direction p_121948_, int p_121949_) {

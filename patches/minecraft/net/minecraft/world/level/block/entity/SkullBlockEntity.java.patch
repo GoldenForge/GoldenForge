@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/block/entity/SkullBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/SkullBlockEntity.java
+@@ -116,7 +_,7 @@
+    public static void m_155738_(@Nullable GameProfile p_155739_, Consumer<GameProfile> p_155740_) {
+       if (p_155739_ != null && !StringUtil.m_14408_(p_155739_.getName()) && (!p_155739_.isComplete() || !p_155739_.getProperties().containsKey("textures")) && f_59755_ != null && f_59756_ != null) {
+          f_59755_.m_143967_(p_155739_.getName(), (p_182470_) -> {
+-            Util.m_183991_().execute(() -> {
++            Util.PROFILE_EXECUTOR.execute(() -> { // Paper - not a good idea to use BLOCKING OPERATIONS on the worldgen executor
+                Util.m_137521_(p_182470_, (p_182479_) -> {
+                   Property property = Iterables.getFirst(p_182479_.getProperties().get("textures"), (Property)null);
+                   if (property == null) {

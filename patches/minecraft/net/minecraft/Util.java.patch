@@ -1,5 +1,29 @@
 --- a/net/minecraft/Util.java
 +++ b/net/minecraft/Util.java
+@@ -81,6 +_,23 @@
+    private static final AtomicInteger f_137442_ = new AtomicInteger(1);
+    private static final ExecutorService f_137443_ = m_137477_("Bootstrap");
+    private static final ExecutorService f_137444_ = m_137477_("Main");
++
++   // Paper start - don't submit BLOCKING PROFILE LOOKUPS to the world gen thread
++   public static final ExecutorService PROFILE_EXECUTOR = Executors.newFixedThreadPool(2, new java.util.concurrent.ThreadFactory() {
++
++      private final AtomicInteger count = new AtomicInteger();
++
++      @Override
++      public Thread newThread(Runnable run) {
++         Thread ret = new Thread(run);
++         ret.setName("Profile Lookup Executor #" + this.count.getAndIncrement());
++         ret.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -> {
++            f_137446_.error("Uncaught exception in thread " + thread.getName(), throwable);
++         });
++         return ret;
++      }
++   });
++   // Paper end - don't submit BLOCKING PROFILE LOOKUPS to the world gen thread
+    private static final ExecutorService f_137445_ = m_137586_();
+    private static final DateTimeFormatter f_241646_ = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", Locale.ROOT);
+    public static TimeSource.NanoTimeSource f_137440_ = System::nanoTime;
 @@ -170,6 +_,11 @@
        return 255;
     }
@@ -21,13 +45,41 @@
           if (SharedConstants.f_136183_) {
              throw illegalargumentexception;
           }
-@@ -692,7 +_,8 @@
+@@ -692,30 +_,31 @@
  
     public static <T, R> Function<T, R> m_143827_(final Function<T, R> p_143828_) {
        return new Function<T, R>() {
 -         private final Map<T, R> f_211548_ = Maps.newHashMap();
 +         // FORGE: Allow using memoized functions from multiple threads.
-+         private final Map<T, R> f_211548_ = Maps.newConcurrentMap();
++         private final Map<T, R> f_214693_ = Maps.newConcurrentMap();
  
           public R apply(T p_214691_) {
-             return this.f_211548_.computeIfAbsent(p_214691_, p_143828_);
+-            return this.f_211548_.computeIfAbsent(p_214691_, p_143828_);
++            return this.f_214693_.computeIfAbsent(p_214691_, p_143828_);
+          }
+ 
+          public String toString() {
+-            return "memoize/1[function=" + p_143828_ + ", size=" + this.f_211548_.size() + "]";
++            return "memoize/1[function=" + p_143828_ + ", size=" + this.f_214693_.size() + "]";
+          }
+       };
+    }
+ 
+    public static <T, U, R> BiFunction<T, U, R> m_143821_(final BiFunction<T, U, R> p_143822_) {
+       return new BiFunction<T, U, R>() {
+-         private final Map<Pair<T, U>, R> f_214693_ = Maps.newHashMap();
++         private final Map<Pair<T, U>, R> cache = Maps.newHashMap();
+ 
+          public R apply(T p_214700_, U p_214701_) {
+-            return this.f_214693_.computeIfAbsent(Pair.of(p_214700_, p_214701_), (p_214698_) -> {
++            return this.cache.computeIfAbsent(Pair.of(p_214700_, p_214701_), (p_214698_) -> {
+                return p_143822_.apply(p_214698_.getFirst(), p_214698_.getSecond());
+             });
+          }
+ 
+          public String toString() {
+-            return "memoize/2[function=" + p_143822_ + ", size=" + this.f_214693_.size() + "]";
++            return "memoize/2[function=" + p_143822_ + ", size=" + this.cache.size() + "]";
+          }
+       };
+    }

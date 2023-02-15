@@ -1,22 +1,214 @@
 --- a/net/minecraft/network/Connection.java
 +++ b/net/minecraft/network/Connection.java
-@@ -82,6 +_,7 @@
+@@ -31,12 +_,15 @@
+ import java.util.concurrent.RejectedExecutionException;
+ import javax.annotation.Nullable;
+ import javax.crypto.Cipher;
++
++import io.netty.util.concurrent.AbstractEventExecutor;
+ import net.minecraft.Util;
+ import net.minecraft.network.chat.Component;
+ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.PacketFlow;
+ import net.minecraft.network.protocol.game.ClientboundDisconnectPacket;
+ import net.minecraft.network.protocol.login.ClientboundLoginDisconnectPacket;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.RunningOnDifferentThreadException;
+ import net.minecraft.util.LazyLoadedValue;
+ import net.minecraft.util.Mth;
+@@ -82,6 +_,64 @@
     private float f_129477_;
     private int f_129478_;
     private boolean f_129479_;
 +   private java.util.function.Consumer<Connection> activationHandler;
++
++   // Optimize network
++   volatile boolean canFlush = true;
++   public boolean preparing = true;
++   public boolean isPending = true;
++   public boolean queueImmunity = false;
++   public ConnectionProtocol protocol;
++   private final java.util.concurrent.atomic.AtomicInteger packetWrites = new java.util.concurrent.atomic.AtomicInteger();
++   private int flushPacketsStart;
++   private final Object flushLock = new Object();
++
++   public void disableAutomaticFlush() {
++      synchronized (this.flushLock) {
++         this.flushPacketsStart = this.packetWrites.get(); // must be volatile and before canFlush = false
++         this.canFlush = false;
++      }
++   }
++
++   public void enableAutomaticFlush() {
++      synchronized (this.flushLock) {
++         this.canFlush = true;
++         if (this.packetWrites.get() != this.flushPacketsStart) { // must be after canFlush = true
++            this.flush(); // only make the flush call if we need to
++         }
++      }
++   }
++
++   private final void flush() {
++      if (this.f_129468_.eventLoop().inEventLoop()) {
++         this.f_129468_.flush();
++      } else {
++         this.f_129468_.eventLoop().execute(() -> {
++            this.f_129468_.flush();
++         });
++      }
++   }
++   private final Queue<Runnable> pendingTasks = new java.util.concurrent.ConcurrentLinkedQueue<>();
++   public void execute(final Runnable run) {
++      if (this.f_129468_ == null || !this.f_129468_.isRegistered()) {
++         run.run();
++         return;
++      }
++      final boolean queue = !this.f_129467_.isEmpty();
++      if (!queue) {
++         this.f_129468_.eventLoop().execute(run);
++      } else {
++         this.pendingTasks.add(run);
++         if (this.f_129467_.isEmpty()) {
++            // something flushed async, dump tasks now
++            Runnable r;
++            while ((r = this.pendingTasks.poll()) != null) {
++               this.f_129468_.eventLoop().execute(r);
++            }
++         }
++      }
++   }
++   // Paper end
  
     public Connection(PacketFlow p_129482_) {
        this.f_129466_ = p_129482_;
-@@ -91,6 +_,7 @@
+@@ -91,6 +_,10 @@
        super.channelActive(p_129525_);
        this.f_129468_ = p_129525_.channel();
        this.f_129469_ = this.f_129468_.remoteAddress();
++      // Spigot Start
++      this.preparing = false;
++      // Spigot End
 +      if (activationHandler != null) activationHandler.accept(this);
  
        try {
           this.m_129498_(ConnectionProtocol.HANDSHAKING);
-@@ -186,7 +_,7 @@
+@@ -101,6 +_,7 @@
+    }
+ 
+    public void m_129498_(ConnectionProtocol p_129499_) {
++      protocol = p_129499_; // Paper
+       this.f_129468_.attr(f_129461_).set(p_129499_);
+       this.f_129468_.config().setAutoRead(true);
+       f_129465_.debug("Enabled auto read");
+@@ -166,46 +_,144 @@
+       this.f_129470_ = p_129506_;
+    }
+ 
++   // Paper start
++   public @Nullable net.minecraft.server.level.ServerPlayer getPlayer() {
++      if (f_129470_ instanceof net.minecraft.server.network.ServerGamePacketListenerImpl serverGamePacketListener) {
++         return serverGamePacketListener.f_9743_;
++      } else {
++         return null;
++      }
++   }
++   private static class InnerUtil { // Attempt to hide these methods from ProtocolLib so it doesn't accidently pick them up.
++      private static java.util.List<Packet> buildExtraPackets(Packet packet) {
++         java.util.List<Packet> extra = packet.getExtraPackets();
++         if (extra == null || extra.isEmpty()) {
++            return null;
++         }
++         java.util.List<Packet> ret = new java.util.ArrayList<>(1 + extra.size());
++         buildExtraPackets0(extra, ret);
++         return ret;
++      }
++
++      private static void buildExtraPackets0(java.util.List<Packet> extraPackets, java.util.List<Packet> into) {
++         for (Packet extra : extraPackets) {
++            into.add(extra);
++            java.util.List<Packet> extraExtra = extra.getExtraPackets();
++            if (extraExtra != null && !extraExtra.isEmpty()) {
++               buildExtraPackets0(extraExtra, into);
++            }
++         }
++      }
++      // Paper start
++      private static boolean canSendImmediate(Connection networkManager, Packet<?> packet) {
++         return networkManager.isPending || networkManager.protocol != ConnectionProtocol.PLAY ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundKeepAlivePacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundPlayerChatPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundSystemChatPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundCommandSuggestionsPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundClearTitlesPacket ||
++                 packet instanceof net.minecraft.network.protocol.game.ClientboundBossEventPacket;
++      }
++      // Paper end
++   }
++   // Paper end
++
+    public void m_129512_(Packet<?> p_129513_) {
+       this.m_243124_(p_129513_, (PacketSendListener)null);
+    }
+ 
+    public void m_243124_(Packet<?> p_243248_, @Nullable PacketSendListener p_243316_) {
+-      if (this.m_129536_()) {
+-         this.m_129544_();
+-         this.m_129520_(p_243248_, p_243316_);
+-      } else {
++//      if (this.isConnected()) {
++//         this.flushQueue();
++//         this.sendPacket(p_243248_, p_243316_);
++//      } else {
++//         this.queue.add(new Connection.PacketHolder(p_243248_, p_243316_));
++//      }
++      // Paper start - handle oversized packets better
++      boolean connected = this.m_129536_();
++      if (!connected && !preparing) {
++         return; // Do nothing
++      }
++      if (connected && (InnerUtil.canSendImmediate(this, p_243248_) || (
++              MinecraftServer.getServer().m_18695_() && this.f_129467_.isEmpty() &&
++                      (p_243248_.getExtraPackets() == null || p_243248_.getExtraPackets().isEmpty())
++      ))) {
++         this.sendPacket(p_243248_, p_243316_, null); // Paper
++         return;
++      }
++      // write the packets to the queue, then flush - antixray hooks there already
++      java.util.List<Packet> extraPackets = InnerUtil.buildExtraPackets(p_243248_);
++      boolean hasExtraPackets = extraPackets != null && !extraPackets.isEmpty();
++      if (!hasExtraPackets) {
+          this.f_129467_.add(new Connection.PacketHolder(p_243248_, p_243316_));
+-      }
++      } else {
++         java.util.List<Connection.PacketHolder> packets = new java.util.ArrayList<>(1 + extraPackets.size());
++         packets.add(new Connection.PacketHolder(p_243248_, null)); // delay the future listener until the end of the extra packets
+ 
++         for (int i = 0, len = extraPackets.size(); i < len;) {
++            Packet extra = extraPackets.get(i);
++            boolean end = ++i == len;
++            packets.add(new Connection.PacketHolder(extra, end ? p_243316_ : null)); // append listener to the end
++         }
++         this.f_129467_.addAll(packets); // atomic
++      }
++      this.flushQueue();
++      // Paper end
+    }
+ 
+    private void m_129520_(Packet<?> p_129521_, @Nullable PacketSendListener p_243246_) {
++      // Paper start - add flush parameter
++      this.sendPacket(p_129521_, p_243246_, Boolean.TRUE);
++   }
++   private void sendPacket(Packet<?> p_129521_, @Nullable PacketSendListener p_243246_, Boolean flushConditional) {
++      this.packetWrites.getAndIncrement(); // must be befeore using canFlush
++      boolean effectiveFlush = flushConditional == null ? this.canFlush : flushConditional.booleanValue();
++      final boolean flush = effectiveFlush || p_129521_ instanceof net.minecraft.network.protocol.game.ClientboundKeepAlivePacket || p_129521_ instanceof ClientboundDisconnectPacket; // no delay for certain packets
++      // Paper end - add flush parameter
+       ConnectionProtocol connectionprotocol = ConnectionProtocol.m_129592_(p_129521_);
+       ConnectionProtocol connectionprotocol1 = this.m_178315_();
        ++this.f_129475_;
        if (connectionprotocol1 != connectionprotocol) {
           f_129465_.debug("Disabled auto read");
@@ -25,6 +217,143 @@
        }
  
        if (this.f_129468_.eventLoop().inEventLoop()) {
+-         this.m_243087_(p_129521_, p_243246_, connectionprotocol, connectionprotocol1);
++         this.doSendPacket(p_129521_, p_243246_, connectionprotocol, connectionprotocol1, flush);
+       } else {
+-         this.f_129468_.eventLoop().execute(() -> {
+-            this.m_243087_(p_129521_, p_243246_, connectionprotocol, connectionprotocol1);
+-         });
++         // Paper start - optimise packets that are not flushed
++         // note: since the type is not dynamic here, we need to actually copy the old executor code
++         // into two branches. On conflict, just re-copy - no changes were made inside the executor code.
++         if (!flush) {
++            AbstractEventExecutor.LazyRunnable run = () -> {
++               this.doSendPacket(p_129521_, p_243246_, connectionprotocol, connectionprotocol1, flush); // Paper - add flush parameter
++            };
++            this.f_129468_.eventLoop().execute(run);
++         } else { // Paper end - optimise packets that are not flushed
++            this.f_129468_.eventLoop().execute(() -> {
++               this.doSendPacket(p_129521_, p_243246_, connectionprotocol, connectionprotocol1, flush); // Paper - add flush parameter // Paper - diff on change
++            });
++         } // Paper
+       }
+ 
+    }
+ 
+    private void m_243087_(Packet<?> p_243260_, @Nullable PacketSendListener p_243290_, ConnectionProtocol p_243203_, ConnectionProtocol p_243307_) {
++      this.doSendPacket(p_243260_, p_243290_, p_243203_, p_243307_, true);
++   }
++   private void doSendPacket(Packet<?> p_243260_, @Nullable PacketSendListener p_243290_, ConnectionProtocol p_243203_, ConnectionProtocol p_243307_ , boolean flush) {
+       if (p_243203_ != p_243307_) {
+          this.m_129498_(p_243203_);
+       }
+ 
+-      ChannelFuture channelfuture = this.f_129468_.writeAndFlush(p_243260_);
+-      if (p_243290_ != null) {
++      net.minecraft.server.level.ServerPlayer player = getPlayer();
++      try {
++         ChannelFuture channelfuture = flush ? this.f_129468_.writeAndFlush(p_243260_) : this.f_129468_.write(p_243260_); // Paper - add flush parameter
++         if (p_243290_ != null) {
+          channelfuture.addListener((p_243167_) -> {
+             if (p_243167_.isSuccess()) {
+                p_243290_.m_243096_();
+@@ -221,26 +_,76 @@
+       }
+ 
+       channelfuture.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
++         // Paper start
++      } catch (Exception e) {
++         f_129465_.error("NetworkException: " + player, e);
++         m_129507_(Component.m_237110_("disconnect.genericReason", "Internal Exception: " + e.getMessage()));
++      }
++      // Paper end
+    }
+ 
+    private ConnectionProtocol m_178315_() {
+       return this.f_129468_.attr(f_129461_).get();
+    }
+ 
+-   private void m_129544_() {
+-      if (this.f_129468_ != null && this.f_129468_.isOpen()) {
+-         synchronized(this.f_129467_) {
+-            Connection.PacketHolder connection$packetholder;
+-            while((connection$packetholder = this.f_129467_.poll()) != null) {
+-               this.m_129520_(connection$packetholder.f_129558_, connection$packetholder.f_129559_);
+-            }
+-
+-         }
+-      }
+-   }
++   // Paper start - rewrite this to be safer if ran off main thread
++   private boolean flushQueue() { // void -> boolean
++      if (!m_129536_()) {
++         return true;
++      }
++      if (MinecraftServer.getServer().m_18695_()) {
++         return processQueue();
++      } else if (isPending) {
++         // Should only happen during login/status stages
++         synchronized (this.f_129467_) {
++            return this.processQueue();
++         }
++      }
++      return false;
++   }
++   private boolean processQueue() {
++      try { // Paper - add pending task queue
++         if (this.f_129467_.isEmpty()) return true;
++         // Paper start - make only one flush call per sendPacketQueue() call
++         final boolean needsFlush = this.canFlush;
++         boolean hasWrotePacket = false;
++         // Paper end - make only one flush call per sendPacketQueue() call
++         // If we are on main, we are safe here in that nothing else should be processing queue off main anymore
++         // But if we are not on main due to login/status, the parent is synchronized on packetQueue
++         java.util.Iterator<PacketHolder> iterator = this.f_129467_.iterator();
++         while (iterator.hasNext()) {
++            PacketHolder queued = iterator.next(); // poll -> peek
++
++            // Fix NPE (Spigot bug caused by handleDisconnection())
++            if (false && queued == null) { // Paper - diff on change, this logic is redundant: iterator guarantees ret of an element - on change, hook the flush logic here
++               return true;
++            }
++
++            // Paper start - checking isConsumed flag and skipping packet sending
++            if (queued.isConsumed()) {
++               continue;
++            }
++            // Paper end - checking isConsumed flag and skipping packet sending
++
++            Packet<?> packet = queued.f_129558_;
++            iterator.remove();
++            if (queued.tryMarkConsumed()) { // Paper - try to mark isConsumed flag for de-duplicating packet
++               this.sendPacket(packet, queued.f_129559_, (!iterator.hasNext() && (needsFlush || this.canFlush)) ? Boolean.TRUE : Boolean.FALSE); // Paper - make only one flush call per sendPacketQueue() call
++               hasWrotePacket = true; // Paper - make only one flush call per sendPacketQueue() call
++            }
++         }
++         return true;
++      } finally { // Paper start - add pending task queue
++         Runnable r;
++         while ((r = this.pendingTasks.poll()) != null) {
++            this.f_129468_.eventLoop().execute(r);
++         }
++      } // Paper end - add pending task queue
++   }
++   // Paper end
+ 
+    public void m_129483_() {
+-      this.m_129544_();
++      this.flushQueue();
+       PacketListener packetlistener = this.f_129470_;
+       if (packetlistener instanceof TickablePacketListener tickablepacketlistener) {
+          tickablepacketlistener.m_9933_();
+@@ -272,6 +_,7 @@
+    }
+ 
+    public void m_129507_(Component p_129508_) {
++      this.preparing = false;
+       if (this.f_129468_.isOpen()) {
+          this.f_129468_.close().awaitUninterruptibly();
+          this.f_129471_ = p_129508_;
 @@ -292,7 +_,9 @@
     }
  
@@ -43,18 +372,34 @@
        (new Bootstrap()).group(f_129464_.m_13971_()).handler(new ChannelInitializer<Channel>() {
           protected void initChannel(Channel p_129557_) {
              p_129557_.pipeline().addLast("packet_handler", connection);
-@@ -404,6 +_,14 @@
- 
-    public float m_129543_() {
+@@ -406,10 +_,30 @@
        return this.f_129477_;
-+   }
-+
+    }
+ 
 +   public Channel channel() {
 +      return f_129468_;
 +   }
 +
 +   public PacketFlow getDirection() {
 +      return this.f_129466_;
-    }
- 
++   }
++
     static class PacketHolder {
+       final Packet<?> f_129558_;
+       @Nullable
+       final PacketSendListener f_129559_;
++
++      // Paper start - isConsumed flag for the connection
++      private java.util.concurrent.atomic.AtomicBoolean isConsumed = new java.util.concurrent.atomic.AtomicBoolean(false);
++
++      public boolean tryMarkConsumed() {
++         return isConsumed.compareAndSet(false, true);
++      }
++
++      public boolean isConsumed() {
++         return isConsumed.get();
++      }
++      // Paper end - isConsumed flag for the connection
+ 
+       public PacketHolder(Packet<?> p_243302_, @Nullable PacketSendListener p_243266_) {
+          this.f_129558_ = p_243302_;

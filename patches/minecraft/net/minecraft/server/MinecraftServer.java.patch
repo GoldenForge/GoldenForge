@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
+@@ -155,6 +_,7 @@
+ import org.slf4j.Logger;
+ 
+ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements CommandSource, AutoCloseable {
++   private static MinecraftServer SERVER; public static MinecraftServer getServer() { return SERVER; }
+    private static final Logger f_129750_ = LogUtils.getLogger();
+    public static final String f_195495_ = "vanilla";
+    private static final float f_177884_ = 0.8F;
 @@ -240,7 +_,7 @@
  
     public static <S extends MinecraftServer> S m_129872_(Function<Thread, S> p_129873_) {
@@ -9,6 +17,14 @@
           atomicreference.get().m_130011_();
        }, "Server thread");
        thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> {
+@@ -258,6 +_,7 @@
+ 
+    public MinecraftServer(Thread p_236723_, LevelStorageSource.LevelStorageAccess p_236724_, PackRepository p_236725_, WorldStem p_236726_, Proxy p_236727_, DataFixer p_236728_, Services p_236729_, ChunkProgressListenerFactory p_236730_) {
+       super("Server");
++      SERVER = this;
+       this.f_129746_ = p_236726_.f_206894_();
+       this.f_129749_ = p_236726_.f_206895_();
+       if (!this.f_129749_.m_5961_().m_204655_().m_142003_(LevelStem.f_63971_)) {
 @@ -332,6 +_,7 @@
        this.m_129841_(dimensiondatastorage);
        this.f_129732_ = new CommandStorage(dimensiondatastorage);
@@ -91,6 +107,96 @@
              this.m_6988_();
           }
  
+@@ -732,19 +_,85 @@
+ 
+    private boolean m_129961_() {
+       if (super.m_7245_()) {
++         this.executeMidTickTasks(); // Paper - execute chunk tasks mid tick
+          return true;
+       } else {
++         boolean ret = false; // Paper - force execution of all worlds, do not just bias the first
+          if (this.m_129960_()) {
+             for(ServerLevel serverlevel : this.m_129785_()) {
+                if (serverlevel.m_7726_().m_8466_()) {
+-                  return true;
++                  ret = true; // Paper - force execution of all worlds, do not just bias the first
+                }
+             }
+          }
+ 
+-         return false;
+-      }
+-   }
++         return ret;  // Paper - force execution of all worlds, do not just bias the first
++      }
++   }
++
++   // Paper start - execute chunk tasks mid tick
++   static final long CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME = 25L * 1000L; // 25us
++   static final long MAX_CHUNK_EXEC_TIME = 1000L; // 1us
++
++   static final long TASK_EXECUTION_FAILURE_BACKOFF = 5L * 1000L; // 5us
++
++   private static long lastMidTickExecute;
++   private static long lastMidTickExecuteFailure;
++
++   private boolean tickMidTickTasks() {
++      // give all worlds a fair chance at by targetting them all.
++      // if we execute too many tasks, that's fine - we have logic to correctly handle overuse of allocated time.
++      boolean executed = false;
++      for (ServerLevel world : this.m_129785_()) {
++         long currTime = System.nanoTime();
++         if (currTime - world.lastMidTickExecuteFailure <= TASK_EXECUTION_FAILURE_BACKOFF) {
++            continue;
++         }
++         if (!world.m_7726_().m_8466_()) {
++            // we need to back off if this fails
++            world.lastMidTickExecuteFailure = currTime;
++         } else {
++            executed = true;
++         }
++      }
++
++      return executed;
++   }
++
++   public final void executeMidTickTasks() {
++      long startTime = System.nanoTime();
++      if ((startTime - lastMidTickExecute) <= CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME || (startTime - lastMidTickExecuteFailure) <= TASK_EXECUTION_FAILURE_BACKOFF) {
++         // it's shown to be bad to constantly hit the queue (chunk loads slow to a crawl), even if no tasks are executed.
++         // so, backoff to prevent this
++         return;
++      }
++
++      for (;;) {
++         boolean moreTasks = this.tickMidTickTasks();
++         long currTime = System.nanoTime();
++         long diff = currTime - startTime;
++
++         if (!moreTasks || diff >= MAX_CHUNK_EXEC_TIME) {
++            if (!moreTasks) {
++               lastMidTickExecuteFailure = currTime;
++            }
++
++            // note: negative values reduce the time
++            long overuse = diff - MAX_CHUNK_EXEC_TIME;
++            if (overuse >= (10L * 1000L * 1000L)) { // 10ms
++               // make sure something like a GC or dumb plugin doesn't screw us over...
++               overuse = 10L * 1000L * 1000L; // 10ms
++            }
++
++            double overuseCount = (double)overuse/(double)MAX_CHUNK_EXEC_TIME;
++            long extraSleep = (long)Math.round(overuseCount*CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME);
++
++            lastMidTickExecute = currTime + extraSleep;
++            return;
++         }
++      }
++   }
++   // Paper end - execute chunk tasks mid tick
+ 
+    public void m_6367_(TickTask p_129957_) {
+       this.m_129905_().m_6174_("runTask");
 @@ -789,6 +_,7 @@
  
     public void m_5705_(BooleanSupplier p_129871_) {

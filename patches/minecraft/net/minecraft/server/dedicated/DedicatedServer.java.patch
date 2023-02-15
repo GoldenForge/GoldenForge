@@ -1,5 +1,15 @@
 --- a/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -60,7 +_,8 @@
+    static final Logger f_139598_ = LogUtils.getLogger();
+    private static final int f_142864_ = 5000;
+    private static final int f_142865_ = 2;
+-   public final List<ConsoleInput> f_139600_ = Collections.synchronizedList(Lists.newArrayList());
++   //public final List<ConsoleInput> consoleInput = Collections.synchronizedList(Lists.newArrayList());
++   private final java.util.Queue<ConsoleInput> serverCommandQueue = new java.util.concurrent.ConcurrentLinkedQueue<>(); // Paper - use a proper queuemmands
+    @Nullable
+    private QueryThreadGs4 f_139601_;
+    private final RconConsoleSource f_139602_;
 @@ -82,6 +_,7 @@
     public boolean m_7038_() throws IOException {
        Thread thread = new Thread("Server console handler") {
@@ -37,6 +47,26 @@
        }
     }
  
+@@ -294,13 +_,15 @@
+    }
+ 
+    public void m_139645_(String p_139646_, CommandSourceStack p_139647_) {
+-      this.f_139600_.add(new ConsoleInput(p_139646_, p_139647_));
++      this.serverCommandQueue.add(new ConsoleInput(p_139646_, p_139647_)); // Paper - use proper queue
+    }
+ 
+    public void m_139665_() {
+-      while(!this.f_139600_.isEmpty()) {
+-         ConsoleInput consoleinput = this.f_139600_.remove(0);
+-         this.m_129892_().m_230957_(consoleinput.f_135929_, consoleinput.f_135928_);
++      // Paper start - use proper queue
++      ConsoleInput servercommand;
++      while ((servercommand = this.serverCommandQueue.poll()) != null) {
++         // Paper end
++         this.m_129892_().m_230957_(servercommand.f_135929_, servercommand.f_135928_);
+       }
+ 
+    }
 @@ -318,7 +_,7 @@
     }
  

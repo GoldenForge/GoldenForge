@@ -8,7 +8,11 @@
              Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = chunkholder.m_140080_(ChunkStatus.f_62326_).getNow((Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>)null);
              if (either == null) {
                 return null;
-@@ -349,7 +_,7 @@
+@@ -346,10 +_,11 @@
+          boolean flag2 = this.f_8329_.m_46469_().m_46207_(GameRules.f_46134_);
+          Collections.shuffle(list);
+ 
++         int chunksTicked = 0; // Paper
           for(ServerChunkCache.ChunkAndHolder serverchunkcache$chunkandholder : list) {
              LevelChunk levelchunk1 = serverchunkcache$chunkandholder.f_184028_;
              ChunkPos chunkpos = levelchunk1.m_7697_();
@@ -17,6 +21,39 @@
                 levelchunk1.m_187632_(j);
                 if (flag2 && (this.f_8335_ || this.f_8336_) && this.f_8329_.m_6857_().m_61927_(chunkpos)) {
                    NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, naturalspawner$spawnstate, this.f_8336_, this.f_8335_, flag1);
+@@ -357,6 +_,7 @@
+ 
+                if (this.f_8329_.m_183438_(chunkpos.m_45588_())) {
+                   this.f_8329_.m_8714_(levelchunk1, k);
++                  if ((chunksTicked++ & 1) == 0) net.minecraft.server.MinecraftServer.getServer().executeMidTickTasks(); // Paper
+                }
+             }
+          }
+@@ -372,7 +_,24 @@
+          });
+          profilerfiller.m_7238_();
+          profilerfiller.m_7238_();
++         // Paper start - controlled flush for entity tracker packets
++         List<net.minecraft.network.Connection> disabledFlushes = new java.util.ArrayList<>(this.f_8329_.f_8546_.size());
++         for (ServerPlayer player : this.f_8329_.f_8546_) {
++            net.minecraft.server.network.ServerGamePacketListenerImpl connection = player.f_8906_;
++            if (connection != null) {
++               connection.f_9742_.disableAutomaticFlush();
++               disabledFlushes.add(connection.f_9742_);
++            }
++         }
++         try { // Paper end - controlled flush for entity tracker packets
+          this.f_8325_.m_140421_();
++            // Paper start - controlled flush for entity tracker packets
++         } finally {
++            for (net.minecraft.network.Connection networkManager : disabledFlushes) {
++               networkManager.enableAutomaticFlush();
++            }
++         }
++         // Paper end - controlled flush for entity tracker packets
+       }
+    }
+ 
 @@ -426,11 +_,17 @@
     }
  

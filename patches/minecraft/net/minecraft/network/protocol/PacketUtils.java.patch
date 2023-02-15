@@ -1,0 +1,81 @@
+--- a/net/minecraft/network/protocol/PacketUtils.java
++++ b/net/minecraft/network/protocol/PacketUtils.java
+@@ -2,34 +_,67 @@
+ 
+ import com.mojang.logging.LogUtils;
+ import net.minecraft.network.PacketListener;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.RunningOnDifferentThreadException;
+ import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.network.ServerGamePacketListenerImpl;
+ import net.minecraft.util.thread.BlockableEventLoop;
+ import org.slf4j.Logger;
+ 
+ public class PacketUtils {
+    private static final Logger f_131354_ = LogUtils.getLogger();
+ 
++   // Paper start - detailed watchdog information
++   public static final java.util.concurrent.ConcurrentLinkedDeque<PacketListener> packetProcessing = new java.util.concurrent.ConcurrentLinkedDeque<>();
++   static final java.util.concurrent.atomic.AtomicLong totalMainThreadPacketsProcessed = new java.util.concurrent.atomic.AtomicLong();
++
++   public static long getTotalProcessedPackets() {
++      return totalMainThreadPacketsProcessed.get();
++   }
++
++   public static java.util.List<PacketListener> getCurrentPacketProcessors() {
++      java.util.List<PacketListener> ret = new java.util.ArrayList<>(4);
++      for (PacketListener listener : packetProcessing) {
++         ret.add(listener);
++      }
++
++      return ret;
++   }
++   // Paper end - detailed watchdog information
++
+    public static <T extends PacketListener> void m_131359_(Packet<T> p_131360_, T p_131361_, ServerLevel p_131362_) throws RunningOnDifferentThreadException {
+       m_131363_(p_131360_, p_131361_, p_131362_.m_7654_());
+    }
+ 
+    public static <T extends PacketListener> void m_131363_(Packet<T> p_131364_, T p_131365_, BlockableEventLoop<?> p_131366_) throws RunningOnDifferentThreadException {
+       if (!p_131366_.m_18695_()) {
+-         p_131366_.m_201446_(() -> {
+-            if (p_131365_.m_6198_().m_129536_()) {
+-               try {
+-                  p_131364_.m_5797_(p_131365_);
+-               } catch (Exception exception) {
+-                  if (p_131365_.m_201767_()) {
+-                     throw exception;
++         p_131366_.execute(() -> { // Paper - Fix preemptive player kick on a server shutdown.
++            packetProcessing.push(p_131365_); // Paper - detailed watchdog information
++            try { // Paper - detailed watchdog information
++               if (p_131365_.m_6198_().m_129536_()) {
++                  try  { // Paper - timings
++                     p_131364_.m_5797_(p_131365_);
++                  } catch (Exception exception) {
++                     net.minecraft.network.Connection networkmanager = p_131365_.m_6198_();
++                     String playerIP = String.valueOf(networkmanager.m_129523_());
++                     if (networkmanager.getPlayer() != null) {
++                        f_131354_.error("Error whilst processing packet {} for {}[{}]", p_131364_, networkmanager.getPlayer().m_6302_(), playerIP, exception); // Paper
++                     } else {
++                        f_131354_.error("Error whilst processing packet {} for connection from {}", p_131364_, playerIP, exception); // Paper
++                     }
++                     net.minecraft.network.chat.Component error = net.minecraft.network.chat.Component.m_237113_("Packet processing error");
++                     networkmanager.m_243124_(new net.minecraft.network.protocol.game.ClientboundDisconnectPacket(error), net.minecraft.network.PacketSendListener.m_243092_(() -> networkmanager.m_129507_(error)));
++                     networkmanager.m_129540_();
+                   }
+-
+-                  f_131354_.error("Failed to handle packet {}, suppressing error", p_131364_, exception);
++               } else {
++                  PacketUtils.f_131354_.debug("Ignoring packet due to disconnection: {}", p_131364_);
+                }
+-            } else {
+-               f_131354_.debug("Ignoring packet due to disconnection: {}", (Object)p_131364_);
++               // Paper start - detailed watchdog information
++            } finally {
++               totalMainThreadPacketsProcessed.getAndIncrement();
++               packetProcessing.pop();
+             }
++            // Paper end - detailed watchdog information
+ 
+          });
+          throw RunningOnDifferentThreadException.f_136017_;

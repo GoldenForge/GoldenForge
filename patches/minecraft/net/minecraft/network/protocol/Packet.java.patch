@@ -1,0 +1,9 @@
+--- a/net/minecraft/network/protocol/Packet.java
++++ b/net/minecraft/network/protocol/Packet.java
+@@ -11,4 +_,6 @@
+    default boolean m_6588_() {
+       return false;
+    }
++
++   default java.util.List<Packet> getExtraPackets() { return null; }
+ }

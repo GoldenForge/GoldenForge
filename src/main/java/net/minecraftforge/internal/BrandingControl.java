@@ -70,11 +70,11 @@ public class BrandingControl
     }
 
     public static String getClientBranding() {
-        return "forge";
+        return "GoldenForge";
     }
 
     public static String getServerBranding() {
-        return "forge";
+        return "GoldenForge";
     }
 
     public static ResourceManagerReloadListener resourceManagerReloadListener() {

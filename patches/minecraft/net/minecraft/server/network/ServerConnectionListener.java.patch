@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/network/ServerConnectionListener.java
 +++ b/net/minecraft/server/network/ServerConnectionListener.java
-@@ -50,11 +_,12 @@
+@@ -50,16 +_,28 @@
  
  public class ServerConnectionListener {
     private static final Logger f_9701_ = LogUtils.getLogger();
@@ -15,6 +15,22 @@
     });
     final MinecraftServer f_9702_;
     public volatile boolean f_9700_;
+    private final List<ChannelFuture> f_9703_ = Collections.synchronizedList(Lists.newArrayList());
+    final List<Connection> f_9704_ = Collections.synchronizedList(Lists.newArrayList());
++   // Paper start - prevent blocking on adding a new network manager while the server is ticking
++   private final java.util.Queue<Connection> pending = new java.util.concurrent.ConcurrentLinkedQueue<>();
++   private static final boolean disableFlushConsolidation = Boolean.getBoolean("Paper.disableFlushConsolidate"); // Paper
++   private final void addPending() {
++      Connection manager = null;
++      while ((manager = pending.poll()) != null) {
++         f_9704_.add(manager);
++         manager.isPending = false;
++      }
++   }
++   // Paper end
+ 
+    public ServerConnectionListener(MinecraftServer p_9707_) {
+       this.f_9702_ = p_9707_;
 @@ -67,6 +_,8 @@
     }
  
@@ -24,7 +40,7 @@
        synchronized(this.f_9703_) {
           Class<? extends ServerSocketChannel> oclass;
           LazyLoadedValue<? extends EventLoopGroup> lazyloadedvalue;
-@@ -87,7 +_,7 @@
+@@ -87,10 +_,11 @@
                 } catch (ChannelException channelexception) {
                 }
  
@@ -32,4 +48,28 @@
 +               p_9729_.pipeline().addLast("timeout", new ReadTimeoutHandler(READ_TIMEOUT)).addLast("legacy_query", new LegacyQueryHandler(ServerConnectionListener.this)).addLast("splitter", new Varint21FrameDecoder()).addLast("decoder", new PacketDecoder(PacketFlow.SERVERBOUND)).addLast("prepender", new Varint21LengthFieldPrepender()).addLast("encoder", new PacketEncoder(PacketFlow.CLIENTBOUND));
                 int i = ServerConnectionListener.this.f_9702_.m_7032_();
                 Connection connection = (Connection)(i > 0 ? new RateKickingConnection(i) : new Connection(PacketFlow.SERVERBOUND));
-                ServerConnectionListener.this.f_9704_.add(connection);
+-               ServerConnectionListener.this.f_9704_.add(connection);
++               //ServerConnectionListener.this.connections.add(connection);
++               pending.add(connection); // Paper
+                p_9729_.pipeline().addLast("packet_handler", connection);
+                connection.m_129505_(new ServerHandshakePacketListenerImpl(ServerConnectionListener.this.f_9702_, connection));
+             }
+@@ -130,6 +_,7 @@
+ 
+    public void m_9721_() {
+       synchronized(this.f_9704_) {
++         this.addPending(); // Paper
+          Iterator<Connection> iterator = this.f_9704_.iterator();
+ 
+          while(iterator.hasNext()) {
+@@ -151,6 +_,10 @@
+                      connection.m_129540_();
+                   }
+                } else {
++                  // Spigot Start
++                  // Fix a race condition where a NetworkManager could be unregistered just before connection.
++                  if (connection.preparing) continue;
++                  // Spigot End
+                   iterator.remove();
+                   connection.m_129541_();
+                }

@@ -1,0 +1,15 @@
+--- a/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
++++ b/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
+@@ -55,4 +_,12 @@
+    public ClientboundLightUpdatePacketData m_195720_() {
+       return this.f_195702_;
+    }
++
++
++   // Paper start - handle over-sized TE packets
++   @Override
++   public java.util.List<Packet> getExtraPackets() {
++      return this.f_195701_.getExtraPackets();
++   }
++   // Paper end
+ }

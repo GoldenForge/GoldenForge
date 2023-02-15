@@ -1,0 +1,113 @@
+--- a/net/minecraft/world/level/pathfinder/PathFinder.java
++++ b/net/minecraft/world/level/pathfinder/PathFinder.java
+@@ -38,28 +_,31 @@
+       if (node == null) {
+          return null;
+       } else {
+-         Map<Target, BlockPos> map = p_77430_.stream().collect(Collectors.toMap((p_77448_) -> {
+-            return this.f_77422_.m_7568_((double)p_77448_.m_123341_(), (double)p_77448_.m_123342_(), (double)p_77448_.m_123343_());
+-         }, Function.identity()));
+-         Path path = this.m_164716_(p_77428_.m_151625_(), node, map, p_77431_, p_77432_, p_77433_);
++         // Paper start - remove streams - and optimize collection
++         List<Map.Entry<Target, BlockPos>> map = Lists.newArrayList();
++         for (BlockPos pos : p_77430_) {
++            map.add(new java.util.AbstractMap.SimpleEntry<>(this.f_77422_.m_7568_(pos.m_123341_(), pos.m_123342_(), pos.m_123343_()), pos));
++         }
++         // Paper end
++         Path path = this.findPath(p_77428_.m_151625_(), node, map, p_77431_, p_77432_, p_77433_);
+          this.f_77422_.m_6802_();
+          return path;
+       }
+    }
+ 
+    @Nullable
+-   private Path m_164716_(ProfilerFiller p_164717_, Node p_164718_, Map<Target, BlockPos> p_164719_, float p_164720_, int p_164721_, float p_164722_) {
++   private Path findPath(ProfilerFiller p_164717_, Node p_164718_, List<Map.Entry<Target, BlockPos>> p_164719_, float p_164720_, int p_164721_, float p_164722_) {
+       p_164717_.m_6180_("find_path");
+       p_164717_.m_142259_(MetricCategory.PATH_FINDING);
+-      Set<Target> set = p_164719_.keySet();
++      //Set<Target> set = p_164719_.keySet();
+       p_164718_.f_77275_ = 0.0F;
+-      p_164718_.f_77276_ = this.m_77444_(p_164718_, set);
++      p_164718_.f_77276_ = this.getBestH(p_164718_, p_164719_);
+       p_164718_.f_77277_ = p_164718_.f_77276_;
+       this.f_77423_.m_77081_();
+       this.f_77423_.m_77084_(p_164718_);
+-      Set<Node> set1 = ImmutableSet.of();
++      //Set<Node> set1 = ImmutableSet.of();
+       int i = 0;
+-      Set<Target> set2 = Sets.newHashSetWithExpectedSize(set.size());
++      List<Map.Entry<Target, BlockPos>> entryList = Lists.newArrayListWithExpectedSize(p_164719_.size());
+       int j = (int)((float)this.f_77421_ * p_164722_);
+ 
+       while(!this.f_77423_.m_77092_()) {
+@@ -71,14 +_,18 @@
+          Node node = this.f_77423_.m_77091_();
+          node.f_77279_ = true;
+ 
+-         for(Target target : set) {
++         // Paper start - optimize collection
++         for(int i1 = 0; i1 < p_164719_.size(); i1++) {
++            final Map.Entry<Target, BlockPos> entry = p_164719_.get(i1);
++            Target target = entry.getKey();
+             if (node.m_77304_(target) <= (float)p_164721_) {
+                target.m_77509_();
+-               set2.add(target);
++               entryList.add(entry);
++               // Paper end
+             }
+          }
+ 
+-         if (!set2.isEmpty()) {
++         if (!entryList.isEmpty()) {
+             break;
+          }
+ 
+@@ -93,7 +_,7 @@
+                if (node1.f_77280_ < p_164720_ && (!node1.m_77303_() || f1 < node1.f_77275_)) {
+                   node1.f_77278_ = node;
+                   node1.f_77275_ = f1;
+-                  node1.f_77276_ = this.m_77444_(node1, set) * 1.5F;
++                  node1.f_77276_ = this.getBestH(node1, p_164719_) * 1.5F;
+                   if (node1.m_77303_()) {
+                      this.f_77423_.m_77086_(node1, node1.f_77275_ + node1.f_77276_);
+                   } else {
+@@ -105,23 +_,29 @@
+          }
+       }
+ 
+-      Optional<Path> optional = !set2.isEmpty() ? set2.stream().map((p_77454_) -> {
+-         return this.m_77434_(p_77454_.m_77508_(), p_164719_.get(p_77454_), true);
+-      }).min(Comparator.comparingInt(Path::m_77398_)) : set.stream().map((p_77451_) -> {
+-         return this.m_77434_(p_77451_.m_77508_(), p_164719_.get(p_77451_), false);
+-      }).min(Comparator.comparingDouble(Path::m_77407_).thenComparingInt(Path::m_77398_));
+-      p_164717_.m_7238_();
+-      return !optional.isPresent() ? null : optional.get();
++      // Paper start - remove streams - and optimize collection
++      Path best = null;
++      boolean entryListIsEmpty = entryList.isEmpty();
++      Comparator<Path> comparator = entryListIsEmpty ? Comparator.comparingInt(Path::m_77398_)
++              : Comparator.comparingDouble(Path::m_77407_).thenComparingInt(Path::m_77398_);
++      for (Map.Entry<Target, BlockPos> entry : entryListIsEmpty ? p_164719_ : entryList) {
++         Path path = this.m_77434_(entry.getKey().m_77508_(), entry.getValue(), !entryListIsEmpty);
++         if (best == null || comparator.compare(path, best) < 0)
++            best = path;
++      }
++      return best;
++      // Paper end
+    }
+ 
+    protected float m_214208_(Node p_230617_, Node p_230618_) {
+       return p_230617_.m_77293_(p_230618_);
+    }
+ 
+-   private float m_77444_(Node p_77445_, Set<Target> p_77446_) {
++   private float getBestH(Node p_77445_, List<Map.Entry<Target, BlockPos>> p_77446_) {
+       float f = Float.MAX_VALUE;
+ 
+-      for(Target target : p_77446_) {
++      for (int i = 0, targetsSize = p_77446_.size(); i < targetsSize; i++) {
++         final Target target = p_77446_.get(i).getKey();
+          float f1 = p_77445_.m_77293_(target);
+          target.m_77503_(f1, p_77445_);
+          f = Math.min(f1, f);
