@@ -1,0 +1,99 @@
+--- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
++++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
+@@ -41,9 +_,12 @@
+    private final PoiManager.DistanceTracker f_27029_;
+    private final LongSet f_27030_ = new LongOpenHashSet();
+ 
++   public final net.minecraft.server.level.ServerLevel world;
++
+    public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
+       super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
+       this.f_27029_ = new PoiManager.DistanceTracker();
++      this.world = (net.minecraft.server.level.ServerLevel)p_217873_; // Paper
+    }
+ 
+    public void m_217919_(BlockPos p_217920_, Holder<PoiType> p_217921_) {
+@@ -111,43 +_,62 @@
+    }
+ 
+    public Optional<BlockPos> m_27186_(Predicate<Holder<PoiType>> p_27187_, Predicate<BlockPos> p_27188_, BlockPos p_27189_, int p_27190_, PoiManager.Occupancy p_27191_) {
+-      return this.m_27138_(p_27187_, p_27188_, p_27189_, p_27190_, p_27191_).findFirst();
++      // Paper start - re-route to faster logic
++      BlockPos ret = io.papermc.paper.util.PoiAccess.findAnyPoiPosition(this, p_27187_, p_27188_, p_27189_, p_27190_, p_27191_, false);
++      return Optional.ofNullable(ret);
++      // Paper end
+    }
+ 
+    public Optional<BlockPos> m_27192_(Predicate<Holder<PoiType>> p_27193_, BlockPos p_27194_, int p_27195_, PoiManager.Occupancy p_27196_) {
+-      return this.m_27181_(p_27193_, p_27194_, p_27195_, p_27196_).map(PoiRecord::m_27257_).min(Comparator.comparingDouble((p_217977_) -> {
+-         return p_217977_.m_123331_(p_27194_);
+-      }));
++      // Paper start - re-route to faster logic
++      BlockPos ret = io.papermc.paper.util.PoiAccess.findClosestPoiDataPosition(this, p_27193_, null, p_27194_, p_27195_, p_27195_ * p_27195_, p_27196_, false);
++      return Optional.ofNullable(ret);
++      // Paper end - re-route to faster logic
+    }
+ 
+    public Optional<Pair<Holder<PoiType>, BlockPos>> m_218002_(Predicate<Holder<PoiType>> p_218003_, BlockPos p_218004_, int p_218005_, PoiManager.Occupancy p_218006_) {
+-      return this.m_27181_(p_218003_, p_218004_, p_218005_, p_218006_).min(Comparator.comparingDouble((p_217909_) -> {
+-         return p_217909_.m_27257_().m_123331_(p_218004_);
+-      })).map((p_217959_) -> {
+-         return Pair.of(p_217959_.m_218018_(), p_217959_.m_27257_());
+-      });
++      // Paper start - re-route to faster logic
++      return Optional.ofNullable(io.papermc.paper.util.PoiAccess.findClosestPoiDataTypeAndPosition(
++              this, p_218003_, null, p_218004_, p_218005_, p_218005_ * p_218005_, p_218006_, false
++      ));
++      // Paper end - re-route to faster logic
+    }
+ 
+    public Optional<BlockPos> m_148658_(Predicate<Holder<PoiType>> p_148659_, Predicate<BlockPos> p_148660_, BlockPos p_148661_, int p_148662_, PoiManager.Occupancy p_148663_) {
+-      return this.m_27181_(p_148659_, p_148661_, p_148662_, p_148663_).map(PoiRecord::m_27257_).filter(p_148660_).min(Comparator.comparingDouble((p_217918_) -> {
+-         return p_217918_.m_123331_(p_148661_);
+-      }));
++      // Paper start - re-route to faster logic
++      BlockPos ret = io.papermc.paper.util.PoiAccess.findClosestPoiDataPosition(this, p_148659_, p_148660_, p_148661_, p_148662_, p_148662_ * p_148662_, p_148663_, false);
++      return Optional.ofNullable(ret);
++      // Paper end - re-route to faster logic
+    }
+ 
+    public Optional<BlockPos> m_217946_(Predicate<Holder<PoiType>> p_217947_, BiPredicate<Holder<PoiType>, BlockPos> p_217948_, BlockPos p_217949_, int p_217950_) {
+-      return this.m_27181_(p_217947_, p_217949_, p_217950_, PoiManager.Occupancy.HAS_SPACE).filter((p_217934_) -> {
+-         return p_217948_.test(p_217934_.m_218018_(), p_217934_.m_27257_());
+-      }).findFirst().map((p_217881_) -> {
+-         p_217881_.m_27247_();
+-         return p_217881_.m_27257_();
++      // Paper start - re-route to faster logic
++      final @javax.annotation.Nullable PoiRecord closest = io.papermc.paper.util.PoiAccess.findClosestPoiDataRecord(
++              this, p_217947_, p_217948_, p_217949_, p_217950_, p_217950_ * p_217950_, Occupancy.HAS_SPACE, false
++      );
++      return Optional.ofNullable(closest).map(poi -> {
++         // Paper end - re-route to faster logic
++         poi.m_27247_();
++         return poi.m_27257_();
+       });
+    }
+ 
+    public Optional<BlockPos> m_217951_(Predicate<Holder<PoiType>> p_217952_, Predicate<BlockPos> p_217953_, PoiManager.Occupancy p_217954_, BlockPos p_217955_, int p_217956_, RandomSource p_217957_) {
+-      List<PoiRecord> list = Util.m_214661_(this.m_27181_(p_217952_, p_217955_, p_217956_, p_217954_), p_217957_);
+-      return list.stream().filter((p_217945_) -> {
+-         return p_217953_.test(p_217945_.m_27257_());
+-      }).findFirst().map(PoiRecord::m_27257_);
++      // Paper start - re-route to faster logic
++      List<PoiRecord> list = new java.util.ArrayList<>();
++      io.papermc.paper.util.PoiAccess.findAnyPoiRecords(
++              this, p_217952_, p_217953_, p_217955_, p_217956_, p_217954_, false, Integer.MAX_VALUE, list
++      );
++
++      // the old method shuffled the list and then tried to find the first element in it that
++      // matched positionPredicate, however we moved positionPredicate into the poi search. This means we can avoid a
++      // shuffle entirely, and just pick a random element from list
++      if (list.isEmpty()) {
++         return Optional.empty();
++      }
++
++      return Optional.of(list.get(p_217957_.m_188503_(list.size())).m_27257_());
++      // Paper end - re-route to faster logic
+    }
+ 
+    public boolean m_27154_(BlockPos p_27155_) {

@@ -1,0 +1,53 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
+@@ -111,6 +_,11 @@
+ 
+    protected void m_63708_(ChunkPos p_63709_, @Nullable CompoundTag p_63710_) throws IOException {
+       RegionFile regionfile = this.m_63711_(p_63709_);
++
++      // Paper end - rewrite chunk system
++      try { // Paper
++         int attempts = 0; Exception laste = null; while (attempts++ < 5) { try { // Paper
++
+       if (p_63710_ == null) {
+          regionfile.m_156613_(p_63709_);
+       } else {
+@@ -118,10 +_,11 @@
+ 
+          try {
+             NbtIo.m_128941_(p_63710_, dataoutputstream);
++            dataoutputstream.close(); // Paper - only write if successful
+          } catch (Throwable throwable1) {
+             if (dataoutputstream != null) {
+                try {
+-                  dataoutputstream.close();
++                  //dataoutputstream.close();
+                } catch (Throwable throwable) {
+                   throwable1.addSuppressed(throwable);
+                }
+@@ -129,11 +_,21 @@
+ 
+             throw throwable1;
+          }
+-
+-         if (dataoutputstream != null) {
+-            dataoutputstream.close();
+-         }
+       }
++            // Paper start
++            return;
++         } catch (Exception ex)  {
++            laste = ex;
++         }
++         }
++
++         if (laste != null) {
++            net.minecraft.server.MinecraftServer.f_129750_.error("Failed to save chunk " + p_63709_, laste);
++         }
++         // Paper end
++      } finally { // Paper start
++         //regionfile.fileLock.unlock();
++      } // Paper end
+ 
+    }
+ 

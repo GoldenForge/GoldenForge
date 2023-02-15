@@ -129,7 +129,7 @@ subprojects {
     apply plugin: 'java'
 
     group = 'net.minecraftforge'
-    version = VERSION
+    version = '1.19.2-43.2.4'
     //println(name + ' Version: ' + version)
 
     ext {

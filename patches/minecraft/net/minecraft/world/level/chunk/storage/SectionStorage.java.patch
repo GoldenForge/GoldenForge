@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/level/chunk/storage/SectionStorage.java
++++ b/net/minecraft/world/level/chunk/storage/SectionStorage.java
+@@ -70,11 +_,11 @@
+    }
+ 
+    @Nullable
+-   protected Optional<R> m_63818_(long p_63819_) {
++   public Optional<R> m_63818_(long p_63819_) {
+       return this.f_63774_.get(p_63819_);
+    }
+ 
+-   protected Optional<R> m_63823_(long p_63824_) {
++   public Optional<R> m_63823_(long p_63824_) {
+       if (this.m_156630_(p_63824_)) {
+          return Optional.empty();
+       } else {

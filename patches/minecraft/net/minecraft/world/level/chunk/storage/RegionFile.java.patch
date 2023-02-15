@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionFile.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFile.java
+@@ -240,6 +_,7 @@
+                return true;
+             }
+          } catch (IOException ioexception) {
++            com.destroystokyo.paper.util.SneakyThrow.sneaky(ioexception); // Paper - we want the upper try/catch to retry this
+             return false;
+          }
+       }

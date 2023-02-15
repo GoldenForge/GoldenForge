@@ -1,13 +1,15 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -155,6 +_,7 @@
+@@ -155,7 +_,8 @@
  import org.slf4j.Logger;
  
  public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements CommandSource, AutoCloseable {
+-   private static final Logger f_129750_ = LogUtils.getLogger();
 +   private static MinecraftServer SERVER; public static MinecraftServer getServer() { return SERVER; }
-    private static final Logger f_129750_ = LogUtils.getLogger();
++   public static final Logger f_129750_ = LogUtils.getLogger();
     public static final String f_195495_ = "vanilla";
     private static final float f_177884_ = 0.8F;
+    private static final int f_177885_ = 100;
 @@ -240,7 +_,7 @@
  
     public static <S extends MinecraftServer> S m_129872_(Function<Thread, S> p_129873_) {
@@ -107,6 +109,22 @@
              this.m_6988_();
           }
  
+@@ -706,9 +_,15 @@
+    }
+ 
+    private boolean m_129960_() {
++      if (isOversleep) return canOversleep();// Paper - because of our changes, this logic is broken
+       return this.m_18767_() || Util.m_137550_() < (this.f_129728_ ? this.f_129727_ : this.f_129726_);
+    }
+ 
++   boolean isOversleep = false;
++   private boolean canOversleep() {
++      return this.f_129728_ && Util.m_137550_() < this.f_129727_;
++   }
++
+    protected void m_130012_() {
+       this.m_18699_();
+       this.m_18701_(() -> {
 @@ -732,19 +_,85 @@
  
     private boolean m_129961_() {
@@ -197,10 +215,17 @@
  
     public void m_6367_(TickTask p_129957_) {
        this.m_129905_().m_6174_("runTask");
-@@ -789,6 +_,7 @@
+@@ -789,6 +_,14 @@
  
     public void m_5705_(BooleanSupplier p_129871_) {
        long i = Util.m_137569_();
++      // Paper start - move oversleep into full server tick
++      isOversleep = true;
++      this.m_18701_(() -> {
++         return !this.canOversleep();
++      });
++      isOversleep = false;
++      // Paper end
 +      net.minecraftforge.event.ForgeEventFactory.onPreServerTick(p_129871_, this);
        ++this.f_129766_;
        this.m_5703_(p_129871_);

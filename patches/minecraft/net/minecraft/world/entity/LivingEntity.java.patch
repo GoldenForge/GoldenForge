@@ -527,8 +527,15 @@
           if (itemstack.m_150930_(Items.f_42741_) && ElytraItem.m_41140_(itemstack)) {
              flag = true;
              int i = this.f_20937_ + 1;
-@@ -2809,8 +_,16 @@
- 
+@@ -2806,11 +_,22 @@
+    public InteractionHand m_7655_() {
+       return (this.f_19804_.m_135370_(f_20909_) & 2) > 0 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+    }
+-
++   // Paper start - lag compensate eating
++   protected long eatStartTime;
++   protected int totalEatTimeTicks;
++   // Paper end
     private void m_21329_() {
        if (this.m_6117_()) {
 -         if (ItemStack.m_41758_(this.m_21120_(this.m_7655_()), this.f_20935_)) {
@@ -546,6 +553,21 @@
              this.m_142106_(this.f_20935_);
           } else {
              this.m_5810_();
+@@ -2824,8 +_,12 @@
+       if (this.m_21332_()) {
+          this.m_21137_(p_147201_, 5);
+       }
+-
+-      if (--this.f_20936_ == 0 && !this.f_19853_.f_46443_ && !p_147201_.m_41781_()) {
++      // Paper start - lag compensate eating
++      // we add 1 to the expected time to avoid lag compensating when we should not
++      boolean shouldLagCompensate = this.f_20935_.m_41720_().m_41472_() && this.eatStartTime != -1 && (System.nanoTime() - this.eatStartTime) > ((1 + this.totalEatTimeTicks) * 50 * (1000 * 1000));
++      if ((--this.f_20936_ == 0 || shouldLagCompensate) && !this.f_19853_.f_46443_ && !this.f_20935_.m_41781_()) {
++         this.f_20936_ = 0;
++         // Paper end
+          this.m_8095_();
+       }
+ 
 @@ -2833,7 +_,7 @@
  
     private boolean m_21332_() {
@@ -555,7 +577,7 @@
        boolean flag = foodproperties != null && foodproperties.m_38748_();
        flag |= i <= this.f_20935_.m_41779_() - 7;
        return flag && i % 4 == 0;
-@@ -2863,8 +_,10 @@
+@@ -2863,8 +_,13 @@
     public void m_6672_(InteractionHand p_21159_) {
        ItemStack itemstack = this.m_21120_(p_21159_);
        if (!itemstack.m_41619_() && !this.m_6117_()) {
@@ -563,10 +585,25 @@
 +         if (duration <= 0) return;
           this.f_20935_ = itemstack;
 -         this.f_20936_ = itemstack.m_41779_();
-+         this.f_20936_ = duration;
++         // Paper start - lag compensate eating
++         this.f_20936_ = this.totalEatTimeTicks = itemstack.m_41779_();
++         this.eatStartTime = System.nanoTime();
++         // Paper end
           if (!this.f_19853_.f_46443_) {
              this.m_21155_(1, true);
              this.m_21155_(2, p_21159_ == InteractionHand.OFF_HAND);
+@@ -2888,7 +_,10 @@
+             }
+          } else if (!this.m_6117_() && !this.f_20935_.m_41619_()) {
+             this.f_20935_ = ItemStack.f_41583_;
+-            this.f_20936_ = 0;
++            // Paper start - lag compensate eating
++            this.f_20936_ = this.totalEatTimeTicks = 0;
++            this.eatStartTime = -1L;
++            // Paper end
+          }
+       }
+ 
 @@ -2925,6 +_,9 @@
           vec31 = vec31.m_82496_(-this.m_146909_() * ((float)Math.PI / 180F));
           vec31 = vec31.m_82524_(-this.m_146908_() * ((float)Math.PI / 180F));
