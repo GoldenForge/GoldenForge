@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
+@@ -11,6 +_,8 @@
+ import com.mojang.logging.LogUtils;
+ import com.mojang.serialization.DataResult;
+ import com.mojang.serialization.JsonOps;
++import io.papermc.paper.ConfigTemp;
++import io.papermc.paper.util.MCUtil;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.longs.Long2ByteMap;
 @@ -26,14 +_,7 @@
  import java.io.IOException;
  import java.io.Writer;
@@ -16,11 +25,12 @@
  import java.util.concurrent.CancellationException;
  import java.util.concurrent.CompletableFuture;
  import java.util.concurrent.CompletionException;
-@@ -46,6 +_,8 @@
+@@ -46,6 +_,9 @@
  import java.util.function.Supplier;
  import java.util.stream.Collectors;
  import javax.annotation.Nullable;
 +
++import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
 +import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
  import net.minecraft.CrashReport;
  import net.minecraft.CrashReportCategory;
@@ -258,9 +268,68 @@
           this.f_140138_.close();
        } finally {
           super.close();
-@@ -400,8 +_,18 @@
+@@ -399,9 +_,77 @@
+ 
     }
  
++   // Paper start - incremental autosave
++   final ObjectRBTreeSet<ChunkHolder> autoSaveQueue = new ObjectRBTreeSet<>((playerchunk1, playerchunk2) -> {
++      int timeCompare =  Long.compare(playerchunk1.lastAutoSaveTime, playerchunk2.lastAutoSaveTime);
++      if (timeCompare != 0) {
++         return timeCompare;
++      }
++
++      return Long.compare(MCUtil.getCoordinateKey(playerchunk1.f_140009_), MCUtil.getCoordinateKey(playerchunk2.f_140009_));
++   });
++
++   protected void saveIncrementally() {
++      int savedThisTick = 0;
++      // optimized since we search far less chunks to hit ones that need to be saved
++      List<ChunkHolder> reschedule = new java.util.ArrayList<>(ConfigTemp.maxAutoSaveChunksPerTick);
++      long currentTick = this.f_140133_.m_46467_();
++      long maxSaveTime = currentTick - ConfigTemp.autoSavePeriod;
++
++      for (Iterator<ChunkHolder> iterator = this.autoSaveQueue.iterator(); iterator.hasNext();) {
++         ChunkHolder playerchunk = iterator.next();
++         if (playerchunk.lastAutoSaveTime > maxSaveTime) {
++            break;
++         }
++
++         iterator.remove();
++
++         ChunkAccess ichunkaccess = playerchunk.m_140090_().getNow(null);
++         if (ichunkaccess instanceof LevelChunk) {
++            boolean shouldSave = ((LevelChunk)ichunkaccess).lastSaveTime <= maxSaveTime;
++
++            if (shouldSave && this.m_140258_(ichunkaccess) && this.f_140133_.f_143244_.m_157512_(playerchunk.f_140009_.m_45588_(), entity -> {})) {
++               ++savedThisTick;
++
++               if (!playerchunk.setHasBeenLoaded()) {
++                  // do not fall through to reschedule logic
++                  playerchunk.inactiveTimeStart = currentTick;
++                  if (savedThisTick >= ConfigTemp.maxAutoSaveChunksPerTick) {
++                     break;
++                  }
++                  continue;
++               }
++            }
++         }
++
++         reschedule.add(playerchunk);
++
++         if (savedThisTick >= ConfigTemp.maxAutoSaveChunksPerTick) {
++            break;
++         }
++      }
++
++      for (int i = 0, len = reschedule.size(); i < len; ++i) {
++         ChunkHolder playerchunk = reschedule.get(i);
++         playerchunk.lastAutoSaveTime = this.f_140133_.m_46467_();
++         this.autoSaveQueue.add(playerchunk);
++      }
++   }
++   // Paper end
++
     protected void m_140318_(boolean p_140319_) {
 +      // Paper start - do not overload I/O threads with too much work when saving
 +      int[] saved = new int[1];
@@ -391,7 +460,7 @@
                    this.f_140133_.m_8712_(levelchunk);
                 }
  
-+
++               this.autoSaveQueue.remove(p_140183_); // Paper
                 this.f_140134_.m_9330_(p_203002_.m_7697_());
                 this.f_140134_.m_9409_();
                 this.f_140144_.m_5511_(p_203002_.m_7697_(), (ChunkStatus)null);
@@ -615,7 +684,7 @@
     }
  
     public int m_140368_() {
-@@ -771,6 +_,42 @@
+@@ -771,17 +_,54 @@
        }
     }
  
@@ -651,14 +720,18 @@
 +              asyncSaveData, chunk);
 +
 +      chunk.m_8092_(false);
-+      //chunk.setLastSaved(this.level.getGameTime()); // Paper - track last saved time
++      chunk.setLastSaved(this.f_140133_.m_46467_()); // Paper - track last saved time
 +   }
 +   // Paper end
 +
     private boolean m_140258_(ChunkAccess p_140259_) {
        this.f_140138_.m_63796_(p_140259_.m_7697_());
        if (!p_140259_.m_6344_()) {
-@@ -781,7 +_,7 @@
+          return false;
+       } else {
++         p_140259_.setLastSaved(this.f_140133_.m_46467_()); // Paper - track save time
+          p_140259_.m_8092_(false);
+          ChunkPos chunkpos = p_140259_.m_7697_();
  
           try {
              ChunkStatus chunkstatus = p_140259_.m_6415_();

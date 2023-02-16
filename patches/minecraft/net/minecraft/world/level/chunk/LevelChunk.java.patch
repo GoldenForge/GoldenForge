@@ -25,12 +25,19 @@
     static final Logger f_62771_ = LogUtils.getLogger();
     private static final TickingBlockEntity f_156361_ = new TickingBlockEntity() {
        public void m_142224_() {
-@@ -78,10 +_,26 @@
+@@ -77,11 +_,33 @@
+    private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
- 
-+   boolean loadedTicketLevel; public final boolean wasLoadCallbackInvoked() { return this.loadedTicketLevel; } // Paper - public accessor
++   // Paper start - track last save time
++   public long lastSaveTime;
++   public void setLastSaved(long ticks) {
++      this.lastSaveTime = ticks;
++   }
++   // Paper end
 +
++   boolean loadedTicketLevel; public final boolean wasLoadCallbackInvoked() { return this.loadedTicketLevel; } // Paper - public accessor
+ 
     public LevelChunk(Level p_187945_, ChunkPos p_187946_) {
        this(p_187945_, p_187946_, UpgradeData.f_63320_, new LevelChunkTicks<>(), new LevelChunkTicks<>(), 0L, (LevelChunkSection[])null, (LevelChunk.PostLoadProcessor)null, (BlendingData)null);
     }

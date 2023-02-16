@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
+@@ -167,7 +_,7 @@
+    private final MinecraftServer f_8548_;
+    private final ServerLevelData f_8549_;
+    final EntityTickList f_143243_ = new EntityTickList();
+-   private final PersistentEntitySectionManager<Entity> f_143244_;
++   public final PersistentEntitySectionManager<Entity> f_143244_;
+    public boolean f_8564_;
+    private final SleepStatus f_143245_;
+    private int f_8551_;
 @@ -184,10 +_,85 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
@@ -186,6 +195,38 @@
              p_8664_.m_6083_();
              profilerfiller.m_7238_();
  
+@@ -682,6 +_,31 @@
+       return !this.f_8548_.m_7762_(this, p_8697_, p_8696_) && this.m_6857_().m_61937_(p_8697_);
+    }
+ 
++   // Paper start - derived from below
++   public void saveIncrementally(boolean doFull) {
++      ServerChunkCache chunkproviderserver = this.m_7726_();
++
++
++         if (doFull) {
++            this.m_8806_();
++         }
++
++         if (!this.m_7441_()) chunkproviderserver.saveIncrementally();
++
++         // Copied from save()
++         // CraftBukkit start - moved from MinecraftServer.saveChunks
++         if (doFull) { // Paper
++            ServerLevel worldserver1 = this;
++
++            this.f_8549_.m_7831_(worldserver1.m_6857_().m_61970_());
++            this.f_8548_.f_129749_.m_5917_(this.f_8548_.m_129901_().m_136307_());
++            this.f_8548_.f_129744_.m_78290_(this.m_5962_(), this.f_8548_.f_129749_, this.f_8548_.m_6846_().m_6960_());
++         }
++         // CraftBukkit end
++
++   }
++   // Paper end
++
+    public void m_8643_(@Nullable ProgressListener p_8644_, boolean p_8645_, boolean p_8646_) {
+       ServerChunkCache serverchunkcache = this.m_7726_();
+       if (!p_8646_) {
 @@ -701,6 +_,7 @@
              this.f_143244_.m_157554_();
           }

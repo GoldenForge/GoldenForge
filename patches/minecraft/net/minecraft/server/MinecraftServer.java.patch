@@ -10,11 +10,36 @@
     public static final String f_195495_ = "vanilla";
     private static final float f_177884_ = 0.8F;
     private static final int f_177885_ = 100;
-@@ -238,9 +_,11 @@
-    protected final WorldData f_129749_;
+@@ -172,7 +_,7 @@
+    public static final LevelSettings f_129743_ = new LevelSettings("Demo World", GameType.SURVIVAL, false, Difficulty.NORMAL, false, new GameRules(), DataPackConfig.f_45842_);
+    private static final long f_177871_ = 50L;
+    public static final GameProfile f_195496_ = new GameProfile(Util.f_137441_, "Anonymous Player");
+-   protected final LevelStorageSource.LevelStorageAccess f_129744_;
++   public final LevelStorageSource.LevelStorageAccess f_129744_;
+    protected final PlayerDataStorage f_129745_;
+    private final List<Runnable> f_129752_ = Lists.newArrayList();
+    private MetricsRecorder f_177872_ = InactiveMetricsRecorder.f_146153_;
+@@ -217,7 +_,7 @@
+    private long f_129718_;
+    protected final Services f_236721_;
+    private long f_129724_;
+-   private final Thread f_129725_;
++   public final Thread f_129725_;
+    protected long f_129726_ = Util.m_137550_();
+    private long f_129727_;
+    private boolean f_129728_;
+@@ -235,12 +_,17 @@
+    private String f_129739_;
+    private MinecraftServer.ReloadableResources f_129740_;
+    private final StructureTemplateManager f_236720_;
+-   protected final WorldData f_129749_;
++   public final WorldData f_129749_;
     private volatile boolean f_195494_;
  
 +   public static long currentTickLong = 0L; // Paper
++   public int autosavePeriod;
++   public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
++   public static int currentTick = 0; // Paper - Further improve tick loop
 +
     public static <S extends MinecraftServer> S m_129872_(Function<Thread, S> p_129873_) {
        AtomicReference<S> atomicreference = new AtomicReference<>();
@@ -98,11 +123,12 @@
           this.f_129726_ = Util.m_137550_();
           this.f_129757_.m_134908_(Component.m_237113_(this.f_129709_));
           this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
-@@ -635,6 +_,8 @@
+@@ -635,6 +_,9 @@
                 this.f_129718_ = this.f_129726_;
              }
  
 +            ++MinecraftServer.currentTickLong; // Paper
++            ++MinecraftServer.currentTick;
 +
              if (this.f_177877_) {
                 this.f_177877_ = false;
@@ -253,15 +279,46 @@
        ++this.f_129766_;
        this.m_5703_(p_129871_);
        if (i - this.f_129724_ >= 5000000000L) {
-@@ -810,6 +_,7 @@
+@@ -810,15 +_,31 @@
              Collections.shuffle(Arrays.asList(agameprofile));
              this.f_129757_.m_134914_().m_134924_(agameprofile);
           }
 +         this.f_129757_.invalidateJson();
        }
  
-       if (this.f_129766_ % 6000 == 0) {
-@@ -826,6 +_,7 @@
+-      if (this.f_129766_ % 6000 == 0) {
+-         f_129750_.debug("Autosave started");
+-         this.f_129754_.m_6180_("save");
+-         this.m_195514_(true, false, false);
+-         this.f_129754_.m_7238_();
+-         f_129750_.debug("Autosave finished");
+-      }
++      // Paper start - incremental chunk and player saving
++      int playerSaveInterval = -1;
++      if (playerSaveInterval < 0) {
++         playerSaveInterval = autosavePeriod;
++      }
++      this.f_129754_.m_6180_("save");
++      final boolean fullSave = autosavePeriod > 0 && this.f_129766_ % autosavePeriod == 0;
++      try {
++         this.f_195494_ = true;
++         if (playerSaveInterval > 0) {
++            this.f_129763_.saveAll(playerSaveInterval);
++         }
++         for (ServerLevel level : this.m_129785_()) {
++            if (-1 > 0) {
++               level.saveIncrementally(fullSave);
++            }
++         }
++      } finally {
++         this.f_195494_ = false;
++      }
++      this.f_129754_.m_7238_();
++      // Paper end
+ 
+       this.f_129754_.m_6180_("tallying");
+       long l = this.f_129748_[this.f_129766_ % 100] = Util.m_137569_() - i;
+@@ -826,14 +_,19 @@
        long i1 = Util.m_137569_();
        this.f_129735_.m_13755_(i1 - i);
        this.f_129754_.m_7238_();
@@ -269,9 +326,12 @@
     }
  
     public void m_5703_(BooleanSupplier p_129954_) {
-@@ -833,7 +_,8 @@
+       this.f_129754_.m_6180_("commandFunctions");
        this.m_129890_().m_136128_();
        this.f_129754_.m_6182_("levels");
++      while (!this.processQueue.isEmpty()) {
++         this.processQueue.remove().run();
++      }
  
 -      for(ServerLevel serverlevel : this.m_129785_()) {
 +      for(ServerLevel serverlevel : this.getWorldArray()) {

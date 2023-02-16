@@ -365,6 +365,20 @@
        boolean flag = this.f_8327_.m_140805_(this.f_8325_);
        boolean flag1 = this.f_8325_.m_140324_();
        if (!flag && !flag1) {
+@@ -294,6 +_,13 @@
+       this.f_8325_.m_140318_(p_8420_);
+    }
+ 
++   // Paper start - duplicate save, but call incremental
++   public void saveIncrementally() {
++      this.m_8489_();
++      this.f_8325_.saveIncrementally();
++   }
++   // Paper end
++
+    public void close() throws IOException {
+       this.m_8419_(true);
+       this.f_8331_.close();
 @@ -315,6 +_,8 @@
        this.m_8488_();
     }

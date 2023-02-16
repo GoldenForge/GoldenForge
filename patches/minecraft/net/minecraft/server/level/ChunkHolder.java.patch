@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/level/ChunkHolder.java
 +++ b/net/minecraft/server/level/ChunkHolder.java
+@@ -2,6 +_,7 @@
+ 
+ import com.mojang.datafixers.util.Either;
+ import com.mojang.datafixers.util.Pair;
++import io.papermc.paper.ConfigTemp;
+ import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
+ import it.unimi.dsi.fastutil.shorts.ShortSet;
+ import java.util.ArrayList;
 @@ -21,6 +_,7 @@
  import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
  import net.minecraft.network.protocol.game.ClientboundLightUpdatePacket;
@@ -31,7 +39,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -67,8 +_,171 @@
+@@ -67,8 +_,173 @@
     private final ChunkHolder.PlayerProvider f_140016_;
     private boolean f_140017_;
     private boolean f_140018_;
@@ -39,6 +47,8 @@
     private CompletableFuture<Void> f_142981_ = CompletableFuture.completedFuture((Void)null);
  
 +   private final ChunkMap chunkMap; // Paper
++   long lastAutoSaveTime; // Paper - incremental autosave
++   long inactiveTimeStart; // Paper - incremental autosave
 +
 +   // Paper start - optimize chunk status progression without jumping through thread pool
 +   public boolean canAdvanceStatus() {
@@ -410,9 +420,23 @@
        if (flag) {
           Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = Either.right(new ChunkHolder.ChunkLoadingFailure() {
              public String toString() {
-@@ -372,14 +_,28 @@
+@@ -370,16 +_,42 @@
+ 
+       boolean flag5 = chunkholder$fullchunkstatus.m_140114_(ChunkHolder.FullChunkStatus.BORDER);
        boolean flag6 = chunkholder$fullchunkstatus1.m_140114_(ChunkHolder.FullChunkStatus.BORDER);
++      boolean prevHasBeenLoaded = this.f_140017_; // Paper
        this.f_140017_ |= flag6;
++      // Paper start - incremental autosave
++      if (this.f_140017_ & !prevHasBeenLoaded) {
++         long timeSinceAutoSave = this.inactiveTimeStart - this.lastAutoSaveTime;
++         if (timeSinceAutoSave < 0) {
++            // safest bet is to assume autosave is needed here
++            timeSinceAutoSave = ConfigTemp.autoSavePeriod;
++         }
++         this.lastAutoSaveTime = this.chunkMap.f_140133_.m_46467_() - timeSinceAutoSave;
++         this.chunkMap.autoSaveQueue.add(this);
++      }
++      // Paper end
        if (!flag5 && flag6) {
 +         int expectCreateCount = ++this.fullChunkCreateCount; // Paper
           this.f_140002_ = p_143004_.m_143109_(this);
@@ -547,6 +571,39 @@
     }
  
     public static ChunkStatus m_140074_(int p_140075_) {
+@@ -433,8 +_,32 @@
+    }
+ 
+    public void m_140096_() {
++      boolean prev = this.f_140017_; // Paper
++      this.f_140017_ = ChunkHolder.m_140083_(this.f_140007_).m_140114_(ChunkHolder.FullChunkStatus.BORDER);
++      // Paper start - incremental autosave
++      if (prev != this.f_140017_) {
++         if (this.f_140017_) {
++            long timeSinceAutoSave = this.inactiveTimeStart - this.lastAutoSaveTime;
++            if (timeSinceAutoSave < 0) {
++               // safest bet is to assume autosave is needed here
++               timeSinceAutoSave = ConfigTemp.autoSavePeriod;
++            }
++            this.lastAutoSaveTime = this.chunkMap.f_140133_.m_46467_() - timeSinceAutoSave;
++            this.chunkMap.autoSaveQueue.add(this);
++         } else {
++            this.inactiveTimeStart = this.chunkMap.f_140133_.m_46467_();
++            this.chunkMap.autoSaveQueue.remove(this);
++         }
++      }
++      // Paper end
++   }
++
++   // Paper start - incremental autosave
++   public boolean setHasBeenLoaded() {
+       this.f_140017_ = m_140083_(this.f_140007_).m_140114_(ChunkHolder.FullChunkStatus.BORDER);
++      return this.f_140017_;
+    }
++   // Paper end
+ 
+    public void m_140052_(ImposterProtoChunk p_140053_) {
+       for(int i = 0; i < this.f_140001_.length(); ++i) {
 @@ -499,4 +_,17 @@
     public interface PlayerProvider {
        List<ServerPlayer> m_183262_(ChunkPos p_183717_, boolean p_183718_);

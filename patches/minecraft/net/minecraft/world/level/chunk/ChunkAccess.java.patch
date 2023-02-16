@@ -30,10 +30,12 @@
        this.f_187606_ = p_187622_;
        this.f_187611_ = p_187623_;
        this.f_187612_ = new LevelChunkSection[p_187623_.m_151559_()];
-@@ -407,4 +_,7 @@
+@@ -407,4 +_,9 @@
  
     public static record TicksToSave(SerializableTickContainer<Block> f_187680_, SerializableTickContainer<Fluid> f_187681_) {
     }
++
++   public void setLastSaved(long ticks) {} // Paper
 +
 +   @Nullable
 +   public net.minecraft.world.level.LevelAccessor getWorldForge() { return null; }

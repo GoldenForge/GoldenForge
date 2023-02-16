@@ -32,6 +32,15 @@
        });
     }
  
+@@ -185,7 +_,7 @@
+ 
+    }
+ 
+-   private boolean m_157512_(long p_157513_, Consumer<T> p_157514_) {
++   public boolean m_157512_(long p_157513_, Consumer<T> p_157514_) {
+       PersistentEntitySectionManager.ChunkLoadStatus persistententitysectionmanager$chunkloadstatus = this.f_157498_.get(p_157513_);
+       if (persistententitysectionmanager$chunkloadstatus == PersistentEntitySectionManager.ChunkLoadStatus.PENDING) {
+          return false;
 @@ -247,6 +_,7 @@
        while((chunkentities = this.f_157500_.poll()) != null) {
           chunkentities.m_156792_().forEach((p_157593_) -> {

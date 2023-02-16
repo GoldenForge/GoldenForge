@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
+@@ -20,6 +_,8 @@
+ import java.util.function.Function;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.util.MCUtil;
+ import net.minecraft.ChatFormatting;
+ import net.minecraft.FileUtil;
+ import net.minecraft.commands.CommandSourceStack;
 @@ -30,6 +_,7 @@
  import net.minecraft.nbt.NbtOps;
  import net.minecraft.network.Connection;
@@ -169,11 +178,12 @@
        } else {
           compoundtag1 = this.f_11204_.m_78435_(p_11225_);
        }
-@@ -308,6 +_,7 @@
+@@ -308,6 +_,8 @@
     }
  
     protected void m_6765_(ServerPlayer p_11277_) {
 +      if (p_11277_.f_8906_ == null) return;
++      p_11277_.lastSave = MinecraftServer.currentTick; // Paper
        this.f_11204_.m_78433_(p_11277_);
        ServerStatsCounter serverstatscounter = this.f_11202_.get(p_11277_.m_20148_());
        if (serverstatscounter != null) {
@@ -250,6 +260,29 @@
        this.f_11200_.m_11393_(p_11281_);
        ServerPlayer serverplayer = this.m_11259_(p_11281_.getId());
        if (serverplayer != null) {
+@@ -621,6 +_,22 @@
+ 
+    }
+ 
++
++   public void saveAll(int interval) {
++      MCUtil.ensureMain("Save Players" , () -> { // Paper - Ensure main
++         int numSaved = 0;
++         long now = MinecraftServer.currentTick;
++         for (int i = 0; i < this.f_11196_.size(); ++i) {
++            ServerPlayer entityplayer = this.f_11196_.get(i);
++            if (interval == -1 || now - entityplayer.lastSave >= interval) {
++               this.m_6765_(entityplayer);
++               if (interval != -1 && ++numSaved <= 10) { break; }
++            }
++            // Paper end
++         }
++         return null; }); // Paper - ensure main
++   }
++
+    public UserWhiteList m_11305_() {
+       return this.f_11201_;
+    }
 @@ -784,13 +_,6 @@
        if (serverstatscounter == null) {
           File file1 = this.f_11195_.m_129843_(LevelResource.f_78175_).toFile();
