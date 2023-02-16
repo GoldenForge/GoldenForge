@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/ChunkStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/ChunkStorage.java
-@@ -21,27 +_,34 @@
+@@ -21,27 +_,36 @@
  
  public class ChunkStorage implements AutoCloseable {
     public static final int f_196910_ = 1493;
@@ -34,8 +34,10 @@
 -            LegacyStructureDataHandler legacystructuredatahandler = this.m_223448_(p_188289_, p_188290_);
 -            p_188291_ = legacystructuredatahandler.m_71326_(p_188291_);
 +            synchronized (this.persistentDataLock) { // Paper - Async chunk loading
-+               LegacyStructureDataHandler legacystructuredatahandler = this.m_223448_(p_188289_, p_188290_);
-+               p_188291_ = legacystructuredatahandler.m_71326_(p_188291_);
++               if (this.f_63497_ == null) {
++                  f_63497_ = LegacyStructureDataHandler.m_71331_(p_188289_, p_188290_.get());
++               }
++               p_188291_ = this.f_63497_.m_71326_(p_188291_);
 +            } // Paper - Async chunk loading
           }
        }

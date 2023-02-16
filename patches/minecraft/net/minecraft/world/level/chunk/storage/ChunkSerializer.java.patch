@@ -224,10 +224,11 @@
           if (flag1 || datalayer != null || datalayer1 != null) {
              CompoundTag compoundtag1 = new CompoundTag();
              if (flag1) {
-@@ -333,6 +_,18 @@
+@@ -333,16 +_,28 @@
           compoundtag.m_128379_("isLightOn", true);
        }
  
+-      ListTag listtag1 = new ListTag();
 +      // Paper start
 +      ListTag nbttaglist1;
 +      Iterator<BlockPos> iterator;
@@ -239,10 +240,25 @@
 +         iterator = p_63456_.m_5928_().iterator();
 +      }
 +      // Paper end
-+
-       ListTag listtag1 = new ListTag();
  
-       for(BlockPos blockpos : p_63456_.m_5928_()) {
+-      for(BlockPos blockpos : p_63456_.m_5928_()) {
+-         CompoundTag compoundtag3 = p_63456_.m_8051_(blockpos);
+-         if (compoundtag3 != null) {
+-            listtag1.add(compoundtag3);
++      CompoundTag nbttagcompound2;
++      while (iterator.hasNext()) {
++         BlockPos blockpos = (BlockPos) iterator.next();
++         nbttagcompound2 = p_63456_.m_8051_(blockpos);
++         if (nbttagcompound2 != null) {
++            nbttaglist1.add(nbttagcompound2);
+          }
+       }
+ 
+-      compoundtag.m_128365_("block_entities", listtag1);
++      compoundtag.m_128365_("block_entities", nbttaglist1);
+       if (p_63456_.m_6415_().m_62494_() == ChunkStatus.ChunkType.PROTOCHUNK) {
+          ProtoChunk protochunk = (ProtoChunk)p_63456_;
+          ListTag listtag2 = new ListTag();
 @@ -360,8 +_,26 @@
  
           compoundtag.m_128365_("CarvingMasks", compoundtag4);

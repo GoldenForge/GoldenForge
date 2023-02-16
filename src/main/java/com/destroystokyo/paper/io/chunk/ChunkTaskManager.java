@@ -44,6 +44,32 @@ public final class ChunkTaskManager {
 
     public static final ArrayDeque<ChunkInfo> WAITING_CHUNKS = new ArrayDeque<>(); // stack
 
+    public static boolean asyncChunks = false;
+    static {
+        int threads = 4;
+        int cpus = Runtime.getRuntime().availableProcessors() / 2;
+
+        if (threads <= 0) {
+            if (cpus <= 4) {
+                threads = cpus <= 2 ? 1 : 2;
+            } else {
+                threads = (int) Math.min(Integer.getInteger("paper.maxChunkThreads", 4), cpus / 2);
+            }
+        }
+        if (cpus == 1 && !Boolean.getBoolean("Paper.allowAsyncChunksSingleCore")) {
+            asyncChunks = false;
+        } else {
+            asyncChunks = true;
+        }
+
+        if (!asyncChunks) {
+            System.out.println("Async Chunks: Disabled - Chunks will be managed synchronously, and will cause tremendous lag.");
+        } else {
+            ChunkTaskManager.initGlobalLoadThreads(threads);
+            System.out.println("Async Chunks: Enabled - Chunks will be loaded much faster, without lag. Using " + threads + " threads.");
+        }
+    }
+
     private static final class ChunkInfo {
 
         public final int chunkX;

@@ -584,18 +584,19 @@
           long i = entry.getLongKey();
           ChunkPos chunkpos = new ChunkPos(i);
           ChunkHolder chunkholder = entry.getValue();
-@@ -918,12 +_,66 @@
+@@ -918,10 +_,64 @@
        }
     }
  
 -   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) {
 -      return this.m_223454_(p_214964_).thenApplyAsync((p_214907_) -> {
 -         return p_214907_.map(this::m_214947_);
+-      }, Util.m_183991_());
 +   // Paper start - Asynchronous chunk io
 +   @Nullable
 +   @Override
 +   public CompoundTag read(ChunkPos chunkcoordintpair) throws IOException {
-+      if (Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE) {
++      if (Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE || Thread.currentThread().getName().contains("Chunky")) {
 +         CompoundTag ret = com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE
 +                 .loadChunkDataAsyncFuture(this.f_140133_, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, com.destroystokyo.paper.io.IOUtil.getPriorityForCurrentThread(),
 +                         false, true, true).join().chunkData;
@@ -630,9 +631,9 @@
 +         }
 +      }).thenApplyAsync((optional) -> {
 +         return Optional.of(this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, optional, this.f_140136_.m_187743_()));
-       }, Util.m_183991_());
-    }
- 
++      }, mainInvokingExecutor);
++   }
++
 +   private CompoundTag readChunkInternal(ChunkPos p_214964_) throws IOException {
 +      CompoundTag nbttagcompound = this.read(p_214964_);
 +      // Paper start - Cache chunk status on disk
@@ -649,11 +650,9 @@
 +
 +      return nbttagcompound;
 +      // Paper end
-+   }
-+
-    private CompoundTag m_214947_(CompoundTag p_214948_) {
-       return this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, p_214948_, this.f_140136_.m_187743_());
     }
+ 
+    private CompoundTag m_214947_(CompoundTag p_214948_) {
 @@ -1105,7 +_,7 @@
     }
  
