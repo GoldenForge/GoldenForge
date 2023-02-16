@@ -291,6 +291,10 @@ def sharedDeps = {
     installer "net.minecraftforge:JarJarSelector:${JARJAR_VERSION}"
     installer "net.minecraftforge:JarJarMetadata:${JARJAR_VERSION}"
 
+    installer "net.objecthunter:exp4j:0.4.8"
+    installer "com.ibm.async:asyncutil:0.1.0"
+    installer "org.threadly:threadly:7.0"
+
     /*
     installer 'org.lwjgl:lwjgl:3.2.2'
     installer 'org.lwjgl:lwjgl-glfw:3.2.2'

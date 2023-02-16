@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-@@ -65,7 +_,13 @@
+@@ -65,10 +_,16 @@
     }
  
     public void m_9933_() {
@@ -14,7 +14,20 @@
 +      } else if (this.f_10019_ == ServerLoginPacketListenerImpl.State.READY_TO_ACCEPT) {
           this.m_10055_();
        } else if (this.f_10019_ == ServerLoginPacketListenerImpl.State.DELAY_ACCEPT) {
-          ServerPlayer serverplayer = this.f_10018_.m_6846_().m_11259_(this.f_10021_.getId());
+-         ServerPlayer serverplayer = this.f_10018_.m_6846_().m_11259_(this.f_10021_.getId());
++         ServerPlayer serverplayer = this.f_10018_.m_6846_().getActivePlayer(this.f_10021_.getId()); // Paper
+          if (serverplayer == null) {
+             this.f_10019_ = ServerLoginPacketListenerImpl.State.READY_TO_ACCEPT;
+             this.m_143699_(this.f_10024_);
+@@ -126,7 +_,7 @@
+          }
+ 
+          this.f_10013_.m_129512_(new ClientboundGameProfilePacket(this.f_10021_));
+-         ServerPlayer serverplayer = this.f_10018_.m_6846_().m_11259_(this.f_10021_.getId());
++         ServerPlayer serverplayer = this.f_10018_.m_6846_().getActivePlayer(this.f_10021_.getId()); // Paper
+ 
+          try {
+             ServerPlayer serverplayer1 = this.f_10018_.m_6846_().m_215624_(this.f_10021_, profilepublickey);
 @@ -178,14 +_,14 @@
        GameProfile gameprofile = this.f_10018_.m_236731_();
        if (gameprofile != null && p_10047_.f_238040_().equalsIgnoreCase(gameprofile.getName())) {

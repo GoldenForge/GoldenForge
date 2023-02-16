@@ -1,5 +1,16 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
+@@ -191,6 +_,10 @@
+    private final TextFilter f_8939_;
+    private boolean f_143378_;
+    private boolean f_184127_ = true;
++
++   public boolean isRealPlayer; // Paper - chunk priority
++   public net.minecraft.network.Connection networkManager; // Paper
++
+    private final ContainerSynchronizer f_143379_ = new ContainerSynchronizer() {
+       public void m_142589_(AbstractContainerMenu p_143448_, NonNullList<ItemStack> p_143449_, ItemStack p_143450_, int[] p_143451_) {
+          ServerPlayer.this.f_8906_.m_9829_(new ClientboundContainerSetContentPacket(p_143448_.f_38840_, p_143448_.m_182425_(), p_143449_, p_143450_));
 @@ -550,6 +_,7 @@
  
     public void m_6667_(DamageSource p_9035_) {

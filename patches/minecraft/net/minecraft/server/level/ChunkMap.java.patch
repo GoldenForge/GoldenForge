@@ -56,14 +56,57 @@
     private final PoiManager f_140138_;
     final LongSet f_140139_ = new LongOpenHashSet();
     private boolean f_140140_;
-@@ -136,9 +_,41 @@
+@@ -128,7 +_,7 @@
+    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> f_140143_;
+    private final ChunkProgressListener f_140144_;
+    private final ChunkStatusUpdateListener f_143031_;
+-   private final ChunkMap.DistanceManager f_140145_;
++   public final ChunkMap.DistanceManager f_140145_;
+    private final AtomicInteger f_140146_ = new AtomicInteger();
+    private final StructureTemplateManager f_214833_;
+    private final String f_182284_;
+@@ -136,9 +_,74 @@
     private final Int2ObjectMap<ChunkMap.TrackedEntity> f_140150_ = new Int2ObjectOpenHashMap<>();
     private final Long2ByteMap f_140151_ = new Long2ByteOpenHashMap();
     private final Long2LongMap f_202981_ = new Long2LongOpenHashMap();
 -   private final Queue<Runnable> f_140125_ = Queues.newConcurrentLinkedQueue();
 +   private final Queue<Runnable> f_140125_ = new com.destroystokyo.paper.utils.CachedSizeConcurrentLinkedQueue<>(); // Paper - need constant-time size()
     int f_140126_;
- 
+-
++   public final ReferenceOpenHashSet<ChunkHolder> needsChangeBroadcasting = new ReferenceOpenHashSet<>();
++
++   // Paper start - Chunk Prioritization
++   public void queueHolderUpdate(ChunkHolder playerchunk) {
++      Runnable runnable = () -> {
++         if (isUnloading(playerchunk)) {
++            return; // unloaded
++         }
++         f_140145_.pendingChunkUpdates.add(playerchunk);
++         if (!f_140145_.pollingPendingChunkUpdates) {
++            f_140133_.m_7726_().m_8489_();
++         }
++      };
++      if (MinecraftServer.getServer().m_18695_()) {
++         // We can't use executor here because it will not execute tasks if its currently in the middle of executing tasks...
++         runnable.run();
++      } else {
++         f_140135_.execute(runnable);
++      }
++   }
++
++
++   private boolean isUnloading(ChunkHolder playerchunk) {
++      return playerchunk == null || f_140139_.contains(playerchunk.f_140009_.m_45588_());
++   }
++
++   private void updateChunkPriorityMap(it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap map, long chunk, int level) {
++      int prev = map.getOrDefault(chunk, -1);
++      if (level > prev) {
++         map.put(chunk, level);
++      }
++   }
++   // Paper end
++
 +   public final ChunkHolder getUnloadingChunkHolder(int chunkX, int chunkZ) {
 +      return this.f_140131_.get(io.papermc.paper.util.CoordinateUtils.getChunkKey(chunkX, chunkZ));
 +   }
@@ -138,6 +181,29 @@
     }
  
     protected IntSupplier m_140371_(long p_140372_) {
+@@ -267,6 +_,7 @@
+       List<ChunkHolder> list1 = new ArrayList<>();
+       int i = p_140211_.f_45578_;
+       int j = p_140211_.f_45579_;
++      ChunkHolder requestingNeighbor = m_140174_(p_140211_.m_45588_()); // Paper
+ 
+       for(int k = -p_140212_; k <= p_140212_; ++k) {
+          for(int l = -p_140212_; l <= p_140212_; ++l) {
+@@ -284,6 +_,14 @@
+ 
+             ChunkStatus chunkstatus = p_140213_.apply(i1);
+             CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture = chunkholder.m_140049_(chunkstatus, this);
++            // Paper start
++            if (requestingNeighbor != null && requestingNeighbor != chunkholder && !completablefuture.isDone()) {
++               requestingNeighbor.onNeighborRequest(chunkholder, chunkstatus);
++               completablefuture.thenAccept(either -> {
++                  requestingNeighbor.onNeighborDone(chunkholder, chunkstatus, either.left().orElse(null));
++               });
++            }
++            // Paper end
+             list1.add(chunkholder);
+             list.add(completablefuture);
+          }
 @@ -336,9 +_,9 @@
           });
        };
@@ -150,7 +216,7 @@
        CrashReport crashreport = CrashReport.m_127521_(p_203752_, "Chunk loading");
        CrashReportCategory crashreportcategory = crashreport.m_127514_("Chunk loading");
        crashreportcategory.m_128159_("Details", p_203753_);
-@@ -353,7 +_,7 @@
+@@ -353,11 +_,12 @@
           return p_203086_.mapLeft((p_203092_) -> {
              return (LevelChunk)p_203092_.get(p_203092_.size() / 2);
           });
@@ -159,7 +225,17 @@
     }
  
     @Nullable
-@@ -381,10 +_,13 @@
+    ChunkHolder m_140176_(long p_140177_, int p_140178_, @Nullable ChunkHolder p_140179_, int p_140180_) {
++      if (this.unloadingPlayerChunk) { net.minecraft.server.MinecraftServer.f_129750_.error("Cannot tick distance manager while unloading playerchunks", new Throwable()); throw new IllegalStateException("Cannot tick distance manager while unloading playerchunks"); } // Paper
+       if (p_140180_ > f_140127_ && p_140178_ > f_140127_) {
+          return p_140179_;
+       } else {
+@@ -377,14 +_,18 @@
+             p_140179_ = this.f_140131_.remove(p_140177_);
+             if (p_140179_ != null) {
+                p_140179_.m_140027_(p_140178_);
++               p_140179_.onChunkAdd(); // Paper - optimise anyPlayerCloseEnoughForSpawning - PUT HERE AFTER RE-ADDING ONLY
+             } else {
                 p_140179_ = new ChunkHolder(new ChunkPos(p_140177_), p_140178_, this.f_140133_, this.f_140134_, this.f_140141_, this);
              }
  
@@ -232,15 +308,17 @@
     }
  
     private void m_140353_(BooleanSupplier p_140354_) {
-@@ -452,7 +_,7 @@
+@@ -452,8 +_,9 @@
  
        for(int i = 0; longiterator.hasNext() && (p_140354_.getAsBoolean() || i < 200 || this.f_140139_.size() > 2000); longiterator.remove()) {
           long j = longiterator.nextLong();
 -         ChunkHolder chunkholder = this.f_140129_.remove(j);
 +         ChunkHolder chunkholder = this.updatingChunks.queueRemove(j);  // Paper - Don't copy
           if (chunkholder != null) {
++            chunkholder.onChunkRemove(); // Paper
              this.f_140131_.put(j, chunkholder);
              this.f_140140_ = true;
+             ++i;
 @@ -461,7 +_,7 @@
           }
        }
@@ -250,7 +328,7 @@
  
        Runnable runnable;
        while((p_140354_.getAsBoolean() || k > 0) && (runnable = this.f_140125_.poll()) != null) {
-@@ -470,13 +_,13 @@
+@@ -470,44 +_,74 @@
        }
  
        int l = 0;
@@ -270,10 +348,23 @@
  
     }
  
-@@ -488,11 +_,24 @@
+    private void m_140181_(long p_140182_, ChunkHolder p_140183_) {
+       CompletableFuture<ChunkAccess> completablefuture = p_140183_.m_140090_();
+-      completablefuture.thenAcceptAsync((p_203002_) -> {
++      Consumer<ChunkAccess> consumer = (p_203002_) -> { // CraftBukkit - decompile error
+          CompletableFuture<ChunkAccess> completablefuture1 = p_140183_.m_140090_();
+          if (completablefuture1 != completablefuture) {
              this.m_140181_(p_140182_, p_140183_);
           } else {
-             if (this.f_140131_.remove(p_140182_, p_140183_) && p_203002_ != null) {
+-            if (this.f_140131_.remove(p_140182_, p_140183_) && p_203002_ != null) {
++            // Paper start - do not allow ticket level changes while unloading chunks
++            boolean unloadingBefore = this.unloadingPlayerChunk;
++            this.unloadingPlayerChunk = true;
++            try {
++
++            // Paper start
++            boolean removed;
++            if ((removed = this.f_140131_.remove(p_140182_, p_140183_)) && p_203002_ != null) {
 +
 +               this.m_140424_().queueUnload(p_140183_.f_140009_.longKey, MinecraftServer.currentTickLong + 1); // Paper - unload POI data
                 if (p_203002_ instanceof LevelChunk) {
@@ -298,6 +389,35 @@
                 if (this.f_140132_.remove(p_140182_) && p_203002_ instanceof LevelChunk) {
                    LevelChunk levelchunk = (LevelChunk)p_203002_;
                    this.f_140133_.m_8712_(levelchunk);
+                }
+ 
++
+                this.f_140134_.m_9330_(p_203002_.m_7697_());
+                this.f_140134_.m_9409_();
+                this.f_140144_.m_5511_(p_203002_.m_7697_(), (ChunkStatus)null);
+                this.f_202981_.remove(p_203002_.m_7697_().m_45588_());
+-            }
++            } else if (removed) { // Paper start
++               this.m_140424_().queueUnload(p_140183_.f_140009_.longKey, MinecraftServer.currentTickLong + 1); // Paper - unload POI data
++            } // Paper end
++            } finally { this.unloadingPlayerChunk = unloadingBefore; } // Paper - do not allow ticket level changes while unloading chunks
+ 
+          }
+-      }, this.f_140125_::add).whenComplete((p_202996_, p_202997_) -> {
+-         if (p_202997_ != null) {
+-            f_140128_.error("Failed to save chunk {}", p_140183_.m_140092_(), p_202997_);
++
++         };
++
++      Queue queue = this.f_140125_;
++
++      Objects.requireNonNull(this.f_140125_);
++      completablefuture.thenAcceptAsync(consumer, queue::add).whenComplete((ovoid, throwable) -> {
++         if (throwable != null) {
++            ChunkMap.f_140128_.error("Failed to save chunk {}", p_140183_.m_140092_(), throwable);
+          }
+ 
+       });
 @@ -517,7 +_,11 @@
        if (!this.f_140140_) {
           return false;
@@ -311,7 +431,33 @@
           this.f_140140_ = false;
           return true;
        }
-@@ -546,27 +_,79 @@
+@@ -528,11 +_,19 @@
+       if (p_140294_ == ChunkStatus.f_62314_) {
+          return this.m_140417_(chunkpos);
+       } else {
++         // Paper start - revert 1.17 chunk system changes
++         CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future = p_140293_.m_140049_(p_140294_.m_62482_(), this);
++         return future.thenComposeAsync((either) -> {
++            Optional<ChunkAccess> optional = either.left();
++            if (!optional.isPresent()) {
++               return CompletableFuture.completedFuture(either);
++            }
++            // Paper end - revert 1.17 chunk system changes
+          if (p_140294_ == ChunkStatus.f_62323_) {
+             this.f_140145_.m_140792_(TicketType.f_9446_, chunkpos, 33 + ChunkStatus.m_62370_(ChunkStatus.f_62323_), chunkpos);
+          }
+ 
+-         Optional<ChunkAccess> optional = p_140293_.m_140049_(p_140294_.m_62482_(), this).getNow(ChunkHolder.f_139995_).left();
++        // Optional<ChunkAccess> optional = p_140293_.getOrScheduleFuture(p_140294_.getParent(), this).getNow(ChunkHolder.UNLOADED_CHUNK).left();
+          if (optional.isPresent() && optional.get().m_6415_().m_62427_(p_140294_)) {
+             CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture = p_140294_.m_223244_(this.f_140133_, this.f_214833_, this.f_140134_, (p_203081_) -> {
+                return this.m_140383_(p_140293_);
+@@ -542,31 +_,84 @@
+          } else {
+             return this.m_140360_(p_140293_, p_140294_);
+          }
++         }, this.f_140135_).thenComposeAsync(CompletableFuture::completedFuture, this.f_140135_); // Paper - revert 1.17 chunk system changes
+       }
     }
  
     private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_140417_(ChunkPos p_140418_) {
@@ -469,7 +615,7 @@
     }
  
     public int m_140368_() {
-@@ -771,6 +_,41 @@
+@@ -771,6 +_,42 @@
        }
     }
  
@@ -500,6 +646,7 @@
 +
 +      ChunkSerializer.AsyncSaveData asyncSaveData = ChunkSerializer.getAsyncSaveData(this.f_140133_, chunk);
 +
++      chunk.asyncsavedata = asyncSaveData;
 +      this.f_140133_.asyncChunkTaskManager.scheduleChunkSave(chunkPos.f_45578_, chunkPos.f_45579_, com.destroystokyo.paper.io.PrioritizedTaskQueue.NORMAL_PRIORITY,
 +              asyncSaveData, chunk);
 +
@@ -547,7 +694,7 @@
           this.f_140145_.m_140777_(this.f_140126_ + 1);
  
 -         for(ChunkHolder chunkholder : this.f_140129_.values()) {
-+         for(ChunkHolder chunkholder : this.updatingChunks.getVisibleValuesCopy()) {
++         for(ChunkHolder chunkholder : this.updatingChunks.getUpdatingValues()) {
              ChunkPos chunkpos = chunkholder.m_140092_();
              MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
              this.m_183262_(chunkpos, false).forEach((p_214864_) -> {
@@ -596,7 +743,7 @@
 +   @Nullable
 +   @Override
 +   public CompoundTag read(ChunkPos chunkcoordintpair) throws IOException {
-+      if (Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE || Thread.currentThread().getName().contains("Chunky")) {
++      if (Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE ) {
 +         CompoundTag ret = com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE
 +                 .loadChunkDataAsyncFuture(this.f_140133_, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, com.destroystokyo.paper.io.IOUtil.getPriorityForCurrentThread(),
 +                         false, true, true).join().chunkData;
@@ -674,6 +821,15 @@
        return this.f_140138_;
     }
  
+@@ -1247,7 +_,7 @@
+ 
+    class DistanceManager extends net.minecraft.server.level.DistanceManager {
+       protected DistanceManager(Executor p_140459_, Executor p_140460_) {
+-         super(p_140459_, p_140460_);
++         super(p_140459_, p_140460_, ChunkMap.this);
+       }
+ 
+       protected boolean m_7009_(long p_140462_) {
 @@ -1270,7 +_,7 @@
        final Entity f_140472_;
        private final int f_140473_;

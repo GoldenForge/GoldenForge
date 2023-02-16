@@ -8,25 +8,37 @@
  import net.minecraft.util.DebugBuffer;
  import net.minecraft.util.Mth;
  import net.minecraft.world.level.ChunkPos;
-@@ -56,8 +_,8 @@
+@@ -48,16 +_,17 @@
+    private static final int f_142982_ = 64;
+    private final AtomicReferenceArray<CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>>> f_140001_ = new AtomicReferenceArray<>(f_139999_.size());
+    private final LevelHeightAccessor f_142983_;
+-   private volatile CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> f_140002_ = f_139998_;
+-   private volatile CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> f_140003_ = f_139998_;
+-   private volatile CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> f_140004_ = f_139998_;
++   private volatile CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> f_140002_ = f_139998_; private int fullChunkCreateCount; private volatile boolean isFullChunkReady; // Paper - cache chunk ticking stage
++   private volatile CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> f_140003_ = f_139998_;  private volatile boolean isTickingReady; // Paper - cache chunk ticking stage
++   private volatile CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> f_140004_ = f_139998_; private volatile boolean isEntityTickingReady; // Paper - cache chunk ticking stage
+    private CompletableFuture<ChunkAccess> f_140005_ = CompletableFuture.completedFuture((ChunkAccess)null);
+    @Nullable
     private final DebugBuffer<ChunkHolder.ChunkSaveDebug> f_142984_ = null;
     private int f_140006_;
     private int f_140007_;
 -   private int f_140008_;
 -   final ChunkPos f_140009_;
 +   public  int f_140008_;
++   boolean isUpdateQueued = false; // Paper
 +   public final ChunkPos f_140009_;
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -67,8 +_,53 @@
+@@ -67,8 +_,171 @@
     private final ChunkHolder.PlayerProvider f_140016_;
     private boolean f_140017_;
     private boolean f_140018_;
 +   LevelChunk currentlyLoading; // Forge: Used to bypass future chain when loading chunks.
     private CompletableFuture<Void> f_142981_ = CompletableFuture.completedFuture((Void)null);
  
-+   int requestedPriority = ChunkMap.f_140127_ + 1; // this priority is possible pending, but is used to ensure needless updates are not queued
++   private final ChunkMap chunkMap; // Paper
 +
 +   // Paper start - optimize chunk status progression without jumping through thread pool
 +   public boolean canAdvanceStatus() {
@@ -70,9 +82,245 @@
 +   private boolean unloadCallbackScheduled = false;
 +   // Paper end
 +
++
++   // Paper start - optimise chunk tick iteration
++   public final boolean needsBroadcastChanges() {
++      return this.f_140010_ || !this.f_140013_.isEmpty() || !this.f_140012_.isEmpty();
++   }
++
++   private void addToBroadcastMap() {
++      this.chunkMap.needsChangeBroadcasting.add(this);
++   }
++   // Paper end - optimise chunk tick iteration
++
++   void onChunkAdd() {
++      // Paper start - optimise chunk tick iteration
++      if (this.needsBroadcastChanges()) {
++         this.chunkMap.needsChangeBroadcasting.add(this);
++      }
++      // Paper end - optimise chunk tick iteration
++   }
++
++   void onChunkRemove() {
++      // Paper start - optimise chunk tick iteration
++      if (this.needsBroadcastChanges()) {
++         this.chunkMap.needsChangeBroadcasting.remove(this);
++      }
++      // Paper end - optimise chunk tick iterationn
++   }
++
++   // Paper start - Chunk gen/load priority system
++   volatile int neighborPriority = -1;
++   volatile int priorityBoost = 0;
++   public final java.util.concurrent.ConcurrentHashMap<ChunkHolder, ChunkStatus> neighbors = new java.util.concurrent.ConcurrentHashMap<>();
++   public final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Integer> neighborPriorities = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
++   int requestedPriority = ChunkMap.f_140127_ + 1; // this priority is possible pending, but is used to ensure needless updates are not queued
++
++   private int getDemandedPriority() {
++      int priority = neighborPriority; // if we have a neighbor priority, use it
++      int myPriority = getMyPriority();
++
++      if (priority == -1 || (f_140007_ <= 33 && priority > myPriority)) {
++         priority = myPriority;
++      }
++
++      return Math.max(1, Math.min(Math.max(f_140007_, ChunkMap.f_140127_), priority));
++   }
++
++   private int getMyPriority() {
++      if (priorityBoost == DistanceManager.URGENT_PRIORITY) {
++         return 2; // Urgent - ticket level isn't always 31 so 33-30 = 3, but allow 1 more tasks to go below this for dependents
++      }
++      return f_140007_ - priorityBoost;
++   }
++
++   private int getNeighborsPriority() {
++      return (neighborPriorities.isEmpty() ? getMyPriority() : getDemandedPriority()) + 1;
++   }
++
++   public void onNeighborRequest(ChunkHolder neighbor, ChunkStatus status) {
++      neighbor.setNeighborPriority(this, getNeighborsPriority());
++      this.neighbors.compute(neighbor, (playerChunk, currentWantedStatus) -> {
++         if (currentWantedStatus == null || !currentWantedStatus.m_62427_(status)) {
++            //System.out.println(this + " request " + neighbor + " at " + status + " currently " + currentWantedStatus);
++            return status;
++         } else {
++            //System.out.println(this + " requested " + neighbor + " at " + status + " but thats lower than other wanted status " + currentWantedStatus);
++            return currentWantedStatus;
++         }
++      });
++
++   }
++
++   public void onNeighborDone(ChunkHolder neighbor, ChunkStatus chunkstatus, ChunkAccess chunk) {
++      this.neighbors.compute(neighbor, (playerChunk, wantedStatus) -> {
++         if (wantedStatus != null && chunkstatus.m_62427_(wantedStatus)) {
++            //System.out.println(this + " neighbor done at " + neighbor + " for status " + chunkstatus + " wanted " + wantedStatus);
++            neighbor.removeNeighborPriority(this);
++            return null;
++         } else {
++            //System.out.println(this + " neighbor finished our previous request at " + neighbor + " for status " + chunkstatus + " but we now want instead " + wantedStatus);
++            return wantedStatus;
++         }
++      });
++   }
++
++   private void removeNeighborPriority(ChunkHolder requester) {
++      synchronized (neighborPriorities) {
++         neighborPriorities.remove(requester.f_140009_.m_45588_());
++         recalcNeighborPriority();
++      }
++      checkPriority();
++   }
++
++
++   private void setNeighborPriority(ChunkHolder requester, int priority) {
++      synchronized (neighborPriorities) {
++         if (!Integer.valueOf(priority).equals(neighborPriorities.put(requester.f_140009_.m_45588_(), Integer.valueOf(priority)))) {
++            recalcNeighborPriority();
++         }
++      }
++      checkPriority();
++   }
++
++   private void recalcNeighborPriority() {
++      neighborPriority = -1;
++      if (!neighborPriorities.isEmpty()) {
++         synchronized (neighborPriorities) {
++            for (Integer neighbor : neighborPriorities.values()) {
++               if (neighbor < neighborPriority || neighborPriority == -1) {
++                  neighborPriority = neighbor;
++               }
++            }
++         }
++      }
++   }
++   private void checkPriority() {
++      if (this.requestedPriority != getDemandedPriority()) this.chunkMap.queueHolderUpdate(this);
++   }
++
++
     public ChunkHolder(ChunkPos p_142986_, int p_142987_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.LevelChangeListener p_142990_, ChunkHolder.PlayerProvider p_142991_) {
        this.f_140009_ = p_142986_;
        this.f_142983_ = p_142988_;
+@@ -80,6 +_,8 @@
+       this.f_140008_ = this.f_140006_;
+       this.m_140027_(p_142987_);
+       this.f_140011_ = new ShortSet[p_142988_.m_151559_()];
++      this.chunkMap = (ChunkMap)p_142991_; // Paper
++      this.onChunkAdd(); // Paper - optimise anyPlayerCloseEnoughForSpawning
+    }
+ 
+    public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_140047_(ChunkStatus p_140048_) {
+@@ -146,7 +_,7 @@
+       return null;
+    }
+ 
+-   public CompletableFuture<ChunkAccess> m_140090_() {
++   public final CompletableFuture<ChunkAccess> m_140090_() {
+       return this.f_140005_;
+    }
+ 
+@@ -156,6 +_,7 @@
+          int i = this.f_142983_.m_151564_(p_140057_.m_123342_());
+          if (this.f_140011_[i] == null) {
+             this.f_140010_ = true;
++            this.addToBroadcastMap(); // Paper - optimise chunk tick iteration
+             this.f_140011_[i] = new ShortOpenHashSet();
+          }
+ 
+@@ -174,6 +_,7 @@
+                int i = this.f_140014_.m_164447_();
+                int j = this.f_140014_.m_164448_();
+                if (p_140038_ >= i && p_140038_ <= j) {
++                  this.addToBroadcastMap(); // Paper - optimise chunk tick iteration
+                   int k = p_140038_ - i;
+                   if (p_140037_ == LightLayer.SKY) {
+                      this.f_140013_.set(k);
+@@ -188,45 +_,47 @@
+    }
+ 
+    public void m_140054_(LevelChunk p_140055_) {
+-      if (this.f_140010_ || !this.f_140013_.isEmpty() || !this.f_140012_.isEmpty()) {
+-         Level level = p_140055_.m_62953_();
+-         int i = 0;
+-
+-         for(int j = 0; j < this.f_140011_.length; ++j) {
+-            i += this.f_140011_[j] != null ? this.f_140011_[j].size() : 0;
+-         }
+-
+-         this.f_140018_ |= i >= 64;
+-         if (!this.f_140013_.isEmpty() || !this.f_140012_.isEmpty()) {
+-            this.m_140063_(new ClientboundLightUpdatePacket(p_140055_.m_7697_(), this.f_140014_, this.f_140013_, this.f_140012_, true), !this.f_140018_);
+-            this.f_140013_.clear();
+-            this.f_140012_.clear();
+-         }
+-
+-         for(int l = 0; l < this.f_140011_.length; ++l) {
+-            ShortSet shortset = this.f_140011_[l];
+-            if (shortset != null) {
+-               int k = this.f_142983_.m_151568_(l);
+-               SectionPos sectionpos = SectionPos.m_123196_(p_140055_.m_7697_(), k);
+-               if (shortset.size() == 1) {
+-                  BlockPos blockpos = sectionpos.m_123245_(shortset.iterator().nextShort());
+-                  BlockState blockstate = level.m_8055_(blockpos);
+-                  this.m_140063_(new ClientboundBlockUpdatePacket(blockpos, blockstate), false);
+-                  this.m_140032_(level, blockpos, blockstate);
+-               } else {
+-                  LevelChunkSection levelchunksection = p_140055_.m_183278_(l);
+-                  ClientboundSectionBlocksUpdatePacket clientboundsectionblocksupdatepacket = new ClientboundSectionBlocksUpdatePacket(sectionpos, shortset, levelchunksection, this.f_140018_);
+-                  this.m_140063_(clientboundsectionblocksupdatepacket, false);
+-                  clientboundsectionblocksupdatepacket.m_132992_((p_140078_, p_140079_) -> {
+-                     this.m_140032_(level, p_140078_, p_140079_);
+-                  });
++      if (this.needsBroadcastChanges()) { // Paper - moved into above, other logic needs to call
++         if (this.f_140010_ || !this.f_140013_.isEmpty() || !this.f_140012_.isEmpty()) {
++            Level level = p_140055_.m_62953_();
++            int i = 0;
++
++            for (int j = 0; j < this.f_140011_.length; ++j) {
++               i += this.f_140011_[j] != null ? this.f_140011_[j].size() : 0;
++            }
++
++            this.f_140018_ |= i >= 64;
++            if (!this.f_140013_.isEmpty() || !this.f_140012_.isEmpty()) {
++               this.m_140063_(new ClientboundLightUpdatePacket(p_140055_.m_7697_(), this.f_140014_, this.f_140013_, this.f_140012_, true), !this.f_140018_);
++               this.f_140013_.clear();
++               this.f_140012_.clear();
++            }
++
++            for (int l = 0; l < this.f_140011_.length; ++l) {
++               ShortSet shortset = this.f_140011_[l];
++               if (shortset != null) {
++                  int k = this.f_142983_.m_151568_(l);
++                  SectionPos sectionpos = SectionPos.m_123196_(p_140055_.m_7697_(), k);
++                  if (shortset.size() == 1) {
++                     BlockPos blockpos = sectionpos.m_123245_(shortset.iterator().nextShort());
++                     BlockState blockstate = level.m_8055_(blockpos);
++                     this.m_140063_(new ClientboundBlockUpdatePacket(blockpos, blockstate), false);
++                     this.m_140032_(level, blockpos, blockstate);
++                  } else {
++                     LevelChunkSection levelchunksection = p_140055_.m_183278_(l);
++                     ClientboundSectionBlocksUpdatePacket clientboundsectionblocksupdatepacket = new ClientboundSectionBlocksUpdatePacket(sectionpos, shortset, levelchunksection, this.f_140018_);
++                     this.m_140063_(clientboundsectionblocksupdatepacket, false);
++                     clientboundsectionblocksupdatepacket.m_132992_((p_140078_, p_140079_) -> {
++                        this.m_140032_(level, p_140078_, p_140079_);
++                     });
++                  }
++
++                  this.f_140011_[l] = null;
+                }
+-
+-               this.f_140011_[l] = null;
+             }
++
++            this.f_140010_ = false;
+          }
+-
+-         this.f_140010_ = false;
+       }
+    }
+ 
 @@ -331,7 +_,13 @@
        this.f_142981_.cancel(false);
        CompletableFuture<Void> completablefuture = new CompletableFuture<>();
@@ -87,7 +335,7 @@
        }, p_143001_);
        this.f_142981_ = completablefuture;
        p_143000_.thenAccept((p_200421_) -> {
-@@ -343,16 +_,65 @@
+@@ -343,16 +_,71 @@
  
     private void m_142992_(ChunkMap p_142993_, ChunkHolder.FullChunkStatus p_142994_) {
        this.f_142981_.cancel(false);
@@ -96,9 +344,17 @@
 +      p_142993_.unloadingPlayerChunk = true;
 +      try { // Paper end  - do not allow ticket level changes
        p_142993_.m_143075_(this.f_140009_, p_142994_);
+-   }
+-
 +      } finally { p_142993_.unloadingPlayerChunk = unloadingBefore; } // Paper - do not allow ticket level changes
-    }
- 
++   }
++
++
++   public LevelChunk getFullChunkNowUnchecked() {
++      CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> statusFuture = this.m_140047_(ChunkStatus.f_62326_);
++      Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = (Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>) statusFuture.getNow(null);
++      return (either == null) ? null : (LevelChunk) either.left().orElse(null);
++   }
 +   protected long updateCount; // Paper - correctly handle recursion
     protected void m_143003_(ChunkMap p_143004_, Executor p_143005_) {
 +      long updateCount = ++this.updateCount; // Paper - correctly handle recursion
@@ -154,9 +410,115 @@
        if (flag) {
           Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = Either.right(new ChunkHolder.ChunkLoadingFailure() {
              public String toString() {
-@@ -418,6 +_,30 @@
+@@ -372,14 +_,28 @@
+       boolean flag6 = chunkholder$fullchunkstatus1.m_140114_(ChunkHolder.FullChunkStatus.BORDER);
+       this.f_140017_ |= flag6;
+       if (!flag5 && flag6) {
++         int expectCreateCount = ++this.fullChunkCreateCount; // Paper
+          this.f_140002_ = p_143004_.m_143109_(this);
+          this.m_142998_(p_143004_, this.f_140002_, p_143005_, ChunkHolder.FullChunkStatus.BORDER);
++         // Paper start - cache ticking ready status
++         this.f_140002_.thenAccept(either -> {
++            final Optional<LevelChunk> left = either.left();
++            if (left.isPresent() && ChunkHolder.this.fullChunkCreateCount == expectCreateCount) {
++               // note: Here is a very good place to add callbacks to logic waiting on this.
++               LevelChunk fullChunk = either.left().get();
++               ChunkHolder.this.isFullChunkReady = true;
++               fullChunk.playerChunk = ChunkHolder.this;
++               this.chunkMap.f_140145_.clearPriorityTickets(f_140009_);
++            }
++         });
+          this.m_143017_(this.f_140002_, "full");
+       }
  
-       this.f_140015_.m_6250_(this.f_140009_, this::m_140094_, this.f_140007_, this::m_140086_);
+       if (flag5 && !flag6) {
+          this.f_140002_.complete(f_139997_);
+          this.f_140002_ = f_139998_;
++         ++this.fullChunkCreateCount; // Paper - cache ticking ready status
++         this.isFullChunkReady = false; // Paper - cache ticking ready status
+       }
+ 
+       boolean flag7 = chunkholder$fullchunkstatus.m_140114_(ChunkHolder.FullChunkStatus.TICKING);
+@@ -387,11 +_,22 @@
+       if (!flag7 && flag2) {
+          this.f_140003_ = p_143004_.m_143053_(this);
+          this.m_142998_(p_143004_, this.f_140003_, p_143005_, ChunkHolder.FullChunkStatus.TICKING);
++         // Paper start - cache ticking ready status
++         this.f_140003_.thenAccept(either -> {
++            either.ifLeft(chunk -> {
++               // note: Here is a very good place to add callbacks to logic waiting on this.
++               ChunkHolder.this.isTickingReady = true;
++               // Paper start - ticking chunk set
++               //ChunkHolder.this.chunkMap.level.getChunkSource().tickingChunks.add(chunk);
++               // Paper end - ticking chunk set
++            });
++         });
++         // Paper end
+          this.m_143017_(this.f_140003_, "ticking");
+       }
+ 
+       if (flag7 && !flag2) {
+-         this.f_140003_.complete(f_139997_);
++         this.f_140003_.complete(f_139997_);  this.isTickingReady = false; // Paper - cache chunk ticking stag
+          this.f_140003_ = f_139998_;
+       }
+ 
+@@ -404,20 +_,81 @@
+ 
+          this.f_140004_ = p_143004_.m_143117_(this.f_140009_);
+          this.m_142998_(p_143004_, this.f_140004_, p_143005_, ChunkHolder.FullChunkStatus.ENTITY_TICKING);
++         // Paper start - cache ticking ready status
++         this.f_140004_.thenAccept(either -> {
++            either.ifLeft(chunk -> {
++               ChunkHolder.this.isEntityTickingReady = true;
++                //Paper start - entity ticking chunk set
++               ChunkHolder.this.chunkMap.f_140133_.m_7726_().entityTickingChunks.add(chunk);
++                //Paper end - entity ticking chunk set
++            });
++         });
++         // Paper end
+          this.m_143017_(this.f_140004_, "entity ticking");
+       }
+ 
+       if (flag3 && !flag4) {
+-         this.f_140004_.complete(f_139997_);
++         this.f_140004_.complete(f_139997_); this.isEntityTickingReady = false; // Paper - cache chunk ticking stage
+          this.f_140004_ = f_139998_;
++         // Paper start - entity ticking chunk set
++         LevelChunk chunkIfCached = this.getFullChunkNowUnchecked();
++         if (chunkIfCached != null) {
++            this.chunkMap.f_140133_.m_7726_().entityTickingChunks.remove(chunkIfCached);
++         }
++         // Paper end - entity ticking chunk set
+       }
+ 
+       if (!chunkholder$fullchunkstatus1.m_140114_(chunkholder$fullchunkstatus)) {
+          this.m_142992_(p_143004_, chunkholder$fullchunkstatus1);
+       }
+ 
+-      this.f_140015_.m_6250_(this.f_140009_, this::m_140094_, this.f_140007_, this::m_140086_);
++      //this.onLevelChange.onLevelChange(this.pos, this::getQueueLevel, this.ticketLevel, this::setQueueLevel);
++      // Paper start - raise IO/load priority if priority changes, use our preferred priority
++      priorityBoost = chunkMap.f_140145_.getChunkPriority(f_140009_);
++      int currRequestedPriority = this.requestedPriority;
++      int priority = getDemandedPriority();
++      int newRequestedPriority = this.requestedPriority = priority;
++      if (this.f_140008_ > priority) {
++         int ioPriority = com.destroystokyo.paper.io.PrioritizedTaskQueue.NORMAL_PRIORITY;
++         if (priority <= 10) {
++            ioPriority = com.destroystokyo.paper.io.PrioritizedTaskQueue.HIGHEST_PRIORITY;
++         } else if (priority <= 20) {
++            ioPriority = com.destroystokyo.paper.io.PrioritizedTaskQueue.HIGH_PRIORITY;
++         }
++         chunkMap.f_140133_.asyncChunkTaskManager.raisePriority(f_140009_.f_45578_, f_140009_.f_45579_, ioPriority);
++         //chunkMap.level.getChunkSource().getLightEngine().queue.changePriority(pos.toLong(), this.queueLevel, priority); // Paper // Restore this in chunk priority later?
++      }
++      if (currRequestedPriority != newRequestedPriority) {
++         this.f_140015_.m_6250_(this.f_140009_, () -> this.f_140008_, priority, p -> this.f_140008_ = p); // use preferred priority
++         int neighborsPriority = getNeighborsPriority();
++         this.neighbors.forEach((neighbor, neighborDesired) -> neighbor.setNeighborPriority(this, neighborsPriority));
++      }
++      // Paper end
        this.f_140006_ = this.f_140007_;
 +      if (!chunkholder$fullchunkstatus.m_140114_(ChunkHolder.FullChunkStatus.BORDER) && chunkholder$fullchunkstatus1.m_140114_(ChunkHolder.FullChunkStatus.BORDER)) {
 +         this.m_140047_(ChunkStatus.f_62326_).thenAccept((either) -> {
@@ -185,3 +547,21 @@
     }
  
     public static ChunkStatus m_140074_(int p_140075_) {
+@@ -499,4 +_,17 @@
+    public interface PlayerProvider {
+       List<ServerPlayer> m_183262_(ChunkPos p_183717_, boolean p_183718_);
+    }
++
++   public final boolean isEntityTickingReady() {
++      return this.isEntityTickingReady;
++   }
++
++   public final boolean isTickingReady() {
++      return this.isTickingReady;
++   }
++
++   public final boolean isFullChunkReady() {
++      return this.isFullChunkReady;
++   }
++   // Paper end
+ }

@@ -13,6 +13,27 @@
     public static final double f_215198_ = Mth.m_144952_(6.0D);
     private static final int f_215199_ = -1;
     private static final int f_241635_ = 4096;
+@@ -226,6 +_,7 @@
+    private final SignedMessageChain.Decoder f_240889_;
+    private final LastSeenMessagesValidator f_241654_ = new LastSeenMessagesValidator();
+    private final FutureChain f_241681_;
++   public Runnable playerJoinReady; // Paper
+ 
+    public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_) {
+       this.f_9745_ = p_9770_;
+@@ -246,6 +_,12 @@
+    }
+ 
+    public void m_9933_() {
++      // Paper start - login async
++      Runnable playerJoinReady = this.playerJoinReady;
++      if (playerJoinReady != null) {
++         this.playerJoinReady = null;
++         playerJoinReady.run();
++      }
+       if (this.f_215200_ > -1) {
+          this.m_9829_(new ClientboundBlockChangedAckPacket(this.f_215200_));
+          this.f_215200_ = -1;
 @@ -432,9 +_,11 @@
              }
  

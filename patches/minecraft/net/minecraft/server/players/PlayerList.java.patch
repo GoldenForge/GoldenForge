@@ -1,5 +1,54 @@
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
+@@ -30,6 +_,7 @@
+ import net.minecraft.nbt.NbtOps;
+ import net.minecraft.network.Connection;
+ import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.network.PacketSendListener;
+ import net.minecraft.network.chat.ChatSender;
+ import net.minecraft.network.chat.ChatType;
+ import net.minecraft.network.chat.Component;
+@@ -37,31 +_,7 @@
+ import net.minecraft.network.chat.OutgoingPlayerChatMessage;
+ import net.minecraft.network.chat.PlayerChatMessage;
+ import net.minecraft.network.protocol.Packet;
+-import net.minecraft.network.protocol.game.ClientboundChangeDifficultyPacket;
+-import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
+-import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+-import net.minecraft.network.protocol.game.ClientboundGameEventPacket;
+-import net.minecraft.network.protocol.game.ClientboundInitializeBorderPacket;
+-import net.minecraft.network.protocol.game.ClientboundLoginPacket;
+-import net.minecraft.network.protocol.game.ClientboundPlayerAbilitiesPacket;
+-import net.minecraft.network.protocol.game.ClientboundPlayerInfoPacket;
+-import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetBorderCenterPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetBorderLerpSizePacket;
+-import net.minecraft.network.protocol.game.ClientboundSetBorderSizePacket;
+-import net.minecraft.network.protocol.game.ClientboundSetBorderWarningDelayPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetBorderWarningDistancePacket;
+-import net.minecraft.network.protocol.game.ClientboundSetCarriedItemPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetDefaultSpawnPositionPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
+-import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
+-import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
+-import net.minecraft.network.protocol.game.ClientboundSoundPacket;
+-import net.minecraft.network.protocol.game.ClientboundUpdateMobEffectPacket;
+-import net.minecraft.network.protocol.game.ClientboundUpdateRecipesPacket;
+-import net.minecraft.network.protocol.game.ClientboundUpdateTagsPacket;
++import net.minecraft.network.protocol.game.*;
+ import net.minecraft.resources.ResourceKey;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.PlayerAdvancements;
+@@ -114,6 +_,7 @@
+    private final IpBanList f_11199_ = new IpBanList(f_11190_);
+    private final ServerOpList f_11200_ = new ServerOpList(f_11191_);
+    private final UserWhiteList f_11201_ = new UserWhiteList(f_11192_);
++   private final Map<UUID, ServerPlayer> pendingPlayers = Maps.newHashMap(); // Paper
+    private final Map<UUID, ServerStatsCounter> f_11202_ = Maps.newHashMap();
+    private final Map<UUID, PlayerAdvancements> f_11203_ = Maps.newHashMap();
+    private final PlayerDataStorage f_11204_;
 @@ -125,6 +_,7 @@
     private boolean f_11209_;
     private static final boolean f_143988_ = false;
@@ -8,7 +57,35 @@
  
     public PlayerList(MinecraftServer p_203842_, RegistryAccess.Frozen p_203843_, PlayerDataStorage p_203844_, int p_203845_) {
        this.f_11195_ = p_203842_;
-@@ -160,6 +_,7 @@
+@@ -134,6 +_,12 @@
+    }
+ 
+    public void m_11261_(Connection p_11262_, ServerPlayer p_11263_) {
++      p_11263_.isRealPlayer = true; // Paper - Chunk priority
++      ServerPlayer prev = pendingPlayers.put(p_11263_.m_20148_(), p_11263_);// Paper
++      if (prev != null) {
++         disconnectPendingPlayer(prev);
++      }
++      p_11263_.networkManager = p_11262_; // Paper
+       GameProfile gameprofile = p_11263_.m_36316_();
+       GameProfileCache gameprofilecache = this.f_11195_.m_129927_();
+       Optional<GameProfile> optional = gameprofilecache.m_11002_(gameprofile.getId());
+@@ -151,15 +_,21 @@
+       }
+ 
+       p_11263_.m_143425_(serverlevel1);
+-      String s1 = "local";
++      // Paper start - make s1 final
++      final String s1;
++
+       if (p_11262_.m_129523_() != null) {
+          s1 = p_11262_.m_129523_().toString();
++      } else {
++         s1 = "local";
+       }
++      // Paper end
+ 
+       f_11188_.info("{}[{}] logged in with entity id {} at ({}, {}, {})", p_11263_.m_7755_().getString(), s1, p_11263_.m_19879_(), p_11263_.m_20185_(), p_11263_.m_20186_(), p_11263_.m_20189_());
        LevelData leveldata = serverlevel1.m_6106_();
        p_11263_.m_143427_(compoundtag);
        ServerGamePacketListenerImpl servergamepacketlistenerimpl = new ServerGamePacketListenerImpl(this.f_11195_, p_11262_, p_11263_);
@@ -24,14 +101,66 @@
        servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateRecipesPacket(this.f_11195_.m_129894_().m_44051_()));
        servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateTagsPacket(TagNetworkSerialization.m_203950_(this.f_11206_)));
        this.m_11289_(p_11263_);
-@@ -240,6 +_,7 @@
+@@ -175,6 +_,36 @@
+       p_11263_.m_8952_().m_12789_(p_11263_);
+       this.m_11273_(serverlevel1.m_6188_(), p_11263_);
+       this.f_11195_.m_129929_();
++
++      ServerLevel finalWorldserver = serverlevel1;
++
++      int chunkX = p_11263_.m_146903_() >> 4;
++      int chunkZ = p_11263_.m_146907_() >> 4;
++      final net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(chunkX, chunkZ);
++      net.minecraft.server.level.ChunkMap playerChunkMap = serverlevel1.m_7726_().f_8325_;
++      net.minecraft.server.level.DistanceManager distanceManager = playerChunkMap.f_140145_;
++      distanceManager.m_140792_(net.minecraft.server.level.TicketType.LOGIN, pos, 31, pos.m_45588_());
++      serverlevel1.m_7726_().markAreaHighPriority(pos, 28, 3); // Paper - Chunk priority
++      serverlevel1.m_7726_().getChunkAtAsynchronously(chunkX, chunkZ, true, false).thenApply(chunk -> { // Paper - Chunk priority
++         net.minecraft.server.level.ChunkHolder updatingChunk = playerChunkMap.m_140174_(pos.m_45588_());
++         if (updatingChunk != null) {
++            return updatingChunk.m_140073_();
++         } else {
++            return java.util.concurrent.CompletableFuture.completedFuture(chunk);
++         }
++      }).thenAccept(chunk -> {
++         servergamepacketlistenerimpl.playerJoinReady = () -> {
++            postChunkLoadJoin(
++                    p_11263_, finalWorldserver, p_11262_, servergamepacketlistenerimpl,
++                    compoundtag, s1, s
++            );
++         };
++      });
++
++   }
++
++   private void postChunkLoadJoin(ServerPlayer p_11263_, ServerLevel serverlevel1, Connection networkmanager, ServerGamePacketListenerImpl servergamepacketlistenerimpl, CompoundTag compoundtag, String s1, String s) {
++      pendingPlayers.remove(p_11263_.m_20148_(), p_11263_);
+       MutableComponent mutablecomponent;
+       if (p_11263_.m_36316_().getName().equalsIgnoreCase(s)) {
+          mutablecomponent = Component.m_237110_("multiplayer.player.joined", p_11263_.m_5446_());
+@@ -240,7 +_,21 @@
        }
  
        p_11263_.m_143429_();
-+      net.minecraftforge.event.ForgeEventFactory.firePlayerLoggedIn( p_11263_ );
-    }
+-   }
++      MinecraftServer.getServer().execute(() -> net.minecraftforge.event.ForgeEventFactory.firePlayerLoggedIn( p_11263_ )); // Goldenforge: fire event on main
++   }
++
++      public ServerPlayer getActivePlayer(UUID uuid) {
++      ServerPlayer player = this.f_11197_.get(uuid);
++      return player != null ? player : pendingPlayers.get(uuid);
++   }
++   void disconnectPendingPlayer(ServerPlayer entityplayer) {
++      Component msg = Component.m_237115_("multiplayer.disconnect.duplicate_login");
++      entityplayer.networkManager.m_243124_(new ClientboundDisconnectPacket(msg), PacketSendListener.m_243092_(() -> {
++         entityplayer.networkManager.m_129507_(msg);
++         entityplayer.networkManager = null;
++      }));
++   }
++
  
     protected void m_11273_(ServerScoreboard p_11274_, ServerPlayer p_11275_) {
+       Set<Objective> set = Sets.newHashSet();
 @@ -300,6 +_,7 @@
           compoundtag1 = compoundtag;
           p_11225_.m_20258_(compoundtag);
@@ -56,6 +185,47 @@
        ServerLevel serverlevel = p_11287_.m_9236_();
        p_11287_.m_36220_(Stats.f_12989_);
        this.m_6765_(p_11287_);
+@@ -349,11 +_,40 @@
+          this.f_11203_.remove(uuid);
+       }
+ 
++      // Paper start
++      serverplayer = pendingPlayers.get(uuid);
++      if (serverplayer == p_11287_) {
++         pendingPlayers.remove(uuid);
++      }
++      p_11287_.networkManager = null;
++      // Paper end
++
+       this.m_11268_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.REMOVE_PLAYER, p_11287_));
+    }
+ 
+    @Nullable
+    public Component m_6418_(SocketAddress p_11257_, GameProfile p_11258_) {
++      UUID uuid = UUIDUtil.m_235875_(p_11258_);
++
++      List<ServerPlayer> list = Lists.newArrayList();
++
++      ServerPlayer entityplayer;
++
++      for (int i = 0; i < this.f_11196_.size(); ++i) {
++         entityplayer = (ServerPlayer) this.f_11196_.get(i);
++         if (entityplayer.m_20148_().equals(uuid) || (false && entityplayer.m_36316_().getName().equalsIgnoreCase(p_11258_.getName()))) { // Paper - validate usernames
++            list.add(entityplayer);
++         }
++      }
++
++      // Paper start - check pending players too
++      entityplayer = pendingPlayers.get(uuid);
++      if (entityplayer != null) {
++         this.pendingPlayers.remove(uuid);
++         disconnectPendingPlayer(entityplayer);
++      }
++      // Paper end
++
+       if (this.f_11198_.m_11406_(p_11258_)) {
+          UserBanListEntry userbanlistentry = this.f_11198_.m_11388_(p_11258_);
+          MutableComponent mutablecomponent1 = Component.m_237110_("multiplayer.disconnect.banned.reason", userbanlistentry.m_10962_());
 @@ -462,6 +_,7 @@
        this.f_11197_.put(serverplayer.m_20148_(), serverplayer);
        serverplayer.m_143429_();

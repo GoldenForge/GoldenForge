@@ -1,8 +1,12 @@
 --- a/net/minecraft/server/level/Ticket.java
 +++ b/net/minecraft/server/level/Ticket.java
-@@ -9,9 +_,14 @@
+@@ -8,10 +_,19 @@
+    private final T f_9422_;
     private long f_9423_;
  
++   public long delayUnloadBy; // Paper
++   public int priority; // Paper - Chunk priority
++
     protected Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_) {
 +      this(p_9425_, p_9426_, p_9427_, false);
 +   }
@@ -12,6 +16,7 @@
        this.f_9421_ = p_9426_;
        this.f_9422_ = p_9427_;
 +      this.forceTicks = forceTicks;
++      this.delayUnloadBy = f_9420_.m_9469_(); // Paper
     }
  
     public int compareTo(Ticket<?> p_9432_) {
@@ -35,10 +40,14 @@
     }
  
     public TicketType<T> m_9428_() {
-@@ -58,5 +_,12 @@
+@@ -56,7 +_,14 @@
+    }
+ 
     protected boolean m_9434_(long p_9435_) {
-       long i = this.f_9420_.m_9469_();
-       return i != 0L && p_9435_ - this.f_9423_ > i;
+-      long i = this.f_9420_.m_9469_();
+-      return i != 0L && p_9435_ - this.f_9423_ > i;
++      long l = delayUnloadBy; // Paper
++      return l != 0L && p_9435_ - this.f_9423_ > l;
 +   }
 +
 +   /* ======================================== FORGE START =====================================*/

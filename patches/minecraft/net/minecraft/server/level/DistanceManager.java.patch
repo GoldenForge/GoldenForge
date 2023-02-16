@@ -1,15 +1,185 @@
 --- a/net/minecraft/server/level/DistanceManager.java
 +++ b/net/minecraft/server/level/DistanceManager.java
-@@ -58,6 +_,8 @@
+@@ -1,5 +_,6 @@
+ package net.minecraft.server.level;
+ 
++import com.destroystokyo.paper.util.MCUtil;
+ import com.google.common.annotations.VisibleForTesting;
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableSet;
+@@ -58,13 +_,25 @@
     private long f_140771_;
     private int f_183902_ = 10;
  
-+   private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets = new Long2ObjectOpenHashMap<>();
+-   protected DistanceManager(Executor p_140774_, Executor p_140775_) {
++   public final java.util.Queue<ChunkHolder> pendingChunkUpdates = new java.util.ArrayDeque<ChunkHolder>() {
++      @Override
++      public boolean add(ChunkHolder o) {
++         if (o.isUpdateQueued) return true;
++         o.isUpdateQueued = true;
++         return super.add(o);
++      }
++   };
 +
-    protected DistanceManager(Executor p_140774_, Executor p_140775_) {
++   private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets = new Long2ObjectOpenHashMap<>();
++   private final ChunkMap chunkMap; // Paper
++   protected DistanceManager(Executor p_140774_, Executor p_140775_, ChunkMap chunkMap) {
        ProcessorHandle<Runnable> processorhandle = ProcessorHandle.m_18714_("player ticket throttler", p_140775_::execute);
        ChunkTaskPriorityQueueSorter chunktaskpriorityqueuesorter = new ChunkTaskPriorityQueueSorter(ImmutableList.of(processorhandle), p_140774_, 4);
-@@ -163,6 +_,10 @@
+       this.f_140766_ = chunktaskpriorityqueuesorter;
+       this.f_140767_ = chunktaskpriorityqueuesorter.m_140604_(processorhandle, true);
+       this.f_140768_ = chunktaskpriorityqueuesorter.m_140567_(processorhandle);
+       this.f_140770_ = p_140775_;
++      this.chunkMap = chunkMap; // Paper
+    }
+ 
+    protected void m_140776_() {
+@@ -108,6 +_,7 @@
+    @Nullable
+    protected abstract ChunkHolder m_7288_(long p_140780_, int p_140781_, @Nullable ChunkHolder p_140782_, int p_140783_);
+ 
++   boolean pollingPendingChunkUpdates = false; // Paper - Chunk priority
+    public boolean m_140805_(ChunkMap p_140806_) {
+       this.f_140763_.m_6410_();
+       this.f_183901_.m_184145_();
+@@ -117,11 +_,19 @@
+       if (flag) {
+       }
+ 
+-      if (!this.f_140765_.isEmpty()) {
+-         this.f_140765_.forEach((p_183908_) -> {
+-            p_183908_.m_143003_(p_140806_, this.f_140770_);
+-         });
+-         this.f_140765_.clear();
++
++      if (!this.pendingChunkUpdates.isEmpty()) {
++         this.pollingPendingChunkUpdates = true; try { // Paper - Chunk priority
++            while(!this.pendingChunkUpdates.isEmpty()) {
++               ChunkHolder remove = this.pendingChunkUpdates.remove();
++               remove.isUpdateQueued = false;
++               remove.m_143003_(p_140806_, this.f_140770_);
++            }
++//         this.chunksToUpdateFutures.forEach((p_183908_) -> {
++//            p_183908_.updateFutures(p_140806_, this.mainThreadExecutor);
++//         });
++         //this.chunksToUpdateFutures.clear();
++         } finally { this.pollingPendingChunkUpdates = false; } // Paper - Chunk priority
+          return true;
+       } else {
+          if (!this.f_140769_.isEmpty()) {
+@@ -154,7 +_,110 @@
+       }
+    }
+ 
+-   void m_140784_(long p_140785_, Ticket<?> p_140786_) {
++
++   // Paper start - Chunk priority
++   public static final int PRIORITY_TICKET_LEVEL = ChunkMap.f_140127_;
++   public static final int URGENT_PRIORITY = 29;
++   public boolean delayDistanceManagerTick = false;
++   public boolean markUrgent(ChunkPos coords) {
++      return addPriorityTicket(coords, TicketType.URGENT, URGENT_PRIORITY);
++   }
++   public boolean markHighPriority(ChunkPos coords, int priority) {
++      priority = Math.min(URGENT_PRIORITY - 1, Math.max(1, priority));
++      return addPriorityTicket(coords, TicketType.PRIORITY, priority);
++   }
++
++   public void markAreaHighPriority(ChunkPos center, int priority, int radius) {
++      delayDistanceManagerTick = true;
++      priority = Math.min(URGENT_PRIORITY - 1, Math.max(1, priority));
++      int finalPriority = priority;
++      MCUtil.getSpiralOutChunks(center.m_45615_(), radius).forEach(coords -> {
++         addPriorityTicket(coords, TicketType.PRIORITY, finalPriority);
++      });
++      delayDistanceManagerTick = false;
++      chunkMap.f_140133_.m_7726_().m_8489_();
++   }
++
++   public void clearAreaPriorityTickets(ChunkPos center, int radius) {
++      delayDistanceManagerTick = true;
++      MCUtil.getSpiralOutChunks(center.m_45615_(), radius).forEach(coords -> {
++         this.m_140818_(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.PRIORITY, PRIORITY_TICKET_LEVEL, coords));
++      });
++      delayDistanceManagerTick = false;
++      chunkMap.f_140133_.m_7726_().m_8489_();
++   }
++
++   private boolean addPriorityTicket(ChunkPos coords, TicketType<ChunkPos> ticketType, int priority) {
++      long pair = coords.m_45588_();
++      ChunkHolder chunk = chunkMap.m_140174_(pair);
++      if ((chunk != null && chunk.isFullChunkReady())) {
++         return false;
++      }
++
++      boolean success;
++      if (!(success = updatePriorityTicket(coords, ticketType, priority))) {
++         Ticket<ChunkPos> ticket = new Ticket<ChunkPos>(ticketType, PRIORITY_TICKET_LEVEL, coords);
++         ticket.priority = priority;
++         success = this.addTicket(pair, ticket);
++      } else {
++         if (chunk == null) {
++            chunk = chunkMap.m_140174_(pair);
++         }
++         chunkMap.queueHolderUpdate(chunk);
++      }
++
++      //chunkMap.world.getWorld().spawnParticle(priority <= 15 ? org.bukkit.Particle.EXPLOSION_HUGE : org.bukkit.Particle.EXPLOSION_NORMAL, chunkMap.world.getWorld().getPlayers(), null, coords.x << 4, 70, coords.z << 4, 2, 0, 0, 0, 1, null, true);
++
++      chunkMap.f_140133_.m_7726_().m_8489_();
++
++      return success;
++   }
++
++   private boolean updatePriorityTicket(ChunkPos coords, TicketType<ChunkPos> type, int priority) {
++      SortedArraySet<Ticket<?>> tickets = this.f_140761_.get(coords.m_45588_());
++      if (tickets == null) {
++         return false;
++      }
++      for (Ticket<?> ticket : tickets) {
++         if (ticket.m_9428_() == type) {
++            // We only support increasing, not decreasing, too complicated
++            ticket.m_9429_(this.f_140771_);
++            ticket.priority = Math.max(ticket.priority, priority);
++            return true;
++         }
++      }
++
++      return false;
++   }
++
++   public int getChunkPriority(ChunkPos coords) {
++      SortedArraySet<Ticket<?>> tickets = this.f_140761_.get(coords.m_45588_());
++      if (tickets == null) {
++         return 0;
++      }
++      for (Ticket<?> ticket : tickets) {
++         if (ticket.m_9428_() == TicketType.URGENT) {
++            return URGENT_PRIORITY;
++         }
++      }
++      for (Ticket<?> ticket : tickets) {
++         if (ticket.m_9428_() == TicketType.PRIORITY && ticket.priority > 0) {
++            return ticket.priority;
++         }
++      }
++      return 0;
++   }
++
++   public void clearPriorityTickets(ChunkPos coords) {
++      this.m_140818_(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.PRIORITY, PRIORITY_TICKET_LEVEL, coords));
++   }
++
++   public void clearUrgent(ChunkPos coords) {
++      this.m_140818_(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.URGENT, PRIORITY_TICKET_LEVEL, coords));
++   }
++   // Paper end
++
++   boolean addTicket(long p_140785_, Ticket<?> p_140786_) {
+       SortedArraySet<Ticket<?>> sortedarrayset = this.m_140857_(p_140785_);
+       int i = m_140797_(sortedarrayset);
+       Ticket<?> ticket = sortedarrayset.m_14253_(p_140786_);
+@@ -163,11 +_,39 @@
           this.f_140762_.m_140715_(p_140785_, p_140786_.m_9433_(), true);
        }
  
@@ -17,13 +187,49 @@
 +          SortedArraySet<Ticket<?>> tickets = forcedTickets.computeIfAbsent(p_140785_, e -> SortedArraySet.m_14246_(4));
 +          tickets.m_14253_(ticket);
 +      }
++      return p_140786_ == ticket; // CraftBukkit
     }
  
     void m_140818_(long p_140819_, Ticket<?> p_140820_) {
-@@ -175,6 +_,13 @@
+       SortedArraySet<Ticket<?>> sortedarrayset = this.m_140857_(p_140819_);
++      int oldLevel = m_140797_(sortedarrayset); // Paper
++
+       if (sortedarrayset.remove(p_140820_)) {
++         // Paper start - delay chunk unloads for player tickets
++         long delayChunkUnloadsBy = 10 * 20;
++         if (p_140820_.m_9428_() == TicketType.f_9444_ && delayChunkUnloadsBy > 0) {
++            boolean hasPlayer = false;
++            for (Ticket<?> ticket1 : sortedarrayset) {
++               if (ticket1.m_9428_() == TicketType.f_9444_) {
++                  hasPlayer = true;
++                  break;
++               }
++            }
++            ChunkHolder playerChunk = chunkMap.m_140174_(p_140819_);
++            if (!hasPlayer && playerChunk != null && playerChunk.isFullChunkReady()) {
++               Ticket<Long> delayUnload = new Ticket<Long>(TicketType.DELAY_UNLOAD, 33, p_140819_);
++               delayUnload.delayUnloadBy = delayChunkUnloadsBy;
++               delayUnload.m_9429_(this.f_140771_);
++               sortedarrayset.remove(delayUnload);
++               // refresh ticket
++               sortedarrayset.add(delayUnload);
++            }
++         }
++         // Paper end
+       }
+ 
+       if (sortedarrayset.isEmpty()) {
+@@ -175,10 +_,24 @@
        }
  
        this.f_140762_.m_140715_(p_140819_, m_140797_(sortedarrayset), false);
++
++      // Paper start - Chunk priority
++      int newLevel = m_140797_(sortedarrayset);
++      if (newLevel > oldLevel) {
++         this.f_140762_.m_140715_(p_140819_, m_140797_(sortedarrayset), false);
++      }
++      // Paper end
 +
 +      if (p_140820_.isForceTicks()) {
 +          SortedArraySet<Ticket<?>> tickets = forcedTickets.get(p_140819_);
@@ -34,6 +240,11 @@
     }
  
     public <T> void m_140792_(TicketType<T> p_140793_, ChunkPos p_140794_, int p_140795_, T p_140796_) {
+-      this.m_140784_(p_140794_.m_45588_(), new Ticket<>(p_140793_, p_140795_, p_140796_));
++      this.addTicket(p_140794_.m_45588_(), new Ticket<>(p_140793_, p_140795_, p_140796_));
+    }
+ 
+    public <T> void m_140823_(TicketType<T> p_140824_, ChunkPos p_140825_, int p_140826_, T p_140827_) {
 @@ -187,14 +_,20 @@
     }
  
@@ -44,7 +255,8 @@
 +   public <T> void addRegionTicket(TicketType<T> p_140841_, ChunkPos p_140842_, int p_140843_, T p_140844_, boolean forceTicks) {
 +      Ticket<T> ticket = new Ticket<>(p_140841_, 33 - p_140843_, p_140844_, forceTicks);
        long i = p_140842_.m_45588_();
-       this.m_140784_(i, ticket);
+-      this.m_140784_(i, ticket);
++      this.addTicket(i, ticket);
        this.f_183901_.m_184151_(i, ticket);
     }
  
@@ -57,6 +269,15 @@
        long i = p_140851_.m_45588_();
        this.m_140818_(i, ticket);
        this.f_183901_.m_184165_(i, ticket);
+@@ -210,7 +_,7 @@
+       Ticket<ChunkPos> ticket = new Ticket<>(TicketType.f_9445_, 31, p_140800_);
+       long i = p_140800_.m_45588_();
+       if (p_140801_) {
+-         this.m_140784_(i, ticket);
++         this.addTicket(i, ticket);
+          this.f_183901_.m_184151_(i, ticket);
+       } else {
+          this.m_140818_(i, ticket);
 @@ -287,6 +_,11 @@
        return this.f_140766_.m_140558_();
     }
@@ -78,3 +299,22 @@
        ObjectIterator<Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>>> objectiterator = this.f_140761_.long2ObjectEntrySet().fastIterator();
  
        while(objectiterator.hasNext()) {
+@@ -385,7 +_,8 @@
+          if (i != p_140881_) {
+             chunkholder = DistanceManager.this.m_7288_(p_140880_, p_140881_, chunkholder, i);
+             if (chunkholder != null) {
+-               DistanceManager.this.f_140765_.add(chunkholder);
++              // DistanceManager.this.chunksToUpdateFutures.add(chunkholder);
++               DistanceManager.this.pendingChunkUpdates.add(chunkholder);
+             }
+ 
+          }
+@@ -497,7 +_,7 @@
+                DistanceManager.this.f_140767_.m_6937_(ChunkTaskPriorityQueueSorter.m_140624_(() -> {
+                   DistanceManager.this.f_140770_.execute(() -> {
+                      if (this.m_140932_(this.m_6172_(p_140919_))) {
+-                        DistanceManager.this.m_140784_(p_140919_, ticket);
++                        DistanceManager.this.addTicket(p_140919_, ticket);
+                         DistanceManager.this.f_140769_.add(p_140919_);
+                      } else {
+                         DistanceManager.this.f_140768_.m_6937_(ChunkTaskPriorityQueueSorter.m_140628_(() -> {

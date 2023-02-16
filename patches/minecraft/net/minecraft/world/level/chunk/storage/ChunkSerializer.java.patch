@@ -196,7 +196,7 @@
        ChunkPos chunkpos = p_63456_.m_7697_();
        CompoundTag compoundtag = new CompoundTag();
 +
-+      AsyncSaveData asyncsavedata = getAsyncSaveData(p_63455_, p_63456_);
++      AsyncSaveData asyncsavedata = p_63456_.asyncsavedata;
        compoundtag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
        compoundtag.m_128405_("xPos", chunkpos.f_45578_);
        compoundtag.m_128405_("yPos", p_63456_.m_151560_());

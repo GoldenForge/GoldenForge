@@ -1,10 +1,14 @@
 --- a/net/minecraft/server/level/TicketType.java
 +++ b/net/minecraft/server/level/TicketType.java
-@@ -23,6 +_,8 @@
+@@ -23,6 +_,12 @@
     public static final TicketType<Integer> f_9448_ = m_9465_("post_teleport", Integer::compareTo, 5);
     public static final TicketType<ChunkPos> f_9449_ = m_9465_("unknown", Comparator.comparingLong(ChunkPos::m_45588_), 1);
  
 +   public static final TicketType<Long> ASYNC_LOAD = m_9462_("async_load", Long::compareTo); // Paper
++   public static final TicketType<ChunkPos> PRIORITY = m_9465_("priority", Comparator.comparingLong(ChunkPos::m_45588_), 300); // Paper
++   public static final TicketType<ChunkPos> URGENT = m_9465_("urgent", Comparator.comparingLong(ChunkPos::m_45588_), 300); // Paper
++   public static final TicketType<Long> DELAY_UNLOAD = m_9465_("delay_unload", Long::compareTo, 300); // Paper
++   public static final TicketType<Long> LOGIN = m_9465_("login", Long::compareTo, 100); // Paper
 +
     public static <T> TicketType<T> m_9462_(String p_9463_, Comparator<T> p_9464_) {
        return new TicketType<>(p_9463_, p_9464_, 0L);

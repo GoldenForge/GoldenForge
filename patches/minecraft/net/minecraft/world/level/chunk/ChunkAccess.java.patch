@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/chunk/ChunkAccess.java
 +++ b/net/minecraft/world/level/chunk/ChunkAccess.java
+@@ -38,6 +_,7 @@
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.entity.BlockEntity;
+ import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.chunk.storage.ChunkSerializer;
+ import net.minecraft.world.level.gameevent.GameEventDispatcher;
+ import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
+ import net.minecraft.world.level.levelgen.Heightmap;
 @@ -56,7 +_,7 @@
     protected final ShortList[] f_187602_;
     protected volatile boolean f_187603_;
@@ -9,8 +17,11 @@
     private long f_187615_;
     /** @deprecated */
     @Nullable
-@@ -76,7 +_,8 @@
+@@ -74,9 +_,11 @@
+    protected final Map<BlockPos, BlockEntity> f_187610_ = Maps.newHashMap();
+    protected final LevelHeightAccessor f_187611_;
     protected final LevelChunkSection[] f_187612_;
++   public ChunkSerializer.AsyncSaveData asyncsavedata;
  
     public ChunkAccess(ChunkPos p_187621_, UpgradeData p_187622_, LevelHeightAccessor p_187623_, Registry<Biome> p_187624_, long p_187625_, @Nullable LevelChunkSection[] p_187626_, @Nullable BlendingData p_187627_) {
 -      this.f_187604_ = p_187621_;
