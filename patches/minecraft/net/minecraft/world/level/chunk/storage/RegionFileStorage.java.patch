@@ -1,9 +1,77 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
-@@ -111,6 +_,11 @@
+@@ -13,7 +_,7 @@
+ import net.minecraft.util.ExceptionCollector;
+ import net.minecraft.world.level.ChunkPos;
+ 
+-public final class RegionFileStorage implements AutoCloseable {
++public class RegionFileStorage implements AutoCloseable {
+    public static final String f_156615_ = ".mca";
+    private static final int f_156616_ = 256;
+    private final Long2ObjectLinkedOpenHashMap<RegionFile> f_63699_ = new Long2ObjectLinkedOpenHashMap<>();
+@@ -25,10 +_,23 @@
+       this.f_63701_ = p_196955_;
+    }
+ 
+-   private RegionFile m_63711_(ChunkPos p_63712_) throws IOException {
++   public synchronized RegionFile m_63711_(ChunkPos p_63712_) throws IOException {
++      return this.getRegionFile(p_63712_, false);
++   }
++
++   public synchronized RegionFile getRegionFileIfLoaded(ChunkPos chunkcoordintpair) {
++      return this.f_63699_.getAndMoveToFirst(ChunkPos.m_45589_(chunkcoordintpair.m_45610_(), chunkcoordintpair.m_45612_()));
++   }
++   public synchronized RegionFile getRegionFile(ChunkPos p_63712_, boolean lock) throws IOException {
+       long i = ChunkPos.m_45589_(p_63712_.m_45610_(), p_63712_.m_45612_());
+       RegionFile regionfile = this.f_63699_.getAndMoveToFirst(i);
+       if (regionfile != null) {
++         // Paper start
++         if (lock) {
++            // must be in this synchronized block
++            regionfile.fileLock.lock();
++         }
++         // Paper end
+          return regionfile;
+       } else {
+          if (this.f_63699_.size() >= 256) {
+@@ -39,13 +_,20 @@
+          Path path = this.f_63700_.resolve("r." + p_63712_.m_45610_() + "." + p_63712_.m_45612_() + ".mca");
+          RegionFile regionfile1 = new RegionFile(path, this.f_63700_, this.f_63701_);
+          this.f_63699_.putAndMoveToFirst(i, regionfile1);
++         // Paper start
++         if (lock) {
++            // must be in this synchronized block
++            regionfile1.fileLock.lock();
++         }
++         // Paper end
+          return regionfile1;
+       }
+    }
+ 
+    @Nullable
+    public CompoundTag m_63706_(ChunkPos p_63707_) throws IOException {
+-      RegionFile regionfile = this.m_63711_(p_63707_);
++      RegionFile regionfile = this.getRegionFile(p_63707_, true);
++      try { // Paper
+       DataInputStream datainputstream = regionfile.m_63645_(p_63707_);
+ 
+       CompoundTag compoundtag;
+@@ -81,6 +_,9 @@
+       }
+ 
+       return compoundtag;
++      } finally { // Paper start
++         regionfile.fileLock.unlock();
++      } // Paper end
+    }
+ 
+    public void m_196956_(ChunkPos p_196957_, StreamTagVisitor p_196958_) throws IOException {
+@@ -110,7 +_,12 @@
+    }
  
     protected void m_63708_(ChunkPos p_63709_, @Nullable CompoundTag p_63710_) throws IOException {
-       RegionFile regionfile = this.m_63711_(p_63709_);
+-      RegionFile regionfile = this.m_63711_(p_63709_);
++      RegionFile regionfile = this.getRegionFile(p_63709_, true);
 +
 +      // Paper end - rewrite chunk system
 +      try { // Paper
@@ -25,7 +93,7 @@
                 } catch (Throwable throwable) {
                    throwable1.addSuppressed(throwable);
                 }
-@@ -129,11 +_,21 @@
+@@ -129,15 +_,25 @@
  
              throw throwable1;
           }
@@ -46,8 +114,22 @@
 +         }
 +         // Paper end
 +      } finally { // Paper start
-+         //regionfile.fileLock.unlock();
++         regionfile.fileLock.unlock();
 +      } // Paper end
  
     }
  
+-   public void close() throws IOException {
++   public synchronized void close() throws IOException {
+       ExceptionCollector<IOException> exceptioncollector = new ExceptionCollector<>();
+ 
+       for(RegionFile regionfile : this.f_63699_.values()) {
+@@ -151,7 +_,7 @@
+       exceptioncollector.m_13652_();
+    }
+ 
+-   public void m_63705_() throws IOException {
++   public synchronized void m_63705_() throws IOException {
+       for(RegionFile regionfile : this.f_63699_.values()) {
+          regionfile.m_63637_();
+       }

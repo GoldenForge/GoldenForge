@@ -1,5 +1,15 @@
 --- a/net/minecraft/world/level/chunk/ProtoChunk.java
 +++ b/net/minecraft/world/level/chunk/ProtoChunk.java
+@@ -49,6 +_,9 @@
+    private final ProtoChunkTicks<Block> f_63163_;
+    private final ProtoChunkTicks<Fluid> f_188165_;
+ 
++   public CompoundTag poiData;
++   public java.util.ArrayDeque<Runnable> tasks;
++
+    public ProtoChunk(ChunkPos p_188167_, UpgradeData p_188168_, LevelHeightAccessor p_188169_, Registry<Biome> p_188170_, @Nullable BlendingData p_188171_) {
+       this(p_188167_, p_188168_, (LevelChunkSection[])null, new ProtoChunkTicks<>(), new ProtoChunkTicks<>(), p_188169_, p_188170_, p_188171_);
+    }
 @@ -123,13 +_,13 @@
           if (this.f_187612_[l].m_188008_() && p_63218_.m_60713_(Blocks.f_50016_)) {
              return p_63218_;

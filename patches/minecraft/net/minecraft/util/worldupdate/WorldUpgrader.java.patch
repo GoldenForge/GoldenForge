@@ -1,0 +1,20 @@
+--- a/net/minecraft/util/worldupdate/WorldUpgrader.java
++++ b/net/minecraft/util/worldupdate/WorldUpgrader.java
+@@ -119,7 +_,7 @@
+                   boolean flag1 = false;
+ 
+                   try {
+-                     CompoundTag compoundtag = chunkstorage.m_223454_(chunkpos).join().orElse((CompoundTag)null);
++                     CompoundTag compoundtag = chunkstorage.read(chunkpos);
+                      if (compoundtag != null) {
+                         int k = ChunkStorage.m_63505_(compoundtag);
+                         ChunkGenerator chunkgenerator = this.f_185925_.m_204655_().m_6246_(WorldGenSettings.m_190052_(resourcekey2)).m_63990_();
+@@ -160,6 +_,8 @@
+                      }
+ 
+                      f_18797_.error("Error upgrading chunk {}", chunkpos, throwable);
++                  } catch (IOException e) {
++                     throw new RuntimeException(e);
+                   }
+ 
+                   if (flag1) {

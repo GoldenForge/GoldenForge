@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+@@ -85,7 +_,12 @@
+             return true;
+          }
+       };
+-      Set<Pair<Holder<PoiType>, BlockPos>> set = poimanager.m_217994_(this.f_22316_, predicate, p_22351_.m_20183_(), 48, PoiManager.Occupancy.HAS_SPACE).limit(5L).collect(Collectors.toSet());
++      // Paper start - optimise POI access
++      java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
++      io.papermc.paper.util.PoiAccess.findNearestPoiPositions(poimanager, this.f_22316_, predicate, p_22351_.m_20183_(), 48, 48*48, PoiManager.Occupancy.HAS_SPACE, false, 5, poiposes);
++      Set<Pair<Holder<PoiType>, BlockPos>> set = new java.util.HashSet<>(poiposes);
++      // Paper end - optimise POI access
++      //Set<Pair<Holder<PoiType>, BlockPos>> set = poimanager.findAllClosestFirstWithType(this.poiType, predicate, p_22351_.blockPosition(), 48, PoiManager.Occupancy.HAS_SPACE).limit(5L).collect(Collectors.toSet());
+       Path path = m_217097_(p_22351_, set);
+       if (path != null && path.m_77403_()) {
+          BlockPos blockpos = path.m_77406_();

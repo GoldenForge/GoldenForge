@@ -1,0 +1,27 @@
+--- a/net/minecraft/world/level/ChunkPos.java
++++ b/net/minecraft/world/level/ChunkPos.java
+@@ -23,20 +_,24 @@
+    private static final int f_151379_ = 1664525;
+    private static final int f_151380_ = 1013904223;
+    private static final int f_151381_ = -559038737;
++   public final long longKey; // Paper
+ 
+    public ChunkPos(int p_45582_, int p_45583_) {
+       this.f_45578_ = p_45582_;
+       this.f_45579_ = p_45583_;
++      this.longKey = m_45589_(this.f_45578_, this.f_45579_); // Paper
+    }
+ 
+    public ChunkPos(BlockPos p_45587_) {
+       this.f_45578_ = SectionPos.m_123171_(p_45587_.m_123341_());
+       this.f_45579_ = SectionPos.m_123171_(p_45587_.m_123343_());
++      this.longKey = m_45589_(this.f_45578_, this.f_45579_); // Paper
+    }
+ 
+    public ChunkPos(long p_45585_) {
+       this.f_45578_ = (int)p_45585_;
+       this.f_45579_ = (int)(p_45585_ >> 32);
++      this.longKey = m_45589_(this.f_45578_, this.f_45579_); // Paper
+    }
+ 
+    public static ChunkPos m_220337_(int p_220338_, int p_220339_) {

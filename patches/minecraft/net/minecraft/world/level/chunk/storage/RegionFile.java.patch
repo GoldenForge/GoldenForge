@@ -1,5 +1,22 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFile.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFile.java
+@@ -40,6 +_,7 @@
+    private final IntBuffer f_63626_;
+    @VisibleForTesting
+    protected final RegionBitmap f_63618_ = new RegionBitmap();
++   public final java.util.concurrent.locks.ReentrantLock fileLock = new java.util.concurrent.locks.ReentrantLock(true); // Paper
+ 
+    public RegionFile(Path p_196950_, Path p_196951_, boolean p_196952_) throws IOException {
+       this(p_196950_, p_196951_, RegionFileVersion.f_63744_, p_196952_);
+@@ -197,7 +_,7 @@
+       return (p_63677_ + 4096 - 1) / 4096;
+    }
+ 
+-   public boolean m_63673_(ChunkPos p_63674_) {
++   public synchronized boolean m_63673_(ChunkPos p_63674_) { // paper
+       int i = this.m_63686_(p_63674_);
+       if (i == 0) {
+          return false;
 @@ -240,6 +_,7 @@
                 return true;
              }
@@ -8,3 +25,36 @@
              return false;
           }
        }
+@@ -354,15 +_,25 @@
+    }
+ 
+    public void close() throws IOException {
+-      try {
+-         this.m_63681_();
+-      } finally {
++      // Paper start - Prevent regionfiles from being closed during use
++      this.fileLock.lock();
++      synchronized (this) {
+          try {
+-            this.f_63621_.force(true);
+-         } finally {
+-            this.f_63621_.close();
++            // Paper end
++            //this.closed = true; // Paper
++            try {
++               this.m_63681_();
++            } finally {
++               try {
++                  this.f_63621_.force(true);
++               } finally {
++                  this.f_63621_.close();
++               }
++            }
++         } finally { // Paper start - Prevent regionfiles from being closed during use
++            this.fileLock.unlock();
+          }
+-      }
++      } // Paper end
+ 
+    }
+ 

@@ -1,5 +1,24 @@
 --- a/net/minecraft/world/level/chunk/ChunkAccess.java
 +++ b/net/minecraft/world/level/chunk/ChunkAccess.java
+@@ -56,7 +_,7 @@
+    protected final ShortList[] f_187602_;
+    protected volatile boolean f_187603_;
+    private volatile boolean f_187614_;
+-   protected final ChunkPos f_187604_;
++   protected final ChunkPos f_187604_; public final long coordinateKey; public final int locX; public final int locZ; // Paper - cache coordinate key
+    private long f_187615_;
+    /** @deprecated */
+    @Nullable
+@@ -76,7 +_,8 @@
+    protected final LevelChunkSection[] f_187612_;
+ 
+    public ChunkAccess(ChunkPos p_187621_, UpgradeData p_187622_, LevelHeightAccessor p_187623_, Registry<Biome> p_187624_, long p_187625_, @Nullable LevelChunkSection[] p_187626_, @Nullable BlendingData p_187627_) {
+-      this.f_187604_ = p_187621_;
++      this.locX = p_187621_.f_45578_; this.locZ = p_187621_.f_45579_; // Paper - reduce need for field lookups
++      this.f_187604_ = p_187621_; this.coordinateKey = ChunkPos.m_45589_(locX, locZ); // Paper - cache long key
+       this.f_187606_ = p_187622_;
+       this.f_187611_ = p_187623_;
+       this.f_187612_ = new LevelChunkSection[p_187623_.m_151559_()];
 @@ -407,4 +_,7 @@
  
     public static record TicksToSave(SerializableTickContainer<Block> f_187680_, SerializableTickContainer<Fluid> f_187681_) {

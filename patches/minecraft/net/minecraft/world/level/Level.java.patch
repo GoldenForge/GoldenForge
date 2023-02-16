@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
+@@ -24,6 +_,7 @@
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.level.ChunkHolder;
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.sounds.SoundEvent;
+ import net.minecraft.sounds.SoundSource;
+ import net.minecraft.util.Mth;
 @@ -65,7 +_,7 @@
  import net.minecraft.world.phys.AABB;
  import net.minecraft.world.scores.Scoreboard;
@@ -9,6 +17,15 @@
     public static final Codec<ResourceKey<Level>> f_46427_ = ResourceKey.m_195966_(Registry.f_122819_);
     public static final ResourceKey<Level> f_46428_ = ResourceKey.m_135785_(Registry.f_122819_, new ResourceLocation("overworld"));
     public static final ResourceKey<Level> f_46429_ = ResourceKey.m_135785_(Registry.f_122819_, new ResourceLocation("the_nether"));
+@@ -82,7 +_,7 @@
+    protected final NeighborUpdater f_220350_;
+    private final List<TickingBlockEntity> f_151503_ = Lists.newArrayList();
+    private boolean f_151504_;
+-   private final Thread f_46423_;
++   public final Thread f_46423_;
+    private final boolean f_46424_;
+    private int f_46425_;
+    protected int f_46435_ = RandomSource.m_216327_().m_188502_();
 @@ -104,8 +_,14 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
@@ -24,6 +41,22 @@
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
+@@ -165,6 +_,15 @@
+    }
+ 
+    public LevelChunk m_6325_(int p_46727_, int p_46728_) {
++      // Paper start - make sure loaded chunks get the inlined variant of this function
++      net.minecraft.server.level.ServerChunkCache cps = ((ServerLevel)this).m_7726_();
++      if (cps.f_8330_ == Thread.currentThread()) {
++         LevelChunk ifLoaded = cps.getChunkAtIfLoadedMainThread(p_46727_, p_46728_);
++         if (ifLoaded != null) {
++            return ifLoaded;
++         }
++      }
++      // Paper end - make sure loaded chunks get the inlined variant of this function
+       return (LevelChunk)this.m_46819_(p_46727_, p_46728_, ChunkStatus.f_62326_);
+    }
+ 
 @@ -190,17 +_,45 @@
        } else {
           LevelChunk levelchunk = this.m_46745_(p_46605_);

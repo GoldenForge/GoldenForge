@@ -1,6 +1,20 @@
 --- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
 +++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
-@@ -41,9 +_,12 @@
+@@ -2,10 +_,9 @@
+ 
+ import com.mojang.datafixers.DataFixer;
+ import com.mojang.datafixers.util.Pair;
+-import it.unimi.dsi.fastutil.longs.Long2ByteMap;
+-import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+-import it.unimi.dsi.fastutil.longs.LongSet;
++import io.papermc.paper.util.MCUtil;
++import it.unimi.dsi.fastutil.longs.*;
++
+ import java.nio.file.Path;
+ import java.util.Comparator;
+ import java.util.List;
+@@ -41,10 +_,126 @@
     private final PoiManager.DistanceTracker f_27029_;
     private final LongSet f_27030_ = new LongOpenHashSet();
  
@@ -9,10 +23,125 @@
     public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
        super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
        this.f_27029_ = new PoiManager.DistanceTracker();
+-   }
 +      this.world = (net.minecraft.server.level.ServerLevel)p_217873_; // Paper
-    }
++   }
++
++
++   // Paper start - actually unload POI data
++   private final java.util.TreeSet<QueuedUnload> queuedUnloads = new java.util.TreeSet<>();
++   private final Long2ObjectOpenHashMap<QueuedUnload> queuedUnloadsByCoordinate = new Long2ObjectOpenHashMap<>();
++
++   static final class QueuedUnload implements Comparable<QueuedUnload> {
++
++      private final long unloadTick;
++      private final long coordinate;
++
++      public QueuedUnload(long unloadTick, long coordinate) {
++         this.unloadTick = unloadTick;
++         this.coordinate = coordinate;
++      }
++
++      @Override
++      public int compareTo(QueuedUnload other) {
++         if (other.unloadTick == this.unloadTick) {
++            return Long.compare(this.coordinate, other.coordinate);
++         } else {
++            return Long.compare(this.unloadTick, other.unloadTick);
++         }
++      }
++
++      @Override
++      public int hashCode() {
++         int hash = 1;
++         hash = hash * 31 + Long.hashCode(this.unloadTick);
++         hash = hash * 31 + Long.hashCode(this.coordinate);
++         return hash;
++      }
++
++      @Override
++      public boolean equals(Object obj) {
++         if (obj == null || obj.getClass() != QueuedUnload.class) {
++            return false;
++         }
++         QueuedUnload other = (QueuedUnload)obj;
++         return other.unloadTick == this.unloadTick && other.coordinate == this.coordinate;
++      }
++   }
++
++   long determineDelay(long coordinate) {
++      if (this.isEmpty(coordinate)) {
++         return 5 * 60 * 20;
++      } else {
++         return 60 * 20;
++      }
++   }
++
++   public void queueUnload(long coordinate, long minTarget) {
++      QueuedUnload unload = new QueuedUnload(minTarget + this.determineDelay(coordinate), coordinate);
++      QueuedUnload existing = this.queuedUnloadsByCoordinate.put(coordinate, unload);
++      if (existing != null) {
++         this.queuedUnloads.remove(existing);
++      }
++      this.queuedUnloads.add(unload);
++   }
++
++   public void dequeueUnload(long coordinate) {
++      QueuedUnload unload = this.queuedUnloadsByCoordinate.remove(coordinate);
++      if (unload != null) {
++         this.queuedUnloads.remove(unload);
++      }
++
++   }
++
++   public void pollUnloads(BooleanSupplier canSleepForTick) {
++      long currentTick = net.minecraft.server.MinecraftServer.currentTickLong;
++      net.minecraft.server.level.ServerChunkCache chunkProvider = this.world.m_7726_();
++      net.minecraft.server.level.ChunkMap playerChunkMap = chunkProvider.f_8325_;
++      // copied target determination from PlayerChunkMap
++
++      java.util.Iterator<QueuedUnload> iterator = this.queuedUnloads.iterator();
++      for (int i = 0; iterator.hasNext() && (i < 200 || this.queuedUnloads.size() > 2000 || canSleepForTick.getAsBoolean()); i++) {
++         QueuedUnload unload = iterator.next();
++         if (unload.unloadTick > currentTick) {
++            break;
++         }
++
++         long coordinate = unload.coordinate;
++
++         iterator.remove();
++         this.queuedUnloadsByCoordinate.remove(coordinate);
++
++         if (playerChunkMap.getUnloadingChunkHolder(MCUtil.getCoordinateX(coordinate), MCUtil.getCoordinateZ(coordinate)) != null
++                 || playerChunkMap.m_140174_(coordinate) != null) {
++            continue;
++         }
++
++         this.unloadData(coordinate);
++      }
++   }
++
++   @Override
++   public void unloadData(long coordinate) {
++      super.unloadData(coordinate);
++   }
++
++   @Override
++   protected void onUnload(long coordinate) {
++      this.f_27030_.remove(coordinate);
++      int chunkX = MCUtil.getCoordinateX(coordinate);
++      int chunkZ = MCUtil.getCoordinateZ(coordinate);
++      for (int section = this.f_156618_.m_151560_(); section < this.f_156618_.m_151561_(); ++section) {
++         long sectionPos = SectionPos.m_123209_(chunkX, section, chunkZ);
++         //this.updateDistanceTracking(sectionPos);
++         this.f_27029_.m_27203_();
++      }
++   }
++
++   // Paper end - actually unload POI data
  
     public void m_217919_(BlockPos p_217920_, Holder<PoiType> p_217921_) {
+       this.m_63827_(SectionPos.m_175568_(p_217920_)).m_218021_(p_217920_, p_217921_);
 @@ -111,43 +_,62 @@
     }
  
@@ -97,3 +226,54 @@
     }
  
     public boolean m_27154_(BlockPos p_27155_) {
+@@ -194,9 +_,49 @@
+    }
+ 
+    public void m_6202_(BooleanSupplier p_27105_) {
+-      super.m_6202_(p_27105_);
++      // Paper start - async chunk io
++      while (!this.f_63775_.isEmpty() && p_27105_.getAsBoolean() && !this.world.m_7441_()) { // Paper - unload POI data - don't write to disk if saving is disabled
++         ChunkPos chunkcoordintpair = SectionPos.m_123184_(this.f_63775_.firstLong()).m_123251_();
++
++         net.minecraft.nbt.CompoundTag data = this.getData(chunkcoordintpair);
++         com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.scheduleSave(this.world,
++                 chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, data, null, com.destroystokyo.paper.io.PrioritizedTaskQueue.NORMAL_PRIORITY);
++      }
++
++      this.pollUnloads(p_27105_);
++      // Paper end
+       this.f_27029_.m_27203_();
+    }
++
++
++   // Paper start - Asynchronous chunk io
++   @javax.annotation.Nullable
++   @Override
++   public net.minecraft.nbt.CompoundTag m_63706_(ChunkPos chunkcoordintpair) throws java.io.IOException {
++      if (this.world != null && Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE) {
++         net.minecraft.nbt.CompoundTag ret = com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE
++                 .loadChunkDataAsyncFuture(this.world, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, com.destroystokyo.paper.io.IOUtil.getPriorityForCurrentThread(),
++                         true, false, true).join().poiData;
++
++         if (ret == com.destroystokyo.paper.io.PaperFileIOThread.FAILURE_VALUE) {
++            throw new java.io.IOException("See logs for further detail");
++         }
++         return ret;
++      }
++      return super.m_63706_(chunkcoordintpair);
++   }
++
++   @Override
++   public void m_63708_(ChunkPos chunkcoordintpair, net.minecraft.nbt.CompoundTag nbttagcompound) throws java.io.IOException {
++      if (this.world != null && Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE) {
++         com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.scheduleSave(
++                 this.world, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, nbttagcompound, null,
++                 com.destroystokyo.paper.io.IOUtil.getPriorityForCurrentThread());
++         return;
++      }
++      super.m_63708_(chunkcoordintpair, nbttagcompound);
++   }
++   // Paper end
+ 
+    protected void m_5838_(long p_27036_) {
+       super.m_5838_(p_27036_);

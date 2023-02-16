@@ -1,10 +1,187 @@
 --- a/net/minecraft/server/level/ChunkHolder.java
 +++ b/net/minecraft/server/level/ChunkHolder.java
-@@ -67,6 +_,7 @@
+@@ -21,6 +_,7 @@
+ import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
+ import net.minecraft.network.protocol.game.ClientboundLightUpdatePacket;
+ import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.util.DebugBuffer;
+ import net.minecraft.util.Mth;
+ import net.minecraft.world.level.ChunkPos;
+@@ -56,8 +_,8 @@
+    private final DebugBuffer<ChunkHolder.ChunkSaveDebug> f_142984_ = null;
+    private int f_140006_;
+    private int f_140007_;
+-   private int f_140008_;
+-   final ChunkPos f_140009_;
++   public  int f_140008_;
++   public final ChunkPos f_140009_;
+    private boolean f_140010_;
+    private final ShortSet[] f_140011_;
+    private final BitSet f_140012_ = new BitSet();
+@@ -67,8 +_,53 @@
     private final ChunkHolder.PlayerProvider f_140016_;
     private boolean f_140017_;
     private boolean f_140018_;
 +   LevelChunk currentlyLoading; // Forge: Used to bypass future chain when loading chunks.
     private CompletableFuture<Void> f_142981_ = CompletableFuture.completedFuture((Void)null);
  
++   int requestedPriority = ChunkMap.f_140127_ + 1; // this priority is possible pending, but is used to ensure needless updates are not queued
++
++   // Paper start - optimize chunk status progression without jumping through thread pool
++   public boolean canAdvanceStatus() {
++      ChunkStatus status = getChunkHolderStatus();
++      ChunkAccess chunk = getAvailableChunkNow();
++      return chunk != null && (status == null || chunk.m_6415_().m_62427_(getNextStatus(status)));
++   }
++   public @Nullable ChunkAccess getAvailableChunkNow() {
++      // TODO can we just getStatusFuture(EMPTY)?
++      for (ChunkStatus curr = ChunkStatus.f_62326_, next = curr.m_62482_(); curr != next; curr = next, next = next.m_62482_()) {
++         CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future = this.m_140047_(curr);
++         Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = future.getNow(null);
++         if (either == null || either.left().isEmpty()) {
++            continue;
++         }
++         return either.left().get();
++      }
++      return null;
++   }
++   public static ChunkStatus getNextStatus(ChunkStatus status) {
++      if (status == ChunkStatus.f_62326_) {
++         return status;
++      }
++      return f_139999_.get(status.m_62445_() + 1);
++   }
++   // Paper end
++   // Paper start
++   public ChunkStatus getChunkHolderStatus() {
++      for (ChunkStatus curr = ChunkStatus.f_62326_, next = curr.m_62482_(); curr != next; curr = next, next = next.m_62482_()) {
++         CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future = this.m_140047_(curr);
++         Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = future.getNow(null);
++         if (either == null || !either.left().isPresent()) {
++            continue;
++         }
++         return curr;
++      }
++
++      return null;
++   }
++   private boolean loadCallbackScheduled = false;
++   private boolean unloadCallbackScheduled = false;
++   // Paper end
++
     public ChunkHolder(ChunkPos p_142986_, int p_142987_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.LevelChangeListener p_142990_, ChunkHolder.PlayerProvider p_142991_) {
+       this.f_140009_ = p_142986_;
+       this.f_142983_ = p_142988_;
+@@ -331,7 +_,13 @@
+       this.f_142981_.cancel(false);
+       CompletableFuture<Void> completablefuture = new CompletableFuture<>();
+       completablefuture.thenRunAsync(() -> {
++         // Paper start - do not allow ticket level changes
++         boolean unloadingBefore = p_142999_.unloadingPlayerChunk;
++         p_142999_.unloadingPlayerChunk = true;
++         try {
++            // Paper end  - do not allow ticket level changes
+          p_142999_.m_143075_(this.f_140009_, p_143002_);
++         } finally { p_142999_.unloadingPlayerChunk = unloadingBefore; } // Paper - do not allow ticket level changes
+       }, p_143001_);
+       this.f_142981_ = completablefuture;
+       p_143000_.thenAccept((p_200421_) -> {
+@@ -343,16 +_,65 @@
+ 
+    private void m_142992_(ChunkMap p_142993_, ChunkHolder.FullChunkStatus p_142994_) {
+       this.f_142981_.cancel(false);
++      // Paper start - do not allow ticket level changes
++      boolean unloadingBefore = p_142993_.unloadingPlayerChunk;
++      p_142993_.unloadingPlayerChunk = true;
++      try { // Paper end  - do not allow ticket level changes
+       p_142993_.m_143075_(this.f_140009_, p_142994_);
++      } finally { p_142993_.unloadingPlayerChunk = unloadingBefore; } // Paper - do not allow ticket level changes
+    }
+ 
++   protected long updateCount; // Paper - correctly handle recursion
+    protected void m_143003_(ChunkMap p_143004_, Executor p_143005_) {
++      long updateCount = ++this.updateCount; // Paper - correctly handle recursion
+       ChunkStatus chunkstatus = m_140074_(this.f_140006_);
+       ChunkStatus chunkstatus1 = m_140074_(this.f_140007_);
+       boolean flag = this.f_140006_ <= ChunkMap.f_140127_;
+-      boolean flag1 = this.f_140007_ <= ChunkMap.f_140127_;
++      boolean flag1 = this.f_140007_ <= ChunkMap.f_140127_; // Paper - diff on change: (flag1 = new ticket level is in loadable range)
+       ChunkHolder.FullChunkStatus chunkholder$fullchunkstatus = m_140083_(this.f_140006_);
+       ChunkHolder.FullChunkStatus chunkholder$fullchunkstatus1 = m_140083_(this.f_140007_);
++      // CraftBukkit start
++      // ChunkUnloadEvent: Called before the chunk is unloaded: isChunkLoaded is still true and chunk can still be modified by plugins.
++      if (chunkholder$fullchunkstatus.m_140114_(ChunkHolder.FullChunkStatus.BORDER) && !chunkholder$fullchunkstatus1.m_140114_(ChunkHolder.FullChunkStatus.BORDER)) {
++         this.m_140047_(ChunkStatus.f_62326_).thenAccept((either) -> {
++            LevelChunk chunk = (LevelChunk)either.left().orElse(null);
++            if (chunk != null && chunk.wasLoadCallbackInvoked() && ChunkHolder.this.f_140007_ > 33) { // Paper - only invoke unload if load was called
++               // Paper  start - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++               if (ChunkHolder.this.unloadCallbackScheduled) {
++                  return;
++               }
++               ChunkHolder.this.unloadCallbackScheduled = true;
++               // Paper  end - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++               p_143004_.callbackExecutor.execute(() -> {
++                  // Paper  start - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++                  ChunkHolder.this.unloadCallbackScheduled = false;
++                  if (ChunkHolder.this.f_140007_ <= 33) {
++                     return;
++                  }
++                  // Paper  end - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++                  // Minecraft will apply the chunks tick lists to the world once the chunk got loaded, and then store the tick
++                  // lists again inside the chunk once the chunk becomes inaccessible and set the chunk's needsSaving flag.
++                  // These actions may however happen deferred, so we manually set the needsSaving flag already here.
++                  chunk.m_8092_(true);
++                  chunk.unloadCallback();
++               });
++            }
++         }).exceptionally((throwable) -> {
++            // ensure exceptions are printed, by default this is not the case
++            MinecraftServer.f_129750_.error("Failed to schedule unload callback for chunk " + ChunkHolder.this.f_140009_, throwable);
++            return null;
++         });
++
++         // Run callback right away if the future was already done
++         p_143004_.callbackExecutor.run();
++         // Paper start - correctly handle recursion
++         if (this.updateCount != updateCount) {
++            // something else updated ticket level for us.
++            return;
++         }
++         // Paper end - correctly handle recursion
++      }
++      // CraftBukkit end
+       if (flag) {
+          Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = Either.right(new ChunkHolder.ChunkLoadingFailure() {
+             public String toString() {
+@@ -418,6 +_,30 @@
+ 
+       this.f_140015_.m_6250_(this.f_140009_, this::m_140094_, this.f_140007_, this::m_140086_);
+       this.f_140006_ = this.f_140007_;
++      if (!chunkholder$fullchunkstatus.m_140114_(ChunkHolder.FullChunkStatus.BORDER) && chunkholder$fullchunkstatus1.m_140114_(ChunkHolder.FullChunkStatus.BORDER)) {
++         this.m_140047_(ChunkStatus.f_62326_).thenAccept((either) -> {
++            LevelChunk chunk = (LevelChunk)either.left().orElse(null);
++            if (chunk != null && ChunkHolder.this.f_140006_ <= 33 && !chunk.wasLoadCallbackInvoked()) { // Paper - ensure ticket level is set to loaded before calling, as now this can complete with ticket level > 33
++               // Paper  start - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++               if (ChunkHolder.this.loadCallbackScheduled) {
++                  return;
++               }
++               ChunkHolder.this.loadCallbackScheduled = true;
++               // Paper  end - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++               p_143004_.callbackExecutor.execute(() -> {
++                  ChunkHolder.this.loadCallbackScheduled = false; // Paper  - only schedule once, now the future is no longer completed as RIGHT if unloaded...
++                  if (ChunkHolder.this.f_140006_ <= 33) chunk.loadCallback(); // Paper "
++               });
++            }
++         }).exceptionally((throwable) -> {
++            // ensure exceptions are printed, by default this is not the case
++            MinecraftServer.f_129750_.error("Failed to schedule load callback for chunk " + ChunkHolder.this.f_140009_, throwable);
++            return null;
++         });
++
++         // Run callback right away if the future was already done
++         p_143004_.callbackExecutor.run();
++      }
+    }
+ 
+    public static ChunkStatus m_140074_(int p_140075_) {

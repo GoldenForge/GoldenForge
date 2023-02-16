@@ -29,6 +29,7 @@ import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.common.util.LogicalSidedProvider;
 import net.minecraftforge.server.command.ForgeCommand;
 import net.minecraftforge.server.command.ConfigCommand;
+import net.minecraftforge.server.command.goldenforge.GoldenForgeCommand;
 
 public class ForgeInternalHandler
 {
@@ -109,6 +110,7 @@ public class ForgeInternalHandler
     @SubscribeEvent
     public void onCommandsRegister(RegisterCommandsEvent event)
     {
+        new GoldenForgeCommand(event.getDispatcher());
         new ForgeCommand(event.getDispatcher());
         ConfigCommand.register(event.getDispatcher());
     }

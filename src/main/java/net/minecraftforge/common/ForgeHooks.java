@@ -299,6 +299,7 @@ public class ForgeHooks
     @Deprecated(since = "1.19.2", forRemoval = true)
     public static void onLivingSetAttackTarget(LivingEntity entity, LivingEntity target, ILivingTargetType targetType)
     {
+
         MinecraftForge.EVENT_BUS.post(new LivingSetAttackTargetEvent(entity, target, targetType));
     }
     

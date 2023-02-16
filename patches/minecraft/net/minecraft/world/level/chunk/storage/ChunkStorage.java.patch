@@ -1,0 +1,97 @@
+--- a/net/minecraft/world/level/chunk/storage/ChunkStorage.java
++++ b/net/minecraft/world/level/chunk/storage/ChunkStorage.java
+@@ -21,27 +_,34 @@
+ 
+ public class ChunkStorage implements AutoCloseable {
+    public static final int f_196910_ = 1493;
+-   private final IOWorker f_63495_;
++   //private final IOWorker worker;
+    protected final DataFixer f_63496_;
+    @Nullable
+    private volatile LegacyStructureDataHandler f_63497_;
++   private final Object persistentDataLock = new Object(); // Paper
++   public final RegionFileStorage regionFileCache;
++   // Paper end - async chunk loading
+ 
+    public ChunkStorage(Path p_196912_, DataFixer p_196913_, boolean p_196914_) {
+       this.f_63496_ = p_196913_;
+-      this.f_63495_ = new IOWorker(p_196912_, p_196914_, "chunk");
++      this.regionFileCache = new RegionFileStorage(p_196912_, p_196914_); // Paper - nuke IOWorker // Paper
+    }
+ 
+    public boolean m_223451_(ChunkPos p_223452_, int p_223453_) {
+-      return this.f_63495_.m_223471_(p_223452_, p_223453_);
++     // return this.regionFileCache.isOldChunkAround(p_223452_, p_223453_);
++      return false;
+    }
+ 
+    public CompoundTag m_188288_(ResourceKey<Level> p_188289_, Supplier<DimensionDataStorage> p_188290_, CompoundTag p_188291_, Optional<ResourceKey<Codec<? extends ChunkGenerator>>> p_188292_) {
++      p_188291_ = p_188291_.m_6426_(); // Paper - defensive copy, another thread might modify this
+       int i = m_63505_(p_188291_);
+       if (i < 1493) {
+          p_188291_ = NbtUtils.m_129218_(this.f_63496_, DataFixTypes.CHUNK, p_188291_, i, 1493);
+          if (p_188291_.m_128469_("Level").m_128471_("hasLegacyStructureData")) {
+-            LegacyStructureDataHandler legacystructuredatahandler = this.m_223448_(p_188289_, p_188290_);
+-            p_188291_ = legacystructuredatahandler.m_71326_(p_188291_);
++            synchronized (this.persistentDataLock) { // Paper - Async chunk loading
++               LegacyStructureDataHandler legacystructuredatahandler = this.m_223448_(p_188289_, p_188290_);
++               p_188291_ = legacystructuredatahandler.m_71326_(p_188291_);
++            } // Paper - Async chunk loading
+          }
+       }
+ 
+@@ -82,27 +_,46 @@
+       return p_63506_.m_128425_("DataVersion", 99) ? p_63506_.m_128451_("DataVersion") : -1;
+    }
+ 
+-   public CompletableFuture<Optional<CompoundTag>> m_223454_(ChunkPos p_223455_) {
+-      return this.f_63495_.m_156587_(p_223455_);
++   public CompoundTag read(ChunkPos p_223455_) throws IOException {
++      return this.regionFileCache.m_63706_(p_223455_); // Paper - async chunk io
+    }
+ 
+-   public void m_63502_(ChunkPos p_63503_, CompoundTag p_63504_) {
+-      this.f_63495_.m_63538_(p_63503_, p_63504_);
++   public void m_63502_(ChunkPos p_63503_, CompoundTag p_63504_) throws IOException {
++//      // Paper start
++//      if (!p_63503_.equals(ChunkSerializer.getChunkCoordinate(nbt))) {
++//         String world = (this instanceof net.minecraft.server.level.ChunkMap) ? ((net.minecraft.server.level.ChunkMap)this).level.getWorld().getName() : null;
++//         throw new IllegalArgumentException("Chunk coordinate and serialized data do not have matching coordinates, trying to serialize coordinate " + chunkPos.toString()
++//                 + " but compound says coordinate is " + ChunkSerializer.getChunkCoordinate(nbt).toString() + (world == null ? " for an unknown world" : (" for world: " + world)));
++//      }
++//      // Paper end
++      this.regionFileCache.m_63708_(p_63503_, p_63504_);
++      // Paper end - Async chunk loading
+       if (this.f_63497_ != null) {
+-         this.f_63497_.m_71318_(p_63503_.m_45588_());
++         synchronized (this.persistentDataLock) { // Paper - Async chunk loading
++            this.f_63497_.m_71318_(p_63503_.m_45588_());
++         } // Paper - Async chunk loading
+       }
+ 
+    }
+ 
+    public void m_63514_() {
+-      this.f_63495_.m_182498_(true).join();
++      com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.flush(); // Paper - nuke IO worker
+    }
+ 
+    public void close() throws IOException {
+-      this.f_63495_.close();
++      this.regionFileCache.close(); // Paper - nuke IO worker
+    }
+ 
+    public ChunkScanAccess m_196922_() {
+-      return this.f_63495_;
++      // Paper start - nuke IO worker
++      return ((chunkPos, streamTagVisitor) -> {
++         try {
++            this.regionFileCache.m_196956_(chunkPos, streamTagVisitor);
++            return java.util.concurrent.CompletableFuture.completedFuture(null);
++         } catch (IOException e) {
++            throw new RuntimeException(e);
++         }
++      });
++      // Paper end
+    }
+ }

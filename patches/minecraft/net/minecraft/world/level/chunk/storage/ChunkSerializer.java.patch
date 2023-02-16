@@ -1,5 +1,97 @@
 --- a/net/minecraft/world/level/chunk/storage/ChunkSerializer.java
 +++ b/net/minecraft/world/level/chunk/storage/ChunkSerializer.java
+@@ -7,10 +_,8 @@
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
+-import java.util.Arrays;
+-import java.util.EnumSet;
+-import java.util.Map;
+-import java.util.Objects;
++
++import java.util.*;
+ import javax.annotation.Nullable;
+ import net.minecraft.SharedConstants;
+ import net.minecraft.core.BlockPos;
+@@ -18,13 +_,10 @@
+ import net.minecraft.core.Registry;
+ import net.minecraft.core.RegistryAccess;
+ import net.minecraft.core.SectionPos;
+-import net.minecraft.nbt.CompoundTag;
+-import net.minecraft.nbt.ListTag;
+-import net.minecraft.nbt.LongArrayTag;
+-import net.minecraft.nbt.NbtOps;
+-import net.minecraft.nbt.ShortTag;
++import net.minecraft.nbt.*;
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ThreadedLevelLightEngine;
+ import net.minecraft.world.entity.EntityType;
+ import net.minecraft.world.entity.ai.village.poi.PoiManager;
+ import net.minecraft.world.level.ChunkPos;
+@@ -74,7 +_,29 @@
+    public static final String f_223446_ = "BlockLight";
+    public static final String f_223447_ = "SkyLight";
+ 
++   public static final class InProgressChunkHolder {
++
++      public final ProtoChunk protoChunk;
++      public final java.util.ArrayDeque<Runnable> tasks;
++
++      public CompoundTag poiData;
++
++      public InProgressChunkHolder(final ProtoChunk protoChunk, final java.util.ArrayDeque<Runnable> tasks) {
++         this.protoChunk = protoChunk;
++         this.tasks = tasks;
++      }
++   }
++
++//   public static ProtoChunk read(ServerLevel world, PoiManager poiStorage, ChunkPos chunkPos, CompoundTag nbt) {
++//      // Paper start - add variant for async calls
++//      InProgressChunkHolder holder = loadChunk(world, poiStorage, chunkPos, nbt);
++//      holder.tasks.forEach(Runnable::run);
++//      return holder.protoChunk;
++//   }
++
+    public static ProtoChunk m_188230_(ServerLevel p_188231_, PoiManager p_188232_, ChunkPos p_188233_, CompoundTag p_188234_) {
++      java.util.ArrayDeque<Runnable> tasksToExecuteOnMain = new java.util.ArrayDeque<>();
++
+       ChunkPos chunkpos = new ChunkPos(p_188234_.m_128451_("xPos"), p_188234_.m_128451_("zPos"));
+       if (!Objects.equals(p_188233_, chunkpos)) {
+          f_63449_.error("Chunk file at {} is in the wrong location; relocating. (Expected {}, got {})", p_188233_, p_188233_, chunkpos);
+@@ -117,23 +_,31 @@
+ 
+             LevelChunkSection levelchunksection = new LevelChunkSection(k, palettedcontainer, palettedcontainerro);
+             alevelchunksection[l] = levelchunksection;
+-            p_188232_.m_27047_(p_188233_, levelchunksection);
++            tasksToExecuteOnMain.add(() -> { // Paper - delay this task since we're executing off-main
++               p_188232_.m_27047_(p_188233_, levelchunksection);
++            }); // Paper - delay this task since we're executing off-main
+          }
+ 
+          boolean flag4 = compoundtag.m_128425_("BlockLight", 7);
+          boolean flag5 = flag1 && compoundtag.m_128425_("SkyLight", 7);
+          if (flag4 || flag5) {
+             if (!flag2) {
++               tasksToExecuteOnMain.add(() -> { // Paper - delay this task since we're executing off-main
+                levellightengine.m_6462_(p_188233_, true);
++               }); // Paper - delay this task since we're executing off-main
+                flag2 = true;
+             }
+ 
+             if (flag4) {
++               tasksToExecuteOnMain.add(() -> {
+                levellightengine.m_5687_(LightLayer.BLOCK, SectionPos.m_123196_(p_188233_, k), new DataLayer(compoundtag.m_128463_("BlockLight")), true);
++               });
+             }
+ 
+             if (flag5) {
++               tasksToExecuteOnMain.add(() -> {
+                levellightengine.m_5687_(LightLayer.SKY, SectionPos.m_123196_(p_188233_, k), new DataLayer(compoundtag.m_128463_("SkyLight")), true);
++               });
+             }
+          }
+       }
 @@ -156,6 +_,7 @@
              return Registry.f_122822_.m_6612_(ResourceLocation.m_135820_(p_188285_));
           }, p_188233_);
@@ -17,27 +109,146 @@
                    protochunk.m_63277_(blockpos);
                 }
              }
-@@ -219,6 +_,7 @@
+@@ -219,7 +_,10 @@
        }
  
        if (chunkstatus$chunktype == ChunkStatus.ChunkType.LEVELCHUNK) {
+-         return new ImposterProtoChunk((LevelChunk)chunkaccess, false);
 +         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Load(chunkaccess, p_188234_, chunkstatus$chunktype));
-          return new ImposterProtoChunk((LevelChunk)chunkaccess, false);
++         ProtoChunk chunk = new ImposterProtoChunk((LevelChunk) chunkaccess, false);
++         chunk.tasks = tasksToExecuteOnMain;
++         return chunk;
        } else {
           ProtoChunk protochunk1 = (ProtoChunk)chunkaccess;
-@@ -252,6 +_,7 @@
+          ListTag listtag4 = p_188234_.m_128437_("entities", 10);
+@@ -252,10 +_,69 @@
              protochunk1.m_188186_(generationstep$carving, new CarvingMask(compoundtag4.m_128467_(s1), chunkaccess.m_141937_()));
           }
  
 +         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Load(chunkaccess, p_188234_, chunkstatus$chunktype));
++         protochunk1.tasks = tasksToExecuteOnMain;
           return protochunk1;
        }
     }
-@@ -359,6 +_,15 @@
-          }
+ 
++   // Paper start - async chunk save for unload
++   public record AsyncSaveData(
++           DataLayer[] blockLight,
++           DataLayer[] skyLight,
++           Tag blockTickList, // non-null if we had to go to the server's tick list
++           Tag fluidTickList, // non-null if we had to go to the server's tick list
++           ListTag blockEntities,
++           long worldTime
++   ) {}
++
++   // must be called sync
++   public static AsyncSaveData getAsyncSaveData(ServerLevel world, ChunkAccess chunk) {
++      ChunkPos chunkPos = chunk.m_7697_();
++
++      ThreadedLevelLightEngine lightenginethreaded = world.m_7726_().m_7827_();
++
++      DataLayer[] blockLight = new DataLayer[lightenginethreaded.m_164448_() - lightenginethreaded.m_164447_()];
++      DataLayer[] skyLight = new DataLayer[lightenginethreaded.m_164448_() - lightenginethreaded.m_164447_()];
++
++      for (int i = lightenginethreaded.m_164447_(); false && i < lightenginethreaded.m_164448_(); ++i) { // Paper - don't run loop, we don't need to - light data is per chunk now
++         DataLayer blockArray = lightenginethreaded.m_75814_(LightLayer.BLOCK).m_8079_(SectionPos.m_123196_(chunkPos, i));
++         DataLayer skyArray = lightenginethreaded.m_75814_(LightLayer.SKY).m_8079_(SectionPos.m_123196_(chunkPos, i));
++
++         // copy data for safety
++         if (blockArray != null) {
++            blockArray = blockArray.m_62569_();
++         }
++         if (skyArray != null) {
++            skyArray = skyArray.m_62569_();
++         }
++
++         blockLight[i - lightenginethreaded.m_164447_()] = blockArray;
++         skyLight[i - lightenginethreaded.m_164447_()] = skyArray;
++      }
++
++      final CompoundTag tickLists = new CompoundTag();
++      ChunkSerializer.m_188235_(world, tickLists, chunk.m_183568_());
++
++      ListTag blockEntitiesSerialized = new ListTag();
++      for (final BlockPos blockPos : chunk.m_5928_()) {
++         final CompoundTag blockEntityNbt = chunk.m_8051_(blockPos);
++         if (blockEntityNbt != null) {
++            blockEntitiesSerialized.add(blockEntityNbt);
++         }
++      }
++
++      return new AsyncSaveData(
++              blockLight,
++              skyLight,
++              tickLists.m_128423_(f_188228_),
++              tickLists.m_128423_(f_188229_),
++              blockEntitiesSerialized,
++              world.m_46467_()
++      );
++   }
++   // Paper end
++
+    private static void m_188239_(ChunkPos p_188240_, int p_188241_, String p_188242_) {
+       f_63449_.error("Recoverable errors when loading section [" + p_188240_.f_45578_ + ", " + p_188241_ + ", " + p_188240_.f_45579_ + "]: " + p_188242_);
+    }
+@@ -267,11 +_,13 @@
+    public static CompoundTag m_63454_(ServerLevel p_63455_, ChunkAccess p_63456_) {
+       ChunkPos chunkpos = p_63456_.m_7697_();
+       CompoundTag compoundtag = new CompoundTag();
++
++      AsyncSaveData asyncsavedata = getAsyncSaveData(p_63455_, p_63456_);
+       compoundtag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
+       compoundtag.m_128405_("xPos", chunkpos.f_45578_);
+       compoundtag.m_128405_("yPos", p_63456_.m_151560_());
+       compoundtag.m_128405_("zPos", chunkpos.f_45579_);
+-      compoundtag.m_128356_("LastUpdate", p_63455_.m_46467_());
++      compoundtag.m_128356_("LastUpdate", asyncsavedata != null ? asyncsavedata.worldTime : p_63455_.m_46467_()); // Paper - async chunk unloading
+       compoundtag.m_128356_("InhabitedTime", p_63456_.m_6319_());
+       compoundtag.m_128359_("Status", p_63456_.m_6415_().m_62467_());
+       BlendingData blendingdata = p_63456_.m_183407_();
+@@ -303,8 +_,15 @@
+       for(int i = levellightengine.m_164447_(); i < levellightengine.m_164448_(); ++i) {
+          int j = p_63456_.m_151566_(i);
+          boolean flag1 = j >= 0 && j < alevelchunksection.length;
+-         DataLayer datalayer = levellightengine.m_75814_(LightLayer.BLOCK).m_8079_(SectionPos.m_123196_(chunkpos, i));
+-         DataLayer datalayer1 = levellightengine.m_75814_(LightLayer.SKY).m_8079_(SectionPos.m_123196_(chunkpos, i));
++         DataLayer datalayer;
++         DataLayer datalayer1;
++         if (asyncsavedata == null) {
++            datalayer = levellightengine.m_75814_(LightLayer.BLOCK).m_8079_(SectionPos.m_123196_(chunkpos, i));
++            datalayer1 = levellightengine.m_75814_(LightLayer.SKY).m_8079_(SectionPos.m_123196_(chunkpos, i));
++         } else {
++            datalayer = asyncsavedata.blockLight[i - levellightengine.m_164447_()];
++            datalayer1 = asyncsavedata.skyLight[i - levellightengine.m_164447_()];
++         }
+          if (flag1 || datalayer != null || datalayer1 != null) {
+             CompoundTag compoundtag1 = new CompoundTag();
+             if (flag1) {
+@@ -333,6 +_,18 @@
+          compoundtag.m_128379_("isLightOn", true);
+       }
+ 
++      // Paper start
++      ListTag nbttaglist1;
++      Iterator<BlockPos> iterator;
++      if (asyncsavedata != null) {
++         nbttaglist1 = asyncsavedata.blockEntities;
++         iterator = java.util.Collections.emptyIterator();
++      } else {
++         nbttaglist1 = new ListTag();
++         iterator = p_63456_.m_5928_().iterator();
++      }
++      // Paper end
++
+       ListTag listtag1 = new ListTag();
+ 
+       for(BlockPos blockpos : p_63456_.m_5928_()) {
+@@ -360,8 +_,26 @@
  
           compoundtag.m_128365_("CarvingMasks", compoundtag4);
-+      }
+       }
+-
+-      m_188235_(p_63455_, compoundtag, p_63456_.m_183568_());
 +      else {
 +          LevelChunk levelChunk = (LevelChunk) p_63456_;
 +          try {
@@ -46,6 +257,18 @@
 +          } catch (Exception exception) {
 +              f_63449_.error("A capability provider has thrown an exception trying to write state. It will not persist. Report this to the mod author", exception);
 +          }
-       }
++      }
++
++      // Paper start
++      if (asyncsavedata != null) {
++         compoundtag.m_128365_(f_188228_, asyncsavedata.blockTickList);
++         compoundtag.m_128365_(f_188229_, asyncsavedata.fluidTickList);
++      } else {
++         ChunkSerializer.m_188235_(p_63455_, compoundtag, p_63456_.m_183568_());
++      }
++      // Paper end
++
++     // saveTicks(p_63455_, compoundtag, p_63456_.getTicksForSerialization());
+       compoundtag.m_128365_("PostProcessing", m_63490_(p_63456_.m_6720_()));
+       CompoundTag compoundtag2 = new CompoundTag();
  
-       m_188235_(p_63455_, compoundtag, p_63456_.m_183568_());

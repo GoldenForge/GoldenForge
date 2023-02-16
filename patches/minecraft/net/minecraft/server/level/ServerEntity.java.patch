@@ -28,7 +28,7 @@
  
        if (this.f_8521_ % this.f_8511_ == 0 || this.f_8510_.f_19812_ || this.f_8510_.m_20088_().m_135352_()) {
           if (this.f_8510_.m_20159_()) {
-@@ -189,11 +_,13 @@
+@@ -189,16 +_,19 @@
     public void m_8534_(ServerPlayer p_8535_) {
        this.f_8510_.m_6452_(p_8535_);
        p_8535_.f_8906_.m_9829_(new ClientboundRemoveEntitiesPacket(this.f_8510_.m_19879_()));
@@ -42,3 +42,10 @@
     }
  
     public void m_8536_(Consumer<Packet<?>> p_8537_) {
+       if (this.f_8510_.m_213877_()) {
+-         f_8508_.warn("Fetching packet for removed entity {}", (Object)this.f_8510_);
++         //LOGGER.warn("Fetching packet for removed entity {}", (Object)this.entity);
++         return;
+       }
+ 
+       Packet<?> packet = this.f_8510_.m_5654_();

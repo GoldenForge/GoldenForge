@@ -72,12 +72,13 @@
                       PrimaryLevelData primaryleveldata = new PrimaryLevelData(levelsettings, worldgensettings, Lifecycle.stable());
                       return Pair.of(primaryleveldata, registryaccess$writable.m_203557_());
                    }
-@@ -178,22 +_,33 @@
+@@ -178,22 +_,34 @@
           }
  
           levelstoragesource$levelstorageaccess.m_78287_(registryaccess$frozen, worlddata);
 -         final DedicatedServer dedicatedserver = MinecraftServer.m_129872_((p_236710_) -> {
 -            DedicatedServer dedicatedserver1 = new DedicatedServer(p_236710_, levelstoragesource$levelstorageaccess, packrepository, worldstem, dedicatedserversettings, DataFixers.m_14512_(), services, LoggerChunkProgressListener::new);
++         Class.forName(net.minecraft.world.entity.npc.VillagerTrades.class.getName());// Paper - load this sync so it won't fail later async
 +         final MinecraftServer dedicatedserver = MinecraftServer.m_129872_((p_129697_) -> {
 +            MinecraftServer dedicatedserver1;
 +            if (gametestEnabled) {

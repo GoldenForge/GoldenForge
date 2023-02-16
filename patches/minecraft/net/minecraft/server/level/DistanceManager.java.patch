@@ -57,15 +57,24 @@
        long i = p_140851_.m_45588_();
        this.m_140818_(i, ticket);
        this.f_183901_.m_184165_(i, ticket);
-@@ -285,6 +_,11 @@
- 
-    public String m_140837_() {
+@@ -287,6 +_,11 @@
        return this.f_140766_.m_140558_();
-+   }
-+
+    }
+ 
 +   public boolean shouldForceTicks(long chunkPos) {
 +       SortedArraySet<Ticket<?>> tickets = forcedTickets.get(chunkPos);
 +       return tickets != null && !tickets.isEmpty();
++   }
++
+    private void m_143207_(String p_143208_) {
+       try {
+          FileOutputStream fileoutputstream = new FileOutputStream(new File(p_143208_));
+@@ -322,7 +_,7 @@
     }
  
-    private void m_143207_(String p_143208_) {
+    public void m_201910_() {
+-      ImmutableSet<TicketType<?>> immutableset = ImmutableSet.of(TicketType.f_9449_, TicketType.f_9448_, TicketType.f_9446_);
++      ImmutableSet<TicketType<?>> immutableset = ImmutableSet.of(TicketType.f_9449_, TicketType.f_9448_, TicketType.f_9446_, TicketType.ASYNC_LOAD); // Paper
+       ObjectIterator<Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>>> objectiterator = this.f_140761_.long2ObjectEntrySet().fastIterator();
+ 
+       while(objectiterator.hasNext()) {

@@ -1,0 +1,24 @@
+--- a/net/minecraft/world/level/levelgen/blending/Blender.java
++++ b/net/minecraft/world/level/levelgen/blending/Blender.java
+@@ -66,9 +_,9 @@
+          return f_190137_;
+       } else {
+          ChunkPos chunkpos = p_190203_.m_143488_();
+-         if (!p_190203_.m_215159_(chunkpos, f_190140_)) {
+-            return f_190137_;
+-         } else {
++//         if (!p_190203_.isOldChunkAround(chunkpos, HEIGHT_BLENDING_RANGE_CHUNKS)) {
++//            return EMPTY;
++//         } else {
+             Long2ObjectOpenHashMap<BlendingData> long2objectopenhashmap = new Long2ObjectOpenHashMap<>();
+             Long2ObjectOpenHashMap<BlendingData> long2objectopenhashmap1 = new Long2ObjectOpenHashMap<>();
+             int i = Mth.m_144944_(f_190140_ + 1);
+@@ -91,7 +_,7 @@
+ 
+             return long2objectopenhashmap.isEmpty() && long2objectopenhashmap1.isEmpty() ? f_190137_ : new Blender(long2objectopenhashmap, long2objectopenhashmap1);
+          }
+-      }
++
+    }
+ 
+    Blender(Long2ObjectOpenHashMap<BlendingData> p_202197_, Long2ObjectOpenHashMap<BlendingData> p_202198_) {

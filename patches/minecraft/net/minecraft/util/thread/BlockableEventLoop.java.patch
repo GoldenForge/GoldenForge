@@ -1,0 +1,26 @@
+--- a/net/minecraft/util/thread/BlockableEventLoop.java
++++ b/net/minecraft/util/thread/BlockableEventLoop.java
+@@ -27,6 +_,14 @@
+       MetricsRegistry.f_146067_.m_146072_(this);
+    }
+ 
++   // Paper start
++   public void scheduleOnMain(Runnable r0) {
++      // postToMainThread does not work the same as older versions of mc
++      // This method is actually used to create a TickTask, which can then be posted onto main
++      this.m_6937_(this.m_6681_(r0));
++   }
++   // Paper end
++
+    protected abstract R m_6681_(Runnable p_18704_);
+ 
+    protected abstract boolean m_6362_(R p_18703_);
+@@ -100,7 +_,7 @@
+       this.f_18682_.clear();
+    }
+ 
+-   protected void m_18699_() {
++   public void m_18699_() {
+       while(this.m_7245_()) {
+       }
+ 
