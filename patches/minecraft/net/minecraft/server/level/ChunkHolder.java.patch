@@ -29,7 +29,8 @@
     private CompletableFuture<ChunkAccess> f_140005_ = CompletableFuture.completedFuture((ChunkAccess)null);
     @Nullable
     private final DebugBuffer<ChunkHolder.ChunkSaveDebug> f_142984_ = null;
-    private int f_140006_;
+-   private int f_140006_;
++   public int f_140006_;
     private int f_140007_;
 -   private int f_140008_;
 -   final ChunkPos f_140009_;
@@ -39,7 +40,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -67,8 +_,173 @@
+@@ -67,8 +_,185 @@
     private final ChunkHolder.PlayerProvider f_140016_;
     private boolean f_140017_;
     private boolean f_140018_;
@@ -56,6 +57,18 @@
 +      ChunkAccess chunk = getAvailableChunkNow();
 +      return chunk != null && (status == null || chunk.m_6415_().m_62427_(getNextStatus(status)));
 +   }
++
++   public final LevelChunk getSendingChunk() {
++      // it's important that we use getChunkAtIfLoadedImmediately to mirror the chunk sending logic used
++      // in Chunk's neighbour callback
++      LevelChunk ret = this.chunkMap.f_140133_.m_7726_().getChunkAtIfLoadedImmediately(this.f_140009_.f_45578_, this.f_140009_.f_45579_);
++      if (ret != null && ret.areNeighboursLoaded(1)) {
++         return ret;
++      }
++      return null;
++   }
++
++
 +   public @Nullable ChunkAccess getAvailableChunkNow() {
 +      // TODO can we just getStatusFuture(EMPTY)?
 +      for (ChunkStatus curr = ChunkStatus.f_62326_, next = curr.m_62482_(); curr != next; curr = next, next = next.m_62482_()) {
@@ -222,7 +235,7 @@
     }
  
     public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_140047_(ChunkStatus p_140048_) {
-@@ -146,7 +_,7 @@
+@@ -146,16 +_,17 @@
        return null;
     }
  
@@ -231,7 +244,10 @@
        return this.f_140005_;
     }
  
-@@ -156,6 +_,7 @@
+    public void m_140056_(BlockPos p_140057_) {
+-      LevelChunk levelchunk = this.m_140085_();
++      LevelChunk levelchunk = this.getSendingChunk(); // Paper - no-tick view distance
+       if (levelchunk != null) {
           int i = this.f_142983_.m_151564_(p_140057_.m_123342_());
           if (this.f_140011_[i] == null) {
              this.f_140010_ = true;
@@ -239,7 +255,13 @@
              this.f_140011_[i] = new ShortOpenHashSet();
           }
  
-@@ -174,6 +_,7 @@
+@@ -169,11 +_,12 @@
+          ChunkAccess chunkaccess = either.left().orElse((ChunkAccess)null);
+          if (chunkaccess != null) {
+             chunkaccess.m_8092_(true);
+-            LevelChunk levelchunk = this.m_140085_();
++            LevelChunk levelchunk = this.getSendingChunk(); // Paper - no-tick view distance
+             if (levelchunk != null) {
                 int i = this.f_140014_.m_164447_();
                 int j = this.f_140014_.m_164448_();
                 if (p_140038_ >= i && p_140038_ <= j) {
@@ -331,6 +353,38 @@
        }
     }
  
+@@ -249,9 +_,28 @@
+    }
+ 
+    private void m_140063_(Packet<?> p_140064_, boolean p_140065_) {
+-      this.f_140016_.m_183262_(this.f_140009_, p_140065_).forEach((p_140062_) -> {
+-         p_140062_.f_8906_.m_9829_(p_140064_);
+-      });
++      // Paper start - per player view distance
++      // there can be potential desync with player's last mapped section and the view distance map, so use the
++      // view distance map here.
++      com.destroystokyo.paper.util.misc.PlayerAreaMap viewDistanceMap = this.chunkMap.playerChunkManager.broadcastMap; // Paper - replace old player chunk manager
++      com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> players = viewDistanceMap.getObjectsInRange(this.f_140009_);
++      if (players == null) {
++         return;
++      }
++
++      Object[] backingSet = players.getBackingSet();
++      for (int i = 0, len = backingSet.length; i < len; ++i) {
++         Object temp = backingSet[i];
++         if (!(temp instanceof ServerPlayer)) {
++            continue;
++         }
++         ServerPlayer player = (ServerPlayer)temp;
++         if (!this.chunkMap.playerChunkManager.isChunkSent(player, this.f_140009_.f_45578_, this.f_140009_.f_45579_, p_140065_)) {
++            continue;
++         }
++         player.f_8906_.m_9829_(p_140064_);
++      }
++      // Paper end - per player view distance
+    }
+ 
+    public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_140049_(ChunkStatus p_140050_, ChunkMap p_140051_) {
 @@ -331,7 +_,13 @@
        this.f_142981_.cancel(false);
        CompletableFuture<Void> completablefuture = new CompletableFuture<>();

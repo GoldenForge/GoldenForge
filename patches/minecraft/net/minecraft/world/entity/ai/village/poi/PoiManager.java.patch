@@ -14,16 +14,34 @@
  import java.nio.file.Path;
  import java.util.Comparator;
  import java.util.List;
-@@ -41,10 +_,126 @@
-    private final PoiManager.DistanceTracker f_27029_;
+@@ -38,13 +_,142 @@
+ public class PoiManager extends SectionStorage<PoiSection> {
+    public static final int f_148565_ = 6;
+    public static final int f_148566_ = 1;
+-   private final PoiManager.DistanceTracker f_27029_;
++  // private final PoiManager.DistanceTracker distanceTracker;
     private final LongSet f_27030_ = new LongOpenHashSet();
  
 +   public final net.minecraft.server.level.ServerLevel world;
++   private final io.papermc.paper.util.misc.Delayed26WayDistancePropagator3D villageDistanceTracker = new io.papermc.paper.util.misc.Delayed26WayDistancePropagator3D();
++   static final int POI_DATA_SOURCE = 7;
++   public static int convertBetweenLevels(final int level) {
++      return POI_DATA_SOURCE - level;
++   }
++
++   protected void updateDistanceTracking(long section) {
++      if (this.m_27197_(section)) {
++         this.villageDistanceTracker.setSource(section, POI_DATA_SOURCE);
++      } else {
++         this.villageDistanceTracker.removeSource(section);
++      }
++   }
 +
     public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
        super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
-       this.f_27029_ = new PoiManager.DistanceTracker();
+-      this.f_27029_ = new PoiManager.DistanceTracker();
 -   }
++      //this.distanceTracker = new PoiManager.DistanceTracker();
 +      this.world = (net.minecraft.server.level.ServerLevel)p_217873_; // Paper
 +   }
 +
@@ -133,8 +151,8 @@
 +      int chunkZ = MCUtil.getCoordinateZ(coordinate);
 +      for (int section = this.f_156618_.m_151560_(); section < this.f_156618_.m_151561_(); ++section) {
 +         long sectionPos = SectionPos.m_123209_(chunkX, section, chunkZ);
-+         //this.updateDistanceTracking(sectionPos);
-+         this.f_27029_.m_27203_();
++         this.updateDistanceTracking(sectionPos);
++         //this.distanceTracker.runAllUpdates();
 +      }
 +   }
 +
@@ -226,11 +244,26 @@
     }
  
     public boolean m_27154_(BlockPos p_27155_) {
-@@ -194,9 +_,49 @@
+@@ -180,8 +_,10 @@
+    }
+ 
+    public int m_27098_(SectionPos p_27099_) {
+-      this.f_27029_.m_27203_();
+-      return this.f_27029_.m_6172_(p_27099_.m_123252_());
++      this.villageDistanceTracker.propagateUpdates(); // Paper - replace distance tracking util
++      return convertBetweenLevels(this.villageDistanceTracker.getLevel(io.papermc.paper.util.CoordinateUtils.getChunkSectionKey(p_27099_))); // Paper - replace distance tracking util
++//      this.distanceTracker.runAllUpdates();
++//      return this.distanceTracker.getLevel(p_27099_.asLong());
+    }
+ 
+    boolean m_27197_(long p_27198_) {
+@@ -194,17 +_,64 @@
     }
  
     public void m_6202_(BooleanSupplier p_27105_) {
 -      super.m_6202_(p_27105_);
+-      this.f_27029_.m_27203_();
+-   }
 +      // Paper start - async chunk io
 +      while (!this.f_63775_.isEmpty() && p_27105_.getAsBoolean() && !this.world.m_7441_()) { // Paper - unload POI data - don't write to disk if saving is disabled
 +         ChunkPos chunkcoordintpair = SectionPos.m_123184_(this.f_63775_.firstLong()).m_123251_();
@@ -240,10 +273,15 @@
 +                 chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, data, null, com.destroystokyo.paper.io.PrioritizedTaskQueue.NORMAL_PRIORITY);
 +      }
 +
-+      this.pollUnloads(p_27105_);
++      // Paper start - unload POI data
++      if (!this.world.m_7441_()) { // don't write to disk if saving is disabled
++         this.pollUnloads(p_27105_);
++      }
++      // Paper end - unload POI data
 +      // Paper end
-       this.f_27029_.m_27203_();
-    }
++      this.villageDistanceTracker.propagateUpdates(); // Paper - replace distance tracking until
++      //this.distanceTracker.runAllUpdates();
++   }
 +
 +
 +   // Paper start - Asynchronous chunk io
@@ -277,3 +315,15 @@
  
     protected void m_5838_(long p_27036_) {
        super.m_5838_(p_27036_);
+-      this.f_27029_.m_8288_(p_27036_, this.f_27029_.m_7409_(p_27036_), false);
++      //this.distanceTracker.update(p_27036_, this.distanceTracker.getLevelFromSource(p_27036_), false);
++      this.updateDistanceTracking(p_27036_); // Paper - move to new distance tracking util
+    }
+ 
+    protected void m_5839_(long p_27145_) {
+-      this.f_27029_.m_8288_(p_27145_, this.f_27029_.m_7409_(p_27145_), false);
++      //this.distanceTracker.update(p_27145_, this.distanceTracker.getLevelFromSource(p_27145_), false);
++      this.updateDistanceTracking(p_27145_); // Paper - move to new distance tracking util
+    }
+ 
+    public void m_27047_(ChunkPos p_27048_, LevelChunkSection p_27049_) {

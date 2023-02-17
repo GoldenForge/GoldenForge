@@ -7,6 +7,20 @@ import java.util.List;
 
 public class MCUtil {
 
+    public static float normalizeYaw(float f) {
+        float f1 = f % 360.0F;
+
+        if (f1 >= 180.0F) {
+            f1 -= 360.0F;
+        }
+
+        if (f1 < -180.0F) {
+            f1 += 360.0F;
+        }
+
+        return f1;
+    }
+
     public static List<ChunkPos> getSpiralOutChunks(BlockPos blockposition, int radius) {
         List<ChunkPos> list = com.google.common.collect.Lists.newArrayList();
 

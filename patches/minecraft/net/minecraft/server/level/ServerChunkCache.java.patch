@@ -38,7 +38,7 @@
     public final ChunkMap f_8325_;
     private final DimensionDataStorage f_8333_;
     private long f_8334_;
-@@ -80,6 +_,229 @@
+@@ -80,6 +_,233 @@
        this.m_8488_();
     }
  
@@ -98,6 +98,10 @@
 +      // Skipping a null check to avoid extra instructions to improve inline capability
 +      this.lastLoadedChunks[cacheKey] = cachedChunk;
 +      return cachedChunk;
++   }
++
++   public final LevelChunk getChunkAtIfLoadedMainThreadNoCache(int x, int z) {
++      return this.loadedChunkMap.get(ChunkPos.m_45589_(x, z));
 +   }
 +
 +   @Nullable
@@ -365,6 +369,26 @@
        boolean flag = this.f_8327_.m_140805_(this.f_8325_);
        boolean flag1 = this.f_8325_.m_140324_();
        if (!flag && !flag1) {
+@@ -278,15 +_,10 @@
+    }
+ 
+    public boolean m_143239_(long p_143240_) {
+-      ChunkHolder chunkholder = this.m_8364_(p_143240_);
+-      if (chunkholder == null) {
+-         return false;
+-      } else if (!this.f_8329_.m_183438_(p_143240_)) {
+-         return false;
+-      } else {
+-         Either<LevelChunk, ChunkHolder.ChunkLoadingFailure> either = chunkholder.m_140026_().getNow((Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>)null);
+-         return either != null && either.left().isPresent();
+-      }
++      // Paper start - replace player chunk loader system
++      ChunkHolder holder = this.f_8325_.m_140327_(p_143240_);
++      return holder != null && holder.isTickingReady();
++      // Paper end - replace player chunk loader system
+    }
+ 
+    public void m_8419_(boolean p_8420_) {
 @@ -294,6 +_,13 @@
        this.f_8325_.m_140318_(p_8420_);
     }
@@ -379,6 +403,14 @@
     public void close() throws IOException {
        this.m_8419_(true);
        this.f_8331_.close();
+@@ -306,6 +_,7 @@
+       this.m_8489_();
+       this.f_8329_.m_46473_().m_6182_("chunks");
+       if (p_201914_) {
++         this.f_8325_.playerChunkManager.tick(); // Paper - this is mostly is to account for view distance changes
+          this.m_8490_();
+       }
+ 
 @@ -315,6 +_,8 @@
        this.m_8488_();
     }
@@ -537,7 +569,16 @@
     }
  
     public void m_6692_(ChunkPos p_8400_, boolean p_8401_) {
-@@ -529,11 +_,16 @@
+@@ -502,7 +_,7 @@
+    static record ChunkAndHolder(LevelChunk f_184028_, ChunkHolder f_184029_) {
+    }
+ 
+-   final class MainThreadExecutor extends BlockableEventLoop<Runnable> {
++   public final class MainThreadExecutor extends BlockableEventLoop<Runnable> {
+       MainThreadExecutor(Level p_8494_) {
+          super("Chunk source main thread executor for " + p_8494_.m_46472_().m_135782_());
+       }
+@@ -529,11 +_,17 @@
        }
  
        public boolean m_7245_() {
@@ -548,6 +589,7 @@
 -            return super.m_7245_();
 +         try {
 +            boolean execChunkTask = com.destroystokyo.paper.io.chunk.ChunkTaskManager.pollChunkWaitQueue() || ServerChunkCache.this.f_8329_.asyncChunkTaskManager.pollNextChunkTask(); // Paper
++            ServerChunkCache.this.f_8325_.playerChunkManager.tickMidTick(); // Paper
 +            if (ServerChunkCache.this.m_8489_()) {
 +               return true;
 +            } else {

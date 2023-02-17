@@ -29,7 +29,7 @@ import net.minecraftforge.fml.LogicalSide;
 import net.minecraftforge.common.util.LogicalSidedProvider;
 import net.minecraftforge.server.command.ForgeCommand;
 import net.minecraftforge.server.command.ConfigCommand;
-import net.minecraftforge.server.command.goldenforge.GoldenForgeCommand;
+import org.goldenforge.commands.GoldenForgeCommand;
 
 public class ForgeInternalHandler
 {

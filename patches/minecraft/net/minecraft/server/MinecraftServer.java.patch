@@ -306,7 +306,7 @@
 +            this.f_129763_.saveAll(playerSaveInterval);
 +         }
 +         for (ServerLevel level : this.m_129785_()) {
-+            if (-1 > 0) {
++            if (6000 > 0) {
 +               level.saveIncrementally(fullSave);
 +            }
 +         }

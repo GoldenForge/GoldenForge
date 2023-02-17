@@ -1,6 +1,13 @@
 --- a/net/minecraft/nbt/CompoundTag.java
 +++ b/net/minecraft/nbt/CompoundTag.java
-@@ -39,6 +_,7 @@
+@@ -33,12 +_,13 @@
+          if (p_128486_ > 512) {
+             throw new RuntimeException("Tried to read NBT tag with too high complexity, depth > 512");
+          } else {
+-            Map<String, Tag> map = Maps.newHashMap();
++            it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<String, Tag> map = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(8, 0.8f); // Paper - reduce memory footprint of NBTTagCompound
+ 
+             byte b0;
              while((b0 = CompoundTag.m_128420_(p_128485_, p_128487_)) != 0) {
                 String s = CompoundTag.m_128432_(p_128485_, p_128487_);
                 p_128487_.m_6800_((long)(224 + 16 * s.length()));
@@ -8,6 +15,15 @@
                 Tag tag = CompoundTag.m_128413_(TagTypes.m_129397_(b0), s, p_128485_, p_128486_ + 1, p_128487_);
                 if (map.put(s, tag) != null) {
                    p_128487_.m_6800_(288L);
+@@ -123,7 +_,7 @@
+    }
+ 
+    public CompoundTag() {
+-      this(Maps.newHashMap());
++      this(new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(8, 0.8f)); // Paper - reduce memory footprint of NBTTagCompound
+    }
+ 
+    public void m_6434_(DataOutput p_128341_) throws IOException {
 @@ -153,6 +_,7 @@
  
     @Nullable
@@ -16,6 +32,25 @@
        return this.f_128329_.put(p_128366_, p_128367_);
     }
  
+@@ -420,8 +_,16 @@
+    }
+ 
+    public CompoundTag m_6426_() {
+-      Map<String, Tag> map = Maps.newHashMap(Maps.transformValues(this.f_128329_, Tag::m_6426_));
+-      return new CompoundTag(map);
++      // Paper start - reduce memory footprint of NBTTagCompound
++      it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<String, Tag> ret = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(this.f_128329_.size(), 0.8f);
++      java.util.Iterator<java.util.Map.Entry<String, Tag>> iterator = (this.f_128329_ instanceof it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap) ? ((it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap)this.f_128329_).object2ObjectEntrySet().fastIterator() : this.f_128329_.entrySet().iterator();
++      while (iterator.hasNext()) {
++         Map.Entry<String, Tag> entry = iterator.next();
++         ret.put(entry.getKey(), entry.getValue().m_6426_());
++      }
++
++      return new CompoundTag(ret);
++      // Paper end - reduce memory footprint of NBTTagCompound
+    }
+ 
+    public boolean equals(Object p_128444_) {
 @@ -445,11 +_,12 @@
     }
  

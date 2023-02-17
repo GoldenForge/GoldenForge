@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
+@@ -9,6 +_,8 @@
+ import java.util.function.Predicate;
+ import java.util.function.Supplier;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.util.MCUtil;
+ import net.minecraft.CrashReport;
+ import net.minecraft.CrashReportCategory;
+ import net.minecraft.ReportedException;
 @@ -24,6 +_,7 @@
  import net.minecraft.resources.ResourceLocation;
  import net.minecraft.server.MinecraftServer;
@@ -104,6 +113,18 @@
              if (blockstate1 == p_46606_) {
                 if (blockstate != blockstate1) {
                    this.m_6550_(p_46605_, blockstate, blockstate1);
+@@ -208,6 +_,11 @@
+ 
+                if ((p_46607_ & 2) != 0 && (!this.f_46443_ || (p_46607_ & 4) == 0) && (this.f_46443_ || levelchunk.m_6708_() != null && levelchunk.m_6708_().m_140114_(ChunkHolder.FullChunkStatus.TICKING))) {
+                   this.m_7260_(p_46605_, blockstate, p_46606_, p_46607_);
++                  // Paper start - per player view distance - allow block updates for non-ticking chunks in player view distance
++                  // if copied from above
++               } else if ((p_46607_ & 2) != 0 && (!this.f_46443_ || (p_46607_ & 4) == 0) && (this.f_46443_ || levelchunk == null || ((ServerLevel)this).m_7726_().f_8325_.playerChunkManager.broadcastMap.getObjectsInRange(MCUtil.getCoordinateKey(p_46605_)) != null)) { // Paper - replace old player chunk management
++                  ((ServerLevel)this).m_7726_().m_8450_(p_46605_);
++                  // Paper end - per player view distance
+                }
+ 
+                if ((p_46607_ & 1) != 0) {
 @@ -225,9 +_,8 @@
                 }
  

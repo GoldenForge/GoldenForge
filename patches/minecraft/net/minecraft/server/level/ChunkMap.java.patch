@@ -54,10 +54,12 @@
 +   //private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap = this.updatingChunkMap.clone();
     private final Long2ObjectLinkedOpenHashMap<ChunkHolder> f_140131_ = new Long2ObjectLinkedOpenHashMap<>();
     private final LongSet f_140132_ = new LongOpenHashSet();
-    final ServerLevel f_140133_;
+-   final ServerLevel f_140133_;
++   public final ServerLevel f_140133_;
     private final ThreadedLevelLightEngine f_140134_;
-    private final BlockableEventLoop<Runnable> f_140135_;
+-   private final BlockableEventLoop<Runnable> f_140135_;
 -   private ChunkGenerator f_140136_;
++   public final BlockableEventLoop<Runnable> f_140135_;
 +   final java.util.concurrent.Executor mainInvokingExecutor; // Paper
 +   public ChunkGenerator f_140136_;
     private RandomState f_214834_;
@@ -75,7 +77,7 @@
     private final AtomicInteger f_140146_ = new AtomicInteger();
     private final StructureTemplateManager f_214833_;
     private final String f_182284_;
-@@ -136,9 +_,74 @@
+@@ -136,9 +_,90 @@
     private final Int2ObjectMap<ChunkMap.TrackedEntity> f_140150_ = new Int2ObjectOpenHashMap<>();
     private final Long2ByteMap f_140151_ = new Long2ByteOpenHashMap();
     private final Long2LongMap f_202981_ = new Long2LongOpenHashMap();
@@ -83,6 +85,8 @@
 +   private final Queue<Runnable> f_140125_ = new com.destroystokyo.paper.utils.CachedSizeConcurrentLinkedQueue<>(); // Paper - need constant-time size()
     int f_140126_;
 -
++   private final com.destroystokyo.paper.util.misc.PooledLinkedHashSets<ServerPlayer> pooledLinkedPlayerHashSets = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets<>();
++   public final io.papermc.paper.chunk.PlayerChunkLoader playerChunkManager = new io.papermc.paper.chunk.PlayerChunkLoader(this, this.pooledLinkedPlayerHashSets); // Paper - replace chunk loader
 +   public final ReferenceOpenHashSet<ChunkHolder> needsChangeBroadcasting = new ReferenceOpenHashSet<>();
 +
 +   // Paper start - Chunk Prioritization
@@ -148,6 +152,20 @@
 +         }
 +      }
 +   };
++
++   void addPlayerToDistanceMaps(ServerPlayer player) {
++      this.playerChunkManager.addPlayer(player); // Paper - replace chunk loader
++   }
++
++   void removePlayerFromDistanceMaps(ServerPlayer player) {
++      this.playerChunkManager.removePlayer(player); // Paper - replace chunk loader
++   }
++
++   void updateMaps(ServerPlayer player) {
++      this.playerChunkManager.updatePlayer(player); // Paper - replace chunk loader
++   }
++
++
 +   boolean unloadingPlayerChunk = false; // Paper - do not allow ticket level changes while unloading chunks
     public ChunkMap(ServerLevel p_214836_, LevelStorageSource.LevelStorageAccess p_214837_, DataFixer p_214838_, StructureTemplateManager p_214839_, Executor p_214840_, BlockableEventLoop<Runnable> p_214841_, LightChunkGetter p_214842_, ChunkGenerator p_214843_, ChunkProgressListener p_214844_, ChunkStatusUpdateListener p_214845_, Supplier<DimensionDataStorage> p_214846_, int p_214847_, boolean p_214848_) {
        super(p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
@@ -651,7 +669,7 @@
     }
  
     protected void m_140375_(ChunkPos p_140376_) {
-@@ -689,14 +_,20 @@
+@@ -689,16 +_,42 @@
              levelchunk.m_62952_();
              if (this.f_140132_.add(chunkpos.m_45588_())) {
                 levelchunk.m_62913_(true);
@@ -672,7 +690,43 @@
 +         this.f_140143_.m_6937_(ChunkTaskPriorityQueueSorter.m_140624_(p_214951_, p_140384_.m_140092_().m_45588_(), () -> 1)); // Paper - final loads are always urgent!
        });
     }
++
++
++   // Paper start
++   private static void checkDupeUUID(ServerLevel level, Entity entity) {
++      Entity other = level.m_8791_(entity.m_20148_());
++
++      if (other != null && !other.m_213877_()
++              && Objects.equals(other.m_20078_(), entity.m_20078_())
++              && entity.m_20097_().m_123331_(other.m_20097_()) < 32
++      ) {
++         if (ServerLevel.DEBUG_ENTITIES) f_140128_.warn("[DUPE-UUID] Duplicate UUID found used by " + other + ", deleted entity " + entity + " because it was near the duplicate and likely an actual duplicate. See https://github.com/PaperMC/Paper/issues/1223 for discussion on what this is about.");
++         entity.m_146870_();
++         return;
++      }
++      if (other != null && !other.m_213877_()) {
++         entity.m_20084_(UUID.randomUUID());
++         if (ServerLevel.DEBUG_ENTITIES) f_140128_.warn("[DUPE-UUID] Duplicate UUID found used by " + other + ", regenerated UUID for " + entity + ". See https://github.com/PaperMC/Paper/issues/1223 for discussion on what this is about.");
++      }
++   }
++   // Paper end
  
+    public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> m_143053_(ChunkHolder p_143054_) {
+       ChunkPos chunkpos = p_143054_.m_140092_();
+@@ -721,9 +_,10 @@
+          p_214882_.ifLeft((p_214885_) -> {
+             this.f_140146_.getAndIncrement();
+             MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
+-            this.m_183262_(chunkpos, false).forEach((p_214911_) -> {
+-               this.m_183760_(p_214911_, mutableobject, p_214885_);
+-            });
++//            this.getPlayers(chunkpos, false).forEach((p_214911_) -> {
++//               this.playerLoadedChunk(p_214911_, mutableobject, p_214885_);
++//            });
++            // Paper - no-tick view distance - moved to Chunk neighbour update
+          });
+       }, (p_214922_) -> {
+          this.f_140143_.m_6937_(ChunkTaskPriorityQueueSorter.m_140642_(p_143054_, p_214922_));
 @@ -736,9 +_,7 @@
           return p_214893_.mapLeft((p_214905_) -> {
              return (LevelChunk)p_214905_.get(p_214905_.size() / 2);
@@ -762,15 +816,50 @@
              if (compoundtag == null) {
                 this.m_140422_(p_140426_);
                 return false;
-@@ -833,7 +_,7 @@
+@@ -831,28 +_,29 @@
+       if (i != this.f_140126_) {
+          int j = this.f_140126_;
           this.f_140126_ = i;
-          this.f_140145_.m_140777_(this.f_140126_ + 1);
- 
+-         this.f_140145_.m_140777_(this.f_140126_ + 1);
+-
 -         for(ChunkHolder chunkholder : this.f_140129_.values()) {
-+         for(ChunkHolder chunkholder : this.updatingChunks.getUpdatingValues()) {
-             ChunkPos chunkpos = chunkholder.m_140092_();
-             MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
-             this.m_183262_(chunkpos, false).forEach((p_214864_) -> {
+-            ChunkPos chunkpos = chunkholder.m_140092_();
+-            MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
+-            this.m_183262_(chunkpos, false).forEach((p_214864_) -> {
+-               SectionPos sectionpos = p_214864_.m_8965_();
+-               boolean flag = m_200878_(chunkpos.f_45578_, chunkpos.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), j);
+-               boolean flag1 = m_200878_(chunkpos.f_45578_, chunkpos.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_);
+-               this.m_183754_(p_214864_, chunkpos, mutableobject, flag, flag1);
+-            });
+-         }
++         this.playerChunkManager.setLoadDistance(this.f_140126_); // Paper - replace player loader system
++//         this.distanceManager.updatePlayerTickets(this.viewDistance + 1);
++//
++//         for(ChunkHolder chunkholder : this.updatingChunks.getUpdatingValues()) {
++//            ChunkPos chunkpos = chunkholder.getPos();
++//            MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
++//            this.getPlayers(chunkpos, false).forEach((p_214864_) -> {
++//               SectionPos sectionpos = p_214864_.getLastSectionPos();
++//               boolean flag = isChunkInRange(chunkpos.x, chunkpos.z, sectionpos.x(), sectionpos.z(), j);
++//               boolean flag1 = isChunkInRange(chunkpos.x, chunkpos.z, sectionpos.x(), sectionpos.z(), this.viewDistance);
++//               this.updateChunkTracking(p_214864_, chunkpos, mutableobject, flag, flag1);
++//            });
++//         }
+       }
+ 
+    }
+ 
+-   protected void m_183754_(ServerPlayer p_183755_, ChunkPos p_183756_, MutableObject<ClientboundLevelChunkWithLightPacket> p_183757_, boolean p_183758_, boolean p_183759_) {
++   public void m_183754_(ServerPlayer p_183755_, ChunkPos p_183756_, MutableObject<ClientboundLevelChunkWithLightPacket> p_183757_, boolean p_183758_, boolean p_183759_) {
+       if (p_183755_.f_19853_ == this.f_140133_) {
+          if (p_183759_ && !p_183758_) {
+             ChunkHolder chunkholder = this.m_140327_(p_183756_.m_45588_());
+             if (chunkholder != null) {
+-               LevelChunk levelchunk = chunkholder.m_140085_();
++               LevelChunk levelchunk = chunkholder.getSendingChunk(); // Paper - replace chunk loader system;
+                if (levelchunk != null) {
+                   this.m_183760_(p_183755_, p_183757_, levelchunk);
+                }
 @@ -863,13 +_,14 @@
  
           if (!p_183759_ && p_183758_) {
@@ -797,13 +886,23 @@
  
     void m_140274_(Writer p_140275_) throws IOException {
        CsvOutput csvoutput = CsvOutput.m_13619_().m_13630_("x").m_13630_("z").m_13630_("level").m_13630_("in_memory").m_13630_("status").m_13630_("full_status").m_13630_("accessible_ready").m_13630_("ticking_ready").m_13630_("entity_ticking_ready").m_13630_("ticket").m_13630_("spawning").m_13630_("block_entity_count").m_13630_("ticking_ticket").m_13630_("ticking_level").m_13630_("block_ticks").m_13630_("fluid_ticks").m_13628_(p_140275_);
-       TickingTracker tickingtracker = this.f_140145_.m_183915_();
+-      TickingTracker tickingtracker = this.f_140145_.m_183915_();
++      //TickingTracker tickingtracker = this.distanceManager.tickingTracker();
  
 -      for(Long2ObjectMap.Entry<ChunkHolder> entry : this.f_140130_.long2ObjectEntrySet()) {
 +      for(Long2ObjectMap.Entry<ChunkHolder> entry : this.updatingChunks.getVisibleMap().clone().long2ObjectEntrySet()) {
           long i = entry.getLongKey();
           ChunkPos chunkpos = new ChunkPos(i);
           ChunkHolder chunkholder = entry.getValue();
+@@ -894,7 +_,7 @@
+          });
+          csvoutput.m_13624_(chunkpos.f_45578_, chunkpos.f_45579_, chunkholder.m_140093_(), optional.isPresent(), optional.map(ChunkAccess::m_6415_).orElse((ChunkStatus)null), optional1.map(LevelChunk::m_6708_).orElse((ChunkHolder.FullChunkStatus)null), m_140278_(chunkholder.m_140082_()), m_140278_(chunkholder.m_140026_()), m_140278_(chunkholder.m_140073_()), this.f_140145_.m_140838_(i), this.m_183879_(chunkpos), optional1.map((p_214953_) -> {
+             return p_214953_.m_62954_().size();
+-         }).orElse(0), tickingtracker.m_184175_(i), tickingtracker.m_6172_(i), optional1.map((p_214946_) -> {
++         }).orElse(0), "Use ticket level", -1000, optional1.map((p_214946_) -> { // Paper - replace loader system
+             return p_214946_.m_183531_().m_183574_();
+          }).orElse(0), optional1.map((p_214937_) -> {
+             return p_214937_.m_183526_().m_183574_();
 @@ -918,10 +_,64 @@
        }
     }
@@ -873,7 +972,167 @@
     }
  
     private CompoundTag m_214947_(CompoundTag p_214948_) {
-@@ -1105,7 +_,7 @@
+@@ -984,29 +_,31 @@
+          if (!flag) {
+             this.f_140145_.m_140802_(SectionPos.m_235861_(p_140193_), p_140193_);
+          }
++         this.addPlayerToDistanceMaps(p_140193_); // Paper - distance maps
+       } else {
+          SectionPos sectionpos = p_140193_.m_8965_();
+          this.f_140149_.m_8249_(sectionpos.m_123251_().m_45588_(), p_140193_);
+          if (!flag1) {
+             this.f_140145_.m_140828_(sectionpos, p_140193_);
+          }
++         this.removePlayerFromDistanceMaps(p_140193_); // Paper - distance maps
+       }
+ 
+-      for(int l = i - this.f_140126_ - 1; l <= i + this.f_140126_ + 1; ++l) {
+-         for(int k = j - this.f_140126_ - 1; k <= j + this.f_140126_ + 1; ++k) {
+-            if (m_200878_(l, k, i, j, this.f_140126_)) {
+-               ChunkPos chunkpos = new ChunkPos(l, k);
+-               this.m_183754_(p_140193_, chunkpos, new MutableObject<>(), !p_140194_, p_140194_);
+-            }
+-         }
+-      }
++//      for(int l = i - this.viewDistance - 1; l <= i + this.viewDistance + 1; ++l) {
++//         for(int k = j - this.viewDistance - 1; k <= j + this.viewDistance + 1; ++k) {
++//            if (isChunkInRange(l, k, i, j, this.viewDistance)) {
++//               ChunkPos chunkpos = new ChunkPos(l, k);
++//               this.updateChunkTracking(p_140193_, chunkpos, new MutableObject<>(), !p_140194_, p_140194_);
++//            }
++//         }
++//      }
+ 
+    }
+ 
+    private SectionPos m_140373_(ServerPlayer p_140374_) {
+       SectionPos sectionpos = SectionPos.m_235861_(p_140374_);
+       p_140374_.m_9119_(sectionpos);
+-      p_140374_.f_8906_.m_9829_(new ClientboundSetChunkCacheCenterPacket(sectionpos.m_123170_(), sectionpos.m_123222_()));
++      //p_140374_.connection.send(new ClientboundSetChunkCacheCenterPacket(sectionpos.x(), sectionpos.z()));
+       return sectionpos;
+    }
+ 
+@@ -1051,61 +_,79 @@
+          }
+       }
+ 
+-      int k = sectionpos.m_123170_();
+-      int l = sectionpos.m_123222_();
+-      if (Math.abs(k - i2) <= this.f_140126_ * 2 && Math.abs(l - j2) <= this.f_140126_ * 2) {
+-         int l2 = Math.min(i2, k) - this.f_140126_ - 1;
+-         int j3 = Math.min(j2, l) - this.f_140126_ - 1;
+-         int k3 = Math.max(i2, k) + this.f_140126_ + 1;
+-         int l3 = Math.max(j2, l) + this.f_140126_ + 1;
+-
+-         for(int k1 = l2; k1 <= k3; ++k1) {
+-            for(int l1 = j3; l1 <= l3; ++l1) {
+-               boolean flag5 = m_200878_(k1, l1, k, l, this.f_140126_);
+-               boolean flag6 = m_200878_(k1, l1, i2, j2, this.f_140126_);
+-               this.m_183754_(p_140185_, new ChunkPos(k1, l1), new MutableObject<>(), flag5, flag6);
+-            }
+-         }
+-      } else {
+-         for(int i1 = k - this.f_140126_ - 1; i1 <= k + this.f_140126_ + 1; ++i1) {
+-            for(int j1 = l - this.f_140126_ - 1; j1 <= l + this.f_140126_ + 1; ++j1) {
+-               if (m_200878_(i1, j1, k, l, this.f_140126_)) {
+-                  boolean flag3 = true;
+-                  boolean flag4 = false;
+-                  this.m_183754_(p_140185_, new ChunkPos(i1, j1), new MutableObject<>(), true, false);
+-               }
+-            }
+-         }
+-
+-         for(int k2 = i2 - this.f_140126_ - 1; k2 <= i2 + this.f_140126_ + 1; ++k2) {
+-            for(int i3 = j2 - this.f_140126_ - 1; i3 <= j2 + this.f_140126_ + 1; ++i3) {
+-               if (m_200878_(k2, i3, i2, j2, this.f_140126_)) {
+-                  boolean flag7 = false;
+-                  boolean flag8 = true;
+-                  this.m_183754_(p_140185_, new ChunkPos(k2, i3), new MutableObject<>(), false, true);
+-               }
+-            }
+-         }
+-      }
++
++      this.updateMaps(p_140185_); // Paper - distance maps
++      this.playerChunkManager.updatePlayer(p_140185_); // Paper - respond to movement immediately
++
++//      int k = sectionpos.x();
++//      int l = sectionpos.z();
++//      if (Math.abs(k - i2) <= this.viewDistance * 2 && Math.abs(l - j2) <= this.viewDistance * 2) {
++//         int l2 = Math.min(i2, k) - this.viewDistance - 1;
++//         int j3 = Math.min(j2, l) - this.viewDistance - 1;
++//         int k3 = Math.max(i2, k) + this.viewDistance + 1;
++//         int l3 = Math.max(j2, l) + this.viewDistance + 1;
++//
++//         for(int k1 = l2; k1 <= k3; ++k1) {
++//            for(int l1 = j3; l1 <= l3; ++l1) {
++//               boolean flag5 = isChunkInRange(k1, l1, k, l, this.viewDistance);
++//               boolean flag6 = isChunkInRange(k1, l1, i2, j2, this.viewDistance);
++//               this.updateChunkTracking(p_140185_, new ChunkPos(k1, l1), new MutableObject<>(), flag5, flag6);
++//            }
++//         }
++//      } else {
++//         for(int i1 = k - this.viewDistance - 1; i1 <= k + this.viewDistance + 1; ++i1) {
++//            for(int j1 = l - this.viewDistance - 1; j1 <= l + this.viewDistance + 1; ++j1) {
++//               if (isChunkInRange(i1, j1, k, l, this.viewDistance)) {
++//                  boolean flag3 = true;
++//                  boolean flag4 = false;
++//                  this.updateChunkTracking(p_140185_, new ChunkPos(i1, j1), new MutableObject<>(), true, false);
++//               }
++//            }
++//         }
++//
++//         for(int k2 = i2 - this.viewDistance - 1; k2 <= i2 + this.viewDistance + 1; ++k2) {
++//            for(int i3 = j2 - this.viewDistance - 1; i3 <= j2 + this.viewDistance + 1; ++i3) {
++//               if (isChunkInRange(k2, i3, i2, j2, this.viewDistance)) {
++//                  boolean flag7 = false;
++//                  boolean flag8 = true;
++//                  this.updateChunkTracking(p_140185_, new ChunkPos(k2, i3), new MutableObject<>(), false, true);
++//               }
++//            }
++//         }
++//      }
+ 
+    }
+ 
+    public List<ServerPlayer> m_183262_(ChunkPos p_183801_, boolean p_183802_) {
+-      Set<ServerPlayer> set = this.f_140149_.m_183926_(p_183801_.m_45588_());
+-      ImmutableList.Builder<ServerPlayer> builder = ImmutableList.builder();
+-
+-      for(ServerPlayer serverplayer : set) {
+-         SectionPos sectionpos = serverplayer.m_8965_();
+-         if (p_183802_ && m_183828_(p_183801_.f_45578_, p_183801_.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_) || !p_183802_ && m_200878_(p_183801_.f_45578_, p_183801_.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_)) {
+-            builder.add(serverplayer);
+-         }
+-      }
+-
+-      return builder.build();
++      // Paper start - per player view distance
++      // there can be potential desync with player's last mapped section and the view distance map, so use the
++      // view distance map here.
++      List<ServerPlayer> ret = new java.util.ArrayList<>(4);
++
++      com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> players = this.playerChunkManager.broadcastMap.getObjectsInRange(p_183801_);
++      if (players == null) {
++         return ret;
++      }
++
++      Object[] backingSet = players.getBackingSet();
++      for (int i = 0, len = backingSet.length; i < len; ++i) {
++         Object temp = backingSet[i];
++         if (!(temp instanceof ServerPlayer)) {
++            continue;
++         }
++         ServerPlayer player = (ServerPlayer)temp;
++         if (!this.playerChunkManager.isChunkSent(player, p_183801_.f_45578_, p_183801_.f_45579_, p_183802_)) {
++            continue;
++         }
++         ret.add(player);
++      }
++
++      return ret;
++      // Paper end - per player view distance
     }
  
     protected void m_140199_(Entity p_140200_) {
@@ -912,3 +1171,12 @@
  
        public TrackedEntity(Entity p_140478_, int p_140479_, int p_140480_, boolean p_140481_) {
           this.f_140471_ = new ServerEntity(ChunkMap.this.f_140133_, p_140478_, p_140480_, p_140481_, this::m_140489_);
+@@ -1323,7 +_,7 @@
+       public void m_140497_(ServerPlayer p_140498_) {
+          if (p_140498_ != this.f_140472_) {
+             Vec3 vec3 = p_140498_.m_20182_().m_82546_(this.f_140472_.m_20182_());
+-            double d0 = (double)Math.min(this.m_140496_(), (ChunkMap.this.f_140126_ - 1) * 16);
++            double d0 = (double)Math.min(this.m_140496_(), io.papermc.paper.chunk.PlayerChunkLoader.getSendViewDistance(p_140498_) * 16); // Paper - per player view distance
+             double d1 = vec3.f_82479_ * vec3.f_82479_ + vec3.f_82481_ * vec3.f_82481_;
+             double d2 = d0 * d0;
+             boolean flag = d1 <= d2 && this.f_140472_.m_6459_(p_140498_);

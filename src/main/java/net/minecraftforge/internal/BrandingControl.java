@@ -18,6 +18,7 @@ import net.minecraftforge.common.ForgeI18n;
 import net.minecraftforge.fml.ModList;
 import net.minecraftforge.versions.forge.ForgeVersion;
 import net.minecraftforge.versions.mcp.MCPVersion;
+import org.goldenforge.GoldenForge;
 
 
 public class BrandingControl
@@ -74,7 +75,7 @@ public class BrandingControl
     }
 
     public static String getServerBranding() {
-        return "GoldenForge";
+        return GoldenForge.getBranding();
     }
 
     public static ResourceManagerReloadListener resourceManagerReloadListener() {
