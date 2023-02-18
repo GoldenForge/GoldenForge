@@ -1,5 +1,29 @@
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -41,7 +_,7 @@
+    protected long f_26503_;
+    protected double f_26504_;
+    protected float f_26505_ = 0.5F;
+-   protected boolean f_26506_;
++   protected boolean f_26506_; protected final boolean needsPathRecalculation() { return this.f_26506_; } // Paper - public accessor
+    protected long f_26507_;
+    protected NodeEvaluator f_26508_;
+    @Nullable
+@@ -51,6 +_,14 @@
+    private final PathFinder f_26512_;
+    private boolean f_26513_;
+ 
++
++   // Paper start
++   public boolean isViableForPathRecalculationChecking() {
++      return !this.needsPathRecalculation() &&
++              (this.f_26496_ != null && !this.f_26496_.m_77392_() && this.f_26496_.m_77398_() != 0);
++   }
++   // Paper end
++
+    public PathNavigation(Mob p_26515_, Level p_26516_) {
+       this.f_26494_ = p_26515_;
+       this.f_26495_ = p_26516_;
 @@ -227,10 +_,10 @@
        Vec3 vec3 = this.m_7475_();
        this.f_26505_ = this.f_26494_.m_20205_() > 0.75F ? this.f_26494_.m_20205_() / 2.0F : 0.75F - this.f_26494_.m_20205_() / 2.0F;

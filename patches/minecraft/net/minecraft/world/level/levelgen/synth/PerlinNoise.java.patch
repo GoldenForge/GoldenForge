@@ -1,0 +1,68 @@
+--- a/net/minecraft/world/level/levelgen/synth/PerlinNoise.java
++++ b/net/minecraft/world/level/levelgen/synth/PerlinNoise.java
+@@ -27,6 +_,11 @@
+    private final double f_75393_;
+    private final double f_210641_;
+ 
++   // Goldenforge start: C2ME math opt.
++   private int octaveSamplersCount = 0;
++   private double[] amplitudesArray = null;
++   // Goldenforge end: C2ME math opt.
++
+    /** @deprecated */
+    @Deprecated
+    public static PerlinNoise m_230532_(RandomSource p_230533_, IntStream p_230534_) {
+@@ -131,6 +_,11 @@
+       this.f_75393_ = Math.pow(2.0D, (double)(-j));
+       this.f_75392_ = Math.pow(2.0D, (double)(i - 1)) / (Math.pow(2.0D, (double)i) - 1.0D);
+       this.f_210641_ = this.m_210649_(2.0D);
++
++      // Goldenforge start: C2ME math opt.
++      this.octaveSamplersCount = this.f_75390_.length;
++      this.amplitudesArray = this.f_75391_.toDoubleArray();
++      // Goldenforge end: C2ME math opt.
+    }
+ 
+    protected double m_210642_() {
+@@ -142,7 +_,28 @@
+    }
+ 
+    public double m_75408_(double p_75409_, double p_75410_, double p_75411_) {
+-      return this.m_75417_(p_75409_, p_75410_, p_75411_, 0.0D, 0.0D, false);
++      // Goldenforge start: C2ME math opt.
++      //return this.getValue(p_75409_, p_75410_, p_75411_, 0.0D, 0.0D, false);
++      double d = 0.0;
++      double e = this.f_75393_;
++      double f = this.f_75392_;
++
++      for(int i = 0; i < this.octaveSamplersCount; ++i) {
++         ImprovedNoise perlinNoiseSampler = this.f_75390_[i];
++         if (perlinNoiseSampler != null) {
++            @SuppressWarnings("deprecation")
++            double g = perlinNoiseSampler.m_75327_(
++                    m_75406_(p_75409_ * e), m_75406_(p_75410_ * e), m_75406_(p_75411_ * e), 0.0, 0.0
++            );
++            d += this.amplitudesArray[i] * g * f;
++         }
++
++         e *= 2.0;
++         f /= 2.0;
++      }
++
++      return d;
++      // Goldenforge end: C2ME math opt.
+    }
+ 
+    /** @deprecated */
+@@ -192,7 +_,10 @@
+    }
+ 
+    public static double m_75406_(double p_75407_) {
+-      return p_75407_ - (double)Mth.m_14134_(p_75407_ / 3.3554432E7D + 0.5D) * 3.3554432E7D;
++      // Goldenforge start: C2ME math opt.
++      //return p_75407_ - (double)Mth.lfloor(p_75407_ / 3.3554432E7D + 0.5D) * 3.3554432E7D;
++      return p_75407_ - Math.floor(p_75407_ / 3.3554432E7 + 0.5) * 3.3554432E7;
++      // Goldenforge end: C2ME math opt.
+    }
+ 
+    protected int m_192872_() {

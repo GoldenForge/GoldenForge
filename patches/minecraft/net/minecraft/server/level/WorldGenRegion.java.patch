@@ -1,0 +1,8 @@
+--- a/net/minecraft/server/level/WorldGenRegion.java
++++ b/net/minecraft/server/level/WorldGenRegion.java
+@@ -416,4 +_,5 @@
+    public long m_183596_() {
+       return this.f_184182_.getAndIncrement();
+    }
++
+ }

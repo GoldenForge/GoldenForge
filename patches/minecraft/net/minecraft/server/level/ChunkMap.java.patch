@@ -77,7 +77,7 @@
     private final AtomicInteger f_140146_ = new AtomicInteger();
     private final StructureTemplateManager f_214833_;
     private final String f_182284_;
-@@ -136,9 +_,90 @@
+@@ -136,9 +_,191 @@
     private final Int2ObjectMap<ChunkMap.TrackedEntity> f_140150_ = new Int2ObjectOpenHashMap<>();
     private final Long2ByteMap f_140151_ = new Long2ByteOpenHashMap();
     private final Long2LongMap f_202981_ = new Long2LongOpenHashMap();
@@ -121,10 +121,111 @@
 +   }
 +   // Paper end
 +
++   // Paper start
++   public final List<io.papermc.paper.chunk.SingleThreadChunkRegionManager> regionManagers = new java.util.ArrayList<>();
++   public final io.papermc.paper.chunk.SingleThreadChunkRegionManager dataRegionManager;
++
++   public static final class DataRegionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionData {
++      // Paper start - optimise notify()
++      private io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> navigators;
++
++      public io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> getNavigators() {
++         return this.navigators;
++      }
++
++      public boolean addToNavigators(final Mob navigator) {
++         if (this.navigators == null) {
++            this.navigators = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>();
++         }
++         return this.navigators.add(navigator);
++      }
++
++      public boolean removeFromNavigators(final Mob navigator) {
++         if (this.navigators == null) {
++            return false;
++         }
++         return this.navigators.remove(navigator);
++      }
++      // Paper end - optimise notify()
++   }
++
++   public static final class DataRegionSectionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSectionData {
++
++      // Paper start - optimise notify()
++      private io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> navigators;
++
++      public io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> getNavigators() {
++         return this.navigators;
++      }
++
++      public boolean addToNavigators(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section, final Mob navigator) {
++         if (this.navigators == null) {
++            this.navigators = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>();
++         }
++         final boolean ret = this.navigators.add(navigator);
++         if (ret) {
++            final DataRegionData data = (DataRegionData)section.getRegion().regionData;
++            if (!data.addToNavigators(navigator)) {
++               throw new IllegalStateException();
++            }
++         }
++         return ret;
++      }
++
++      public boolean removeFromNavigators(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section, final Mob navigator) {
++         if (this.navigators == null) {
++            return false;
++         }
++         final boolean ret = this.navigators.remove(navigator);
++         if (ret) {
++            final DataRegionData data = (DataRegionData)section.getRegion().regionData;
++            if (!data.removeFromNavigators(navigator)) {
++               throw new IllegalStateException();
++            }
++         }
++         return ret;
++      }
++      // Paper end - optimise notify()
++
++      @Override
++      public void removeFromRegion(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section,
++                                   final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region from) {
++         final DataRegionSectionData sectionData = (DataRegionSectionData)section.sectionData;
++         final DataRegionData fromData = (DataRegionData)from.regionData;
++         // Paper start - optimise notify()
++         if (sectionData.navigators != null) {
++            for (final Iterator<Mob> iterator = sectionData.navigators.unsafeIterator(io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.ITERATOR_FLAG_SEE_ADDITIONS); iterator.hasNext();) {
++               if (!fromData.removeFromNavigators(iterator.next())) {
++                  throw new IllegalStateException();
++               }
++            }
++         }
++         // Paper end - optimise notify()
++      }
++
++      @Override
++      public void addToRegion(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section,
++                              final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region oldRegion,
++                              final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region newRegion) {
++         final DataRegionSectionData sectionData = (DataRegionSectionData)section.sectionData;
++         final DataRegionData oldRegionData = oldRegion == null ? null : (DataRegionData)oldRegion.regionData;
++         final DataRegionData newRegionData = (DataRegionData)newRegion.regionData;
++         // Paper start - optimise notify()
++         if (sectionData.navigators != null) {
++            for (final Iterator<Mob> iterator = sectionData.navigators.unsafeIterator(io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.ITERATOR_FLAG_SEE_ADDITIONS); iterator.hasNext();) {
++               if (!newRegionData.addToNavigators(iterator.next())) {
++                  throw new IllegalStateException();
++               }
++            }
++         }
++         // Paper end - optimise notify()
++      }
++   }
++
 +   public final ChunkHolder getUnloadingChunkHolder(int chunkX, int chunkZ) {
 +      return this.f_140131_.get(io.papermc.paper.util.CoordinateUtils.getChunkKey(chunkX, chunkZ));
 +   }
-+   // Paper
++   // Paper end
 +   public final CallbackExecutor callbackExecutor = new CallbackExecutor();
 +   public static final class CallbackExecutor implements java.util.concurrent.Executor, Runnable {
 +
@@ -186,6 +287,17 @@
        ProcessorMailbox<Runnable> processormailbox1 = ProcessorMailbox.m_18751_(p_214840_, "worldgen");
        ProcessorHandle<Runnable> processorhandle = ProcessorHandle.m_18714_("main", p_214841_::m_6937_);
        this.f_140144_ = p_214844_;
+@@ -166,6 +_,10 @@
+       this.f_140137_ = p_214846_;
+       this.f_140138_ = new PoiManager(path.resolve("poi"), p_214838_, p_214848_, p_214836_.m_5962_(), p_214836_);
+       this.m_140167_(p_214847_);
++      // Paper start
++      this.dataRegionManager = new io.papermc.paper.chunk.SingleThreadChunkRegionManager(this.f_140133_, 2, (1.0 / 3.0), 1, 6, "Data", DataRegionData::new, DataRegionSectionData::new);
++      this.regionManagers.add(this.dataRegionManager);
++      // Paper end
+    }
+ 
+    protected ChunkGenerator m_183719_() {
 @@ -224,13 +_,18 @@
     }
  
@@ -258,13 +370,18 @@
        if (p_140180_ > f_140127_ && p_140178_ > f_140127_) {
           return p_140179_;
        } else {
-@@ -377,14 +_,18 @@
+@@ -377,14 +_,23 @@
              p_140179_ = this.f_140131_.remove(p_140177_);
              if (p_140179_ != null) {
                 p_140179_.m_140027_(p_140178_);
 +               p_140179_.onChunkAdd(); // Paper - optimise anyPlayerCloseEnoughForSpawning - PUT HERE AFTER RE-ADDING ONLY
              } else {
                 p_140179_ = new ChunkHolder(new ChunkPos(p_140177_), p_140178_, this.f_140133_, this.f_140134_, this.f_140141_, this);
++               // Paper start
++               for (int index = 0, len = this.regionManagers.size(); index < len; ++index) {
++                  this.regionManagers.get(index).addChunk(p_140179_.f_140009_.f_45578_, p_140179_.f_140009_.f_45579_);
++               }
++               // Paper end
              }
  
 -            this.f_140129_.put(p_140177_, p_140179_);
@@ -415,7 +532,7 @@
  
        Runnable runnable;
        while((p_140354_.getAsBoolean() || k > 0) && (runnable = this.f_140125_.poll()) != null) {
-@@ -470,44 +_,74 @@
+@@ -470,44 +_,80 @@
        }
  
        int l = 0;
@@ -452,7 +569,10 @@
 +            // Paper start
 +            boolean removed;
 +            if ((removed = this.f_140131_.remove(p_140182_, p_140183_)) && p_203002_ != null) {
-+
++               for (int index = 0, len = this.regionManagers.size(); index < len; ++index) {
++                  this.regionManagers.get(index).removeChunk(p_140183_.f_140009_.f_45578_, p_140183_.f_140009_.f_45579_);
++               }
++               // Paper end
 +               this.m_140424_().queueUnload(p_140183_.f_140009_.longKey, MinecraftServer.currentTickLong + 1); // Paper - unload POI data
                 if (p_203002_ instanceof LevelChunk) {
                    ((LevelChunk)p_203002_).m_62913_(false);
@@ -485,6 +605,9 @@
                 this.f_202981_.remove(p_203002_.m_7697_().m_45588_());
 -            }
 +            } else if (removed) { // Paper start
++               for (int index = 0, len = this.regionManagers.size(); index < len; ++index) {
++                  this.regionManagers.get(index).removeChunk(p_140183_.f_140009_.f_45578_, p_140183_.f_140009_.f_45579_);
++               }
 +               this.m_140424_().queueUnload(p_140183_.f_140009_.longKey, MinecraftServer.currentTickLong + 1); // Paper - unload POI data
 +            } // Paper end
 +            } finally { this.unloadingPlayerChunk = unloadingBefore; } // Paper - do not allow ticket level changes while unloading chunks

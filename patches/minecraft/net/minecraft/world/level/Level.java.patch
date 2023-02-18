@@ -35,7 +35,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,14 @@
+@@ -104,8 +_,18 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -44,12 +44,28 @@
 +   public java.util.ArrayList<net.minecraftforge.common.util.BlockSnapshot> capturedBlockSnapshots = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> freshBlockEntities = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> pendingFreshBlockEntities = new java.util.ArrayList<>();
++
++   public io.papermc.paper.world.EntitySliceManager entitySliceManager;
++
++
  
     protected Level(WritableLevelData p_220352_, ResourceKey<Level> p_220353_, Holder<DimensionType> p_220354_, Supplier<ProfilerFiller> p_220355_, boolean p_220356_, boolean p_220357_, long p_220358_, int p_220359_) {
 +      super(Level.class);
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
+@@ -133,6 +_,11 @@
+       this.f_46420_ = new BiomeManager(this, p_220358_);
+       this.f_46424_ = p_220357_;
+       this.f_220350_ = new CollectingNeighborUpdater(this, p_220359_);
++      this.initEntitySlices();
++   }
++
++   public void initEntitySlices() {
++      entitySliceManager = new io.papermc.paper.world.EntitySliceManager(this); // Paper
+    }
+ 
+    public boolean m_5776_() {
 @@ -165,6 +_,15 @@
     }
  
@@ -207,45 +223,62 @@
     }
  
     public boolean m_46749_(BlockPos p_46750_) {
-@@ -531,6 +_,7 @@
-             list.add(p_151522_);
-          }
- 
-+         if (false)
-          if (p_151522_ instanceof EnderDragon) {
-             for(EnderDragonPart enderdragonpart : ((EnderDragon)p_151522_).m_31156_()) {
-                if (p_151522_ != p_46536_ && p_46538_.test(enderdragonpart)) {
-@@ -540,6 +_,11 @@
-          }
- 
-       });
-+      for (net.minecraftforge.entity.PartEntity<?> p : this.getPartEntities()) {
-+         if (p != p_46536_ && p.m_20191_().m_82381_(p_46537_) && p_46538_.test(p)) {
-+            list.add(p);
-+         }
-+      }
+@@ -526,41 +_,29 @@
+    public List<Entity> m_6249_(@Nullable Entity p_46536_, AABB p_46537_, Predicate<? super Entity> p_46538_) {
+       this.m_46473_().m_6174_("getEntities");
+       List<Entity> list = Lists.newArrayList();
+-      this.m_142646_().m_142232_(p_46537_, (p_151522_) -> {
+-         if (p_151522_ != p_46536_ && p_46538_.test(p_151522_)) {
+-            list.add(p_151522_);
+-         }
+-
+-         if (p_151522_ instanceof EnderDragon) {
+-            for(EnderDragonPart enderdragonpart : ((EnderDragon)p_151522_).m_31156_()) {
+-               if (p_151522_ != p_46536_ && p_46538_.test(enderdragonpart)) {
+-                  list.add(enderdragonpart);
+-               }
+-            }
+-         }
+-
+-      });
++      this.entitySliceManager.getEntities(p_46536_, p_46537_, list, p_46538_); // Paper - optimise this call
        return list;
     }
  
-@@ -551,6 +_,8 @@
-             list.add(p_151539_);
-          }
- 
-+
-+         if (false)
-          if (p_151539_ instanceof EnderDragon enderdragon) {
-             for(EnderDragonPart enderdragonpart : enderdragon.m_31156_()) {
-                T t = p_151528_.m_141992_(enderdragonpart);
-@@ -561,6 +_,12 @@
-          }
- 
-       });
-+      for (net.minecraftforge.entity.PartEntity<?> p : this.getPartEntities()) {
-+         T t = p_151528_.m_141992_(p);
-+         if (t != null && t.m_20191_().m_82381_(p_151529_) && p_151530_.test(t)) {
-+            list.add(t);
+    public <T extends Entity> List<T> m_142425_(EntityTypeTest<Entity, T> p_151528_, AABB p_151529_, Predicate<? super T> p_151530_) {
+       this.m_46473_().m_6174_("getEntities");
+       List<T> list = Lists.newArrayList();
+-      this.m_142646_().m_142137_(p_151528_, p_151529_, (p_151539_) -> {
+-         if (p_151530_.test(p_151539_)) {
+-            list.add(p_151539_);
+-         }
+-
+-         if (p_151539_ instanceof EnderDragon enderdragon) {
+-            for(EnderDragonPart enderdragonpart : enderdragon.m_31156_()) {
+-               T t = p_151528_.m_141992_(enderdragonpart);
+-               if (t != null && p_151530_.test(t)) {
+-                  list.add(t);
+-               }
+-            }
+-         }
+-
+-      });
++      // Paper start - optimise this call
++      if (p_151528_ instanceof net.minecraft.world.entity.EntityType) {
++         this.entitySliceManager.getEntities((net.minecraft.world.entity.EntityType)p_151528_, p_151529_, list, p_151530_);
++      } else {
++         Predicate<? super T> test = (obj) -> {
++            return p_151528_.m_141992_(obj) != null;
++         };
++         p_151530_ = p_151530_ == null ? test : test.and((Predicate)p_151530_);
++         Class base;
++         if (p_151528_ == null || (base = p_151528_.m_142225_()) == null || base == Entity.class) {
++            this.entitySliceManager.getEntities((Entity) null, p_151529_, (List)list, (Predicate)p_151530_);
++         } else {
++            this.entitySliceManager.getEntities(base, null, p_151529_, (List)list, (Predicate)p_151530_); // Paper - optimise this call
 +         }
 +      }
++      // Paper end - optimise this call
        return list;
     }
  
@@ -287,6 +320,27 @@
                    this.m_213960_(blockstate, blockpos, p_46719_, p_46718_, false);
                 }
              }
+@@ -844,9 +_,18 @@
+    public abstract RecipeManager m_7465_();
+ 
+    public BlockPos m_46496_(int p_46497_, int p_46498_, int p_46499_, int p_46500_) {
++      // Paper start - allow use of mutable pos
++      BlockPos.MutableBlockPos ret = new BlockPos.MutableBlockPos();
++      this.getRandomBlockPosition(p_46497_, p_46498_, p_46499_, p_46500_, ret);
++      return ret.m_7949_();
++   }
++   public final BlockPos.MutableBlockPos getRandomBlockPosition(int x, int y, int z, int l, BlockPos.MutableBlockPos out) {
++      // Paper end
+       this.f_46435_ = this.f_46435_ * 3 + 1013904223;
+-      int i = this.f_46435_ >> 2;
+-      return new BlockPos(p_46497_ + (i & 15), p_46498_ + (i >> 16 & p_46500_), p_46499_ + (i >> 8 & 15));
++      int i1 = this.f_46435_ >> 2;
++
++      out.m_122178_(x + (i1 & 15), y + (i1 >> 16 & l), z + (i1 >> 8 & 15)); // Paper - change to setValues call
++      return out; // Paper
+    }
+ 
+    public boolean m_7441_() {
 @@ -863,6 +_,18 @@
  
     public BiomeManager m_7062_() {

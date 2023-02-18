@@ -44,9 +44,28 @@
     private final Set<TagKey<Fluid>> f_19801_ = new HashSet<>();
     public int f_19802_;
     protected boolean f_19803_ = true;
-@@ -231,6 +_,7 @@
+@@ -230,7 +_,26 @@
+    @Nullable
     private BlockState f_185934_ = null;
  
++   public net.minecraft.server.level.ChunkHolder.FullChunkStatus chunkStatus;
++
++   public int sectionX = Integer.MIN_VALUE;
++   public int sectionY = Integer.MIN_VALUE;
++   public int sectionZ = Integer.MIN_VALUE;
++
++   private final boolean hardCollides;
++   public final boolean hardCollides() {
++      return this.hardCollides;
++   }
++
++   {
++      this.hardCollides = this instanceof Boat
++              || this instanceof net.minecraft.world.entity.monster.Shulker
++              || this instanceof net.minecraft.world.entity.vehicle.AbstractMinecart;
++   }
++
++
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
        this.f_19847_ = p_19870_;

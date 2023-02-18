@@ -489,7 +489,7 @@
 +                        NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, naturalspawner$spawnstate, this.f_8336_, this.f_8335_, flag1);
 +                     }
 +
-+                     if (this.f_8329_.m_183438_(chunkpos.m_45588_())) {
++                     if (true && this.f_8329_.m_183438_(chunkpos.m_45588_())) { // Paper - replace player chunk loader system
 +                        this.f_8329_.m_8714_(levelchunk1, k);
 +                        if ((chunksTicked++ & 1) == 0)
 +                           net.minecraft.server.MinecraftServer.getServer().executeMidTickTasks(); // Paper

@@ -1,0 +1,19 @@
+--- a/net/minecraft/world/level/levelgen/feature/OreFeature.java
++++ b/net/minecraft/world/level/levelgen/feature/OreFeature.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.level.levelgen.feature;
+ 
++import com.ishland.c2me.opts.allocs.common.ObjectCachingUtils;
+ import com.mojang.serialization.Codec;
+ import java.util.BitSet;
+ import java.util.function.Function;
+@@ -53,7 +_,8 @@
+ 
+    protected boolean m_225171_(WorldGenLevel p_225172_, RandomSource p_225173_, OreConfiguration p_225174_, double p_225175_, double p_225176_, double p_225177_, double p_225178_, double p_225179_, double p_225180_, int p_225181_, int p_225182_, int p_225183_, int p_225184_, int p_225185_) {
+       int i = 0;
+-      BitSet bitset = new BitSet(p_225184_ * p_225185_ * p_225184_);
++      //BitSet bitset = new BitSet(p_225184_ * p_225185_ * p_225184_);
++      BitSet bitset = ObjectCachingUtils.getCachedOrNewBitSet(p_225184_ * p_225185_ * p_225184_); // Goldenforge: C2ME OPT.
+       BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
+       int j = p_225174_.f_67839_;
+       double[] adouble = new double[j * 4];

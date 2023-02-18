@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/level/EntityGetter.java
++++ b/net/minecraft/world/level/EntityGetter.java
+@@ -18,6 +_,7 @@
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ 
+ public interface EntityGetter {
++
+    List<Entity> m_6249_(@Nullable Entity p_45936_, AABB p_45937_, Predicate<? super Entity> p_45938_);
+ 
+    <T extends Entity> List<T> m_142425_(EntityTypeTest<Entity, T> p_151464_, AABB p_151465_, Predicate<? super T> p_151466_);

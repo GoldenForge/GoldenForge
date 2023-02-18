@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/animal/Turtle.java
++++ b/net/minecraft/world/entity/animal/Turtle.java
+@@ -82,7 +_,7 @@
+    }
+ 
+    public void m_30219_(BlockPos p_30220_) {
+-      this.f_19804_.m_135381_(f_30123_, p_30220_);
++      this.f_19804_.m_135381_(f_30123_, p_30220_.m_7949_());
+    }
+ 
+    BlockPos m_30208_() {

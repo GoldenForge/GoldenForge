@@ -1,0 +1,209 @@
+--- a/net/minecraft/world/level/levelgen/synth/ImprovedNoise.java
++++ b/net/minecraft/world/level/levelgen/synth/ImprovedNoise.java
+@@ -11,6 +_,27 @@
+    public final double f_75322_;
+    public final double f_75323_;
+ 
++   // Goldenforge start: C2ME math opt.
++   private static final double[] FLAT_SIMPLEX_GRAD = new double[]{
++           1, 1, 0, 0,
++           -1, 1, 0, 0,
++           1, -1, 0, 0,
++           -1, -1, 0, 0,
++           1, 0, 1, 0,
++           -1, 0, 1, 0,
++           1, 0, -1, 0,
++           -1, 0, -1, 0,
++           0, 1, 1, 0,
++           0, -1, 1, 0,
++           0, 1, -1, 0,
++           0, -1, -1, 0,
++           1, 1, 0, 0,
++           0, -1, 1, 0,
++           -1, 1, 0, 0,
++           0, -1, -1, 0,
++   };
++   // Goldenforge end: C2ME math opt.
++
+    public ImprovedNoise(RandomSource p_230499_) {
+       this.f_75321_ = p_230499_.m_188500_() * 256.0D;
+       this.f_75322_ = p_230499_.m_188500_() * 256.0D;
+@@ -37,30 +_,54 @@
+    /** @deprecated */
+    @Deprecated
+    public double m_75327_(double p_75328_, double p_75329_, double p_75330_, double p_75331_, double p_75332_) {
+-      double d0 = p_75328_ + this.f_75321_;
+-      double d1 = p_75329_ + this.f_75322_;
+-      double d2 = p_75330_ + this.f_75323_;
+-      int i = Mth.m_14107_(d0);
+-      int j = Mth.m_14107_(d1);
+-      int k = Mth.m_14107_(d2);
+-      double d3 = d0 - (double)i;
+-      double d4 = d1 - (double)j;
+-      double d5 = d2 - (double)k;
+-      double d6;
+-      if (p_75331_ != 0.0D) {
+-         double d7;
+-         if (p_75332_ >= 0.0D && p_75332_ < d4) {
+-            d7 = p_75332_;
++      // Goldenforge start: C2ME math opt.
++      double d = p_75328_ + this.f_75321_;
++      double e = p_75329_ + this.f_75322_;
++      double f = p_75330_ + this.f_75323_;
++      double i = Math.floor(d);
++      double j = Math.floor(e);
++      double k = Math.floor(f);
++      double g = d - i;
++      double h = e - j;
++      double l = f - k;
++      double o = 0.0D;
++      if (p_75331_ != 0.0) {
++         double m;
++         if (p_75332_ >= 0.0 && p_75332_ < h) {
++            m = p_75332_;
+          } else {
+-            d7 = d4;
++            m = h;
+          }
+ 
+-         d6 = (double)Mth.m_14107_(d7 / p_75331_ + (double)1.0E-7F) * p_75331_;
+-      } else {
+-         d6 = 0.0D;
++         o = Math.floor(m / p_75331_ + 1.0E-7F) * p_75331_;
+       }
+ 
+-      return this.m_164317_(i, j, k, d3, d4 - d6, d5, d4);
++      return this.m_164317_((int) i, (int) j, (int) k, g, h - o, l, h);
++      // Goldenforge end: C2ME math opt.
++//      double d0 = p_75328_ + this.xo;
++//      double d1 = p_75329_ + this.yo;
++//      double d2 = p_75330_ + this.zo;
++//      int i = Mth.floor(d0);
++//      int j = Mth.floor(d1);
++//      int k = Mth.floor(d2);
++//      double d3 = d0 - (double)i;
++//      double d4 = d1 - (double)j;
++//      double d5 = d2 - (double)k;
++//      double d6;
++//      if (p_75331_ != 0.0D) {
++//         double d7;
++//         if (p_75332_ >= 0.0D && p_75332_ < d4) {
++//            d7 = p_75332_;
++//         } else {
++//            d7 = d4;
++//         }
++//
++//         d6 = (double)Mth.floor(d7 / p_75331_ + (double)1.0E-7F) * p_75331_;
++//      } else {
++//         d6 = 0.0D;
++//      }
++//
++//      return this.sampleAndLerp(i, j, k, d3, d4 - d6, d5, d4);
+    }
+ 
+    public double m_164312_(double p_164313_, double p_164314_, double p_164315_, double[] p_164316_) {
+@@ -85,24 +_,86 @@
+    }
+ 
+    private double m_164317_(int p_164318_, int p_164319_, int p_164320_, double p_164321_, double p_164322_, double p_164323_, double p_164324_) {
+-      int i = this.m_75333_(p_164318_);
+-      int j = this.m_75333_(p_164318_ + 1);
+-      int k = this.m_75333_(i + p_164319_);
+-      int l = this.m_75333_(i + p_164319_ + 1);
+-      int i1 = this.m_75333_(j + p_164319_);
+-      int j1 = this.m_75333_(j + p_164319_ + 1);
+-      double d0 = m_75335_(this.m_75333_(k + p_164320_), p_164321_, p_164322_, p_164323_);
+-      double d1 = m_75335_(this.m_75333_(i1 + p_164320_), p_164321_ - 1.0D, p_164322_, p_164323_);
+-      double d2 = m_75335_(this.m_75333_(l + p_164320_), p_164321_, p_164322_ - 1.0D, p_164323_);
+-      double d3 = m_75335_(this.m_75333_(j1 + p_164320_), p_164321_ - 1.0D, p_164322_ - 1.0D, p_164323_);
+-      double d4 = m_75335_(this.m_75333_(k + p_164320_ + 1), p_164321_, p_164322_, p_164323_ - 1.0D);
+-      double d5 = m_75335_(this.m_75333_(i1 + p_164320_ + 1), p_164321_ - 1.0D, p_164322_, p_164323_ - 1.0D);
+-      double d6 = m_75335_(this.m_75333_(l + p_164320_ + 1), p_164321_, p_164322_ - 1.0D, p_164323_ - 1.0D);
+-      double d7 = m_75335_(this.m_75333_(j1 + p_164320_ + 1), p_164321_ - 1.0D, p_164322_ - 1.0D, p_164323_ - 1.0D);
+-      double d8 = Mth.m_14197_(p_164321_);
+-      double d9 = Mth.m_14197_(p_164324_);
+-      double d10 = Mth.m_14197_(p_164323_);
+-      return Mth.m_14019_(d8, d9, d10, d0, d1, d2, d3, d4, d5, d6, d7);
++      // TODO [VanillaCopy] but optimized
++      final int var0 = p_164318_ & 0xFF;
++      final int var1 = (p_164318_ + 1) & 0xFF;
++      final int var2 = this.f_75324_[var0] & 0xFF;
++      final int var3 = this.f_75324_[var1] & 0xFF;
++      final int var4 = (var2 + p_164319_) & 0xFF;
++      final int var5 = (var3 + p_164319_) & 0xFF;
++      final int var6 = (var2 + p_164319_ + 1) & 0xFF;
++      final int var7 = (var3 + p_164319_ + 1) & 0xFF;
++      final int var8 = this.f_75324_[var4] & 0xFF;
++      final int var9 = this.f_75324_[var5] & 0xFF;
++      final int var10 = this.f_75324_[var6] & 0xFF;
++      final int var11 = this.f_75324_[var7] & 0xFF;
++
++      final int var12 = (var8 + p_164320_) & 0xFF;
++      final int var13 = (var9 + p_164320_) & 0xFF;
++      final int var14 = (var10 + p_164320_) & 0xFF;
++      final int var15 = (var11 + p_164320_) & 0xFF;
++      final int var16 = (var8 + p_164320_ + 1) & 0xFF;
++      final int var17 = (var9 + p_164320_ + 1) & 0xFF;
++      final int var18 = (var10 + p_164320_ + 1) & 0xFF;
++      final int var19 = (var11 + p_164320_ + 1) & 0xFF;
++      final int var20 = (this.f_75324_[var12] & 15) << 2;
++      final int var21 = (this.f_75324_[var13] & 15) << 2;
++      final int var22 = (this.f_75324_[var14] & 15) << 2;
++      final int var23 = (this.f_75324_[var15] & 15) << 2;
++      final int var24 = (this.f_75324_[var16] & 15) << 2;
++      final int var25 = (this.f_75324_[var17] & 15) << 2;
++      final int var26 = (this.f_75324_[var18] & 15) << 2;
++      final int var27 = (this.f_75324_[var19] & 15) << 2;
++      final double var60 = p_164321_ - 1.0;
++      final double var61 = p_164322_ - 1.0;
++      final double var62 = p_164323_ - 1.0;
++      final double var87 = FLAT_SIMPLEX_GRAD[(var20) | 0] * p_164321_ + FLAT_SIMPLEX_GRAD[(var20) | 1] * p_164322_ + FLAT_SIMPLEX_GRAD[(var20) | 2] * p_164323_;
++      final double var88 = FLAT_SIMPLEX_GRAD[(var21) | 0] * var60 + FLAT_SIMPLEX_GRAD[(var21) | 1] * p_164322_ + FLAT_SIMPLEX_GRAD[(var21) | 2] * p_164323_;
++      final double var89 = FLAT_SIMPLEX_GRAD[(var22) | 0] * p_164321_ + FLAT_SIMPLEX_GRAD[(var22) | 1] * var61 + FLAT_SIMPLEX_GRAD[(var22) | 2] * p_164323_;
++      final double var90 = FLAT_SIMPLEX_GRAD[(var23) | 0] * var60 + FLAT_SIMPLEX_GRAD[(var23) | 1] * var61 + FLAT_SIMPLEX_GRAD[(var23) | 2] * p_164323_;
++      final double var91 = FLAT_SIMPLEX_GRAD[(var24) | 0] * p_164321_ + FLAT_SIMPLEX_GRAD[(var24) | 1] * p_164322_ + FLAT_SIMPLEX_GRAD[(var24) | 2] * var62;
++      final double var92 = FLAT_SIMPLEX_GRAD[(var25) | 0] * var60 + FLAT_SIMPLEX_GRAD[(var25) | 1] * p_164322_ + FLAT_SIMPLEX_GRAD[(var25) | 2] * var62;
++      final double var93 = FLAT_SIMPLEX_GRAD[(var26) | 0] * p_164321_ + FLAT_SIMPLEX_GRAD[(var26) | 1] * var61 + FLAT_SIMPLEX_GRAD[(var26) | 2] * var62;
++      final double var94 = FLAT_SIMPLEX_GRAD[(var27) | 0] * var60 + FLAT_SIMPLEX_GRAD[(var27) | 1] * var61 + FLAT_SIMPLEX_GRAD[(var27) | 2] * var62;
++
++      final double var95 = p_164321_ * 6.0 - 15.0;
++      final double var96 = p_164324_ * 6.0 - 15.0;
++      final double var97 = p_164323_ * 6.0 - 15.0;
++      final double var98 = p_164321_ * var95 + 10.0;
++      final double var99 = p_164324_ * var96 + 10.0;
++      final double var100 = p_164323_ * var97 + 10.0;
++      final double var101 = p_164321_ * p_164321_ * p_164321_ * var98;
++      final double var102 = p_164324_ * p_164324_ * p_164324_ * var99;
++      final double var103 = p_164323_ * p_164323_ * p_164323_ * var100;
++
++      final double var113 = var87 + var101 * (var88 - var87);
++      final double var114 = var93 + var101 * (var94 - var93);
++      final double var115 = var91 + var101 * (var92 - var91);
++      final double var116 = var89 + var101 * (var90 - var89);
++      final double var117 = var114 - var115;
++      final double var118 = var102 * (var116 - var113);
++      final double var119 = var102 * var117;
++      final double var120 = var113 + var118;
++      final double var121 = var115 + var119;
++      return var120 + (var103 * (var121 - var120));
++//      int i = this.p(p_164318_);
++//      int j = this.p(p_164318_ + 1);
++//      int k = this.p(i + p_164319_);
++//      int l = this.p(i + p_164319_ + 1);
++//      int i1 = this.p(j + p_164319_);
++//      int j1 = this.p(j + p_164319_ + 1);
++//      double d0 = gradDot(this.p(k + p_164320_), p_164321_, p_164322_, p_164323_);
++//      double d1 = gradDot(this.p(i1 + p_164320_), p_164321_ - 1.0D, p_164322_, p_164323_);
++//      double d2 = gradDot(this.p(l + p_164320_), p_164321_, p_164322_ - 1.0D, p_164323_);
++//      double d3 = gradDot(this.p(j1 + p_164320_), p_164321_ - 1.0D, p_164322_ - 1.0D, p_164323_);
++//      double d4 = gradDot(this.p(k + p_164320_ + 1), p_164321_, p_164322_, p_164323_ - 1.0D);
++//      double d5 = gradDot(this.p(i1 + p_164320_ + 1), p_164321_ - 1.0D, p_164322_, p_164323_ - 1.0D);
++//      double d6 = gradDot(this.p(l + p_164320_ + 1), p_164321_, p_164322_ - 1.0D, p_164323_ - 1.0D);
++//      double d7 = gradDot(this.p(j1 + p_164320_ + 1), p_164321_ - 1.0D, p_164322_ - 1.0D, p_164323_ - 1.0D);
++//      double d8 = Mth.smoothstep(p_164321_);
++//      double d9 = Mth.smoothstep(p_164324_);
++//      double d10 = Mth.smoothstep(p_164323_);
++//      return Mth.lerp3(d8, d9, d10, d0, d1, d2, d3, d4, d5, d6, d7);
+    }
+ 
+    private double m_164325_(int p_164326_, int p_164327_, int p_164328_, double p_164329_, double p_164330_, double p_164331_, double[] p_164332_) {

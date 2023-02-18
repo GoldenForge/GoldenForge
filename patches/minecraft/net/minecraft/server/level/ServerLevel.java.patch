@@ -1,5 +1,22 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
+@@ -18,15 +_,7 @@
+ import java.io.Writer;
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+-import java.util.ArrayList;
+-import java.util.Collections;
+-import java.util.Comparator;
+-import java.util.List;
+-import java.util.Locale;
+-import java.util.Objects;
+-import java.util.Optional;
+-import java.util.Set;
+-import java.util.UUID;
++import java.util.*;
+ import java.util.concurrent.Executor;
+ import java.util.function.BooleanSupplier;
+ import java.util.function.Function;
 @@ -163,11 +_,11 @@
     private static final int f_143242_ = 300;
     private static final int f_184046_ = 65536;
@@ -102,6 +119,15 @@
  
     public ServerLevel(MinecraftServer p_214999_, Executor p_215000_, LevelStorageSource.LevelStorageAccess p_215001_, ServerLevelData p_215002_, ResourceKey<Level> p_215003_, LevelStem p_215004_, ChunkProgressListener p_215005_, boolean p_215006_, long p_215007_, List<CustomSpawner> p_215008_, boolean p_215009_) {
        super(p_215002_, p_215003_, p_215004_.m_204521_(), p_214999_::m_129905_, false, p_215006_, p_215007_, p_214999_.m_213994_());
+@@ -199,7 +_,7 @@
+       boolean flag = p_214999_.m_6365_();
+       DataFixer datafixer = p_214999_.m_129933_();
+       EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(this, p_215001_.m_197394_(p_215003_).resolve("entities"), datafixer, flag, p_214999_);
+-      this.f_143244_ = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++      this.f_143244_ = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage, this.entitySliceManager);
+       this.f_8547_ = new ServerChunkCache(this, p_215001_, datafixer, p_214999_.m_236738_(), p_215000_, chunkgenerator, p_214999_.m_6846_().m_11312_(), p_214999_.m_6846_().m_184213_(), flag, p_215005_, this.f_143244_::m_157524_, () -> {
+          return p_214999_.m_129783_().m_8895_();
+       });
 @@ -227,6 +_,9 @@
        }
  
@@ -164,14 +190,91 @@
     }
  
     protected void m_8809_() {
-@@ -408,6 +_,7 @@
-          BlockPos blockpos2 = this.m_5452_(Heightmap.Types.MOTION_BLOCKING, this.m_46496_(i, 0, j, 15));
-          BlockPos blockpos3 = blockpos2.m_7495_();
-          Biome biome = this.m_204166_(blockpos2).m_203334_();
-+         if (this.isAreaLoaded(blockpos2, 1)) // Forge: check area to avoid loading neighbors in unloaded chunks
-          if (biome.m_47477_(this, blockpos3)) {
-             this.m_46597_(blockpos3, Blocks.f_50126_.m_49966_());
+@@ -376,6 +_,10 @@
+       });
+    }
+ 
++   // Paper start - optimise random block ticking
++   private final BlockPos.MutableBlockPos chunkTickMutablePosition = new BlockPos.MutableBlockPos();
++   private final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom();
++   // Paper end
+    public void m_8714_(LevelChunk p_8715_, int p_8716_) {
+       ChunkPos chunkpos = p_8715_.m_7697_();
+       boolean flag = this.m_46471_();
+@@ -383,21 +_,22 @@
+       int j = chunkpos.m_45605_();
+       ProfilerFiller profilerfiller = this.m_46473_();
+       profilerfiller.m_6180_("thunder");
++      final BlockPos.MutableBlockPos blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
+       if (flag && this.m_46470_() && this.f_46441_.m_188503_(100000) == 0) {
+-         BlockPos blockpos = this.m_143288_(this.m_46496_(i, 0, j, 15));
+-         if (this.m_46758_(blockpos)) {
+-            DifficultyInstance difficultyinstance = this.m_6436_(blockpos);
+-            boolean flag1 = this.m_46469_().m_46207_(GameRules.f_46134_) && this.f_46441_.m_188500_() < (double)difficultyinstance.m_19056_() * 0.01D && !this.m_8055_(blockpos.m_7495_()).m_60713_(Blocks.f_152587_);
++         blockposition.m_122190_(this.m_143288_(this.m_46496_(i, 0, j, 15))); // Paper
++         if (this.m_46758_(blockposition)) {
++            DifficultyInstance difficultyinstance = this.m_6436_(blockposition);
++            boolean flag1 = this.m_46469_().m_46207_(GameRules.f_46134_) && this.f_46441_.m_188500_() < (double)difficultyinstance.m_19056_() * 0.01D && !this.m_8055_(blockposition.m_7495_()).m_60713_(Blocks.f_152587_);
+             if (flag1) {
+                SkeletonHorse skeletonhorse = EntityType.f_20525_.m_20615_(this);
+                skeletonhorse.m_30923_(true);
+                skeletonhorse.m_146762_(0);
+-               skeletonhorse.m_6034_((double)blockpos.m_123341_(), (double)blockpos.m_123342_(), (double)blockpos.m_123343_());
++               skeletonhorse.m_6034_((double)blockposition.m_123341_(), (double)blockposition.m_123342_(), (double)blockposition.m_123343_());
+                this.m_7967_(skeletonhorse);
+             }
+ 
+             LightningBolt lightningbolt = EntityType.f_20465_.m_20615_(this);
+-            lightningbolt.m_20219_(Vec3.m_82539_(blockpos));
++            lightningbolt.m_20219_(Vec3.m_82539_(blockposition));
+             lightningbolt.m_20874_(flag1);
+             this.m_7967_(lightningbolt);
           }
+@@ -405,25 +_,34 @@
+ 
+       profilerfiller.m_6182_("iceandsnow");
+       if (this.f_46441_.m_188503_(16) == 0) {
+-         BlockPos blockpos2 = this.m_5452_(Heightmap.Types.MOTION_BLOCKING, this.m_46496_(i, 0, j, 15));
+-         BlockPos blockpos3 = blockpos2.m_7495_();
+-         Biome biome = this.m_204166_(blockpos2).m_203334_();
+-         if (biome.m_47477_(this, blockpos3)) {
+-            this.m_46597_(blockpos3, Blocks.f_50126_.m_49966_());
++         // Paper start - optimise chunk ticking
++         this.getRandomBlockPosition(i, 0, j, 15, blockposition);
++         int normalY = p_8715_.m_5885_(Heightmap.Types.MOTION_BLOCKING, blockposition.m_123341_() & 15, blockposition.m_123343_() & 15) + 1;
++         int downY = normalY - 1;
++         blockposition.m_142448_(normalY);
++         // Paper end
++         Biome biome = this.m_204166_(blockposition).m_203334_();
++         if (this.isAreaLoaded(blockposition, 1)) // Forge: check area to avoid loading neighbors in unloaded chunks
++
++            blockposition.m_142448_(downY);
++         if (biome.m_47477_(this, blockposition)) {
++            this.m_46597_(blockposition, Blocks.f_50126_.m_49966_());
+          }
+ 
+          if (flag) {
+-            if (biome.m_47519_(this, blockpos2)) {
+-               this.m_46597_(blockpos2, Blocks.f_50125_.m_49966_());
++            blockposition.m_142448_(normalY); // Paper
++            if (biome.m_47519_(this, blockposition)) {
++               this.m_46597_(blockposition, Blocks.f_50125_.m_49966_());
+             }
+ 
+-            BlockState blockstate1 = this.m_8055_(blockpos3);
++            blockposition.m_142448_(downY); // Paper
++            BlockState blockstate1 = this.m_8055_(blockposition);
+             Biome.Precipitation biome$precipitation = biome.m_47530_();
+-            if (biome$precipitation == Biome.Precipitation.RAIN && biome.m_198904_(blockpos3)) {
++            if (biome$precipitation == Biome.Precipitation.RAIN && biome.m_198904_(blockposition)) {
+                biome$precipitation = Biome.Precipitation.SNOW;
+             }
+ 
+-            blockstate1.m_60734_().m_141997_(blockstate1, this, blockpos3, biome$precipitation);
++            blockstate1.m_60734_().m_141997_(blockstate1, this, blockposition, biome$precipitation);
+          }
+       }
+ 
 @@ -598,15 +_,19 @@
           this.f_8548_.m_6846_().m_11270_(new ClientboundGameEventPacket(ClientboundGameEventPacket.f_132161_, this.f_46440_), this.m_46472_());
        }
@@ -205,7 +308,7 @@
     }
  
     private void m_184112_(BlockPos p_184113_, Block p_184114_) {
-@@ -635,7 +_,7 @@
+@@ -635,10 +_,11 @@
        if (blockstate.m_60713_(p_184114_)) {
           blockstate.m_222963_(this, p_184113_, this.f_46441_);
        }
@@ -214,6 +317,10 @@
     }
  
     public void m_8647_(Entity p_8648_) {
++      if (!p_8648_.m_213877_()) this.f_143244_.updateNavigatorsInRegion(p_8648_); // Paper - optimise notify
+       p_8648_.m_146867_();
+       ProfilerFiller profilerfiller = this.m_46473_();
+       ++p_8648_.f_19797_;
 @@ -665,6 +_,7 @@
                 return Registry.f_122826_.m_7981_(p_8664_.m_6095_()).toString();
              });
@@ -325,7 +432,75 @@
        int i = p_215041_.m_157827_();
        BlockPos blockpos = new BlockPos(p_215042_);
        int j = SectionPos.m_123171_(blockpos.m_123341_() - i);
-@@ -931,10 +_,15 @@
+@@ -909,32 +_,74 @@
+       VoxelShape voxelshape = p_8757_.m_60812_(this, p_8755_);
+       if (Shapes.m_83157_(voxelshape1, voxelshape, BooleanOp.f_82687_)) {
+          List<PathNavigation> list = new ObjectArrayList<>();
+-
+-         for(Mob mob : this.f_143246_) {
+-            PathNavigation pathnavigation = mob.m_21573_();
+-            if (pathnavigation.m_200903_(p_8755_)) {
+-               list.add(pathnavigation);
+-            }
+-         }
++         // Paper start - optimise notify()
++         io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region region = this.m_7726_().f_8325_.dataRegionManager.getRegion(p_8755_.m_123341_() >> 4, p_8755_.m_123343_() >> 4);
++         if (region == null) {
++            return;
++         }
++         io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> navigatorsFromRegion = ((ChunkMap.DataRegionData)region.regionData).getNavigators();
++         if (navigatorsFromRegion == null) {
++            return;
++         }
++         io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Mob> iterator = navigatorsFromRegion.iterator();
++
++         try { while (iterator.hasNext()) { // Paper end - optimise notify()
++            // CraftBukkit start - fix SPIGOT-6362
++            Mob entityinsentient;
++            try {
++               entityinsentient = (Mob) iterator.next();
++            } catch (java.util.ConcurrentModificationException ex) {
++               // This can happen because the pathfinder update below may trigger a chunk load, which in turn may cause more navigators to register
++               // In this case we just run the update again across all the iterators as the chunk will then be loaded
++               // As this is a relative edge case it is much faster than copying navigators (on either read or write)
++               this.m_7260_(p_8755_, p_8756_, p_8757_, p_8758_);
++               return;
++            }
++            // CraftBukkit end
++            PathNavigation navigationabstract = entityinsentient.m_21573_();
++
++            if (navigationabstract.m_200903_(p_8755_)) {
++               list.add(navigationabstract);
++            }
++         }
++
++         //Compatibility with immersive ingenering
++            for(Mob mob : this.f_143246_) {
++
++            }
+ 
+          try {
+             this.f_200893_ = true;
++            // Paper start - optimise notify()
++            Iterator<PathNavigation> navigationIterator = list.iterator();
+ 
+-            for(PathNavigation pathnavigation1 : list) {
+-               pathnavigation1.m_26569_();
++            while (navigationIterator.hasNext()) {
++               PathNavigation navigationabstract1 = navigationIterator.next();
++               // Paper end - optimise notify()
++               navigationabstract1.m_26569_();
+             }
+          } finally {
+             this.f_200893_ = false;
+          }
+ 
++            // Paper start - optimise notify()
++         } finally {
++            iterator.finishedIterating();
++         }
++         // Paper end - optimise notify()
+       }
     }
  
     public void m_46672_(BlockPos p_215045_, Block p_215046_) {
@@ -374,6 +549,21 @@
     }
  
     public boolean m_143340_(BlockPos p_143341_) {
+@@ -1522,11 +_,14 @@
+       }
+ 
+       public void m_141987_(Entity p_143363_) {
++         if (p_143363_ instanceof net.minecraft.world.entity.Marker) return; // Paper - Don't tick markers
+          ServerLevel.this.f_143243_.m_156908_(p_143363_);
++         ServerLevel.this.f_143244_.addNavigatorsIfPathingToRegion(p_143363_); // Paper - optimise notify
+       }
+ 
+       public void m_141983_(Entity p_143367_) {
+          ServerLevel.this.f_143243_.m_156912_(p_143367_);
++         ServerLevel.this.f_143244_.removeNavigatorsFromData(p_143367_); // Paper - optimise notify
+       }
+ 
+       public void m_141985_(Entity p_143371_) {
 @@ -1545,8 +_,8 @@
              ServerLevel.this.f_143246_.add(mob);
           }
