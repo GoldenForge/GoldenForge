@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -1,21 +_,21 @@
+@@ -1,25 +_,26 @@
  package net.minecraft.server.level;
  
 +import com.destroystokyo.paper.util.MCUtil;
@@ -26,6 +26,11 @@
  import net.minecraft.Util;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.SectionPos;
+ import net.minecraft.network.protocol.Packet;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.level.progress.ChunkProgressListener;
+ import net.minecraft.util.VisibleForDebug;
+ import net.minecraft.util.profiling.ProfilerFiller;
 @@ -50,9 +_,9 @@
     private static final List<ChunkStatus> f_8326_ = ChunkStatus.m_62349_();
     private final DistanceManager f_8327_;
@@ -291,7 +296,15 @@
           ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
           profilerfiller.m_6174_("getChunk");
           long i = ChunkPos.m_45589_(p_8360_, p_8361_);
-@@ -126,8 +_,21 @@
+@@ -119,15 +_,28 @@
+          for(int j = 0; j < 4; ++j) {
+             if (i == this.f_8337_[j] && p_8362_ == this.f_8338_[j]) {
+                ChunkAccess chunkaccess = this.f_8339_[j];
+-               if (chunkaccess != null || !p_8363_) {
++               if (chunkaccess != null) { // CraftBukkit - the chunk can become accessible in the meantime TODO for non-null chunks it might also make sense to check that the chunk's state hasn't changed in the meantime
+                   return chunkaccess;
+                }
+             }
           }
  
           profilerfiller.m_6174_("getChunkCacheMiss");
@@ -315,15 +328,44 @@
           ChunkAccess chunkaccess1 = completablefuture.join().map((p_8406_) -> {
              return p_8406_;
           }, (p_8423_) -> {
-@@ -161,6 +_,7 @@
-          if (chunkholder == null) {
-             return null;
-          } else {
-+            if (chunkholder.currentlyLoading != null) return chunkholder.currentlyLoading; // Forge: If the requested chunk is loading, bypass the future chain to prevent a deadlock.
-             Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = chunkholder.m_140080_(ChunkStatus.f_62326_).getNow((Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>)null);
-             if (either == null) {
-                return null;
-@@ -203,15 +_,20 @@
+@@ -147,35 +_,7 @@
+       if (Thread.currentThread() != this.f_8330_) {
+          return null;
+       } else {
+-         this.f_8329_.m_46473_().m_6174_("getChunkNow");
+-         long i = ChunkPos.m_45589_(p_8357_, p_8358_);
+-
+-         for(int j = 0; j < 4; ++j) {
+-            if (i == this.f_8337_[j] && this.f_8338_[j] == ChunkStatus.f_62326_) {
+-               ChunkAccess chunkaccess = this.f_8339_[j];
+-               return chunkaccess instanceof LevelChunk ? (LevelChunk)chunkaccess : null;
+-            }
+-         }
+-
+-         ChunkHolder chunkholder = this.m_8364_(i);
+-         if (chunkholder == null) {
+-            return null;
+-         } else {
+-            Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = chunkholder.m_140080_(ChunkStatus.f_62326_).getNow((Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>)null);
+-            if (either == null) {
+-               return null;
+-            } else {
+-               ChunkAccess chunkaccess1 = either.left().orElse((ChunkAccess)null);
+-               if (chunkaccess1 != null) {
+-                  this.m_8366_(i, chunkaccess1, ChunkStatus.f_62326_);
+-                  if (chunkaccess1 instanceof LevelChunk) {
+-                     return (LevelChunk)chunkaccess1;
+-                  }
+-               }
+-
+-               return null;
+-            }
+-         }
++         return this.getChunkAtIfLoadedMainThread(p_8357_, p_8358_); // Paper - optimise for loaded chunks
+       }
+    }
+ 
+@@ -203,15 +_,28 @@
     }
  
     private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_8456_(int p_8457_, int p_8458_, ChunkStatus p_8459_, boolean p_8460_) {
@@ -334,7 +376,16 @@
        long i = chunkpos.m_45588_();
        int j = 33 + ChunkStatus.m_62370_(p_8459_);
        ChunkHolder chunkholder = this.m_8364_(i);
-       if (p_8460_) {
+-      if (p_8460_) {
++
++      // CraftBukkit start - don't add new ticket for currently unloading chunk
++      boolean currentlyUnloading = false;
++      if (chunkholder != null) {
++         ChunkHolder.FullChunkStatus oldChunkState = ChunkHolder.m_140083_(chunkholder.f_140006_);
++         ChunkHolder.FullChunkStatus currentChunkState = ChunkHolder.m_140083_(chunkholder.m_140093_());
++         currentlyUnloading = (oldChunkState.m_140114_(ChunkHolder.FullChunkStatus.BORDER) && !currentChunkState.m_140114_(ChunkHolder.FullChunkStatus.BORDER));
++      }
++      if (p_8460_ && !currentlyUnloading) {
           this.f_8327_.m_140792_(TicketType.f_9449_, chunkpos, j, chunkpos);
 +         if (isUrgent) this.f_8327_.markUrgent(chunkpos); // Paper - Chunk priority
           if (this.m_8416_(chunkholder, j)) {
@@ -344,7 +395,7 @@
              this.m_8489_();
              chunkholder = this.m_8364_(i);
              profilerfiller.m_7238_();
-@@ -221,7 +_,15 @@
+@@ -221,11 +_,20 @@
           }
        }
  
@@ -361,18 +412,34 @@
     }
  
     private boolean m_8416_(@Nullable ChunkHolder p_8417_, int p_8418_) {
-@@ -267,6 +_,7 @@
+-      return p_8417_ == null || p_8417_.m_140093_() > p_8418_;
++      //return p_8417_ == null || p_8417_.getTicketLevel() > p_8418_;
++      return p_8417_ == null || p_8417_.f_140006_ > p_8418_; // CraftBukkit using oldTicketLevel for isLoaded checks
     }
  
+    public boolean m_5563_(int p_8429_, int p_8430_) {
+@@ -266,7 +_,16 @@
+       return this.f_8332_.m_7245_();
+    }
+ 
++   public boolean m_143239_(long p_143240_) {
++      // Paper start - replace player chunk loader system
++      ChunkHolder holder = this.f_8325_.m_140327_(p_143240_);
++      return holder != null && holder.isTickingReady();
++      // Paper end - replace player chunk loader system
++   }
++
     boolean m_8489_() {
 +      if (f_8327_.delayDistanceManagerTick) return false; // Paper - Chunk priority
++      if (this.f_8325_.unloadingPlayerChunk) { MinecraftServer.getServer().f_129750_.error("Cannot tick distance manager while unloading playerchunks", new Throwable()); throw new IllegalStateException("Cannot tick distance manager while unloading playerchunks"); } // Paper
        boolean flag = this.f_8327_.m_140805_(this.f_8325_);
        boolean flag1 = this.f_8325_.m_140324_();
        if (!flag && !flag1) {
-@@ -278,15 +_,10 @@
+@@ -277,23 +_,18 @@
+       }
     }
  
-    public boolean m_143239_(long p_143240_) {
+-   public boolean m_143239_(long p_143240_) {
 -      ChunkHolder chunkholder = this.m_8364_(p_143240_);
 -      if (chunkholder == null) {
 -         return false;
@@ -382,14 +449,10 @@
 -         Either<LevelChunk, ChunkHolder.ChunkLoadingFailure> either = chunkholder.m_140026_().getNow((Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>)null);
 -         return either != null && either.left().isPresent();
 -      }
-+      // Paper start - replace player chunk loader system
-+      ChunkHolder holder = this.f_8325_.m_140327_(p_143240_);
-+      return holder != null && holder.isTickingReady();
-+      // Paper end - replace player chunk loader system
-    }
- 
+-   }
+-
     public void m_8419_(boolean p_8420_) {
-@@ -294,6 +_,13 @@
+       this.m_8489_();
        this.f_8325_.m_140318_(p_8420_);
     }
  
@@ -578,7 +641,7 @@
        MainThreadExecutor(Level p_8494_) {
           super("Chunk source main thread executor for " + p_8494_.m_46472_().m_135782_());
        }
-@@ -529,11 +_,17 @@
+@@ -529,11 +_,18 @@
        }
  
        public boolean m_7245_() {
@@ -597,6 +660,7 @@
 +               return super.m_7245_() || execChunkTask; // Paper
 +            }
 +         } finally {
++            f_8325_.chunkLoadConversionCallbackExecutor.run(); // Paper - Add chunk load conversion callback executor to prevent deadlock due to recursion in the chunk task queue sorter
 +            f_8325_.callbackExecutor.run();
           }
        }

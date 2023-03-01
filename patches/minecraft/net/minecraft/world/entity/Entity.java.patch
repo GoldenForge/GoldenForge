@@ -26,14 +26,87 @@
     private float f_19858_;
     public float f_19859_;
     public float f_19860_;
-@@ -177,14 +_,17 @@
+@@ -177,14 +_,89 @@
     public double f_19790_;
     public double f_19791_;
     public double f_19792_;
 +   @Deprecated // Forge - see IForgeEntity#getStepHeight
     public float f_19793_;
     public boolean f_19794_;
-    protected final RandomSource f_19796_ = RandomSource.m_216327_();
+-   protected final RandomSource f_19796_ = RandomSource.m_216327_();
++   // Paper start
++   public static RandomSource SHARED_RANDOM = new RandomRandomSource();
++   private static final class RandomRandomSource extends java.util.Random implements net.minecraft.world.level.levelgen.BitRandomSource {
++      private boolean locked = false;
++
++      @Override
++      public synchronized void setSeed(long seed) {
++         if (locked) {
++            f_19849_.error("Ignoring setSeed on Entity.SHARED_RANDOM", new Throwable());
++         } else {
++            super.setSeed(seed);
++            locked = true;
++         }
++      }
++
++      @Override
++      public RandomSource m_213769_() {
++         return new net.minecraft.world.level.levelgen.LegacyRandomSource(this.nextLong());
++      }
++
++      @Override
++      public net.minecraft.world.level.levelgen.PositionalRandomFactory m_188582_() {
++         return new net.minecraft.world.level.levelgen.LegacyRandomSource.LegacyPositionalRandomFactory(this.nextLong());
++      }
++
++      // these below are added to fix reobf issues that I don't wanna deal with right now
++      @Override
++      public int next(int bits) {
++         return super.next(bits);
++      }
++
++      @Override
++      public int nextInt(int origin, int bound) {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_216339_(origin, bound);
++      }
++
++      @Override
++      public long nextLong() {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_188505_();
++      }
++
++      @Override
++      public int nextInt() {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_188502_();
++      }
++
++      @Override
++      public int nextInt(int bound) {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_188503_(bound);
++      }
++
++      @Override
++      public boolean nextBoolean() {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_188499_();
++      }
++
++      @Override
++      public float nextFloat() {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_188501_();
++      }
++
++      @Override
++      public double nextDouble() {
++         return net.minecraft.world.level.levelgen.BitRandomSource.super.m_188500_();
++      }
++
++      @Override
++      public double nextGaussian() {
++         return super.nextGaussian();
++      }
++   }
++   // Paper end
++   protected final RandomSource f_19796_ = SHARED_RANDOM;
     public int f_19797_;
     private int f_19831_ = -this.m_6101_();
     protected boolean f_19798_;

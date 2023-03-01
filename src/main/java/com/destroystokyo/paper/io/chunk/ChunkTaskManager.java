@@ -46,7 +46,7 @@ public final class ChunkTaskManager {
 
     public static boolean asyncChunks = false;
     static {
-        int threads = -1;
+        int threads = 4;
         int cpus = Runtime.getRuntime().availableProcessors() / 2;
 
         if (threads <= 0) {

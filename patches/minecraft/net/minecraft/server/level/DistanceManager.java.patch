@@ -139,7 +139,7 @@
           }
  
           if (entry.getValue().isEmpty()) {
-@@ -108,77 +_,308 @@
+@@ -108,96 +_,336 @@
     @Nullable
     protected abstract ChunkHolder m_7288_(long p_140780_, int p_140781_, @Nullable ChunkHolder p_140782_, int p_140783_);
  
@@ -344,7 +344,7 @@
 +   public void clearAreaPriorityTickets(ChunkPos center, int radius) {
 +      delayDistanceManagerTick = true;
 +      MCUtil.getSpiralOutChunks(center.m_45615_(), radius).forEach(coords -> {
-+         this.m_140818_(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.PRIORITY, PRIORITY_TICKET_LEVEL, coords));
++         this.removeTicket(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.PRIORITY, PRIORITY_TICKET_LEVEL, coords));
 +      });
 +      delayDistanceManagerTick = false;
 +      chunkMap.f_140133_.m_7726_().m_8489_();
@@ -412,11 +412,11 @@
 +   }
 +
 +   public void clearPriorityTickets(ChunkPos coords) {
-+      this.m_140818_(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.PRIORITY, PRIORITY_TICKET_LEVEL, coords));
++      this.removeTicket(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.PRIORITY, PRIORITY_TICKET_LEVEL, coords));
 +   }
 +
 +   public void clearUrgent(ChunkPos coords) {
-+      this.m_140818_(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.URGENT, PRIORITY_TICKET_LEVEL, coords));
++      this.removeTicket(coords.m_45588_(), new Ticket<ChunkPos>(TicketType.URGENT, PRIORITY_TICKET_LEVEL, coords));
 +   }
 +   // Paper end
 +
@@ -437,11 +437,14 @@
 +      return p_140786_ == ticket; // CraftBukkit
     }
  
-    void m_140818_(long p_140819_, Ticket<?> p_140820_) {
+-   void m_140818_(long p_140819_, Ticket<?> p_140820_) {
++   boolean removeTicket(long p_140819_, Ticket<?> p_140820_) {
        SortedArraySet<Ticket<?>> sortedarrayset = this.m_140857_(p_140819_);
 +      int oldLevel = m_140797_(sortedarrayset); // Paper
 +
++      boolean removed = false; // CraftBukkit
        if (sortedarrayset.remove(p_140820_)) {
++         removed = true; // CraftBukkit
 +         // Paper start - delay chunk unloads for player tickets
 +         long delayChunkUnloadsBy = 10 * 20;
 +         if (p_140820_.m_9428_() == TicketType.f_9444_ && delayChunkUnloadsBy > 0) {
@@ -484,6 +487,7 @@
 +              tickets.remove(p_140820_);
 +          }
 +      }
++      return removed; // CraftBukkit
     }
  
     public <T> void m_140792_(TicketType<T> p_140793_, ChunkPos p_140794_, int p_140795_, T p_140796_) {
@@ -492,7 +496,9 @@
     }
  
     public <T> void m_140823_(TicketType<T> p_140824_, ChunkPos p_140825_, int p_140826_, T p_140827_) {
-@@ -187,17 +_,23 @@
+       Ticket<T> ticket = new Ticket<>(p_140824_, p_140826_, p_140827_);
+-      this.m_140818_(p_140825_.m_45588_(), ticket);
++      this.removeTicket(p_140825_.m_45588_(), ticket);
     }
  
     public <T> void m_140840_(TicketType<T> p_140841_, ChunkPos p_140842_, int p_140843_, T p_140844_) {
@@ -515,8 +521,9 @@
 +   public <T> void removeRegionTicket(TicketType<T> p_140850_, ChunkPos p_140851_, int p_140852_, T p_140853_, boolean forceTicks) {
 +      Ticket<T> ticket = new Ticket<>(p_140850_, 33 - p_140852_, p_140853_, forceTicks);
        long i = p_140851_.m_45588_();
-       this.m_140818_(i, ticket);
+-      this.m_140818_(i, ticket);
 -      this.f_183901_.m_184165_(i, ticket);
++      this.removeTicket(i, ticket);
 +      //this.tickingTicketsTracker.removeTicket(i, ticket);
     }
  
@@ -530,13 +537,14 @@
 +         this.addTicket(i, ticket);
 +         //this.tickingTicketsTracker.addTicket(i, ticket);
        } else {
-          this.m_140818_(i, ticket);
+-         this.m_140818_(i, ticket);
 -         this.f_183901_.m_184165_(i, ticket);
++         this.removeTicket(i, ticket);
 +         //this.tickingTicketsTracker.removeTicket(i, ticket);
        }
  
     }
-@@ -226,8 +_,8 @@
+@@ -226,20 +_,23 @@
           return new ObjectOpenHashSet();
        }).add(p_140804_);
        this.f_140763_.m_140715_(i, 0, true);
@@ -547,8 +555,16 @@
     }
  
     public void m_140828_(SectionPos p_140829_, ServerPlayer p_140830_) {
-@@ -238,8 +_,8 @@
-       if (objectset.isEmpty()) {
+       ChunkPos chunkpos = p_140829_.m_123251_();
+       long i = chunkpos.m_45588_();
+       ObjectSet<ServerPlayer> objectset = this.f_140760_.get(i);
+-      objectset.remove(p_140830_);
+-      if (objectset.isEmpty()) {
++
++      if (objectset == null) return; // CraftBukkit - SPIGOT-6208
++
++      if (objectset != null) objectset.remove(p_140830_); // Paper - some state corruption happens here, don't crash, clean up gracefully.
++      if (objectset == null || objectset.isEmpty()) { // Paper
           this.f_140760_.remove(i);
           this.f_140763_.m_140715_(i, Integer.MAX_VALUE, false);
 -         this.f_140764_.m_140715_(i, Integer.MAX_VALUE, false);
@@ -753,3 +769,12 @@
                          DistanceManager.this.f_140769_.add(p_140919_);
                       } else {
                          DistanceManager.this.f_140768_.m_6937_(ChunkTaskPriorityQueueSorter.m_140628_(() -> {
+@@ -511,7 +_,7 @@
+             } else {
+                DistanceManager.this.f_140768_.m_6937_(ChunkTaskPriorityQueueSorter.m_140628_(() -> {
+                   DistanceManager.this.f_140770_.execute(() -> {
+-                     DistanceManager.this.m_140818_(p_140919_, ticket);
++                     DistanceManager.this.removeTicket(p_140919_, ticket);
+                   });
+                }, p_140919_, true));
+             }

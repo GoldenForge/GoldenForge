@@ -77,7 +77,7 @@
     private final AtomicInteger f_140146_ = new AtomicInteger();
     private final StructureTemplateManager f_214833_;
     private final String f_182284_;
-@@ -136,9 +_,191 @@
+@@ -136,9 +_,192 @@
     private final Int2ObjectMap<ChunkMap.TrackedEntity> f_140150_ = new Int2ObjectOpenHashMap<>();
     private final Long2ByteMap f_140151_ = new Long2ByteOpenHashMap();
     private final Long2LongMap f_202981_ = new Long2LongOpenHashMap();
@@ -85,6 +85,7 @@
 +   private final Queue<Runnable> f_140125_ = new com.destroystokyo.paper.utils.CachedSizeConcurrentLinkedQueue<>(); // Paper - need constant-time size()
     int f_140126_;
 -
++   final CallbackExecutor chunkLoadConversionCallbackExecutor = new CallbackExecutor(); // Paper
 +   private final com.destroystokyo.paper.util.misc.PooledLinkedHashSets<ServerPlayer> pooledLinkedPlayerHashSets = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets<>();
 +   public final io.papermc.paper.chunk.PlayerChunkLoader playerChunkManager = new io.papermc.paper.chunk.PlayerChunkLoader(this, this.pooledLinkedPlayerHashSets); // Paper - replace chunk loader
 +   public final ReferenceOpenHashSet<ChunkHolder> needsChangeBroadcasting = new ReferenceOpenHashSet<>();
@@ -836,7 +837,43 @@
  
     public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> m_143053_(ChunkHolder p_143054_) {
        ChunkPos chunkpos = p_143054_.m_140092_();
-@@ -721,9 +_,10 @@
+@@ -706,24 +_,35 @@
+          return ChunkStatus.f_62326_;
+       });
+       CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> completablefuture1 = completablefuture.thenApplyAsync((p_212878_) -> {
+-         return p_212878_.mapLeft((p_214939_) -> {
+-            return (LevelChunk)p_214939_.get(p_214939_.size() / 2);
+-         });
+-      }, (p_214944_) -> {
+-         this.f_140143_.m_6937_(ChunkTaskPriorityQueueSorter.m_140642_(p_143054_, p_214944_));
+-      }).thenApplyAsync((p_214930_) -> {
+-         return p_214930_.ifLeft((p_214960_) -> {
+-            p_214960_.m_62812_();
+-            this.f_140133_.m_184102_(p_214960_);
+-         });
+-      }, this.f_140135_);
++         return p_212878_.mapLeft((list) -> {
++            // Paper start - revert 1.18.2 diff
++            final LevelChunk chunk = (LevelChunk) list.get(list.size() / 2);
++            chunk.m_62812_();
++            this.f_140133_.m_184102_(chunk);
++            return chunk;
++         });
++      }, (runnable) -> {
++         this.f_140143_.m_6937_(ChunkTaskPriorityQueueSorter.m_140642_(p_143054_, () -> ChunkMap.this.chunkLoadConversionCallbackExecutor.execute(runnable))); // Paper - delay running Chunk post processing until outside of the sorter to prevent a deadlock scenario when post processing causes another chunk request.
++      }); // Paper end - revert 1.18.2 diff
++//         return p_212878_.mapLeft((p_214939_) -> {
++//            return (LevelChunk)p_214939_.get(p_214939_.size() / 2);
++//         });
++//      }, (p_214944_) -> {
++//         this.mainThreadMailbox.tell(ChunkTaskPriorityQueueSorter.message(p_143054_, p_214944_));
++//      }).thenApplyAsync((p_214930_) -> {
++//         return p_214930_.ifLeft((p_214960_) -> {
++//            p_214960_.postProcessGeneration();
++//            this.level.startTickingChunk(p_214960_);
++//         });
++//      }, this.mainThreadExecutor);
+       completablefuture1.thenAcceptAsync((p_214882_) -> {
           p_214882_.ifLeft((p_214885_) -> {
              this.f_140146_.getAndIncrement();
              MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();

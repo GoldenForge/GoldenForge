@@ -112,48 +112,212 @@
        servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateRecipesPacket(this.f_11195_.m_129894_().m_44051_()));
        servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateTagsPacket(TagNetworkSerialization.m_203950_(this.f_11206_)));
        this.m_11289_(p_11263_);
-@@ -175,6 +_,36 @@
-       p_11263_.m_8952_().m_12789_(p_11263_);
+@@ -176,71 +_,158 @@
        this.m_11273_(serverlevel1.m_6188_(), p_11263_);
        this.f_11195_.m_129929_();
+       MutableComponent mutablecomponent;
+-      if (p_11263_.m_36316_().getName().equalsIgnoreCase(s)) {
+-         mutablecomponent = Component.m_237110_("multiplayer.player.joined", p_11263_.m_5446_());
+-      } else {
+-         mutablecomponent = Component.m_237110_("multiplayer.player.joined.renamed", p_11263_.m_5446_(), s);
+-      }
+-
+-      this.m_240416_(mutablecomponent.m_130940_(ChatFormatting.YELLOW), false);
+-      servergamepacketlistenerimpl.m_9774_(p_11263_.m_20185_(), p_11263_.m_20186_(), p_11263_.m_20189_(), p_11263_.m_146908_(), p_11263_.m_146909_());
+-      this.f_11196_.add(p_11263_);
+-      this.f_11197_.put(p_11263_.m_20148_(), p_11263_);
+-      this.m_11268_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.ADD_PLAYER, p_11263_));
+-
+-      for(int i = 0; i < this.f_11196_.size(); ++i) {
+-         p_11263_.f_8906_.m_9829_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.ADD_PLAYER, this.f_11196_.get(i)));
+-      }
+-
+-      serverlevel1.m_8834_(p_11263_);
+-      this.f_11195_.m_129901_().m_136293_(p_11263_);
+-      this.m_11229_(p_11263_, serverlevel1);
+-      this.f_11195_.m_214042_().ifPresent((p_215606_) -> {
+-         p_11263_.m_143408_(p_215606_.f_236743_(), p_215606_.f_236744_(), p_215606_.f_236745_(), p_215606_.f_236746_());
+-      });
+-      p_11263_.m_215109_(this.f_11195_.m_129928_());
+-
+-      for(MobEffectInstance mobeffectinstance : p_11263_.m_21220_()) {
+-         servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateMobEffectPacket(p_11263_.m_19879_(), mobeffectinstance));
+-      }
+-
+-      if (compoundtag != null && compoundtag.m_128425_("RootVehicle", 10)) {
+-         CompoundTag compoundtag1 = compoundtag.m_128469_("RootVehicle");
+-         Entity entity1 = EntityType.m_20645_(compoundtag1.m_128469_("Entity"), serverlevel1, (p_215603_) -> {
+-            return !serverlevel1.m_8847_(p_215603_) ? null : p_215603_;
+-         });
+-         if (entity1 != null) {
+-            UUID uuid;
+-            if (compoundtag1.m_128403_("Attach")) {
+-               uuid = compoundtag1.m_128342_("Attach");
+-            } else {
+-               uuid = null;
+-            }
+-
+-            if (entity1.m_20148_().equals(uuid)) {
+-               p_11263_.m_7998_(entity1, true);
+-            } else {
+-               for(Entity entity : entity1.m_146897_()) {
+-                  if (entity.m_20148_().equals(uuid)) {
+-                     p_11263_.m_7998_(entity, true);
+-                     break;
+-                  }
+-               }
+-            }
+-
+-            if (!p_11263_.m_20159_()) {
+-               f_11188_.warn("Couldn't reattach entity to player");
+-               entity1.m_146870_();
+-
+-               for(Entity entity2 : entity1.m_146897_()) {
+-                  entity2.m_146870_();
+-               }
+-            }
+-         }
+-      }
+-
+-      p_11263_.m_143429_();
+-   }
++      pendingPlayers.remove(p_11263_.m_20148_(), p_11263_);
++      if (p_11263_.m_36316_().getName().equalsIgnoreCase(s)) {
++         mutablecomponent = Component.m_237110_("multiplayer.player.joined", p_11263_.m_5446_());
++      } else {
++         mutablecomponent = Component.m_237110_("multiplayer.player.joined.renamed", p_11263_.m_5446_(), s);
++      }
 +
-+      ServerLevel finalWorldserver = serverlevel1;
++      this.m_240416_(mutablecomponent.m_130940_(ChatFormatting.YELLOW), false);
++      servergamepacketlistenerimpl.m_9774_(p_11263_.m_20185_(), p_11263_.m_20186_(), p_11263_.m_20189_(), p_11263_.m_146908_(), p_11263_.m_146909_());
++      this.f_11196_.add(p_11263_);
++      this.f_11197_.put(p_11263_.m_20148_(), p_11263_);
++      this.m_11268_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.ADD_PLAYER, p_11263_));
 +
-+      int chunkX = p_11263_.m_146903_() >> 4;
-+      int chunkZ = p_11263_.m_146907_() >> 4;
-+      final net.minecraft.world.level.ChunkPos pos = new net.minecraft.world.level.ChunkPos(chunkX, chunkZ);
-+      net.minecraft.server.level.ChunkMap playerChunkMap = serverlevel1.m_7726_().f_8325_;
-+      net.minecraft.server.level.DistanceManager distanceManager = playerChunkMap.f_140145_;
-+      distanceManager.m_140792_(net.minecraft.server.level.TicketType.LOGIN, pos, 31, pos.m_45588_());
-+      serverlevel1.m_7726_().markAreaHighPriority(pos, 28, 3); // Paper - Chunk priority
-+      serverlevel1.m_7726_().getChunkAtAsynchronously(chunkX, chunkZ, true, false).thenApply(chunk -> { // Paper - Chunk priority
-+         net.minecraft.server.level.ChunkHolder updatingChunk = playerChunkMap.m_140174_(pos.m_45588_());
-+         if (updatingChunk != null) {
-+            return updatingChunk.m_140073_();
-+         } else {
-+            return java.util.concurrent.CompletableFuture.completedFuture(chunk);
-+         }
-+      }).thenAccept(chunk -> {
-+         servergamepacketlistenerimpl.playerJoinReady = () -> {
-+            postChunkLoadJoin(
-+                    p_11263_, finalWorldserver, p_11262_, servergamepacketlistenerimpl,
-+                    compoundtag, s1, s
-+            );
-+         };
++      for(int i = 0; i < this.f_11196_.size(); ++i) {
++         p_11263_.f_8906_.m_9829_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.ADD_PLAYER, this.f_11196_.get(i)));
++      }
++
++      serverlevel1.m_8834_(p_11263_);
++      this.f_11195_.m_129901_().m_136293_(p_11263_);
++      this.m_11229_(p_11263_, serverlevel1);
++      this.f_11195_.m_214042_().ifPresent((p_215606_) -> {
++         p_11263_.m_143408_(p_215606_.f_236743_(), p_215606_.f_236744_(), p_215606_.f_236745_(), p_215606_.f_236746_());
 +      });
++      p_11263_.m_215109_(this.f_11195_.m_129928_());
++
++      for(MobEffectInstance mobeffectinstance : p_11263_.m_21220_()) {
++         servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateMobEffectPacket(p_11263_.m_19879_(), mobeffectinstance));
++      }
++
++      if (compoundtag != null && compoundtag.m_128425_("RootVehicle", 10)) {
++         CompoundTag compoundtag1 = compoundtag.m_128469_("RootVehicle");
++         Entity entity1 = EntityType.m_20645_(compoundtag1.m_128469_("Entity"), serverlevel1, (p_215603_) -> {
++            return !serverlevel1.m_8847_(p_215603_) ? null : p_215603_;
++         });
++         if (entity1 != null) {
++            UUID uuid;
++            if (compoundtag1.m_128403_("Attach")) {
++               uuid = compoundtag1.m_128342_("Attach");
++            } else {
++               uuid = null;
++            }
++
++            if (entity1.m_20148_().equals(uuid)) {
++               p_11263_.m_7998_(entity1, true);
++            } else {
++               for(Entity entity : entity1.m_146897_()) {
++                  if (entity.m_20148_().equals(uuid)) {
++                     p_11263_.m_7998_(entity, true);
++                     break;
++                  }
++               }
++            }
++
++            if (!p_11263_.m_20159_()) {
++               f_11188_.warn("Couldn't reattach entity to player");
++               entity1.m_146870_();
++
++               for(Entity entity2 : entity1.m_146897_()) {
++                  entity2.m_146870_();
++               }
++            }
++         }
++      }
++
++      p_11263_.m_143429_();
++      pendingPlayers.remove(p_11263_.m_20148_(), p_11263_);
++      net.minecraftforge.event.ForgeEventFactory.firePlayerLoggedIn( p_11263_ );
 +
 +   }
 +
 +   private void postChunkLoadJoin(ServerPlayer p_11263_, ServerLevel serverlevel1, Connection networkmanager, ServerGamePacketListenerImpl servergamepacketlistenerimpl, CompoundTag compoundtag, String s1, String s) {
 +      pendingPlayers.remove(p_11263_.m_20148_(), p_11263_);
-       MutableComponent mutablecomponent;
-       if (p_11263_.m_36316_().getName().equalsIgnoreCase(s)) {
-          mutablecomponent = Component.m_237110_("multiplayer.player.joined", p_11263_.m_5446_());
-@@ -240,7 +_,21 @@
-       }
- 
-       p_11263_.m_143429_();
--   }
++      MutableComponent mutablecomponent;
++      if (p_11263_.m_36316_().getName().equalsIgnoreCase(s)) {
++         mutablecomponent = Component.m_237110_("multiplayer.player.joined", p_11263_.m_5446_());
++      } else {
++         mutablecomponent = Component.m_237110_("multiplayer.player.joined.renamed", p_11263_.m_5446_(), s);
++      }
++
++      this.m_240416_(mutablecomponent.m_130940_(ChatFormatting.YELLOW), false);
++      servergamepacketlistenerimpl.m_9774_(p_11263_.m_20185_(), p_11263_.m_20186_(), p_11263_.m_20189_(), p_11263_.m_146908_(), p_11263_.m_146909_());
++      this.f_11196_.add(p_11263_);
++      this.f_11197_.put(p_11263_.m_20148_(), p_11263_);
++      this.m_11268_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.ADD_PLAYER, p_11263_));
++
++      for(int i = 0; i < this.f_11196_.size(); ++i) {
++         p_11263_.f_8906_.m_9829_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.ADD_PLAYER, this.f_11196_.get(i)));
++      }
++
++      serverlevel1.m_8834_(p_11263_);
++      this.f_11195_.m_129901_().m_136293_(p_11263_);
++      this.m_11229_(p_11263_, serverlevel1);
++      this.f_11195_.m_214042_().ifPresent((p_215606_) -> {
++         p_11263_.m_143408_(p_215606_.f_236743_(), p_215606_.f_236744_(), p_215606_.f_236745_(), p_215606_.f_236746_());
++      });
++      p_11263_.m_215109_(this.f_11195_.m_129928_());
++
++      for(MobEffectInstance mobeffectinstance : p_11263_.m_21220_()) {
++         servergamepacketlistenerimpl.m_9829_(new ClientboundUpdateMobEffectPacket(p_11263_.m_19879_(), mobeffectinstance));
++      }
++
++      if (compoundtag != null && compoundtag.m_128425_("RootVehicle", 10)) {
++         CompoundTag compoundtag1 = compoundtag.m_128469_("RootVehicle");
++         Entity entity1 = EntityType.m_20645_(compoundtag1.m_128469_("Entity"), serverlevel1, (p_215603_) -> {
++            return !serverlevel1.m_8847_(p_215603_) ? null : p_215603_;
++         });
++         if (entity1 != null) {
++            UUID uuid;
++            if (compoundtag1.m_128403_("Attach")) {
++               uuid = compoundtag1.m_128342_("Attach");
++            } else {
++               uuid = null;
++            }
++
++            if (entity1.m_20148_().equals(uuid)) {
++               p_11263_.m_7998_(entity1, true);
++            } else {
++               for(Entity entity : entity1.m_146897_()) {
++                  if (entity.m_20148_().equals(uuid)) {
++                     p_11263_.m_7998_(entity, true);
++                     break;
++                  }
++               }
++            }
++
++            if (!p_11263_.m_20159_()) {
++               f_11188_.warn("Couldn't reattach entity to player");
++               entity1.m_146870_();
++
++               for(Entity entity2 : entity1.m_146897_()) {
++                  entity2.m_146870_();
++               }
++            }
++         }
++      }
++
++      p_11263_.m_143429_();
 +      MinecraftServer.getServer().execute(() -> net.minecraftforge.event.ForgeEventFactory.firePlayerLoggedIn( p_11263_ )); // Goldenforge: fire event on main
 +   }
 +

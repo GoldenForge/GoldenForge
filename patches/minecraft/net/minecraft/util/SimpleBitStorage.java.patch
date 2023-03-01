@@ -1,0 +1,68 @@
+--- a/net/minecraft/util/SimpleBitStorage.java
++++ b/net/minecraft/util/SimpleBitStorage.java
+@@ -11,8 +_,8 @@
+    private final long f_184709_;
+    private final int f_184710_;
+    private final int f_184711_;
+-   private final int f_184712_;
+-   private final int f_184713_;
++   private final int f_184712_; private final long divideMulUnsigned; // Paper - referenced in b(int) with 2 Integer.toUnsignedLong calls
++   private final int f_184713_; private final long divideAddUnsigned; // Paper
+    private final int f_184714_;
+ 
+    public SimpleBitStorage(int p_198164_, int p_198165_, int[] p_198166_) {
+@@ -56,8 +_,8 @@
+       this.f_184709_ = (1L << p_184724_) - 1L;
+       this.f_184711_ = (char)(64 / p_184724_);
+       int i = 3 * (this.f_184711_ - 1);
+-      this.f_184712_ = f_184706_[i + 0];
+-      this.f_184713_ = f_184706_[i + 1];
++      this.f_184712_ = f_184706_[i + 0]; this.divideMulUnsigned = Integer.toUnsignedLong(this.f_184712_); // Paper
++      this.f_184713_ = f_184706_[i + 1]; this.divideAddUnsigned = Integer.toUnsignedLong(this.f_184713_); // Paper
+       this.f_184714_ = f_184706_[i + 2];
+       int j = (p_184725_ + this.f_184711_ - 1) / this.f_184711_;
+       if (p_184726_ != null) {
+@@ -73,14 +_,14 @@
+    }
+ 
+    private int m_184739_(int p_184740_) {
+-      long i = Integer.toUnsignedLong(this.f_184712_);
+-      long j = Integer.toUnsignedLong(this.f_184713_);
+-      return (int)((long)p_184740_ * i + j >> 32 >> this.f_184714_);
++      //long i = Integer.toUnsignedLong(this.divideMul);
++      //long j = Integer.toUnsignedLong(this.divideAdd);
++      return (int) ((long) p_184740_ * this.divideMulUnsigned + this.divideAddUnsigned >> 32 >> this.f_184714_); // Paper
+    }
+ 
+-   public int m_13516_(int p_184731_, int p_184732_) {
+-      Validate.inclusiveBetween(0L, (long)(this.f_184710_ - 1), (long)p_184731_);
+-      Validate.inclusiveBetween(0L, this.f_184709_, (long)p_184732_);
++   public final int m_13516_(int p_184731_, int p_184732_) { // Paper - make final for inline
++      //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184731_);
++      //Validate.inclusiveBetween(0L, this.mask, (long)p_184732_);
+       int i = this.m_184739_(p_184731_);
+       long j = this.f_184707_[i];
+       int k = (p_184731_ - i * this.f_184711_) * this.f_184708_;
+@@ -89,17 +_,17 @@
+       return l;
+    }
+ 
+-   public void m_13524_(int p_184742_, int p_184743_) {
+-      Validate.inclusiveBetween(0L, (long)(this.f_184710_ - 1), (long)p_184742_);
+-      Validate.inclusiveBetween(0L, this.f_184709_, (long)p_184743_);
++   public final void m_13524_(int p_184742_, int p_184743_) { // Paper - make final for inline
++      //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184742_);
++      //Validate.inclusiveBetween(0L, this.mask, (long)p_184743_);
+       int i = this.m_184739_(p_184742_);
+       long j = this.f_184707_[i];
+       int k = (p_184742_ - i * this.f_184711_) * this.f_184708_;
+       this.f_184707_[i] = j & ~(this.f_184709_ << k) | ((long)p_184743_ & this.f_184709_) << k;
+    }
+ 
+-   public int m_13514_(int p_184729_) {
+-      Validate.inclusiveBetween(0L, (long)(this.f_184710_ - 1), (long)p_184729_);
++   public final int m_13514_(int p_184729_) { // Paper - make final for inline
++      //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184729_);
+       int i = this.m_184739_(p_184729_);
+       long j = this.f_184707_[i];
+       int k = (p_184729_ - i * this.f_184711_) * this.f_184708_;

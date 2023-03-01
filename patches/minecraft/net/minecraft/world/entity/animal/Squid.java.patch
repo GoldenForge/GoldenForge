@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/animal/Squid.java
++++ b/net/minecraft/world/entity/animal/Squid.java
+@@ -44,7 +_,7 @@
+ 
+    public Squid(EntityType<? extends Squid> p_29953_, Level p_29954_) {
+       super(p_29953_, p_29954_);
+-      this.f_19796_.m_188584_((long)this.m_19879_());
++      //this.random.setSeed((long)this.getId()); Paper - we set the random to shared, do not clobber the seed
+       this.f_29945_ = 1.0F / (this.f_19796_.m_188501_() + 1.0F) * 0.2F;
+    }
+ 

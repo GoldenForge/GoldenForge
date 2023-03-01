@@ -45,3 +45,14 @@
           return itemstack;
        }
     }
+@@ -554,9 +_,7 @@
+    public String m_130136_(int p_130137_) {
+       int i = m_236870_(p_130137_);
+       int j = this.m_130242_();
+-      if (j > i) {
+-         throw new DecoderException("The received encoded string buffer length is longer than maximum allowed (" + j + " > " + i + ")");
+-      } else if (j < 0) {
++      if (j < 0) {
+          throw new DecoderException("The received encoded string buffer length is less than zero! Weird string!");
+       } else {
+          String s = this.toString(this.readerIndex(), j, StandardCharsets.UTF_8);

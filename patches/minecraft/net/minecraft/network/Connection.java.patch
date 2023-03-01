@@ -16,6 +16,15 @@
  import net.minecraft.server.RunningOnDifferentThreadException;
  import net.minecraft.util.LazyLoadedValue;
  import net.minecraft.util.Mth;
+@@ -71,7 +_,7 @@
+    private final PacketFlow f_129466_;
+    private final Queue<Connection.PacketHolder> f_129467_ = Queues.newConcurrentLinkedQueue();
+    private Channel f_129468_;
+-   private SocketAddress f_129469_;
++   public SocketAddress f_129469_;
+    private PacketListener f_129470_;
+    private Component f_129471_;
+    private boolean f_129472_;
 @@ -82,6 +_,64 @@
     private float f_129477_;
     private int f_129478_;

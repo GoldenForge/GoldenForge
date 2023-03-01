@@ -16,10 +16,12 @@
     }
  
     private ExplosionDamageCalculator m_46062_(@Nullable Entity p_46063_) {
-@@ -180,6 +_,7 @@
+@@ -179,7 +_,8 @@
+       int i1 = Mth.m_14107_(this.f_46014_ + (double)f2 + 1.0D);
        int j2 = Mth.m_14107_(this.f_46015_ - (double)f2 - 1.0D);
        int j1 = Mth.m_14107_(this.f_46015_ + (double)f2 + 1.0D);
-       List<Entity> list = this.f_46012_.m_45933_(this.f_46016_, new AABB((double)k1, (double)i2, (double)j2, (double)l1, (double)i1, (double)j1));
+-      List<Entity> list = this.f_46012_.m_45933_(this.f_46016_, new AABB((double)k1, (double)i2, (double)j2, (double)l1, (double)i1, (double)j1));
++      List<Entity> list = this.f_46012_.m_6249_(this.f_46016_, new AABB((double)k1, (double)i2, (double)j2, (double)l1, (double)i1, (double)j1), (com.google.common.base.Predicate<Entity>) entity -> entity.m_6084_() && !entity.m_5833_()); // Paper - Fix lag from explosions processing dead entities
 +      net.minecraftforge.event.ForgeEventFactory.onExplosionDetonate(this.f_46012_, this, list, f2);
        Vec3 vec3 = new Vec3(this.f_46013_, this.f_46014_, this.f_46015_);
  
