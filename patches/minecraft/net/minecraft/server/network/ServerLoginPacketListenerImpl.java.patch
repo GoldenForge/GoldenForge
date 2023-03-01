@@ -102,12 +102,11 @@
                 } else {
                    ServerLoginPacketListenerImpl.this.m_10053_(Component.m_237115_("multiplayer.disconnect.authservers_down"));
                    ServerLoginPacketListenerImpl.f_10015_.error("Couldn't verify username because servers are unavailable");
-@@ -263,7 +_,38 @@
+@@ -263,7 +_,37 @@
     }
  
     public void m_7223_(ServerboundCustomQueryPacket p_10045_) {
 -      this.m_10053_(Component.m_237115_("multiplayer.disconnect.unexpected_query_response"));
-+      System.out.println(p_10045_.getIndex());
 +      if (p_10045_.m_179824_() == this.velocityLoginMessageId) {
 +         net.minecraft.network.FriendlyByteBuf buf = p_10045_.m_179825_();
 +         if (buf == null) {
