@@ -17,7 +17,7 @@
  import net.minecraft.network.chat.ChatSender;
  import net.minecraft.network.chat.ChatType;
  import net.minecraft.network.chat.Component;
-@@ -37,31 +_,7 @@
+@@ -37,37 +_,14 @@
  import net.minecraft.network.chat.OutgoingPlayerChatMessage;
  import net.minecraft.network.chat.PlayerChatMessage;
  import net.minecraft.network.protocol.Packet;
@@ -50,6 +50,13 @@
  import net.minecraft.resources.ResourceKey;
  import net.minecraft.server.MinecraftServer;
  import net.minecraft.server.PlayerAdvancements;
+ import net.minecraft.server.ServerScoreboard;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.server.level.TicketType;
+ import net.minecraft.server.network.ServerGamePacketListenerImpl;
+ import net.minecraft.sounds.SoundEvents;
+ import net.minecraft.sounds.SoundSource;
 @@ -114,6 +_,7 @@
     private final IpBanList f_11199_ = new IpBanList(f_11190_);
     private final ServerOpList f_11200_ = new ServerOpList(f_11191_);
@@ -402,6 +409,22 @@
        if (this.f_11198_.m_11406_(p_11258_)) {
           UserBanListEntry userbanlistentry = this.f_11198_.m_11388_(p_11258_);
           MutableComponent mutablecomponent1 = Component.m_237110_("multiplayer.disconnect.banned.reason", userbanlistentry.m_10962_());
+@@ -401,6 +_,7 @@
+    }
+ 
+    public ServerPlayer m_11236_(ServerPlayer p_11237_, boolean p_11238_) {
++      p_11237_.isRealPlayer = true; // Paper - Chunk priority
+       this.f_11196_.remove(p_11237_);
+       p_11237_.m_9236_().m_143261_(p_11237_, Entity.RemovalReason.DISCARDED);
+       BlockPos blockpos = p_11237_.m_8961_();
+@@ -445,6 +_,7 @@
+          serverplayer.f_8906_.m_9829_(new ClientboundGameEventPacket(ClientboundGameEventPacket.f_132153_, 0.0F));
+       }
+ 
++      serverlevel1.m_7726_().m_8387_(net.minecraft.server.level.TicketType.f_9448_, new net.minecraft.world.level.ChunkPos(serverplayer.m_146903_() >> 4, serverplayer.m_146907_() >> 4), 1, serverplayer.m_19879_()); // Paper
+       while(!serverlevel1.m_45786_(serverplayer) && serverplayer.m_20186_() < (double)serverlevel1.m_151558_()) {
+          serverplayer.m_6034_(serverplayer.m_20185_(), serverplayer.m_20186_() + 1.0D, serverplayer.m_20189_());
+       }
 @@ -462,6 +_,7 @@
        this.f_11197_.put(serverplayer.m_20148_(), serverplayer);
        serverplayer.m_143429_();

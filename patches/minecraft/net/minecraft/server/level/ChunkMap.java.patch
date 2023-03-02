@@ -533,7 +533,7 @@
  
        Runnable runnable;
        while((p_140354_.getAsBoolean() || k > 0) && (runnable = this.f_140125_.poll()) != null) {
-@@ -470,44 +_,80 @@
+@@ -470,44 +_,78 @@
        }
  
        int l = 0;
@@ -605,6 +605,7 @@
                 this.f_140144_.m_5511_(p_203002_.m_7697_(), (ChunkStatus)null);
                 this.f_202981_.remove(p_203002_.m_7697_().m_45588_());
 -            }
+-
 +            } else if (removed) { // Paper start
 +               for (int index = 0, len = this.regionManagers.size(); index < len; ++index) {
 +                  this.regionManagers.get(index).removeChunk(p_140183_.f_140009_.f_45578_, p_140183_.f_140009_.f_45579_);
@@ -612,13 +613,11 @@
 +               this.m_140424_().queueUnload(p_140183_.f_140009_.longKey, MinecraftServer.currentTickLong + 1); // Paper - unload POI data
 +            } // Paper end
 +            } finally { this.unloadingPlayerChunk = unloadingBefore; } // Paper - do not allow ticket level changes while unloading chunks
- 
           }
 -      }, this.f_140125_::add).whenComplete((p_202996_, p_202997_) -> {
 -         if (p_202997_ != null) {
 -            f_140128_.error("Failed to save chunk {}", p_140183_.m_140092_(), p_202997_);
-+
-+         };
++      };
 +
 +      Queue queue = this.f_140125_;
 +
@@ -876,10 +875,11 @@
        completablefuture1.thenAcceptAsync((p_214882_) -> {
           p_214882_.ifLeft((p_214885_) -> {
              this.f_140146_.getAndIncrement();
-             MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
+-            MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
 -            this.m_183262_(chunkpos, false).forEach((p_214911_) -> {
 -               this.m_183760_(p_214911_, mutableobject, p_214885_);
 -            });
++            //MutableObject<ClientboundLevelChunkWithLightPacket> mutableobject = new MutableObject<>();
 +//            this.getPlayers(chunkpos, false).forEach((p_214911_) -> {
 +//               this.playerLoadedChunk(p_214911_, mutableobject, p_214885_);
 +//            });

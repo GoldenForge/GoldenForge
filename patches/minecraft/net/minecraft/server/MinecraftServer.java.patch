@@ -97,6 +97,14 @@
        if (this.f_177872_.m_142763_()) {
           this.m_236737_();
        }
+@@ -561,6 +_,7 @@
+             serverlevel1.m_7726_().m_201698_(() -> {
+                return true;
+             }, false);
++            while (serverlevel1.m_7726_().m_8466_()); // Paper - drain tasks
+          }
+ 
+          this.m_130012_();
 @@ -571,6 +_,7 @@
        for(ServerLevel serverlevel2 : this.m_129785_()) {
           if (serverlevel2 != null) {
