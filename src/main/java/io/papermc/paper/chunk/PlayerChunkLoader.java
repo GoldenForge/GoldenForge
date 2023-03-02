@@ -451,9 +451,9 @@ public final class PlayerChunkLoader {
 
     public void addPlayer(final ServerPlayer player) {
         TickThread.ensureTickThread("Cannot add player async");
-        if (!player.isRealPlayer) {
-            return;
-        }
+//        if (!player.isRealPlayer) {
+//            return;
+//        }
         final PlayerLoaderData data = new PlayerLoaderData(player, this);
         if (this.playerMap.putIfAbsent(player, data) == null) {
             data.update();
@@ -462,9 +462,9 @@ public final class PlayerChunkLoader {
 
     public void removePlayer(final ServerPlayer player) {
         TickThread.ensureTickThread("Cannot remove player async");
-        if (!player.isRealPlayer) {
-            return;
-        }
+//        if (!player.isRealPlayer) {
+//            return;
+//        }
 
         final PlayerLoaderData loaderData = this.playerMap.remove(player);
         if (loaderData == null) {
@@ -484,9 +484,9 @@ public final class PlayerChunkLoader {
 
     public void updatePlayer(final ServerPlayer player) {
         TickThread.ensureTickThread("Cannot update player async");
-        if (!player.isRealPlayer) {
-            return;
-        }
+//        if (!player.isRealPlayer) {
+//            return;
+//        }
         final PlayerLoaderData loaderData = this.playerMap.get(player);
         if (loaderData != null) {
             loaderData.update();

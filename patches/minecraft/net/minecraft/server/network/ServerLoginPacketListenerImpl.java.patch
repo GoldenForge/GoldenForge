@@ -17,28 +17,53 @@
     public ServerLoginPacketListenerImpl(MinecraftServer p_10027_, Connection p_10028_) {
        this.f_10018_ = p_10027_;
        this.f_10013_ = p_10028_;
-@@ -65,7 +_,16 @@
+@@ -65,8 +_,18 @@
     }
  
     public void m_9933_() {
 -      if (this.f_10019_ == ServerLoginPacketListenerImpl.State.READY_TO_ACCEPT) {
-+//      System.out.println(this.gameProfile.getId());
-+//      System.out.println(this.state);
+-         this.m_10055_();
 +      if (this.f_10019_ == State.NEGOTIATING) {
 +         // We force the state into "NEGOTIATING" which is otherwise unused. Once we're completed we move the negotiation onto "READY_TO_ACCEPT"
 +         // Might want to promote player object creation to here as well..
-+
 +         boolean negotiationComplete = net.minecraftforge.network.NetworkHooks.tickNegotiation(this, this.f_10013_, this.f_10024_);
 +         if (negotiationComplete)
 +            this.f_10019_ = State.READY_TO_ACCEPT;
 +      } else if (this.f_10019_ == ServerLoginPacketListenerImpl.State.READY_TO_ACCEPT) {
-          this.m_10055_();
++         // Paper start - prevent logins to be processed even though disconnect was called
++         if (f_10013_.m_129536_()) {
++            this.m_10055_();
++         }
++         // Paper end
        } else if (this.f_10019_ == ServerLoginPacketListenerImpl.State.DELAY_ACCEPT) {
           ServerPlayer serverplayer = this.f_10018_.m_6846_().m_11259_(this.f_10021_.getId());
-@@ -97,6 +_,7 @@
+          if (serverplayer == null) {
+@@ -76,7 +_,7 @@
+          }
+       }
+ 
+-      if (this.f_10020_++ == 600) {
++      if (this.f_10020_++ == 1200) {
+          this.m_10053_(Component.m_237115_("multiplayer.disconnect.slow_login"));
+       }
+ 
+@@ -97,6 +_,20 @@
  
     }
  
++   // Paper start - Cache authenticator threads
++   private static final AtomicInteger threadId = new AtomicInteger(0);
++   private static final java.util.concurrent.ExecutorService authenticatorPool = java.util.concurrent.Executors.newCachedThreadPool(
++           r -> {
++              Thread ret = new Thread(r, "User Authenticator #" + threadId.incrementAndGet());
++
++              ret.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(f_10015_));
++
++              return ret;
++           }
++   );
++   // Paper end
++
 +
     public void m_10055_() {
        ProfilePublicKey profilepublickey = null;
@@ -70,12 +95,13 @@
           }
  
        }
-@@ -222,7 +_,7 @@
+@@ -222,7 +_,8 @@
           throw new IllegalStateException("Protocol error", cryptexception);
        }
  
 -      Thread thread = new Thread("User Authenticator #" + f_10014_.incrementAndGet()) {
-+      Thread thread = new Thread(net.minecraftforge.fml.util.thread.SidedThreadGroups.SERVER, "User Authenticator #" + f_10014_.incrementAndGet()) {
++      // Paper start - Cache authenticator threads
++      authenticatorPool.execute(new Runnable() {
           public void run() {
              GameProfile gameprofile = ServerLoginPacketListenerImpl.this.f_10021_;
  
@@ -102,7 +128,15 @@
                 } else {
                    ServerLoginPacketListenerImpl.this.m_10053_(Component.m_237115_("multiplayer.disconnect.authservers_down"));
                    ServerLoginPacketListenerImpl.f_10015_.error("Couldn't verify username because servers are unavailable");
-@@ -263,7 +_,37 @@
+@@ -257,13 +_,42 @@
+             SocketAddress socketaddress = ServerLoginPacketListenerImpl.this.f_10013_.m_129523_();
+             return ServerLoginPacketListenerImpl.this.f_10018_.m_129798_() && socketaddress instanceof InetSocketAddress ? ((InetSocketAddress)socketaddress).getAddress() : null;
+          }
+-      };
+-      thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(f_10015_));
+-      thread.start();
++      });
++
     }
  
     public void m_7223_(ServerboundCustomQueryPacket p_10045_) {
