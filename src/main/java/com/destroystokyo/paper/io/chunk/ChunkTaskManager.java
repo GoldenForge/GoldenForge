@@ -15,6 +15,7 @@ import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import org.apache.commons.lang3.text.StrBuilder;
+import org.goldenforge.GoldenForge;
 
 import java.util.ArrayDeque;
 import java.util.HashSet;
@@ -63,10 +64,10 @@ public final class ChunkTaskManager {
         }
 
         if (!asyncChunks) {
-            System.out.println("Async Chunks: Disabled - Chunks will be managed synchronously, and will cause tremendous lag.");
+          GoldenForge.LOGGER.warn("Async Chunks: Disabled - Chunks will be managed synchronously, and will cause tremendous lag.");
         } else {
             ChunkTaskManager.initGlobalLoadThreads(threads);
-            System.out.println("Async Chunks: Enabled - Chunks will be loaded much faster, without lag. Using " + threads + " threads.");
+            GoldenForge.LOGGER.info("Async Chunks: Enabled - Chunks will be loaded much faster, without lag. Using " + threads + " threads.");
         }
     }
 
