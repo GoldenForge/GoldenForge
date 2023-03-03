@@ -202,17 +202,16 @@
     public void m_8714_(LevelChunk p_8715_, int p_8716_) {
        ChunkPos chunkpos = p_8715_.m_7697_();
        boolean flag = this.m_46471_();
-@@ -383,47 +_,57 @@
+@@ -383,21 +_,22 @@
        int j = chunkpos.m_45605_();
        ProfilerFiller profilerfiller = this.m_46473_();
        profilerfiller.m_6180_("thunder");
--      if (flag && this.m_46470_() && this.f_46441_.m_188503_(100000) == 0) {
++      final BlockPos.MutableBlockPos blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
+       if (flag && this.m_46470_() && this.f_46441_.m_188503_(100000) == 0) {
 -         BlockPos blockpos = this.m_143288_(this.m_46496_(i, 0, j, 15));
 -         if (this.m_46758_(blockpos)) {
 -            DifficultyInstance difficultyinstance = this.m_6436_(blockpos);
 -            boolean flag1 = this.m_46469_().m_46207_(GameRules.f_46134_) && this.f_46441_.m_188500_() < (double)difficultyinstance.m_19056_() * 0.01D && !this.m_8055_(blockpos.m_7495_()).m_60713_(Blocks.f_152587_);
-+      final BlockPos.MutableBlockPos blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
-+      if (flag && this.m_46470_() && p_8715_.shouldDoLightning(this.f_46441_)) { // Pufferfish - replace random with shouldDoLightning
 +         blockposition.m_122190_(this.m_143288_(this.m_46496_(i, 0, j, 15))); // Paper
 +         if (this.m_46758_(blockposition)) {
 +            DifficultyInstance difficultyinstance = this.m_6436_(blockposition);
@@ -232,16 +231,15 @@
              lightningbolt.m_20874_(flag1);
              this.m_7967_(lightningbolt);
           }
-       }
+@@ -405,25 +_,34 @@
  
        profilerfiller.m_6182_("iceandsnow");
--      if (this.f_46441_.m_188503_(16) == 0) {
+       if (this.f_46441_.m_188503_(16) == 0) {
 -         BlockPos blockpos2 = this.m_5452_(Heightmap.Types.MOTION_BLOCKING, this.m_46496_(i, 0, j, 15));
 -         BlockPos blockpos3 = blockpos2.m_7495_();
 -         Biome biome = this.m_204166_(blockpos2).m_203334_();
 -         if (biome.m_47477_(this, blockpos3)) {
 -            this.m_46597_(blockpos3, Blocks.f_50126_.m_49966_());
-+      if ((this.currentIceAndSnowTick++ & 15) == 0) {  // Pufferfish - optimize further random ticking
 +         // Paper start - optimise chunk ticking
 +         this.getRandomBlockPosition(i, 0, j, 15, blockposition);
 +         int normalY = p_8715_.m_5885_(Heightmap.Types.MOTION_BLOCKING, blockposition.m_123341_() & 15, blockposition.m_123343_() & 15) + 1;

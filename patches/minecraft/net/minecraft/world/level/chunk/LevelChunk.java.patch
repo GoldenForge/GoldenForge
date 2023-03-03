@@ -25,7 +25,7 @@
     static final Logger f_62771_ = LogUtils.getLogger();
     private static final TickingBlockEntity f_156361_ = new TickingBlockEntity() {
        public void m_142224_() {
-@@ -77,11 +_,211 @@
+@@ -77,11 +_,199 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -222,27 +222,14 @@
 +   }
 +   // Paper end
 +
-+   // Pufferfish start - instead of using a random every time the chunk is ticked, define when lightning strikes preemptively
-+   private int lightningTick;
-+   // shouldDoLightning compiles down to 29 bytes, which with the default of 35 byte inlining should guarantee an inline
-+   public final boolean shouldDoLightning(net.minecraft.util.RandomSource random) {
-+      if (this.lightningTick-- <= 0) {
-+         this.lightningTick = random.m_188503_(100000) << 1;
-+         return true;
-+      }
-+      return false;
-+   }
-+   // Pufferfish end
-+
     public LevelChunk(Level p_196854_, ChunkPos p_196855_, UpgradeData p_196856_, LevelChunkTicks<Block> p_196857_, LevelChunkTicks<Fluid> p_196858_, long p_196859_, @Nullable LevelChunkSection[] p_196860_, @Nullable LevelChunk.PostLoadProcessor p_196861_, @Nullable BlendingData p_196862_) {
        super(p_196855_, p_196856_, p_196854_, p_196854_.m_5962_().m_175515_(Registry.f_122885_), p_196859_, p_196860_, p_196862_);
        this.f_62776_ = p_196854_;
-@@ -96,6 +_,8 @@
+@@ -96,6 +_,7 @@
        this.f_62791_ = p_196861_;
        this.f_62784_ = p_196857_;
        this.f_187943_ = p_196858_;
 +      this.capProvider.initInternal();
-+      this.lightningTick = this.f_62776_.getThreadUnsafeRandom().m_188503_(100000) << 1; // Pufferfish - initialize lightning tick
     }
  
     public LevelChunk(ServerLevel p_196850_, ProtoChunk p_196851_, @Nullable LevelChunk.PostLoadProcessor p_196852_) {
