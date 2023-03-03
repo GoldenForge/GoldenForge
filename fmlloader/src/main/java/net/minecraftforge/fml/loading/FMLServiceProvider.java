@@ -11,6 +11,7 @@ import joptsimple.ArgumentAcceptingOptionSpec;
 import joptsimple.OptionSpecBuilder;
 import net.minecraftforge.fml.loading.moddiscovery.ModFile;
 import net.minecraftforge.forgespi.Environment;
+import org.goldenforgelauncher.GoldenForgeEntryPoint;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
@@ -59,6 +60,7 @@ public class FMLServiceProvider implements ITransformationService
 
     @Override
     public void initialize(IEnvironment environment) {
+        GoldenForgeEntryPoint.init();
         LOGGER.debug(CORE, "Setting up basic FML game directories");
         FMLPaths.setup(environment);
         LOGGER.debug(CORE, "Loading configuration");
