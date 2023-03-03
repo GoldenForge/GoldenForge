@@ -1331,12 +1331,61 @@
  
        public TrackedEntity(Entity p_140478_, int p_140479_, int p_140480_, boolean p_140481_) {
           this.f_140471_ = new ServerEntity(ChunkMap.this.f_140133_, p_140478_, p_140480_, p_140481_, this::m_140489_);
-@@ -1323,7 +_,7 @@
+@@ -1322,9 +_,13 @@
+ 
        public void m_140497_(ServerPlayer p_140498_) {
           if (p_140498_ != this.f_140472_) {
-             Vec3 vec3 = p_140498_.m_20182_().m_82546_(this.f_140472_.m_20182_());
+-            Vec3 vec3 = p_140498_.m_20182_().m_82546_(this.f_140472_.m_20182_());
 -            double d0 = (double)Math.min(this.m_140496_(), (ChunkMap.this.f_140126_ - 1) * 16);
+-            double d1 = vec3.f_82479_ * vec3.f_82479_ + vec3.f_82481_ * vec3.f_82481_;
++            // Paper start - remove allocation of Vec3D here
++            //Vec3 vec3 = p_140498_.position().subtract(this.entity.position());
++            double vec3d_dx = p_140498_.m_20185_() - this.f_140472_.m_20185_();
++            double vec3d_dz = p_140498_.m_20189_() - this.f_140472_.m_20189_();
++            // Paper end - remove allocation of Vec3D here
 +            double d0 = (double)Math.min(this.m_140496_(), io.papermc.paper.chunk.PlayerChunkLoader.getSendViewDistance(p_140498_) * 16); // Paper - per player view distance
-             double d1 = vec3.f_82479_ * vec3.f_82479_ + vec3.f_82481_ * vec3.f_82481_;
++            double d1 = vec3d_dx * vec3d_dx + vec3d_dz * vec3d_dz; // Paper
              double d2 = d0 * d0;
              boolean flag = d1 <= d2 && this.f_140472_.m_6459_(p_140498_);
+             if (flag) {
+@@ -1342,15 +_,34 @@
+          return ChunkMap.this.f_140133_.m_7654_().m_7186_(p_140484_);
+       }
+ 
++      private static int getHighestRange(Entity parent, int highest) {
++         List<Entity> passengers = parent.m_20197_();
++
++         for (int i = 0, size = passengers.size(); i < size; i++) {
++            Entity entity = passengers.get(i);
++            int range = entity.m_6095_().m_20681_() * 16;
++            range = org.spigotmc.TrackingRange.getEntityTrackingRange(entity, range); // Paper
++
++            if (range > highest) { // Paper - we need the lowest range thanks to the fact that our tracker doesn't account for passenger logic // Tuinity - not anymore!
++               highest = range;
++            }
++
++            highest = getHighestRange(entity, highest);
++         }
++
++         return highest;
++      }
++
+       private int m_140496_() {
+          int i = this.f_140473_;
+ 
+-         for(Entity entity : this.f_140472_.m_146897_()) {
+-            int j = entity.m_6095_().m_20681_() * 16;
+-            if (j > i) {
+-               i = j;
+-            }
+-         }
++//         for(Entity entity : this.entity.getIndirectPassengers()) {
++//            int j = entity.getType().clientTrackingRange() * 16;
++//            if (j > i) {
++//               i = j;
++//            }
++//         }
++         i = getHighestRange(this.f_140472_, i);
+ 
+          return this.m_140483_(i);
+       }

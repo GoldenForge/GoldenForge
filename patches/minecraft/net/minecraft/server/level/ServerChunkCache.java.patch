@@ -483,6 +483,14 @@
     private void m_8490_() {
        long i = this.f_8329_.m_46467_();
        long j = i - this.f_8334_;
+@@ -326,6 +_,7 @@
+          LevelData leveldata = this.f_8329_.m_6106_();
+          ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
+          profilerfiller.m_6180_("pollingChunks");
++         this.f_8329_.resetIceAndSnowTick(); // Pufferfish - reset ice & snow tick random
+          int k = this.f_8329_.m_46469_().m_46215_(GameRules.f_46143_);
+          boolean flag1 = leveldata.m_6793_() % 400L == 0L;
+          profilerfiller.m_6180_("naturalSpawnCount");
 @@ -333,33 +_,61 @@
           NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.m_186524_(l, this.f_8329_.m_8583_(), this::m_8370_, new LocalMobCapCalculator(this.f_8325_));
           this.f_8340_ = naturalspawner$spawnstate;

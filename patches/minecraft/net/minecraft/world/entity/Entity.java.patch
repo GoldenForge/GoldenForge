@@ -17,8 +17,12 @@
     private final EntityType<?> f_19847_;
     private int f_19848_ = f_19843_.incrementAndGet();
     public boolean f_19850_;
-@@ -152,7 +_,7 @@
-    private BlockPos f_19826_;
+@@ -149,10 +_,10 @@
+    public double f_19855_;
+    public double f_19856_;
+    private Vec3 f_19825_;
+-   private BlockPos f_19826_;
++   public BlockPos f_19826_;
     private ChunkPos f_185933_;
     private Vec3 f_19827_ = Vec3.f_82478_;
 -   private float f_19857_;
@@ -117,7 +121,7 @@
     private final Set<TagKey<Fluid>> f_19801_ = new HashSet<>();
     public int f_19802_;
     protected boolean f_19803_ = true;
-@@ -230,7 +_,26 @@
+@@ -230,7 +_,28 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -137,6 +141,8 @@
 +              || this instanceof net.minecraft.world.entity.monster.Shulker
 +              || this instanceof net.minecraft.world.entity.vehicle.AbstractMinecart;
 +   }
++
++   public final org.spigotmc.ActivationRange.ActivationType activationType = org.spigotmc.ActivationRange.initializeEntityActivationType(this);
 +
 +
     public Entity(EntityType<?> p_19870_, Level p_19871_) {

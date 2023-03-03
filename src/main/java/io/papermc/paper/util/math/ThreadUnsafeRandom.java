@@ -1,8 +1,13 @@
 package io.papermc.paper.util.math;
 
-import java.util.Random;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.levelgen.LegacyRandomSource;
+import net.minecraft.world.level.levelgen.PositionalRandomFactory;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.framework.qual.DefaultQualifier;
 
-public final class ThreadUnsafeRandom extends Random {
+@DefaultQualifier(NonNull.class)
+public final class ThreadUnsafeRandom extends LegacyRandomSource {
 
     // See javadoc and internal comments for java.util.Random where these values come from, how they are used, and the author for them.
     private static final long multiplier = 0x5DEECE66DL;
@@ -15,6 +20,20 @@ public final class ThreadUnsafeRandom extends Random {
 
     private long seed;
 
+    public ThreadUnsafeRandom(long seed) {
+        super(seed);
+    }
+
+    @Override
+    public RandomSource fork() {
+        return new ThreadUnsafeRandom(this.nextLong());
+    }
+
+    @Override
+    public PositionalRandomFactory forkPositional() {
+        throw new UnsupportedOperationException();
+    }
+
     @Override
     public void setSeed(long seed) {
         // note: called by Random constructor
@@ -22,7 +41,7 @@ public final class ThreadUnsafeRandom extends Random {
     }
 
     @Override
-    protected int next(int bits) {
+    public int next(int bits) {
         // avoid the expensive CAS logic used by superclass
         return (int) (((this.seed = this.seed * multiplier + addend) & mask) >>> (48 - bits));
     }

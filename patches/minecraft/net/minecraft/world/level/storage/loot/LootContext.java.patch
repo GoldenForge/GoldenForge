@@ -1,5 +1,18 @@
 --- a/net/minecraft/world/level/storage/loot/LootContext.java
 +++ b/net/minecraft/world/level/storage/loot/LootContext.java
+@@ -41,8 +_,10 @@
+       this.f_78909_ = p_230902_;
+       this.f_78910_ = p_230903_;
+       this.f_78912_ = p_230904_;
+-      this.f_78914_ = ImmutableMap.copyOf(p_230905_);
+-      this.f_78915_ = ImmutableMap.copyOf(p_230906_);
++      // Pufferfish start - use unmodifiable maps instead of immutable ones to skip the copy
++      this.f_78914_ = java.util.Collections.unmodifiableMap(p_230905_);
++      this.f_78915_ = java.util.Collections.unmodifiableMap(p_230906_);
++      // Pufferfish end
+    }
+ 
+    public boolean m_78936_(LootContextParam<?> p_78937_) {
 @@ -108,17 +_,47 @@
        return this.f_78909_;
     }

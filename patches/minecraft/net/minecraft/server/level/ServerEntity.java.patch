@@ -28,6 +28,38 @@
  
        if (this.f_8521_ % this.f_8511_ == 0 || this.f_8510_.f_19812_ || this.f_8510_.m_20088_().m_135352_()) {
           if (this.f_8510_.m_20159_()) {
+@@ -117,7 +_,14 @@
+             int l = Mth.m_14143_(this.f_8510_.m_146908_() * 256.0F / 360.0F);
+             int k1 = Mth.m_14143_(this.f_8510_.m_146909_() * 256.0F / 360.0F);
+             Vec3 vec3 = this.f_8510_.m_213870_();
+-            boolean flag2 = this.f_214995_.m_238031_(vec3).m_82556_() >= (double)7.6293945E-6F;
++            //boolean flag2 = this.positionCodec.delta(vec3).lengthSqr() >= (double)7.6293945E-6F;
++            // Paper start - reduce allocation of Vec3D here
++            Vec3 base = this.f_214995_.f_238015_;
++            double vec3d_dx = vec3.f_82479_ - base.f_82479_;
++            double vec3d_dy = vec3.f_82480_ - base.f_82480_;
++            double vec3d_dz = vec3.f_82481_ - base.f_82481_;
++            boolean flag2 = (vec3d_dx * vec3d_dx + vec3d_dy * vec3d_dy + vec3d_dz * vec3d_dz) >= 7.62939453125E-6D;
++            // Paper end - reduce allocation of Vec3D here
+             Packet<?> packet1 = null;
+             boolean flag3 = flag2 || this.f_8521_ % 60 == 0;
+             boolean flag4 = Math.abs(l - this.f_8517_) >= 1 || Math.abs(k1 - this.f_8518_) >= 1;
+@@ -127,6 +_,7 @@
+                long k = this.f_214995_.m_238029_(vec3);
+                boolean flag = i < -32768L || i > 32767L || j < -32768L || j > 32767L || k < -32768L || k > 32767L;
+                if (!flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_()) {
++                  if (flag2 || flag3 || this.f_8510_ instanceof AbstractArrow) { // Pufferfish
+                   if ((!flag3 || !flag4) && !(this.f_8510_ instanceof AbstractArrow)) {
+                      if (flag3) {
+                         packet1 = new ClientboundMoveEntityPacket.Pos(this.f_8510_.m_19879_(), (short)((int)i), (short)((int)j), (short)((int)k), this.f_8510_.m_20096_());
+@@ -136,6 +_,7 @@
+                   } else {
+                      packet1 = new ClientboundMoveEntityPacket.PosRot(this.f_8510_.m_19879_(), (short)((int)i), (short)((int)j), (short)((int)k), (byte)l, (byte)k1, this.f_8510_.m_20096_());
+                   }
++                  } // Pufferfish
+                } else {
+                   this.f_8525_ = this.f_8510_.m_20096_();
+                   this.f_8522_ = 0;
 @@ -189,16 +_,19 @@
     public void m_8534_(ServerPlayer p_8535_) {
        this.f_8510_.m_6452_(p_8535_);

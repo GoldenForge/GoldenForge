@@ -1,0 +1,29 @@
+--- a/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
++++ b/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
+@@ -75,12 +_,21 @@
+             }
+ 
+             if (this.f_26873_ > 0.0D) {
+-               double d0 = this.f_26878_ ? p_26887_.m_20968_(p_26886_) : 1.0D;
+-               double d1 = Math.max(this.f_26873_ * d0, 2.0D);
++//               double d0 = this.testInvisible ? p_26887_.getVisibilityPercent(p_26886_) : 1.0D;
++//               double d1 = Math.max(this.range * d0, 2.0D);
+                double d2 = p_26886_.m_20275_(p_26887_.m_20185_(), p_26887_.m_20186_(), p_26887_.m_20189_());
+-               if (d2 > d1 * d1) {
+-                  return false;
+-               }
++               double followRangeRaw = this.f_26873_;
++
++               if (d2 > followRangeRaw * followRangeRaw) { // the actual follow range will always be this value or smaller, so if the distance is larger then it never will return true after getting invis
++                  return false;
++               }
++               double d = this.f_26878_ ? p_26887_.m_20968_(p_26886_) : 1.0D;
++               double e = Math.max((followRangeRaw) * d, 2.0D); // Paper
++               // Pufferfish end
++               if (d2 > e * e) {
++                  return false;
++               }
++
+             }
+ 
+             if (this.f_148349_ && p_26886_ instanceof Mob) {
