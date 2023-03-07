@@ -1,0 +1,43 @@
+--- a/net/minecraft/world/level/chunk/EmptyLevelChunk.java
++++ b/net/minecraft/world/level/chunk/EmptyLevelChunk.java
+@@ -16,6 +_,40 @@
+ public class EmptyLevelChunk extends LevelChunk {
+    private final Holder<Biome> f_204420_;
+ 
++   // Paper start - starlight
++   @Override
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getBlockNibbles() {
++      return ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(this.m_62953_());
++   }
++
++   @Override
++   public void setBlockNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {}
++
++   @Override
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getSkyNibbles() {
++      return ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(this.m_62953_());
++   }
++
++   @Override
++   public void setSkyNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {}
++
++   @Override
++   public boolean[] getSkyEmptinessMap() {
++      return null;
++   }
++
++   @Override
++   public void setSkyEmptinessMap(final boolean[] emptinessMap) {}
++
++   @Override
++   public boolean[] getBlockEmptinessMap() {
++      return null;
++   }
++
++   @Override
++   public void setBlockEmptinessMap(final boolean[] emptinessMap) {}
++   // Paper end - starlight
++
+    public EmptyLevelChunk(Level p_204422_, ChunkPos p_204423_, Holder<Biome> p_204424_) {
+       super(p_204422_, p_204423_);
+       this.f_204420_ = p_204424_;

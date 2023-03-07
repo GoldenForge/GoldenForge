@@ -29,7 +29,7 @@
  import net.minecraft.world.entity.EntityType;
  import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.level.ChunkPos;
-@@ -74,7 +_,29 @@
+@@ -74,26 +_,78 @@
     public static final String f_223446_ = "BlockLight";
     public static final String f_223447_ = "SkyLight";
  
@@ -53,13 +53,64 @@
 +//      return holder.protoChunk;
 +//   }
 +
++   // Paper start
++   public static @Nullable ChunkStatus getStatus(@Nullable CompoundTag compound) {
++      if (compound == null) {
++         return null;
++      }
++
++      // Note: Copied from below
++      return ChunkStatus.getStatus(compound.m_128461_("Status"));
++   }
++   // Paper end
++
++
++   // Paper start - replace light engine impl
++   private static final int STARLIGHT_LIGHT_VERSION = 8;
++
++   private static final String BLOCKLIGHT_STATE_TAG = "starlight.blocklight_state";
++   private static final String SKYLIGHT_STATE_TAG = "starlight.skylight_state";
++   private static final String STARLIGHT_VERSION_TAG = "starlight.light_version";
++   // Paper end - replace light engine impl
++
++
++
     public static ProtoChunk m_188230_(ServerLevel p_188231_, PoiManager p_188232_, ChunkPos p_188233_, CompoundTag p_188234_) {
 +      java.util.ArrayDeque<Runnable> tasksToExecuteOnMain = new java.util.ArrayDeque<>();
 +
        ChunkPos chunkpos = new ChunkPos(p_188234_.m_128451_("xPos"), p_188234_.m_128451_("zPos"));
        if (!Objects.equals(p_188233_, chunkpos)) {
           f_63449_.error("Chunk file at {} is in the wrong location; relocating. (Expected {}, got {})", p_188233_, p_188233_, chunkpos);
-@@ -117,23 +_,31 @@
+       }
+ 
+       UpgradeData upgradedata = p_188234_.m_128425_("UpgradeData", 10) ? new UpgradeData(p_188234_.m_128469_("UpgradeData"), p_188231_) : UpgradeData.f_63320_;
+-      boolean flag = p_188234_.m_128471_("isLightOn");
++      //boolean flag = p_188234_.getBoolean("isLightOn");
++      boolean flag = getStatus(p_188234_) != null && getStatus(p_188234_).m_62427_(ChunkStatus.f_62323_) && p_188234_.m_128423_("isLightOn") != null && p_188234_.m_128451_(STARLIGHT_VERSION_TAG) == STARLIGHT_LIGHT_VERSION; // Paper
+       ListTag listtag = p_188234_.m_128437_("sections", 10);
+       int i = p_188231_.m_151559_();
+       LevelChunkSection[] alevelchunksection = new LevelChunkSection[i];
+       boolean flag1 = p_188231_.m_6042_().f_223549_();
+       ChunkSource chunksource = p_188231_.m_7726_();
+       LevelLightEngine levellightengine = chunksource.m_7827_();
++      // Paper start
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles = ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_188231_);
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles = ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_188231_);
++      final int minSection = io.papermc.paper.util.WorldUtil.getMinLightSection(p_188231_);
++      final int maxSection = io.papermc.paper.util.WorldUtil.getMaxLightSection(p_188231_);
++      boolean canReadSky = p_188231_.m_6042_().f_223549_();
++      // Paper end
+       Registry<Biome> registry = p_188231_.m_5962_().m_175515_(Registry.f_122885_);
+       Codec<PalettedContainerRO<Holder<Biome>>> codec = m_188260_(registry);
+       boolean flag2 = false;
+ 
+       for(int j = 0; j < listtag.size(); ++j) {
+-         CompoundTag compoundtag = listtag.m_128728_(j);
++         CompoundTag compoundtag = listtag.m_128728_(j); CompoundTag sectionData = compoundtag; // Paper
+          int k = compoundtag.m_128445_("Y");
+          int l = p_188231_.m_151566_(k);
+          if (l >= 0 && l < alevelchunksection.length) {
+@@ -117,25 +_,47 @@
  
              LevelChunkSection levelchunksection = new LevelChunkSection(k, palettedcontainer, palettedcontainerro);
              alevelchunksection[l] = levelchunksection;
@@ -71,35 +122,74 @@
  
           boolean flag4 = compoundtag.m_128425_("BlockLight", 7);
           boolean flag5 = flag1 && compoundtag.m_128425_("SkyLight", 7);
-          if (flag4 || flag5) {
-             if (!flag2) {
-+               tasksToExecuteOnMain.add(() -> { // Paper - delay this task since we're executing off-main
-                levellightengine.m_6462_(p_188233_, true);
-+               }); // Paper - delay this task since we're executing off-main
-                flag2 = true;
-             }
- 
-             if (flag4) {
-+               tasksToExecuteOnMain.add(() -> {
-                levellightengine.m_5687_(LightLayer.BLOCK, SectionPos.m_123196_(p_188233_, k), new DataLayer(compoundtag.m_128463_("BlockLight")), true);
-+               });
-             }
- 
-             if (flag5) {
-+               tasksToExecuteOnMain.add(() -> {
-                levellightengine.m_5687_(LightLayer.SKY, SectionPos.m_123196_(p_188233_, k), new DataLayer(compoundtag.m_128463_("SkyLight")), true);
-+               });
+-         if (flag4 || flag5) {
+-            if (!flag2) {
+-               levellightengine.m_6462_(p_188233_, true);
+-               flag2 = true;
+-            }
+-
+-            if (flag4) {
+-               levellightengine.m_5687_(LightLayer.BLOCK, SectionPos.m_123196_(p_188233_, k), new DataLayer(compoundtag.m_128463_("BlockLight")), true);
+-            }
+-
+-            if (flag5) {
+-               levellightengine.m_5687_(LightLayer.SKY, SectionPos.m_123196_(p_188233_, k), new DataLayer(compoundtag.m_128463_("SkyLight")), true);
++         // Paper start - rewrite the light engine
++         if (flag) {
++            try {
++               int y = sectionData.m_128445_("Y");
++               // Paper end - rewrite the light engine
++               if (flag4) {
++                  // Paper start - rewrite the light engine
++                  // this is where our diff is
++                  blockNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(sectionData.m_128463_("BlockLight").clone(), sectionData.m_128451_(BLOCKLIGHT_STATE_TAG)); // clone for data safety
++               } else {
++                  blockNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(null, sectionData.m_128451_(BLOCKLIGHT_STATE_TAG));
++                  // Paper end - rewrite the light engine
++               }
++
++               if (flag5) {
++                  // Paper start - rewrite the light engine
++                  // we store under the same key so mod programs editing nbt
++                  // can still read the data, hopefully.
++                  // however, for compatibility we store chunks as unlit so vanilla
++                  // is forced to re-light them if it encounters our data. It's too much of a burden
++                  // to try and maintain compatibility with a broken and inferior skylight management system.
++                  skyNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(sectionData.m_128463_("SkyLight").clone(), sectionData.m_128451_(SKYLIGHT_STATE_TAG)); // clone for data safety
++               } else if (flag1) {
++                  skyNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(null, sectionData.m_128451_(SKYLIGHT_STATE_TAG));
++                  // Paper end - rewrite the light engine
++               }
++
++               // Paper start - rewrite the light engine
++            } catch (Exception ex) {
++               f_63449_.warn("Failed to load light data for chunk " + p_188233_ + " in world '" + p_188231_.m_46472_() + "', light will be regenerated", ex);
++               flag = false;
              }
           }
++            // Paper end - rewrite light engine
        }
-@@ -156,6 +_,7 @@
+ 
+       long j1 = p_188234_.m_128454_("InhabitedTime");
+@@ -156,6 +_,9 @@
              return Registry.f_122822_.m_6612_(ResourceLocation.m_135820_(p_188285_));
           }, p_188233_);
           chunkaccess = new LevelChunk(p_188231_.m_6018_(), p_188233_, upgradedata, levelchunkticks, levelchunkticks1, j1, alevelchunksection, m_196890_(p_188231_, p_188234_), blendingdata);
++         ((LevelChunk)chunkaccess).setBlockNibbles(blockNibbles); // Paper - replace light impl
++         ((LevelChunk)chunkaccess).setSkyNibbles(skyNibbles); // Paper - replace light impl
 +         if (p_188234_.m_128441_("ForgeCaps")) ((LevelChunk)chunkaccess).readCapsFromNBT(p_188234_.m_128469_("ForgeCaps"));
        } else {
           ProtoChunkTicks<Block> protochunkticks = ProtoChunkTicks.m_193302_(p_188234_.m_128437_("block_ticks", 10), (p_196906_) -> {
              return Registry.f_122824_.m_6612_(ResourceLocation.m_135820_(p_196906_));
+@@ -164,6 +_,8 @@
+             return Registry.f_122822_.m_6612_(ResourceLocation.m_135820_(p_188276_));
+          }, p_188233_);
+          ProtoChunk protochunk = new ProtoChunk(p_188233_, upgradedata, alevelchunksection, protochunkticks, protochunkticks1, p_188231_, registry, blendingdata);
++         protochunk.setBlockNibbles(blockNibbles); // Paper - replace light impl
++         protochunk.setSkyNibbles(skyNibbles); // Paper - replace light impl
+          chunkaccess = protochunk;
+          protochunk.m_6141_(j1);
+          if (p_188234_.m_128425_("below_zero_retrogen", 10)) {
 @@ -180,7 +_,7 @@
           boolean flag3 = chunkstatus.m_62427_(ChunkStatus.f_62323_) || belowzeroretrogen != null && belowzeroretrogen.m_188466_().m_62427_(ChunkStatus.f_62323_);
           if (!flag && flag3) {
@@ -191,10 +281,17 @@
     private static void m_188239_(ChunkPos p_188240_, int p_188241_, String p_188242_) {
        f_63449_.error("Recoverable errors when loading section [" + p_188240_.f_45578_ + ", " + p_188241_ + ", " + p_188240_.f_45579_ + "]: " + p_188242_);
     }
-@@ -267,11 +_,13 @@
+@@ -267,11 +_,20 @@
     public static CompoundTag m_63454_(ServerLevel p_63455_, ChunkAccess p_63456_) {
        ChunkPos chunkpos = p_63456_.m_7697_();
        CompoundTag compoundtag = new CompoundTag();
++
++      // Paper start - rewrite light impl
++      final int minSection = io.papermc.paper.util.WorldUtil.getMinLightSection(p_63455_);
++      final int maxSection = io.papermc.paper.util.WorldUtil.getMaxLightSection(p_63455_);
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles = p_63456_.getBlockNibbles();
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles = p_63456_.getSkyNibbles();
++      // Paper end - rewrite light impl
 +
 +      AsyncSaveData asyncsavedata = p_63456_.asyncsavedata;
        compoundtag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
@@ -206,29 +303,77 @@
        compoundtag.m_128356_("InhabitedTime", p_63456_.m_6319_());
        compoundtag.m_128359_("Status", p_63456_.m_6415_().m_62467_());
        BlendingData blendingdata = p_63456_.m_183407_();
-@@ -303,8 +_,15 @@
+@@ -303,23 +_,42 @@
        for(int i = levellightengine.m_164447_(); i < levellightengine.m_164448_(); ++i) {
           int j = p_63456_.m_151566_(i);
           boolean flag1 = j >= 0 && j < alevelchunksection.length;
 -         DataLayer datalayer = levellightengine.m_75814_(LightLayer.BLOCK).m_8079_(SectionPos.m_123196_(chunkpos, i));
 -         DataLayer datalayer1 = levellightengine.m_75814_(LightLayer.SKY).m_8079_(SectionPos.m_123196_(chunkpos, i));
-+         DataLayer datalayer;
-+         DataLayer datalayer1;
-+         if (asyncsavedata == null) {
-+            datalayer = levellightengine.m_75814_(LightLayer.BLOCK).m_8079_(SectionPos.m_123196_(chunkpos, i));
-+            datalayer1 = levellightengine.m_75814_(LightLayer.SKY).m_8079_(SectionPos.m_123196_(chunkpos, i));
-+         } else {
-+            datalayer = asyncsavedata.blockLight[i - levellightengine.m_164447_()];
-+            datalayer1 = asyncsavedata.skyLight[i - levellightengine.m_164447_()];
-+         }
-          if (flag1 || datalayer != null || datalayer1 != null) {
-             CompoundTag compoundtag1 = new CompoundTag();
+-         if (flag1 || datalayer != null || datalayer1 != null) {
+-            CompoundTag compoundtag1 = new CompoundTag();
++
++         // Paper - replace light engine
++
++         // Paper start - replace light engine
++         ca.spottedleaf.starlight.common.light.SWMRNibbleArray.SaveState blockNibble = blockNibbles[i - minSection].getSaveState();
++         ca.spottedleaf.starlight.common.light.SWMRNibbleArray.SaveState skyNibble = skyNibbles[i - minSection].getSaveState();
++         if (flag1 || blockNibble != null || skyNibble != null) {
++            // Paper end - replace light engine
++            CompoundTag compoundtag1 = new CompoundTag(); CompoundTag section = compoundtag1; // Paper
              if (flag1) {
-@@ -333,16 +_,28 @@
-          compoundtag.m_128379_("isLightOn", true);
-       }
+                LevelChunkSection levelchunksection = alevelchunksection[j];
+                compoundtag1.m_128365_("block_states", f_188227_.encodeStart(NbtOps.f_128958_, levelchunksection.m_63019_()).getOrThrow(false, f_63449_::error));
+                compoundtag1.m_128365_("biomes", codec.encodeStart(NbtOps.f_128958_, levelchunksection.m_187996_()).getOrThrow(false, f_63449_::error));
+             }
  
+-            if (datalayer != null && !datalayer.m_62575_()) {
+-               compoundtag1.m_128382_("BlockLight", datalayer.m_7877_());
+-            }
+-
+-            if (datalayer1 != null && !datalayer1.m_62575_()) {
+-               compoundtag1.m_128382_("SkyLight", datalayer1.m_7877_());
+-            }
++            // Paper start
++            // we store under the same key so mod programs editing nbt
++            // can still read the data, hopefully.
++            // however, for compatibility we store chunks as unlit so vanilla
++            // is forced to re-light them if it encounters our data. It's too much of a burden
++            // to try and maintain compatibility with a broken and inferior skylight management system.
++
++            if (blockNibble != null) {
++               if (blockNibble.data != null) {
++                  section.m_128382_("BlockLight", blockNibble.data);
++               }
++               section.m_128405_(BLOCKLIGHT_STATE_TAG, blockNibble.state);
++            }
++
++            if (skyNibble != null) {
++               if (skyNibble.data != null) {
++                  section.m_128382_("SkyLight", skyNibble.data);
++               }
++               section.m_128405_(SKYLIGHT_STATE_TAG, skyNibble.state);
++            }
++            // Paper end
+ 
+             if (!compoundtag1.m_128456_()) {
+                compoundtag1.m_128344_("Y", (byte)i);
+@@ -330,19 +_,32 @@
+ 
+       compoundtag.m_128365_("sections", listtag);
+       if (flag) {
+-         compoundtag.m_128379_("isLightOn", true);
+-      }
+-
 -      ListTag listtag1 = new ListTag();
+-
+-      for(BlockPos blockpos : p_63456_.m_5928_()) {
+-         CompoundTag compoundtag3 = p_63456_.m_8051_(blockpos);
+-         if (compoundtag3 != null) {
+-            listtag1.add(compoundtag3);
++         compoundtag.m_128405_(STARLIGHT_VERSION_TAG, STARLIGHT_LIGHT_VERSION); // Paper
++         compoundtag.m_128379_("isLightOn", false); // Paper - set to false but still store, this allows us to detect --eraseCache (as eraseCache _removes_)
++      }
++
 +      // Paper start
 +      ListTag nbttaglist1;
 +      Iterator<BlockPos> iterator;
@@ -240,11 +385,7 @@
 +         iterator = p_63456_.m_5928_().iterator();
 +      }
 +      // Paper end
- 
--      for(BlockPos blockpos : p_63456_.m_5928_()) {
--         CompoundTag compoundtag3 = p_63456_.m_8051_(blockpos);
--         if (compoundtag3 != null) {
--            listtag1.add(compoundtag3);
++
 +      CompoundTag nbttagcompound2;
 +      while (iterator.hasNext()) {
 +         BlockPos blockpos = (BlockPos) iterator.next();

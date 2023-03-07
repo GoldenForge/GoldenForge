@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
-@@ -13,7 +_,7 @@
+@@ -13,22 +_,35 @@
  import net.minecraft.util.ExceptionCollector;
  import net.minecraft.world.level.ChunkPos;
  
@@ -9,7 +9,12 @@
     public static final String f_156615_ = ".mca";
     private static final int f_156616_ = 256;
     private final Long2ObjectLinkedOpenHashMap<RegionFile> f_63699_ = new Long2ObjectLinkedOpenHashMap<>();
-@@ -25,10 +_,23 @@
+    private final Path f_63700_;
+    private final boolean f_63701_;
+ 
+-   RegionFileStorage(Path p_196954_, boolean p_196955_) {
++   protected RegionFileStorage(Path p_196954_, boolean p_196955_) {
+       this.f_63700_ = p_196954_;
        this.f_63701_ = p_196955_;
     }
  

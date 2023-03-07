@@ -1,10 +1,11 @@
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
-@@ -14,6 +_,7 @@
+@@ -14,6 +_,8 @@
  import net.minecraft.CrashReport;
  import net.minecraft.CrashReportCategory;
  import net.minecraft.ReportedException;
 +import net.minecraft.client.multiplayer.ClientChunkCache;
++import net.minecraft.client.multiplayer.ClientLevel;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.Registry;
  import net.minecraft.core.SectionPos;
@@ -25,7 +26,16 @@
     static final Logger f_62771_ = LogUtils.getLogger();
     private static final TickingBlockEntity f_156361_ = new TickingBlockEntity() {
        public void m_142224_() {
-@@ -77,11 +_,199 @@
+@@ -69,7 +_,7 @@
+    private final Map<BlockPos, LevelChunk.RebindableTickingBlockEntityWrapper> f_156362_ = Maps.newHashMap();
+    private boolean f_62775_;
+    private boolean f_196848_ = false;
+-   final Level f_62776_;
++   public final Level f_62776_;
+    @Nullable
+    private Supplier<ChunkHolder.FullChunkStatus> f_62790_;
+    @Nullable
+@@ -77,13 +_,283 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -42,6 +52,82 @@
        this(p_187945_, p_187946_, UpgradeData.f_63320_, new LevelChunkTicks<>(), new LevelChunkTicks<>(), 0L, (LevelChunkSection[])null, (LevelChunk.PostLoadProcessor)null, (BlendingData)null);
     }
  
++
++   // Paper start - new load callbacks
++   private io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder;
++   public io.papermc.paper.chunk.system.scheduling.NewChunkHolder getChunkHolder() {
++      return this.chunkHolder;
++   }
++
++   public void setChunkHolder(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      if (chunkHolder == null) {
++         throw new NullPointerException("Chunkholder cannot be null");
++      }
++      if (this.chunkHolder != null) {
++         throw new IllegalStateException("Already have chunkholder: " + this.chunkHolder + ", cannot replace with " + chunkHolder);
++      }
++      this.chunkHolder = chunkHolder;
++      this.playerChunk = chunkHolder.vanillaChunkHolder;
++   }
++
++   /* Note: We skip the light neighbour chunk loading done for the vanilla full chunk */
++   /* Starlight does not need these chunks for lighting purposes because of edge checks */
++   public void pushChunkIntoLoadedMap() {
++      int chunkX = this.f_187604_.f_45578_;
++      int chunkZ = this.f_187604_.f_45579_;
++      ServerChunkCache chunkProvider = ((ServerChunkCache) this.f_62776_.m_7726_());
++      for (int dx = -NEIGHBOUR_CACHE_RADIUS; dx <= NEIGHBOUR_CACHE_RADIUS; ++dx) {
++         for (int dz = -NEIGHBOUR_CACHE_RADIUS; dz <= NEIGHBOUR_CACHE_RADIUS; ++dz) {
++            LevelChunk neighbour = chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
++            if (neighbour != null) {
++               neighbour.setNeighbourLoaded(-dx, -dz, this);
++               // should be in cached already
++               this.setNeighbourLoaded(dx, dz, neighbour);
++            }
++         }
++      }
++      this.setNeighbourLoaded(0, 0, this);
++      ((ServerChunkCache) this.f_62776_.m_7726_()).addLoadedChunk(this);
++   }
++
++   public void onChunkLoad(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      // figure out how this should interface with:
++      // the entity chunk load event // -> moved to the FULL status
++      // the chunk load event // -> stays here
++      // any entity add to world events // -> in FULL status
++      this.loadCallback();
++      io.papermc.paper.chunk.system.ChunkSystem.onChunkBorder(this, chunkHolder.vanillaChunkHolder);
++   }
++
++   public void onChunkUnload(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      // figure out how this should interface with:
++      // the entity chunk load event // -> moved to chunk unload to disk (not written yet)
++      // the chunk load event // -> stays here
++      // any entity add to world events // -> goes into the unload logic, it will completely explode
++      // etc later
++      this.unloadCallback();
++      io.papermc.paper.chunk.system.ChunkSystem.onChunkNotBorder(this, chunkHolder.vanillaChunkHolder);
++   }
++
++   public void onChunkTicking(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      this.m_62812_();
++      ((ServerLevel) this.f_62776_).m_184102_(this);
++      io.papermc.paper.chunk.system.ChunkSystem.onChunkTicking(this, chunkHolder.vanillaChunkHolder);
++   }
++
++   public void onChunkNotTicking(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      io.papermc.paper.chunk.system.ChunkSystem.onChunkNotTicking(this, chunkHolder.vanillaChunkHolder);
++   }
++
++   public void onChunkEntityTicking(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      io.papermc.paper.chunk.system.ChunkSystem.onChunkEntityTicking(this, chunkHolder.vanillaChunkHolder);
++   }
++
++   public void onChunkNotEntityTicking(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
++      io.papermc.paper.chunk.system.ChunkSystem.onChunkNotEntityTicking(this, chunkHolder.vanillaChunkHolder);
++   }
++   // Paper end - new load callbacks
++
 +   public void loadCallback() {
 +      if (this.loadedTicketLevel) { f_62771_.error("Double calling chunk load!", new Throwable()); } // Paper
 +      // Paper start - neighbour cache
@@ -85,7 +171,9 @@
 +      // Paper end
 +   }
 +
++    // Paper start
 +   public @Nullable ChunkHolder playerChunk;
++
 +   static final int NEIGHBOUR_CACHE_RADIUS = 3;
 +   public static int getNeighbourCacheRadius() {
 +      return NEIGHBOUR_CACHE_RADIUS;
@@ -224,8 +312,14 @@
 +
     public LevelChunk(Level p_196854_, ChunkPos p_196855_, UpgradeData p_196856_, LevelChunkTicks<Block> p_196857_, LevelChunkTicks<Fluid> p_196858_, long p_196859_, @Nullable LevelChunkSection[] p_196860_, @Nullable LevelChunk.PostLoadProcessor p_196861_, @Nullable BlendingData p_196862_) {
        super(p_196855_, p_196856_, p_196854_, p_196854_.m_5962_().m_175515_(Registry.f_122885_), p_196859_, p_196860_, p_196862_);
++      // Paper start - rewrite light engine
++      this.setBlockNibbles(ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_196854_));
++      this.setSkyNibbles(ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_196854_));
++      // Paper end - rewrite light engine
        this.f_62776_ = p_196854_;
-@@ -96,6 +_,7 @@
+       this.f_156363_ = new Int2ObjectOpenHashMap<>();
+ 
+@@ -96,11 +_,17 @@
        this.f_62791_ = p_196861_;
        this.f_62784_ = p_196857_;
        this.f_187943_ = p_196858_;
@@ -233,6 +327,17 @@
     }
  
     public LevelChunk(ServerLevel p_196850_, ProtoChunk p_196851_, @Nullable LevelChunk.PostLoadProcessor p_196852_) {
+       this(p_196850_, p_196851_.m_7697_(), p_196851_.m_7387_(), p_196851_.m_188181_(), p_196851_.m_188182_(), p_196851_.m_6319_(), p_196851_.m_7103_(), p_196852_, p_196851_.m_183407_());
+-
++      // Paper start - rewrite light engine
++      this.setBlockNibbles(p_196851_.getBlockNibbles());
++      this.setSkyNibbles(p_196851_.getSkyNibbles());
++      this.setSkyEmptinessMap(p_196851_.getSkyEmptinessMap());
++      this.setBlockEmptinessMap(p_196851_.getBlockEmptinessMap());
++      // Paper end - rewrite light engine
+       for(BlockEntity blockentity : p_196851_.m_63292_().values()) {
+          this.m_142169_(blockentity);
+       }
 @@ -237,14 +_,14 @@
              boolean flag2 = blockstate.m_155947_();
              if (!this.f_62776_.f_46443_) {
@@ -308,6 +413,38 @@
           if (blockentity != null) {
              Level level = this.f_62776_;
              if (level instanceof ServerLevel) {
+@@ -424,6 +_,31 @@
+ 
+    }
+ 
++
++   // Paper start - add dirty system to tick lists
++   @Override
++   public void m_8092_(boolean needsSaving) {
++      if (!needsSaving) {
++         this.f_62784_.clearDirty();
++         this.f_187943_.clearDirty();
++      }
++      super.m_8092_(needsSaving);
++   }
++   // Paper end - add dirty system to tick lists
++
++   @Override
++   public boolean m_6344_() {
++      // Paper start - add dirty system to tick lists
++      long gameTime = this.f_62776_.m_6106_().m_6793_();
++      if (this.f_62784_.isDirty(gameTime) || this.f_187943_.isDirty(gameTime)) {
++         return true;
++      }
++      // Paper end - add dirty system to tick lists
++      return super.m_6344_(); // Paper - rewrite chunk system - do NOT clobber the dirty flag
++   }
++   // CraftBukkit end
++
++
+    public boolean m_6430_() {
+       return false;
+    }
 @@ -445,7 +_,7 @@
        p_187974_.accept((p_187968_, p_187969_, p_187970_) -> {
           BlockEntity blockentity = this.m_5685_(p_187968_, LevelChunk.EntityCreationType.IMMEDIATE);
@@ -344,6 +481,15 @@
     }
  
     @Nullable
+@@ -545,7 +_,7 @@
+    }
+ 
+    public ChunkHolder.FullChunkStatus m_6708_() {
+-      return this.f_62790_ == null ? ChunkHolder.FullChunkStatus.BORDER : this.f_62790_.get();
++      return this.chunkHolder == null ? ChunkHolder.FullChunkStatus.INACCESSIBLE : this.chunkHolder.getChunkStatus(); // Paper - rewrite chunk system
+    }
+ 
+    public void m_62879_(Supplier<ChunkHolder.FullChunkStatus> p_62880_) {
 @@ -553,6 +_,7 @@
     }
  

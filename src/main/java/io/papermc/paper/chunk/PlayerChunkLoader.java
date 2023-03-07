@@ -1,11 +1,10 @@
 package io.papermc.paper.chunk;
 
-import com.destroystokyo.paper.PaperConfig;
-import com.destroystokyo.paper.util.MCUtil;
 import com.destroystokyo.paper.util.misc.PlayerAreaMap;
 import com.destroystokyo.paper.util.misc.PooledLinkedHashSets;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.IntervalledCounter;
+import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.TickThread;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
@@ -20,6 +19,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.apache.commons.lang3.mutable.MutableObject;
+import org.goldenforge.GoldenConfig;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -79,7 +79,7 @@ public final class PlayerChunkLoader {
 
         final int priorityCompare = Double.compare(holder1 == null ? Double.MAX_VALUE : holder1.priority, holder2 == null ? Double.MAX_VALUE : holder2.priority);
 
-        final int lastLoadTimeCompare = Long.compare(p1.lastChunkLoad, p2.lastChunkLoad);
+        final int lastLoadTimeCompare = Long.compare(p1.lastChunkLoad - p2.lastChunkLoad, 0);
 
         if ((holder1 == null || holder2 == null || lastLoadTimeCompare == 0 || holder1.priority < 0.0 || holder2.priority < 0.0) && priorityCompare != 0) {
             return priorityCompare;
@@ -104,7 +104,7 @@ public final class PlayerChunkLoader {
             return 0;
         }
 
-        final int timeCompare = Long.compare(p1.nextChunkSendTarget, p2.nextChunkSendTarget);
+        final int timeCompare = Long.compare(p1.nextChunkSendTarget - p2.nextChunkSendTarget, 0);
         if (timeCompare != 0) {
             return timeCompare;
         }
@@ -249,13 +249,13 @@ public final class PlayerChunkLoader {
         this.broadcastMap = new PlayerAreaMap(pooledHashSets,
                 null,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     PlayerChunkLoader.this.onChunkLeave(player, rangeX, rangeZ);
                 });
         this.loadMap = new PlayerAreaMap(pooledHashSets,
                 null,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState != null) {
                         return;
                     }
@@ -264,7 +264,7 @@ public final class PlayerChunkLoader {
         this.loadTicketCleanup = new PlayerAreaMap(pooledHashSets,
                 null,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState != null) {
                         return;
                     }
@@ -276,7 +276,7 @@ public final class PlayerChunkLoader {
                 });
         this.tickMap = new PlayerAreaMap(pooledHashSets,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState.size() != 1) {
                         return;
                     }
@@ -289,7 +289,7 @@ public final class PlayerChunkLoader {
                     PlayerChunkLoader.this.chunkMap.level.getChunkSource().addTicketAtLevel(TicketType.PLAYER, chunkPos, TICK_TICKET_LEVEL, chunkPos);
                 },
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState != null) {
                         return;
                     }
@@ -367,21 +367,21 @@ public final class PlayerChunkLoader {
     }
 
     protected int getMaxConcurrentChunkSends() {
-        return PaperConfig.playerMaxConcurrentChunkSends;
+        return GoldenConfig.maxConcurrentSends;
     }
 
     protected int getMaxChunkLoads() {
-        double config = PaperConfig.playerMaxConcurrentChunkLoads;
-        double max = PaperConfig.globalMaxConcurrentChunkLoads;
+        double config = GoldenConfig.playerMaxConcurrentLoads;
+        double max = GoldenConfig.globalMaxConcurrentLoads;
         return (int)Math.ceil(Math.min(config * MinecraftServer.getServer().getPlayerCount(), max <= 1.0 ? Double.MAX_VALUE : max));
     }
 
     protected long getTargetSendPerPlayerAddend() {
-        return PaperConfig.playerTargetChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / PaperConfig.playerTargetChunkSendRate);
+        return GoldenConfig.targetPlayerChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / GoldenConfig.targetPlayerChunkSendRate);
     }
 
     protected long getMaxSendAddend() {
-        return PaperConfig.globalMaxChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / PaperConfig.globalMaxChunkSendRate);
+        return GoldenConfig.globalMaxChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / GoldenConfig.globalMaxChunkSendRate);
     }
 
     public void onChunkPlayerTickReady(final int chunkX, final int chunkZ) {
@@ -451,9 +451,9 @@ public final class PlayerChunkLoader {
 
     public void addPlayer(final ServerPlayer player) {
         TickThread.ensureTickThread("Cannot add player async");
-//        if (!player.isRealPlayer) {
-//            return;
-//        }
+        if (!player.isRealPlayer) {
+            return;
+        }
         final PlayerLoaderData data = new PlayerLoaderData(player, this);
         if (this.playerMap.putIfAbsent(player, data) == null) {
             data.update();
@@ -462,9 +462,9 @@ public final class PlayerChunkLoader {
 
     public void removePlayer(final ServerPlayer player) {
         TickThread.ensureTickThread("Cannot remove player async");
-//        if (!player.isRealPlayer) {
-//            return;
-//        }
+        if (!player.isRealPlayer) {
+            return;
+        }
 
         final PlayerLoaderData loaderData = this.playerMap.remove(player);
         if (loaderData == null) {
@@ -484,9 +484,9 @@ public final class PlayerChunkLoader {
 
     public void updatePlayer(final ServerPlayer player) {
         TickThread.ensureTickThread("Cannot update player async");
-//        if (!player.isRealPlayer) {
-//            return;
-//        }
+        if (!player.isRealPlayer) {
+            return;
+        }
         final PlayerLoaderData loaderData = this.playerMap.get(player);
         if (loaderData != null) {
             loaderData.update();
@@ -510,14 +510,14 @@ public final class PlayerChunkLoader {
     private static long nextChunkSend;
     private void trySendChunks() {
         final long time = System.nanoTime();
-        if (time < nextChunkSend) {
+        if (nextChunkSend - time > 0) {
             return;
         }
         // drain entries from wait queue
         while (!this.chunkSendWaitQueue.isEmpty()) {
             final PlayerLoaderData data = this.chunkSendWaitQueue.first();
 
-            if (data.nextChunkSendTarget > time) {
+            if (data.nextChunkSendTarget - time > 0) {
                 break;
             }
 
@@ -589,7 +589,7 @@ public final class PlayerChunkLoader {
             });
 
             nextChunkSend = this.getMaxSendAddend() + time;
-            if (time < nextChunkSend) {
+            if (nextChunkSend - time > 0) {
                 break;
             }
         }
@@ -662,8 +662,8 @@ public final class PlayerChunkLoader {
                 // priority >= 0.0 implies rate limited chunks
 
                 final int currentChunkLoads = this.concurrentChunkLoads;
-                if (currentChunkLoads >= maxLoads || (PaperConfig.globalMaxChunkLoadRate > 0 && (TICKET_ADDITION_COUNTER_SHORT.getRate() >= PaperConfig.globalMaxChunkLoadRate || TICKET_ADDITION_COUNTER_LONG.getRate() >= PaperConfig.globalMaxChunkLoadRate))
-                    || (PaperConfig.playerMaxChunkLoadRate > 0.0 && (data.ticketAdditionCounterShort.getRate() >= PaperConfig.playerMaxChunkLoadRate || data.ticketAdditionCounterLong.getRate() >= PaperConfig.playerMaxChunkLoadRate))) {
+                if (currentChunkLoads >= maxLoads || (GoldenConfig.globalMaxChunkLoadRate > 0 && (TICKET_ADDITION_COUNTER_SHORT.getRate() >= GoldenConfig.globalMaxChunkLoadRate || TICKET_ADDITION_COUNTER_LONG.getRate() >= GoldenConfig.globalMaxChunkLoadRate))
+                    || (GoldenConfig.playerMaxChunkLoadRate > 0.0 && (data.ticketAdditionCounterShort.getRate() >= GoldenConfig.playerMaxChunkLoadRate || data.ticketAdditionCounterLong.getRate() >= GoldenConfig.playerMaxChunkLoadRate))) {
                     // don't poll, we didn't load it
                     this.chunkLoadQueue.add(data);
                     break;
@@ -817,7 +817,7 @@ public final class PlayerChunkLoader {
             final int tickViewDistance = this.tickViewDistance == -1 ? this.loader.getTickDistance() : this.tickViewDistance;
             final int loadViewDistance = Math.max(tickViewDistance + 1, this.loadViewDistance == -1 ? this.loader.getLoadDistance() : this.loadViewDistance);
             final int clientViewDistance = this.getClientViewDistance();
-            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!PaperConfig.playerAutoConfigureSendViewDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
+            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!GoldenConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
             return sendViewDistance;
         }
 
@@ -934,14 +934,14 @@ public final class PlayerChunkLoader {
             final int loadViewDistance = Math.max(tickViewDistance + 1, this.loadViewDistance == -1 ? this.loader.getLoadDistance() : this.loadViewDistance);
             // send view cannot be greater-than load view
             final int clientViewDistance = this.getClientViewDistance();
-            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!PaperConfig.playerAutoConfigureSendViewDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
+            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!GoldenConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
 
             final double posX = this.player.getX();
             final double posZ = this.player.getZ();
-            final float yaw = MCUtil.normalizeYaw(this.player.yRot + 90.0f); // mc yaw 0 is along the positive z axis, but obviously this is really dumb - offset so we are at positive x-axis
+            final float yaw = MCUtil.normalizeYaw(this.player.getYRot() + 90.0f); // mc yaw 0 is along the positive z axis, but obviously this is really dumb - offset so we are at positive x-axis
 
             // in general, we really only want to prioritise chunks in front if we know we're moving pretty fast into them.
-            final boolean useLookPriority = PaperConfig.playerFrustumPrioritisation && (this.player.getDeltaMovement().horizontalDistanceSqr() > LOOK_PRIORITY_SPEED_THRESHOLD ||
+            final boolean useLookPriority = GoldenConfig.enableFrustumPriority && (this.player.getDeltaMovement().horizontalDistanceSqr() > LOOK_PRIORITY_SPEED_THRESHOLD ||
                     this.player.getAbilities().flying);
 
             // make sure we're in the send queue
@@ -1063,10 +1063,10 @@ public final class PlayerChunkLoader {
 
                     final double priority;
 
-                    if (squareDistance <= PaperConfig.playerMinChunkLoadRadius) {
+                    if (squareDistance <= GoldenConfig.minLoadRadius) {
                         // priority should be negative, and we also want to order it from center outwards
                         // so we want (0,0) to be the smallest, and (minLoadedRadius,minLoadedRadius) to be the greatest
-                        priority = -((2 * PaperConfig.playerMinChunkLoadRadius + 1) - manhattanDistance);
+                        priority = -((2 * GoldenConfig.minLoadRadius + 1) - manhattanDistance);
                     } else {
                         if (prioritised) {
                             // we don't prioritise these chunks above others because we also want to make sure some chunks

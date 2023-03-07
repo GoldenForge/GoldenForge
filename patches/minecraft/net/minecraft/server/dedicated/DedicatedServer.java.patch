@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -19,6 +_,8 @@
+ import java.util.Optional;
+ import java.util.function.BooleanSupplier;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler;
+ import net.minecraft.DefaultUncaughtExceptionHandler;
+ import net.minecraft.DefaultUncaughtExceptionHandlerWithName;
+ import net.minecraft.SharedConstants;
 @@ -60,7 +_,8 @@
     static final Logger f_139598_ = LogUtils.getLogger();
     private static final int f_142864_ = 5000;
@@ -18,6 +27,15 @@
              BufferedReader bufferedreader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
  
              String s1;
+@@ -103,6 +_,8 @@
+          f_139598_.warn("To start the server with more ram, launch it as \"java -Xmx1024M -Xms1024M -jar minecraft_server.jar\"");
+       }
+ 
++      ChunkTaskScheduler.init();
++
+       f_139598_.info("Loading properties");
+       DedicatedServerProperties dedicatedserverproperties = this.f_139604_.m_139777_();
+       if (this.m_129792_()) {
 @@ -159,11 +_,13 @@
           long i = Util.m_137569_();
           SkullBlockEntity.m_222885_(this.f_236721_, this);

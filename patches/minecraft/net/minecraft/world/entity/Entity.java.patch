@@ -130,7 +130,7 @@
 +   public int sectionX = Integer.MIN_VALUE;
 +   public int sectionY = Integer.MIN_VALUE;
 +   public int sectionZ = Integer.MIN_VALUE;
-+
++   public boolean updatingSectionStatus = false;
 +   private final boolean hardCollides;
 +   public final boolean hardCollides() {
 +      return this.hardCollides;

@@ -1,9 +1,34 @@
 --- a/net/minecraft/util/SortedArraySet.java
 +++ b/net/minecraft/util/SortedArraySet.java
-@@ -23,6 +_,42 @@
+@@ -23,6 +_,67 @@
        }
     }
  
++   // Paper start - rewrite chunk system
++   public T replace(T object) {
++      int i = this.m_14269_(object);
++      if (i >= 0) {
++         T old = this.f_14241_[i];
++         this.f_14241_[i] = object;
++         return old;
++      } else {
++         this.m_14255_(object, m_14263_(i));
++         return object;
++      }
++   }
++
++   public T removeAndGet(T object) {
++      int i = this.m_14269_(object);
++      if (i >= 0) {
++         final T ret = this.f_14241_[i];
++         this.m_14274_(i);
++         return ret;
++      } else {
++         return null;
++      }
++   }
++   // Paper end - rewrite chunk system
++
 +   // Paper start - optimise removeIf
 +   @Override
 +   public boolean removeIf(java.util.function.Predicate<? super T> filter) {

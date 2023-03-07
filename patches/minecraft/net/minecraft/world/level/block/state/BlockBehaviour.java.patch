@@ -72,6 +72,30 @@
     public abstract static class BlockStateBase extends StateHolder<Block, BlockState> {
        private final int f_60594_;
        private final boolean f_60595_;
+@@ -443,7 +_,22 @@
+          this.f_60605_ = blockbehaviour$properties.f_60901_;
+          this.f_60606_ = blockbehaviour$properties.f_60902_;
+          this.f_222962_ = blockbehaviour$properties.f_222978_.apply(this.m_7160_());
+-      }
++         this.conditionallyFullOpaque = this.f_60601_ & this.f_60595_; // Paper
++
++      }
++
++      // Paper start - starlight
++      protected int opacityIfCached = -1;
++      // ret -1 if opacity is dynamic, or -1 if the block is conditionally full opaque, else return opacity in [0, 15]
++      public final int getOpacityIfCached() {
++         return this.opacityIfCached;
++      }
++
++      protected final boolean conditionallyFullOpaque;
++      public final boolean isConditionallyFullOpaque() {
++         return this.conditionallyFullOpaque;
++      }
++      // Paper end - starlight
+ 
+       public void m_60611_() {
+          if (!this.m_60734_().m_49967_()) {
 @@ -492,18 +_,22 @@
           return this.f_60595_;
        }

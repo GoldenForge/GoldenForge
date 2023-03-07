@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/ai/village/poi/PoiSection.java
 +++ b/net/minecraft/world/entity/ai/village/poi/PoiSection.java
-@@ -26,7 +_,7 @@
+@@ -26,10 +_,12 @@
  public class PoiSection {
     private static final Logger f_27260_ = LogUtils.getLogger();
     private final Short2ObjectMap<PoiRecord> f_27261_ = new Short2ObjectOpenHashMap<>();
@@ -9,3 +9,22 @@
     private final Runnable f_27263_;
     private boolean f_27264_;
  
++   public final Optional<PoiSection> noAllocateOptional = Optional.of(this); // Paper - rewrite chunk system
++
+    public static Codec<PoiSection> m_27295_(Runnable p_27296_) {
+       return RecordCodecBuilder.<PoiSection>create((p_27299_) -> {
+          return p_27299_.group(RecordCodecBuilder.point(p_27296_), Codec.BOOL.optionalFieldOf("Valid", Boolean.valueOf(false)).forGetter((p_148681_) -> {
+@@ -45,6 +_,13 @@
+    public PoiSection(Runnable p_27267_) {
+       this(p_27267_, true, ImmutableList.of());
+    }
++
++
++   // Paper start - isEmpty
++   public boolean isEmpty() {
++      return this.f_27264_ && this.f_27261_.isEmpty() && this.f_27262_.isEmpty();
++   }
++   // Paper end
+ 
+    private PoiSection(Runnable p_27269_, boolean p_27270_, List<PoiRecord> p_27271_) {
+       this.f_27263_ = p_27269_;

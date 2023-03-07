@@ -14,14 +14,15 @@
  import java.nio.file.Path;
  import java.util.Comparator;
  import java.util.List;
-@@ -38,13 +_,142 @@
+@@ -38,13 +_,103 @@
  public class PoiManager extends SectionStorage<PoiSection> {
     public static final int f_148565_ = 6;
     public static final int f_148566_ = 1;
 -   private final PoiManager.DistanceTracker f_27029_;
+-   private final LongSet f_27030_ = new LongOpenHashSet();
 +  // private final PoiManager.DistanceTracker distanceTracker;
-    private final LongSet f_27030_ = new LongOpenHashSet();
- 
++  // private final LongSet loadedChunks = new LongOpenHashSet();
++
 +   public final net.minecraft.server.level.ServerLevel world;
 +   private final io.papermc.paper.util.misc.Delayed26WayDistancePropagator3D villageDistanceTracker = new io.papermc.paper.util.misc.Delayed26WayDistancePropagator3D();
 +   static final int POI_DATA_SOURCE = 7;
@@ -36,7 +37,7 @@
 +         this.villageDistanceTracker.removeSource(section);
 +      }
 +   }
-+
+ 
     public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
        super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
 -      this.f_27029_ = new PoiManager.DistanceTracker();
@@ -112,51 +113,12 @@
 +
 +   }
 +
-+   public void pollUnloads(BooleanSupplier canSleepForTick) {
-+      long currentTick = net.minecraft.server.MinecraftServer.currentTickLong;
-+      net.minecraft.server.level.ServerChunkCache chunkProvider = this.world.m_7726_();
-+      net.minecraft.server.level.ChunkMap playerChunkMap = chunkProvider.f_8325_;
-+      // copied target determination from PlayerChunkMap
-+
-+      java.util.Iterator<QueuedUnload> iterator = this.queuedUnloads.iterator();
-+      for (int i = 0; iterator.hasNext() && (i < 200 || this.queuedUnloads.size() > 2000 || canSleepForTick.getAsBoolean()); i++) {
-+         QueuedUnload unload = iterator.next();
-+         if (unload.unloadTick > currentTick) {
-+            break;
-+         }
-+
-+         long coordinate = unload.coordinate;
-+
-+         iterator.remove();
-+         this.queuedUnloadsByCoordinate.remove(coordinate);
-+
-+         if (playerChunkMap.getUnloadingChunkHolder(MCUtil.getCoordinateX(coordinate), MCUtil.getCoordinateZ(coordinate)) != null
-+                 || playerChunkMap.m_140174_(coordinate) != null) {
-+            continue;
-+         }
-+
-+         this.unloadData(coordinate);
-+      }
-+   }
 +
 +   @Override
 +   public void unloadData(long coordinate) {
 +      super.unloadData(coordinate);
 +   }
 +
-+   @Override
-+   protected void onUnload(long coordinate) {
-+      this.f_27030_.remove(coordinate);
-+      int chunkX = MCUtil.getCoordinateX(coordinate);
-+      int chunkZ = MCUtil.getCoordinateZ(coordinate);
-+      for (int section = this.f_156618_.m_151560_(); section < this.f_156618_.m_151561_(); ++section) {
-+         long sectionPos = SectionPos.m_123209_(chunkX, section, chunkZ);
-+         this.updateDistanceTracking(sectionPos);
-+         //this.distanceTracker.runAllUpdates();
-+      }
-+   }
-+
-+   // Paper end - actually unload POI data
  
     public void m_217919_(BlockPos p_217920_, Holder<PoiType> p_217921_) {
        this.m_63827_(SectionPos.m_175568_(p_217920_)).m_218021_(p_217920_, p_217921_);
@@ -257,67 +219,58 @@
     }
  
     boolean m_27197_(long p_27198_) {
-@@ -194,17 +_,64 @@
+@@ -194,17 +_,54 @@
     }
  
     public void m_6202_(BooleanSupplier p_27105_) {
 -      super.m_6202_(p_27105_);
 -      this.f_27029_.m_27203_();
--   }
-+      // Paper start - async chunk io
-+      while (!this.f_63775_.isEmpty() && p_27105_.getAsBoolean() && !this.world.m_7441_()) { // Paper - unload POI data - don't write to disk if saving is disabled
-+         ChunkPos chunkcoordintpair = SectionPos.m_123184_(this.f_63775_.firstLong()).m_123251_();
-+
-+         net.minecraft.nbt.CompoundTag data = this.getData(chunkcoordintpair);
-+         com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.scheduleSave(this.world,
-+                 chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, data, null, com.destroystokyo.paper.io.PrioritizedTaskQueue.NORMAL_PRIORITY);
-+      }
-+
-+      // Paper start - unload POI data
-+      if (!this.world.m_7441_()) { // don't write to disk if saving is disabled
-+         this.pollUnloads(p_27105_);
-+      }
-+      // Paper end - unload POI data
-+      // Paper end
-+      this.villageDistanceTracker.propagateUpdates(); // Paper - replace distance tracking until
-+      //this.distanceTracker.runAllUpdates();
-+   }
-+
-+
-+   // Paper start - Asynchronous chunk io
-+   @javax.annotation.Nullable
-+   @Override
-+   public net.minecraft.nbt.CompoundTag m_63706_(ChunkPos chunkcoordintpair) throws java.io.IOException {
-+      if (this.world != null && Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE) {
-+         net.minecraft.nbt.CompoundTag ret = com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE
-+                 .loadChunkDataAsyncFuture(this.world, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, com.destroystokyo.paper.io.IOUtil.getPriorityForCurrentThread(),
-+                         true, false, true).join().poiData;
-+
-+         if (ret == com.destroystokyo.paper.io.PaperFileIOThread.FAILURE_VALUE) {
-+            throw new java.io.IOException("See logs for further detail");
-+         }
-+         return ret;
-+      }
-+      return super.m_63706_(chunkcoordintpair);
-+   }
-+
-+   @Override
-+   public void m_63708_(ChunkPos chunkcoordintpair, net.minecraft.nbt.CompoundTag nbttagcompound) throws java.io.IOException {
-+      if (this.world != null && Thread.currentThread() != com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE) {
-+         com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.scheduleSave(
-+                 this.world, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, nbttagcompound, null,
-+                 com.destroystokyo.paper.io.IOUtil.getPriorityForCurrentThread());
-+         return;
-+      }
-+      super.m_63708_(chunkcoordintpair, nbttagcompound);
-+   }
-+   // Paper end
++       this.villageDistanceTracker.propagateUpdates(); // Paper - rewrite chunk system
+    }
  
-    protected void m_5838_(long p_27036_) {
-       super.m_5838_(p_27036_);
+-   protected void m_5838_(long p_27036_) {
+-      super.m_5838_(p_27036_);
 -      this.f_27029_.m_8288_(p_27036_, this.f_27029_.m_7409_(p_27036_), false);
-+      //this.distanceTracker.update(p_27036_, this.distanceTracker.getLevelFromSource(p_27036_), false);
-+      this.updateDistanceTracking(p_27036_); // Paper - move to new distance tracking util
++    // Paper start - Asynchronous chunk io
++    @javax.annotation.Nullable
++    @Override
++    public net.minecraft.nbt.CompoundTag m_63706_(ChunkPos chunkcoordintpair) throws java.io.IOException {
++        // Paper start - rewrite chunk system
++        if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
++            return io.papermc.paper.chunk.system.io.RegionFileIOThread.loadData(
++                    this.world, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.POI_DATA,
++                    io.papermc.paper.chunk.system.io.RegionFileIOThread.getIOBlockingPriorityForCurrentThread()
++            );
++        }
++        // Paper end - rewrite chunk system
++        return super.m_63706_(chunkcoordintpair);
++    }
++
++    @Override
++    public void m_63708_(ChunkPos chunkcoordintpair, net.minecraft.nbt.CompoundTag nbttagcompound) throws java.io.IOException {
++        // Paper start - rewrite chunk system
++        if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
++            io.papermc.paper.chunk.system.io.RegionFileIOThread.scheduleSave(
++                    this.world, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, nbttagcompound,
++                    io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.POI_DATA);
++            return;
++        }
++        // Paper end - rewrite chunk system
++        super.m_63708_(chunkcoordintpair, nbttagcompound);
++    }
++    // Paper end
++
++   public void m_5838_(long p_27036_) {
++       // Paper start - rewrite chunk system
++       int chunkX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(p_27036_);
++       int chunkZ = io.papermc.paper.util.CoordinateUtils.getChunkSectionZ(p_27036_);
++       io.papermc.paper.chunk.system.scheduling.ChunkHolderManager manager = this.world.chunkTaskScheduler.chunkHolderManager;
++       io.papermc.paper.chunk.system.poi.PoiChunk chunk = manager.getPoiChunkIfLoaded(chunkX, chunkZ, false);
++       if (chunk != null) {
++           chunk.setDirty(true);
++       }
++       this.updateDistanceTracking(p_27036_);
++       // Paper end - rewrite chunk system
     }
  
     protected void m_5839_(long p_27145_) {
@@ -327,3 +280,100 @@
     }
  
     public void m_27047_(ChunkPos p_27048_, LevelChunkSection p_27049_) {
+@@ -238,19 +_,83 @@
+       });
+    }
+ 
+-   public void m_27056_(LevelReader p_27057_, BlockPos p_27058_, int p_27059_) {
+-      SectionPos.m_175557_(new ChunkPos(p_27058_), Math.floorDiv(p_27059_, 16), this.f_156618_.m_151560_(), this.f_156618_.m_151561_()).map((p_217979_) -> {
+-         return Pair.of(p_217979_, this.m_63823_(p_217979_.m_123252_()));
+-      }).filter((p_217963_) -> {
+-         return !p_217963_.getSecond().map(PoiSection::m_27272_).orElse(false);
+-      }).map((p_217891_) -> {
+-         return p_217891_.getFirst().m_123251_();
+-      }).filter((p_217961_) -> {
+-         return this.f_27030_.add(p_217961_.m_45588_());
+-      }).forEach((p_217889_) -> {
+-         p_27057_.m_46819_(p_217889_.f_45578_, p_217889_.f_45579_, ChunkStatus.f_62314_);
+-      });
+-   }
++    @Override
++    public Optional<PoiSection> m_63818_(long pos) {
++        int chunkX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(pos);
++        int chunkY = io.papermc.paper.util.CoordinateUtils.getChunkSectionY(pos);
++        int chunkZ = io.papermc.paper.util.CoordinateUtils.getChunkSectionZ(pos);
++
++        io.papermc.paper.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
++
++        io.papermc.paper.chunk.system.scheduling.ChunkHolderManager manager = this.world.chunkTaskScheduler.chunkHolderManager;
++        io.papermc.paper.chunk.system.poi.PoiChunk ret = manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++
++        return ret == null ? Optional.empty() : ret.getSectionForVanilla(chunkY);
++    }
++
++    @Override
++    public Optional<PoiSection> m_63823_(long pos) {
++        int chunkX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(pos);
++        int chunkY = io.papermc.paper.util.CoordinateUtils.getChunkSectionY(pos);
++        int chunkZ = io.papermc.paper.util.CoordinateUtils.getChunkSectionZ(pos);
++
++        io.papermc.paper.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
++
++        io.papermc.paper.chunk.system.scheduling.ChunkHolderManager manager = this.world.chunkTaskScheduler.chunkHolderManager;
++
++        if (chunkY >= io.papermc.paper.util.WorldUtil.getMinSection(this.world) &&
++                chunkY <= io.papermc.paper.util.WorldUtil.getMaxSection(this.world)) {
++            io.papermc.paper.chunk.system.poi.PoiChunk ret = manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++            if (ret != null) {
++                return ret.getSectionForVanilla(chunkY);
++            } else {
++                return manager.loadPoiChunk(chunkX, chunkZ).getSectionForVanilla(chunkY);
++            }
++        }
++        // retain vanilla behavior: do not load section if out of bounds!
++        return Optional.empty();
++    }
++
++    @Override
++    protected PoiSection m_63827_(long pos) {
++        int chunkX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(pos);
++        int chunkY = io.papermc.paper.util.CoordinateUtils.getChunkSectionY(pos);
++        int chunkZ = io.papermc.paper.util.CoordinateUtils.getChunkSectionZ(pos);
++
++        io.papermc.paper.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
++
++        io.papermc.paper.chunk.system.scheduling.ChunkHolderManager manager = this.world.chunkTaskScheduler.chunkHolderManager;
++
++        io.papermc.paper.chunk.system.poi.PoiChunk ret = manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++        if (ret != null) {
++            return ret.getOrCreateSection(chunkY);
++        } else {
++            return manager.loadPoiChunk(chunkX, chunkZ).getOrCreateSection(chunkY);
++        }
++    }
++
++    public void onUnload(long coordinate) { // Paper - rewrite chunk system
++        int chunkX = io.papermc.paper.util.MCUtil.getCoordinateX(coordinate);
++        int chunkZ = io.papermc.paper.util.MCUtil.getCoordinateZ(coordinate);
++        io.papermc.paper.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Unloading poi chunk off-main");
++        for (int section = this.f_156618_.m_151560_(); section < this.f_156618_.m_151561_(); ++section) {
++            long sectionPos = SectionPos.m_123209_(chunkX, section, chunkZ);
++            this.updateDistanceTracking(sectionPos);
++        }
++    }
++
++    public void loadInPoiChunk(io.papermc.paper.chunk.system.poi.PoiChunk poiChunk) {
++        int chunkX = poiChunk.chunkX;
++        int chunkZ = poiChunk.chunkZ;
++        io.papermc.paper.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Loading poi chunk off-main");
++        for (int sectionY = this.f_156618_.m_151560_(); sectionY < this.f_156618_.m_151561_(); ++sectionY) {
++            PoiSection section = poiChunk.getSection(sectionY);
++            if (section != null && !section.isEmpty()) {
++                this.m_5839_(SectionPos.m_123209_(chunkX, sectionY, chunkZ));
++            }
++        }
++    }
++    // Paper end - rewrite chunk system
+ 
+    final class DistanceTracker extends SectionTracker {
+       private final Long2ByteMap f_27200_ = new Long2ByteOpenHashMap();

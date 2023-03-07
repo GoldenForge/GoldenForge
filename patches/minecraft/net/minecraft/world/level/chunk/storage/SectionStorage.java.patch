@@ -8,7 +8,7 @@
  import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
  import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
  import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
-@@ -34,12 +_,12 @@
+@@ -34,28 +_,62 @@
  import net.minecraft.world.level.LevelHeightAccessor;
  import org.slf4j.Logger;
  
@@ -24,7 +24,9 @@
     private final Function<Runnable, Codec<R>> f_63776_;
     private final Function<Runnable, R> f_63777_;
     private final DataFixer f_63778_;
-@@ -48,14 +_,48 @@
+    private final DataFixTypes f_63779_;
+-   private final RegistryAccess f_223507_;
++   public final RegistryAccess f_223507_;
     protected final LevelHeightAccessor f_156618_;
  
     public SectionStorage(Path p_223509_, Function<Runnable, Codec<R>> p_223510_, Function<Runnable, R> p_223511_, DataFixer p_223512_, DataFixTypes p_223513_, boolean p_223514_, RegistryAccess p_223515_, LevelHeightAccessor p_223516_) {

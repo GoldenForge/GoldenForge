@@ -43,7 +43,17 @@
     public final ChunkMap f_8325_;
     private final DimensionDataStorage f_8333_;
     private long f_8334_;
-@@ -80,6 +_,233 @@
+@@ -66,6 +_,9 @@
+    @VisibleForDebug
+    private NaturalSpawner.SpawnState f_8340_;
+ 
++   public final io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<LevelChunk> tickingChunks = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>(4096, 0.75f, 4096, 0.15, true);
++   public final io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<LevelChunk> entityTickingChunks = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>(4096, 0.75f, 4096, 0.15, true);
++   // Paper end
+    public ServerChunkCache(ServerLevel p_214982_, LevelStorageSource.LevelStorageAccess p_214983_, DataFixer p_214984_, StructureTemplateManager p_214985_, Executor p_214986_, ChunkGenerator p_214987_, int p_214988_, int p_214989_, boolean p_214990_, ChunkProgressListener p_214991_, ChunkStatusUpdateListener p_214992_, Supplier<DimensionDataStorage> p_214993_) {
+       this.f_8329_ = p_214982_;
+       this.f_8332_ = new ServerChunkCache.MainThreadExecutor(p_214982_);
+@@ -80,6 +_,212 @@
        this.m_8488_();
     }
  
@@ -113,7 +123,7 @@
 +   public LevelChunk getChunkAtIfLoadedImmediately(int x, int z) {
 +      long k = ChunkPos.m_45589_(x, z);
 +
-+      if (Thread.currentThread() == this.f_8330_) {
++      if (io.papermc.paper.util.TickThread.isTickThread()) { // Paper - rewrite chunk system
 +         return this.getChunkAtIfLoadedMainThread(x, z);
 +      }
 +
@@ -253,27 +263,6 @@
 +      this.f_8327_.m_140823_(ticketType, chunkPos, ticketLevel, identifier);
 +   }
 +
-+   public boolean markUrgent(ChunkPos coords) {
-+      return this.f_8327_.markUrgent(coords);
-+   }
-+
-+   public boolean markHighPriority(ChunkPos coords, int priority) {
-+      return this.f_8327_.markHighPriority(coords, priority);
-+   }
-+
-+   public void markAreaHighPriority(ChunkPos center, int priority, int radius) {
-+      this.f_8327_.markAreaHighPriority(center, priority, radius);
-+   }
-+
-+   public void clearAreaPriorityTickets(ChunkPos center, int radius) {
-+      this.f_8327_.clearAreaPriorityTickets(center, radius);
-+   }
-+
-+   public void clearPriorityTickets(ChunkPos coords) {
-+      this.f_8327_.clearPriorityTickets(coords);
-+   }
-+   // Paper end - async chunk io
-+
     public ThreadedLevelLightEngine m_7827_() {
        return this.f_8331_;
     }
@@ -296,7 +285,7 @@
           ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
           profilerfiller.m_6174_("getChunk");
           long i = ChunkPos.m_45589_(p_8360_, p_8361_);
-@@ -119,15 +_,28 @@
+@@ -119,15 +_,23 @@
           for(int j = 0; j < 4; ++j) {
              if (i == this.f_8337_[j] && p_8362_ == this.f_8338_[j]) {
                 ChunkAccess chunkaccess = this.f_8339_[j];
@@ -314,22 +303,21 @@
 +         ServerChunkCache.MainThreadExecutor chunkproviderserver_b = this.f_8332_;
 +         if (!completablefuture.isDone()) { // Paper
 +            // Paper start - async chunk io/loading
-+            ChunkPos pair = new ChunkPos(x1, z1); // Paper - Chunk priority
-+            this.f_8327_.markUrgent(pair); // Paper - Chunk priority
-+            this.f_8329_.asyncChunkTaskManager.raisePriority(x1, z1, com.destroystokyo.paper.io.PrioritizedTaskQueue.HIGHEST_PRIORITY);
-+            com.destroystokyo.paper.io.chunk.ChunkTaskManager.pushChunkWait(this.f_8329_, x1, z1);
++            io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.pushChunkWait(this.f_8329_, x1, z1); // Paper - rewrite chunk system
 +            // Paper end
 +            com.destroystokyo.paper.io.SyncLoadFinder.logSyncLoad(this.f_8329_, x1, z1); // Paper - sync load info
 +            chunkproviderserver_b.m_18701_(completablefuture::isDone);
-+            com.destroystokyo.paper.io.chunk.ChunkTaskManager.popChunkWait(); // Paper - async chunk debug
-+            this.f_8327_.clearPriorityTickets(pair); // Paper - Chunk priority
-+            this.f_8327_.clearUrgent(pair); // Paper - Chunk priority
++            io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.popChunkWait(); // Paper - async chunk debug  // Paper - rewrite chunk system
 +         } // Paper
           ChunkAccess chunkaccess1 = completablefuture.join().map((p_8406_) -> {
              return p_8406_;
           }, (p_8423_) -> {
-@@ -147,35 +_,7 @@
-       if (Thread.currentThread() != this.f_8330_) {
+@@ -144,38 +_,10 @@
+ 
+    @Nullable
+    public LevelChunk m_7131_(int p_8357_, int p_8358_) {
+-      if (Thread.currentThread() != this.f_8330_) {
++      if (!io.papermc.paper.util.TickThread.isTickThread()) { // Paper - rewrite chunk system
           return null;
        } else {
 -         this.f_8329_.m_46473_().m_6174_("getChunkNow");
@@ -365,81 +353,138 @@
        }
     }
  
-@@ -203,15 +_,28 @@
+@@ -186,7 +_,7 @@
+    }
+ 
+    public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_8431_(int p_8432_, int p_8433_, ChunkStatus p_8434_, boolean p_8435_) {
+-      boolean flag = Thread.currentThread() == this.f_8330_;
++      boolean flag = io.papermc.paper.util.TickThread.isTickThread(); // Paper - rewrite chunk system
+       CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture;
+       if (flag) {
+          completablefuture = this.m_8456_(p_8432_, p_8433_, p_8434_, p_8435_);
+@@ -203,58 +_,64 @@
     }
  
     private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_8456_(int p_8457_, int p_8458_, ChunkStatus p_8459_, boolean p_8460_) {
-+      return getChunkFutureMainThread(p_8457_, p_8458_, p_8459_, p_8460_, false);
-+   }
-+   private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> getChunkFutureMainThread(int p_8457_, int p_8458_, ChunkStatus p_8459_, boolean p_8460_, boolean isUrgent) {
-       ChunkPos chunkpos = new ChunkPos(p_8457_, p_8458_);
-       long i = chunkpos.m_45588_();
-       int j = 33 + ChunkStatus.m_62370_(p_8459_);
-       ChunkHolder chunkholder = this.m_8364_(i);
+-      ChunkPos chunkpos = new ChunkPos(p_8457_, p_8458_);
+-      long i = chunkpos.m_45588_();
+-      int j = 33 + ChunkStatus.m_62370_(p_8459_);
+-      ChunkHolder chunkholder = this.m_8364_(i);
 -      if (p_8460_) {
-+
-+      // CraftBukkit start - don't add new ticket for currently unloading chunk
-+      boolean currentlyUnloading = false;
-+      if (chunkholder != null) {
-+         ChunkHolder.FullChunkStatus oldChunkState = ChunkHolder.m_140083_(chunkholder.f_140006_);
-+         ChunkHolder.FullChunkStatus currentChunkState = ChunkHolder.m_140083_(chunkholder.m_140093_());
-+         currentlyUnloading = (oldChunkState.m_140114_(ChunkHolder.FullChunkStatus.BORDER) && !currentChunkState.m_140114_(ChunkHolder.FullChunkStatus.BORDER));
-+      }
-+      if (p_8460_ && !currentlyUnloading) {
-          this.f_8327_.m_140792_(TicketType.f_9449_, chunkpos, j, chunkpos);
-+         if (isUrgent) this.f_8327_.markUrgent(chunkpos); // Paper - Chunk priority
-          if (this.m_8416_(chunkholder, j)) {
-             ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
-             profilerfiller.m_6180_("chunkLoad");
-+            f_8327_.delayDistanceManagerTick = false; // Paper - Chunk priority - ensure this is never false
-             this.m_8489_();
-             chunkholder = this.m_8364_(i);
-             profilerfiller.m_7238_();
-@@ -221,11 +_,20 @@
-          }
-       }
- 
+-         this.f_8327_.m_140792_(TicketType.f_9449_, chunkpos, j, chunkpos);
+-         if (this.m_8416_(chunkholder, j)) {
+-            ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
+-            profilerfiller.m_6180_("chunkLoad");
+-            this.m_8489_();
+-            chunkholder = this.m_8364_(i);
+-            profilerfiller.m_7238_();
+-            if (this.m_8416_(chunkholder, j)) {
+-               throw (IllegalStateException)Util.m_137570_(new IllegalStateException("No chunk holder after ticket has been added"));
+-            }
+-         }
+-      }
+-
 -      return this.m_8416_(chunkholder, j) ? ChunkHolder.f_139996_ : chunkholder.m_140049_(p_8459_, this.f_8325_);
-+      CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future =  this.m_8416_(chunkholder, j) ? ChunkHolder.f_139996_ : chunkholder.m_140049_(p_8459_, this.f_8325_);
-+
-+      // Paper end - prevent plugin unloads from removing our ticket
-+      if (isUrgent) {
-+         future.thenAccept(either -> this.f_8327_.clearUrgent(chunkpos));
-+      }
-+      return future;
-+      // Paper end
-+
++      return getChunkFutureMainThread(p_8457_, p_8458_, p_8459_, p_8460_, false);
     }
- 
-    private boolean m_8416_(@Nullable ChunkHolder p_8417_, int p_8418_) {
+-
+-   private boolean m_8416_(@Nullable ChunkHolder p_8417_, int p_8418_) {
 -      return p_8417_ == null || p_8417_.m_140093_() > p_8418_;
-+      //return p_8417_ == null || p_8417_.getTicketLevel() > p_8418_;
-+      return p_8417_ == null || p_8417_.f_140006_ > p_8418_; // CraftBukkit using oldTicketLevel for isLoaded checks
++   private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> getChunkFutureMainThread(int chunkX, int chunkZ, ChunkStatus leastStatus, boolean create, boolean isUrgent) {
++      // Paper start - rewrite chunk system
++      io.papermc.paper.util.TickThread.ensureTickThread(this.f_8329_, chunkX, chunkZ, "Scheduling chunk load off-main");
++      int minLevel = 33 + ChunkStatus.m_62370_(leastStatus);
++      io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder = this.f_8329_.chunkTaskScheduler.chunkHolderManager.getChunkHolder(chunkX, chunkZ);
++
++      boolean needsFullScheduling = leastStatus == ChunkStatus.f_62326_ && (chunkHolder == null || !chunkHolder.getChunkStatus().m_140114_(ChunkHolder.FullChunkStatus.BORDER));
++
++      if ((chunkHolder == null || chunkHolder.getTicketLevel() > minLevel || needsFullScheduling) && !create) {
++         return ChunkHolder.f_139996_;
++      }
++
++      io.papermc.paper.chunk.system.scheduling.NewChunkHolder.ChunkCompletion chunkCompletion = chunkHolder == null ? null : chunkHolder.getLastChunkCompletion();
++      if (needsFullScheduling || chunkCompletion == null || !chunkCompletion.genStatus().m_62427_(leastStatus)) {
++         // schedule
++         CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> ret = new CompletableFuture<>();
++         Consumer<ChunkAccess> complete = (ChunkAccess chunk) -> {
++            if (chunk == null) {
++               ret.complete(Either.right(ChunkHolder.ChunkLoadingFailure.f_140101_));
++            } else {
++               ret.complete(Either.left(chunk));
++            }
++         };
++
++         this.f_8329_.chunkTaskScheduler.scheduleChunkLoad(
++                 chunkX, chunkZ, leastStatus, true,
++                 isUrgent ? ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.BLOCKING : ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL,
++                 complete
++         );
++
++         return ret;
++      } else {
++         // can return now
++         return CompletableFuture.completedFuture(Either.left(chunkCompletion.chunk()));
++      }
++      // Paper end - rewrite chunk system
     }
  
     public boolean m_5563_(int p_8429_, int p_8430_) {
-@@ -266,7 +_,16 @@
-       return this.f_8332_.m_7245_();
+-      ChunkHolder chunkholder = this.m_8364_((new ChunkPos(p_8429_, p_8430_)).m_45588_());
+-      int i = 33 + ChunkStatus.m_62370_(ChunkStatus.f_62326_);
+-      return !this.m_8416_(chunkholder, i);
++      return this.getChunkAtIfLoadedImmediately(p_8429_, p_8430_) != null; // Paper - rewrite chunk system
     }
  
-+   public boolean m_143239_(long p_143240_) {
-+      // Paper start - replace player chunk loader system
-+      ChunkHolder holder = this.f_8325_.m_140327_(p_143240_);
-+      return holder != null && holder.isTickingReady();
-+      // Paper end - replace player chunk loader system
-+   }
+    public BlockGetter m_6196_(int p_8454_, int p_8455_) {
+-      long i = ChunkPos.m_45589_(p_8454_, p_8455_);
+-      ChunkHolder chunkholder = this.m_8364_(i);
+-      if (chunkholder == null) {
++      long k = ChunkPos.m_45589_(p_8454_, p_8455_);
++      ChunkHolder playerchunk = this.m_8364_(k);
 +
-    boolean m_8489_() {
-+      if (f_8327_.delayDistanceManagerTick) return false; // Paper - Chunk priority
-+      if (this.f_8325_.unloadingPlayerChunk) { MinecraftServer.getServer().f_129750_.error("Cannot tick distance manager while unloading playerchunks", new Throwable()); throw new IllegalStateException("Cannot tick distance manager while unloading playerchunks"); } // Paper
-       boolean flag = this.f_8327_.m_140805_(this.f_8325_);
-       boolean flag1 = this.f_8325_.m_140324_();
-       if (!flag && !flag1) {
-@@ -277,23 +_,18 @@
++      if (playerchunk == null) {
+          return null;
+       } else {
+-         int j = f_8326_.size() - 1;
+-
+-         while(true) {
+-            ChunkStatus chunkstatus = f_8326_.get(j);
+-            Optional<ChunkAccess> optional = chunkholder.m_140047_(chunkstatus).getNow(ChunkHolder.f_139995_).left();
+-            if (optional.isPresent()) {
+-               return optional.get();
+-            }
+-
+-            if (chunkstatus == ChunkStatus.f_62323_.m_62482_()) {
+-               return null;
+-            }
+-
+-            --j;
++         // Paper start - rewrite chunk system
++         ChunkStatus status = playerchunk.getChunkHolderStatus();
++         if (status != null && !status.m_62427_(ChunkStatus.f_62323_.m_62482_())) {
++            return null;
+          }
++         return playerchunk.getAvailableChunkNow();
++         // Paper end - rewrite chunk system
        }
     }
  
--   public boolean m_143239_(long p_143240_) {
+@@ -266,27 +_,15 @@
+       return this.f_8332_.m_7245_();
+    }
+ 
+-   boolean m_8489_() {
+-      boolean flag = this.f_8327_.m_140805_(this.f_8325_);
+-      boolean flag1 = this.f_8325_.m_140324_();
+-      if (!flag && !flag1) {
+-         return false;
+-      } else {
+-         this.m_8488_();
+-         return true;
+-      }
+-   }
+-
+    public boolean m_143239_(long p_143240_) {
 -      ChunkHolder chunkholder = this.m_8364_(p_143240_);
 -      if (chunkholder == null) {
 -         return false;
@@ -449,10 +494,18 @@
 -         Either<LevelChunk, ChunkHolder.ChunkLoadingFailure> either = chunkholder.m_140026_().getNow((Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>)null);
 -         return either != null && either.left().isPresent();
 -      }
--   }
--
++      // Paper start - replace player chunk loader system
++      ChunkHolder holder = this.f_8325_.m_140327_(p_143240_);
++      return holder != null && holder.isTickingReady();
++      // Paper end - replace player chunk loader system
++   }
++
++   boolean m_8489_() {
++      return this.f_8329_.chunkTaskScheduler.chunkHolderManager.processTicketUpdates(); // Paper - rewrite chunk system
+    }
+ 
     public void m_8419_(boolean p_8420_) {
-       this.m_8489_();
+@@ -294,10 +_,21 @@
        this.f_8325_.m_140318_(p_8420_);
     }
  
@@ -463,9 +516,20 @@
 +   }
 +   // Paper end
 +
++   @Override
     public void close() throws IOException {
-       this.m_8419_(true);
-       this.f_8331_.close();
+-      this.m_8419_(true);
+-      this.f_8331_.close();
+-      this.f_8325_.close();
++      // CraftBukkit start
++      this.close(true);
++   }
++
++   public void close(boolean save) { // Paper - rewrite chunk system
++      this.f_8329_.chunkTaskScheduler.chunkHolderManager.close(save, true); // Paper - rewrite chunk system
+    }
+ 
+    public void m_201698_(BooleanSupplier p_201913_, boolean p_201914_) {
 @@ -306,6 +_,7 @@
        this.m_8489_();
        this.f_8329_.m_46473_().m_6182_("chunks");
@@ -474,15 +538,6 @@
           this.m_8490_();
        }
  
-@@ -315,6 +_,8 @@
-       this.m_8488_();
-    }
- 
-+   final io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<LevelChunk> entityTickingChunks = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>(4096, 0.75f, 4096, 0.15, true);
-+
-    private void m_8490_() {
-       long i = this.f_8329_.m_46467_();
-       long j = i - this.f_8334_;
 @@ -333,33 +_,61 @@
           NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.m_186524_(l, this.f_8329_.m_8583_(), this::m_8370_, new LocalMobCapCalculator(this.f_8325_));
           this.f_8340_ = naturalspawner$spawnstate;
@@ -569,7 +624,7 @@
  
           profilerfiller.m_6182_("customSpawners");
           if (flag2) {
-@@ -367,12 +_,37 @@
+@@ -367,19 +_,50 @@
           }
  
           profilerfiller.m_6182_("broadcast");
@@ -612,26 +667,39 @@
        }
     }
  
-@@ -426,11 +_,17 @@
+    private void m_8370_(long p_8371_, Consumer<LevelChunk> p_8372_) {
+-      ChunkHolder chunkholder = this.m_8364_(p_8371_);
+-      if (chunkholder != null) {
+-         chunkholder.m_140082_().getNow(ChunkHolder.f_139997_).left().ifPresent(p_8372_);
++      ChunkHolder playerchunk = this.m_8364_(p_8371_);
++
++      if (playerchunk != null) {
++         // Paper start - rewrite chunk system
++         LevelChunk chunk = playerchunk.m_212234_();
++         if (chunk != null) {
++            p_8372_.accept(chunk);
++         }
++         // Paper end - rewrite chunk system
+       }
+ 
+    }
+@@ -426,10 +_,16 @@
     }
  
     public <T> void m_8387_(TicketType<T> p_8388_, ChunkPos p_8389_, int p_8390_, T p_8391_) {
--      this.f_8327_.m_140840_(p_8388_, p_8389_, p_8390_, p_8391_);
 +      addRegionTicket(p_8388_, p_8389_, p_8390_, p_8391_, false);
 +   }
 +   public <T> void addRegionTicket(TicketType<T> p_8388_, ChunkPos p_8389_, int p_8390_, T p_8391_, boolean forceTicks) {
-+      this.f_8327_.addRegionTicket(p_8388_, p_8389_, p_8390_, p_8391_, forceTicks);
+       this.f_8327_.m_140840_(p_8388_, p_8389_, p_8390_, p_8391_);
     }
  
     public <T> void m_8438_(TicketType<T> p_8439_, ChunkPos p_8440_, int p_8441_, T p_8442_) {
--      this.f_8327_.m_140849_(p_8439_, p_8440_, p_8441_, p_8442_);
 +      removeRegionTicket(p_8439_, p_8440_, p_8441_, p_8442_, false);
 +   }
 +   public <T> void removeRegionTicket(TicketType<T> p_8439_, ChunkPos p_8440_, int p_8441_, T p_8442_, boolean forceTicks) {
-+      this.f_8327_.removeRegionTicket(p_8439_, p_8440_, p_8441_, p_8442_, forceTicks);
+       this.f_8327_.m_140849_(p_8439_, p_8440_, p_8441_, p_8442_);
     }
  
-    public void m_6692_(ChunkPos p_8400_, boolean p_8401_) {
 @@ -502,7 +_,7 @@
     static record ChunkAndHolder(LevelChunk f_184028_, ChunkHolder f_184029_) {
     }
@@ -641,27 +709,15 @@
        MainThreadExecutor(Level p_8494_) {
           super("Chunk source main thread executor for " + p_8494_.m_46472_().m_135782_());
        }
-@@ -529,11 +_,18 @@
-       }
- 
+@@ -531,10 +_,8 @@
        public boolean m_7245_() {
--         if (ServerChunkCache.this.m_8489_()) {
--            return true;
+          if (ServerChunkCache.this.m_8489_()) {
+             return true;
 -         } else {
 -            ServerChunkCache.this.f_8331_.m_9409_();
 -            return super.m_7245_();
-+         try {
-+            boolean execChunkTask = com.destroystokyo.paper.io.chunk.ChunkTaskManager.pollChunkWaitQueue() || ServerChunkCache.this.f_8329_.asyncChunkTaskManager.pollNextChunkTask(); // Paper
-+            ServerChunkCache.this.f_8325_.playerChunkManager.tickMidTick(); // Paper
-+            if (ServerChunkCache.this.m_8489_()) {
-+               return true;
-+            } else {
-+               ServerChunkCache.this.f_8331_.m_9409_();
-+               return super.m_7245_() || execChunkTask; // Paper
-+            }
-+         } finally {
-+            f_8325_.chunkLoadConversionCallbackExecutor.run(); // Paper - Add chunk load conversion callback executor to prevent deadlock due to recursion in the chunk task queue sorter
-+            f_8325_.callbackExecutor.run();
           }
++         return super.m_7245_() | ServerChunkCache.this.f_8329_.chunkTaskScheduler.executeMainThreadTask(); // Paper - rewrite chunk system
        }
     }
+ }

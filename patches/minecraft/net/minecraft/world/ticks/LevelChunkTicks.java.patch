@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/ticks/LevelChunkTicks.java
++++ b/net/minecraft/world/ticks/LevelChunkTicks.java
+@@ -25,6 +_,20 @@
+    @Nullable
+    private BiConsumer<LevelChunkTicks<T>, ScheduledTick<T>> f_193166_;
+ 
++   // Paper start - add dirty flag
++   private boolean dirty;
++   private long lastSaved = Long.MIN_VALUE;
++
++   public boolean isDirty(final long tick) {
++      return this.dirty || (!this.f_193163_.isEmpty() && tick != this.lastSaved);
++   }
++
++   public void clearDirty() {
++      this.dirty = false;
++   }
++   // Paper end - add dirty flag
++
++
+    public LevelChunkTicks() {
+    }
+ 

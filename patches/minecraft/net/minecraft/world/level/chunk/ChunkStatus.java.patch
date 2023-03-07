@@ -1,0 +1,89 @@
+--- a/net/minecraft/world/level/chunk/ChunkStatus.java
++++ b/net/minecraft/world/level/chunk/ChunkStatus.java
+@@ -28,6 +_,31 @@
+ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+ 
+ public class ChunkStatus {
++
++   // Paper start - rewrite chunk system
++   public boolean isParallelCapable; // Paper
++   public int writeRadius = -1;
++   public int loadRange = 0;
++
++   protected static final java.util.List<ChunkStatus> statuses = new java.util.ArrayList<>();
++
++   private ChunkStatus nextStatus;
++
++   public final ChunkStatus getNextStatus() {
++      return this.nextStatus;
++   }
++
++   public final boolean isEmptyLoadStatus() {
++      return this.f_62336_ == f_62329_;
++   }
++
++   public final boolean isEmptyGenStatus() {
++      return this == ChunkStatus.f_62314_ || this == ChunkStatus.f_62325_ || this == ChunkStatus.f_62321_;
++   }
++
++   public final java.util.concurrent.atomic.AtomicBoolean warnedAboutNoImmediateComplete = new java.util.concurrent.atomic.AtomicBoolean();
++   // Paper end - rewrite chunk system
++
+    public static final int f_187758_ = 8;
+    private static final EnumSet<Heightmap.Types> f_62327_ = EnumSet.of(Heightmap.Types.OCEAN_FLOOR_WG, Heightmap.Types.WORLD_SURFACE_WG);
+    public static final EnumSet<Heightmap.Types> f_62328_ = EnumSet.of(Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE, Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
+@@ -123,7 +_,7 @@
+    });
+    public static final ChunkStatus f_62321_ = m_62414_("liquid_carvers", f_62320_, 8, f_62328_, ChunkStatus.ChunkType.PROTOCHUNK, (p_196805_, p_196806_, p_196807_, p_196808_, p_196809_) -> {
+    });
+-   public static final ChunkStatus f_62322_ = m_62406_("features", f_62321_, 8, f_62328_, ChunkStatus.ChunkType.PROTOCHUNK, (p_223314_, p_223315_, p_223316_, p_223317_, p_223318_, p_223319_, p_223320_, p_223321_, p_223322_, p_223323_) -> {
++   public static final ChunkStatus f_62322_ = m_62399_("features", f_62321_, 8, f_62328_, ChunkStatus.ChunkType.PROTOCHUNK, (p_223314_, p_223315_, p_223316_, p_223317_, p_223318_, p_223319_, p_223320_, p_223321_, p_223322_, p_223323_) -> {
+       ProtoChunk protochunk = (ProtoChunk)p_223322_;
+       protochunk.m_63209_(p_223319_);
+       if (p_223323_ || !p_223322_.m_6415_().m_62427_(p_223314_)) {
+@@ -134,10 +_,8 @@
+          protochunk.m_7150_(p_223314_);
+       }
+ 
+-      return p_223319_.m_215136_(p_223322_).thenApply(Either::left);
+-   }, (p_223307_, p_223308_, p_223309_, p_223310_, p_223311_, p_223312_) -> {
+-      return p_223310_.m_215136_(p_223312_).thenApply(Either::left);
+-   });
++      return CompletableFuture.completedFuture(Either.left(p_223322_)); // Paper - rewrite chunk system
++   }); // Paper - rewrite chunk system
+    public static final ChunkStatus f_62323_ = m_62406_("light", f_62322_, 1, f_62328_, ChunkStatus.ChunkType.PROTOCHUNK, (p_223296_, p_223297_, p_223298_, p_223299_, p_223300_, p_223301_, p_223302_, p_223303_, p_223304_, p_223305_) -> {
+       return m_62388_(p_223296_, p_223301_, p_223304_);
+    }, (p_223289_, p_223290_, p_223291_, p_223292_, p_223293_, p_223294_) -> {
+@@ -178,6 +_,18 @@
+    private final ChunkStatus.ChunkType f_62338_;
+    private final EnumSet<Heightmap.Types> f_62339_;
+ 
++   // Paper start
++   public static ChunkStatus getStatus(String name) {
++      try {
++         // We need this otherwise we return EMPTY for invalid names
++         ResourceLocation key = new ResourceLocation(name);
++         return Registry.f_122833_.m_6612_(key).orElse(null);
++      } catch (Exception ex) {
++         return null; // invalid name
++      }
++   }
++   // Paper end
++
+    private static CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_62388_(ChunkStatus p_62389_, ThreadedLevelLightEngine p_62390_, ChunkAccess p_62391_) {
+       boolean flag = m_62392_(p_62389_, p_62391_);
+       if (!p_62391_.m_6415_().m_62427_(p_62389_)) {
+@@ -241,6 +_,13 @@
+       this.f_62338_ = p_62346_;
+       this.f_62339_ = p_62345_;
+       this.f_62333_ = p_62343_ == null ? 0 : p_62343_.m_62445_() + 1;
++      // Paper start
++      this.nextStatus = this;
++      if (statuses.size() > 0) {
++         statuses.get(statuses.size() - 1).nextStatus = this;
++      }
++      statuses.add(this);
++      // Paper end
+    }
+ 
+    public int m_62445_() {

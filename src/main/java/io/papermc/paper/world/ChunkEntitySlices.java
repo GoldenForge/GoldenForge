@@ -1,8 +1,11 @@
 package io.papermc.paper.world;
 
 import com.destroystokyo.paper.util.maplist.EntityList;
+import io.papermc.paper.chunk.system.entity.EntityLookup;
+import io.papermc.paper.util.TickThread;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -10,9 +13,11 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.boss.EnderDragonPart;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
-import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.storage.EntityStorage;
+import net.minecraft.world.level.entity.Visibility;
 import net.minecraft.world.phys.AABB;
-
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -22,9 +27,9 @@ public final class ChunkEntitySlices {
 
     protected final int minSection;
     protected final int maxSection;
-    protected final int chunkX;
-    protected final int chunkZ;
-    protected final Level world;
+    public final int chunkX;
+    public final int chunkZ;
+    protected final ServerLevel world;
 
     protected final EntityCollectionBySection allEntities;
     protected final EntityCollectionBySection hardCollidingEntities;
@@ -33,9 +38,19 @@ public final class ChunkEntitySlices {
 
     public ChunkHolder.FullChunkStatus status;
 
+    protected boolean isTransient;
+
+    public boolean isTransient() {
+        return this.isTransient;
+    }
+
+    public void setTransient(final boolean value) {
+        this.isTransient = value;
+    }
+
     // TODO implement container search optimisations
 
-    public ChunkEntitySlices(final Level world, final int chunkX, final int chunkZ, final ChunkHolder.FullChunkStatus status,
+    public ChunkEntitySlices(final ServerLevel world, final int chunkX, final int chunkZ, final ChunkHolder.FullChunkStatus status,
                              final int minSection, final int maxSection) { // inclusive, inclusive
         this.minSection = minSection;
         this.maxSection = maxSection;
@@ -50,27 +65,111 @@ public final class ChunkEntitySlices {
         this.status = status;
     }
 
+    public CompoundTag save() {
+        final int len = this.entities.size();
+        if (len == 0) {
+            return null;
+        }
+
+        final Entity[] rawData = this.entities.getRawData();
+        final List<Entity> collectedEntities = new ArrayList<>(len);
+        for (int i = 0; i < len; ++i) {
+            final Entity entity = rawData[i];
+            if (entity.shouldBeSaved()) {
+                collectedEntities.add(entity);
+            }
+        }
+
+        if (collectedEntities.isEmpty()) {
+            return null;
+        }
+
+        return EntityStorage.saveEntityChunk(collectedEntities, new ChunkPos(this.chunkX, this.chunkZ), this.world);
+    }
+
+    // returns true if this chunk has transient entities remaining
+    public boolean unload() {
+        final int len = this.entities.size();
+        final Entity[] collectedEntities = Arrays.copyOf(this.entities.getRawData(), len);
+
+        for (int i = 0; i < len; ++i) {
+            final Entity entity = collectedEntities[i];
+            if (entity.isRemoved()) {
+                // removed by us below
+                continue;
+            }
+            if (entity.shouldBeSaved()) {
+                entity.setRemoved(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                if (entity.isVehicle()) {
+                    // we cannot assume that these entities are contained within this chunk, because entities can
+                    // desync - so we need to remove them all
+                    for (final Entity passenger : entity.getIndirectPassengers()) {
+                        passenger.setRemoved(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                    }
+                }
+            }
+        }
+
+        return this.entities.size() != 0;
+    }
+
+    private List<Entity> getAllEntities() {
+        final int len = this.entities.size();
+        if (len == 0) {
+            return new ArrayList<>();
+        }
+
+        final Entity[] rawData = this.entities.getRawData();
+        final List<Entity> collectedEntities = new ArrayList<>(len);
+        for (int i = 0; i < len; ++i) {
+            collectedEntities.add(rawData[i]);
+        }
+
+        return collectedEntities;
+    }
 
     public boolean isEmpty() {
         return this.entities.size() == 0;
     }
 
-    private void updateTicketLevels() {
+    public void mergeInto(final ChunkEntitySlices slices) {
         final Entity[] entities = this.entities.getRawData();
         for (int i = 0, size = Math.min(entities.length, this.entities.size()); i < size; ++i) {
             final Entity entity = entities[i];
-            entity.chunkStatus = this.status;
+            slices.addEntity(entity, entity.sectionY);
         }
     }
 
-    public synchronized void updateStatus(final ChunkHolder.FullChunkStatus status) {
-        this.status = status;
-        this.updateTicketLevels();
+    private boolean preventStatusUpdates;
+    public boolean startPreventingStatusUpdates() {
+        final boolean ret = this.preventStatusUpdates;
+        this.preventStatusUpdates = true;
+        return ret;
     }
 
-    public synchronized void addEntity(final Entity entity, final int chunkSection) {
+    public void stopPreventingStatusUpdates(final boolean prev) {
+        this.preventStatusUpdates = prev;
+    }
+
+    public void updateStatus(final ChunkHolder.FullChunkStatus status, final EntityLookup lookup) {
+        this.status = status;
+
+        final Entity[] entities = this.entities.getRawData();
+
+        for (int i = 0, size = this.entities.size(); i < size; ++i) {
+            final Entity entity = entities[i];
+
+            final Visibility oldVisibility = EntityLookup.getEntityStatus(entity);
+            entity.chunkStatus = status;
+            final Visibility newVisibility = EntityLookup.getEntityStatus(entity);
+
+            lookup.entityStatusChange(entity, this, oldVisibility, newVisibility, false, false, false);
+        }
+    }
+
+    public boolean addEntity(final Entity entity, final int chunkSection) {
         if (!this.entities.add(entity)) {
-            return;
+            return false;
         }
         entity.chunkStatus = this.status;
         final int sectionIndex = chunkSection - this.minSection;
@@ -89,13 +188,15 @@ public final class ChunkEntitySlices {
                 entry.getValue().addEntity(entity, sectionIndex);
             }
         }
+
+        return true;
     }
 
-    public synchronized void removeEntity(final Entity entity, final int chunkSection) {
+    public boolean removeEntity(final Entity entity, final int chunkSection) {
         if (!this.entities.remove(entity)) {
-            return;
+            return false;
         }
-        entity.chunkStatus = ChunkHolder.FullChunkStatus.INACCESSIBLE;
+        entity.chunkStatus = null;
         final int sectionIndex = chunkSection - this.minSection;
 
         this.allEntities.removeEntity(entity, sectionIndex);
@@ -112,6 +213,8 @@ public final class ChunkEntitySlices {
                 entry.getValue().removeEntity(entity, sectionIndex);
             }
         }
+
+        return true;
     }
 
     public void getHardCollidingEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
@@ -120,6 +223,10 @@ public final class ChunkEntitySlices {
 
     public void getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
         this.allEntities.getEntitiesWithEnderDragonParts(except, box, into, predicate);
+    }
+
+    public void getEntitiesWithoutDragonParts(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
+        this.allEntities.getEntities(except, box, into, predicate);
     }
 
     public <T extends Entity> void getEntities(final EntityType<?> type, final AABB box, final List<? super T> into,
@@ -156,19 +263,9 @@ public final class ChunkEntitySlices {
         if (collection != null) {
             collection.getEntitiesWithEnderDragonParts(except, clazz, box, (List)into, (Predicate)predicate);
         } else {
-            synchronized (this) {
-                this.entitiesByClass.putIfAbsent(clazz, collection = this.initClass(clazz));
-            }
+            this.entitiesByClass.putIfAbsent(clazz, collection = this.initClass(clazz));
             collection.getEntitiesWithEnderDragonParts(except, clazz, box, (List)into, (Predicate)predicate);
         }
-    }
-
-    public synchronized void updateEntity(final Entity entity) {
-        /*// TODO
-        if (prev aabb != entity.getBoundingBox()) {
-            this.entityMap.delete(entity, prev aabb);
-            this.entityMap.insert(entity, prev aabb = entity.getBoundingBox());
-        }*/
     }
 
     protected static final class BasicEntityList<E extends Entity> {
@@ -305,8 +402,6 @@ public final class ChunkEntitySlices {
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
 
-            // TODO use the bitset
-
             final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
 
             for (int section = min; section <= max; ++section) {
@@ -345,8 +440,6 @@ public final class ChunkEntitySlices {
 
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
-
-            // TODO use the bitset
 
             final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
 
@@ -399,8 +492,6 @@ public final class ChunkEntitySlices {
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
 
-            // TODO use the bitset
-
             final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
 
             for (int section = min; section <= max; ++section) {
@@ -451,8 +542,6 @@ public final class ChunkEntitySlices {
 
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
-
-            // TODO use the bitset
 
             final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
 

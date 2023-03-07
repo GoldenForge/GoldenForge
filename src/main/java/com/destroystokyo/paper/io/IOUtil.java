@@ -1,6 +1,6 @@
 package com.destroystokyo.paper.io;
 
-import net.minecraft.server.MinecraftServer;
+import org.bukkit.Bukkit;
 
 public final class IOUtil {
 
@@ -51,7 +51,7 @@ public final class IOUtil {
     }
 
     public static int getPriorityForCurrentThread() {
-        return MinecraftServer.getServer().isSameThread() ? PrioritizedTaskQueue.HIGHEST_PRIORITY : PrioritizedTaskQueue.NORMAL_PRIORITY;
+        return Bukkit.isPrimaryThread() ? PrioritizedTaskQueue.HIGHEST_PRIORITY : PrioritizedTaskQueue.NORMAL_PRIORITY;
     }
 
     @SuppressWarnings("unchecked")

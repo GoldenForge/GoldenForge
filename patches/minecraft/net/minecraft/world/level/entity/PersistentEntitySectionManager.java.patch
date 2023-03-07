@@ -13,78 +13,7 @@
  import net.minecraft.util.CsvOutput;
  import net.minecraft.util.VisibleForDebug;
  import net.minecraft.world.entity.Entity;
-@@ -41,7 +_,69 @@
-    private final LongSet f_157499_ = new LongOpenHashSet();
-    private final Queue<ChunkEntities<T>> f_157500_ = Queues.newConcurrentLinkedQueue();
- 
--   public PersistentEntitySectionManager(Class<T> p_157503_, LevelCallback<T> p_157504_, EntityPersistentStorage<T> p_157505_) {
-+   // Paper start - optimise notify()
-+   public final void removeNavigatorsFromData(Entity entity, final int chunkX, final int chunkZ) {
-+      if (!(entity instanceof net.minecraft.world.entity.Mob)) {
-+         return;
-+      }
-+      io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section =
-+              ((ServerChunkCache) this.entitySliceManager.world.m_7726_()).f_8325_.dataRegionManager.getRegionSection(chunkX, chunkZ);
-+      if (section != null) {
-+         net.minecraft.server.level.ChunkMap.DataRegionSectionData sectionData = (net.minecraft.server.level.ChunkMap.DataRegionSectionData)section.sectionData;
-+         sectionData.removeFromNavigators(section, ((net.minecraft.world.entity.Mob)entity));
-+      }
-+   }
-+
-+   public final void removeNavigatorsFromData(Entity entity) {
-+      if (!(entity instanceof net.minecraft.world.entity.Mob)) {
-+         return;
-+      }
-+      BlockPos entityPos = entity.m_20183_();
-+      io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section =
-+              ((ServerChunkCache) this.entitySliceManager.world.m_7726_()).f_8325_.dataRegionManager.getRegionSection(entityPos.m_123341_() >> 4, entityPos.m_123343_() >> 4);
-+      if (section != null) {
-+         net.minecraft.server.level.ChunkMap.DataRegionSectionData sectionData = (net.minecraft.server.level.ChunkMap.DataRegionSectionData)section.sectionData;
-+         sectionData.removeFromNavigators(section, ((net.minecraft.world.entity.Mob)entity));
-+      }
-+   }
-+
-+   public final void addNavigatorsIfPathingToRegion(Entity entity) {
-+      if (!(entity instanceof net.minecraft.world.entity.Mob)) {
-+         return;
-+      }
-+      BlockPos entityPos = entity.m_20183_();
-+      io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section =
-+              ((ServerChunkCache) this.entitySliceManager.world.m_7726_()).f_8325_.dataRegionManager.getRegionSection(entityPos.m_123341_() >> 4, entityPos.m_123343_() >> 4);
-+      if (section != null) {
-+         net.minecraft.server.level.ChunkMap.DataRegionSectionData sectionData = (net.minecraft.server.level.ChunkMap.DataRegionSectionData)section.sectionData;
-+         if (((net.minecraft.world.entity.Mob)entity).m_21573_().isViableForPathRecalculationChecking()) {
-+            sectionData.addToNavigators(section, ((net.minecraft.world.entity.Mob)entity));
-+         }
-+      }
-+   }
-+
-+   public final void updateNavigatorsInRegion(Entity entity) {
-+      if (!(entity instanceof net.minecraft.world.entity.Mob)) {
-+         return;
-+      }
-+      BlockPos entityPos = entity.m_20183_();
-+      io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section =
-+              ((ServerChunkCache) this.entitySliceManager.world.m_7726_()).f_8325_.dataRegionManager.getRegionSection(entityPos.m_123341_() >> 4, entityPos.m_123343_() >> 4);
-+      if (section != null) {
-+         net.minecraft.server.level.ChunkMap.DataRegionSectionData sectionData = (net.minecraft.server.level.ChunkMap.DataRegionSectionData)section.sectionData;
-+         if (((net.minecraft.world.entity.Mob)entity).m_21573_().isViableForPathRecalculationChecking()) {
-+            sectionData.addToNavigators(section, ((net.minecraft.world.entity.Mob)entity));
-+         } else {
-+            sectionData.removeFromNavigators(section, ((net.minecraft.world.entity.Mob)entity));
-+         }
-+      }
-+   }
-+   // Paper end - optimise notify
-+
-+   public final io.papermc.paper.world.EntitySliceManager entitySliceManager; // Paper
-+
-+   public PersistentEntitySectionManager(Class<T> p_157503_, LevelCallback<T> p_157504_, EntityPersistentStorage<T> p_157505_, io.papermc.paper.world.EntitySliceManager entitySliceManager) {
-+      this.entitySliceManager = entitySliceManager; // Paper
-       this.f_157494_ = new EntityLookup<>();
-       this.f_157495_ = new EntitySectionStorage<>(p_157503_, this.f_157497_);
-       this.f_157497_.defaultReturnValue(Visibility.HIDDEN);
-@@ -71,13 +_,23 @@
+@@ -71,7 +_,16 @@
        return this.m_157538_(p_157534_, false);
     }
  
@@ -101,13 +30,6 @@
        if (!this.m_157557_(p_157539_)) {
           return false;
        } else {
-          long i = SectionPos.m_175568_(p_157539_.m_20183_());
-          EntitySection<T> entitysection = this.f_157495_.m_156893_(i);
-          entitysection.m_188346_(p_157539_);
-+         this.entitySliceManager.addEntity((Entity)p_157539_); // Paper
-          p_157539_.m_141960_(new PersistentEntitySectionManager.Callback(p_157539_, i, entitysection));
-          if (!p_157540_) {
-             this.f_157492_.m_141989_(p_157539_);
 @@ -103,12 +_,14 @@
     public void m_157552_(Stream<T> p_157553_) {
        p_157553_.forEach((p_157607_) -> {
@@ -121,14 +43,6 @@
           this.m_157538_(p_157605_, false);
 +         if (p_157605_ instanceof Entity entity) entity.onAddedToWorld();
        });
-    }
- 
-@@ -132,6 +_,7 @@
- 
-    public void m_157524_(ChunkPos p_157525_, ChunkHolder.FullChunkStatus p_157526_) {
-       Visibility visibility = Visibility.m_157692_(p_157526_);
-+      this.entitySliceManager.chunkStatusChange(p_157525_.f_45578_, p_157525_.f_45579_, p_157526_); // Paper
-       this.m_157527_(p_157525_, visibility);
     }
  
 @@ -185,7 +_,7 @@
@@ -148,7 +62,7 @@
           });
           this.f_157498_.put(chunkentities.m_156791_().m_45588_(), PersistentEntitySectionManager.ChunkLoadStatus.LOADED);
        }
-@@ -349,20 +_,37 @@
+@@ -349,32 +_,18 @@
  
     class Callback implements EntityInLevelCallback {
        private final T f_157609_;
@@ -164,53 +78,30 @@
        }
  
        public void m_142044_() {
-          BlockPos blockpos = this.f_157609_.m_20183_();
+-         BlockPos blockpos = this.f_157609_.m_20183_();
 -         long i = SectionPos.m_175568_(blockpos);
-+         long i = SectionPos.m_175568_(blockpos); final long newSectionPos = i; // Paper - diff on change, new position section
-          if (i != this.f_157610_) {
+-         if (i != this.f_157610_) {
 -            Visibility visibility = this.f_157611_.m_156848_();
-+            PersistentEntitySectionManager.this.entitySliceManager.moveEntity((Entity)this.f_157609_); // Paper
-+            Visibility visibility = this.f_157611_.m_156848_();  final Visibility oldVisibility = visibility; // Paper - diff on change - this should be OLD section visibility
-+            // Paper start
-+            int shift = ((ServerChunkCache) PersistentEntitySectionManager.this.entitySliceManager.world.m_7726_()).f_8325_.dataRegionManager.regionChunkShift;
-+            int oldChunkX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(this.f_157610_);
-+            int oldChunkZ = io.papermc.paper.util.CoordinateUtils.getChunkSectionZ(this.f_157610_);
-+            int oldRegionX = oldChunkX >> shift;
-+            int oldRegionZ = oldChunkZ >> shift;
-+
-+            int newRegionX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(newSectionPos) >> shift;
-+            int newRegionZ = io.papermc.paper.util.CoordinateUtils.getChunkSectionZ(newSectionPos) >> shift;
-+
-+            if (oldRegionX != newRegionX || oldRegionZ != newRegionZ) {
-+               PersistentEntitySectionManager.this.removeNavigatorsFromData((Entity)this.f_157609_, oldChunkX, oldChunkZ);
-+            }
-+            // Paper end
-             if (!this.f_157611_.m_188355_(this.f_157609_)) {
-                PersistentEntitySectionManager.f_157490_.warn("Entity {} wasn't found in section {} (moving to {})", this.f_157609_, SectionPos.m_123184_(this.f_157610_), i);
-             }
-@@ -370,9 +_,16 @@
-             PersistentEntitySectionManager.this.m_157509_(this.f_157610_, this.f_157611_);
-             EntitySection<T> entitysection = PersistentEntitySectionManager.this.f_157495_.m_156893_(i);
-             entitysection.m_188346_(this.f_157609_);
-+            long oldSectionKey = f_157610_;
-             this.f_157611_ = entitysection;
-             this.f_157610_ = i;
-+            // Paper start
-+            if ((oldRegionX != newRegionX || oldRegionZ != newRegionZ) && oldVisibility.m_157691_() && entitysection.m_156848_().m_157691_()) {
-+               PersistentEntitySectionManager.this.addNavigatorsIfPathingToRegion((Entity)this.f_157609_);
-+            }
-+            // Paper end
-             this.m_157620_(visibility, entitysection.m_156848_());
-+            if (this.realEntity != null) net.minecraftforge.common.ForgeHooks.onEntityEnterSection(this.realEntity, oldSectionKey, i);
-          }
- 
+-            if (!this.f_157611_.m_188355_(this.f_157609_)) {
+-               PersistentEntitySectionManager.f_157490_.warn("Entity {} wasn't found in section {} (moving to {})", this.f_157609_, SectionPos.m_123184_(this.f_157610_), i);
+-            }
+-
+-            PersistentEntitySectionManager.this.m_157509_(this.f_157610_, this.f_157611_);
+-            EntitySection<T> entitysection = PersistentEntitySectionManager.this.f_157495_.m_156893_(i);
+-            entitysection.m_188346_(this.f_157609_);
+-            this.f_157611_ = entitysection;
+-            this.f_157610_ = i;
+-            this.m_157620_(visibility, entitysection.m_156848_());
+-         }
+-
        }
-@@ -413,6 +_,8 @@
+ 
+       private void m_157620_(Visibility p_157621_, Visibility p_157622_) {
+@@ -413,6 +_,7 @@
           if (!this.f_157611_.m_188355_(this.f_157609_)) {
              PersistentEntitySectionManager.f_157490_.warn("Entity {} wasn't found in section {} (destroying due to {})", this.f_157609_, SectionPos.m_123184_(this.f_157610_), p_157619_);
           }
 +
-+         PersistentEntitySectionManager.this.entitySliceManager.removeEntity((Entity)this.f_157609_); // Paper
  
           Visibility visibility = PersistentEntitySectionManager.m_157535_(this.f_157609_, this.f_157611_.m_156848_());
           if (visibility.m_157691_()) {

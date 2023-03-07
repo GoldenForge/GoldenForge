@@ -35,7 +35,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,18 @@
+@@ -104,8 +_,21 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -45,27 +45,18 @@
 +   private final java.util.ArrayList<BlockEntity> freshBlockEntities = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> pendingFreshBlockEntities = new java.util.ArrayList<>();
 +
-+   public io.papermc.paper.world.EntitySliceManager entitySliceManager;
 +
 +   protected final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom(java.util.concurrent.ThreadLocalRandom.current().nextLong()); public net.minecraft.util.RandomSource getThreadUnsafeRandom() { return this.randomTickRandom; } // Pufferfish - move thread unsafe random initialization // Pufferfish - getter
++
++   public final ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
++      return ((ServerLevel)this).f_8547_.getChunkAtIfLoadedImmediately(x, z);
++   }
  
     protected Level(WritableLevelData p_220352_, ResourceKey<Level> p_220353_, Holder<DimensionType> p_220354_, Supplier<ProfilerFiller> p_220355_, boolean p_220356_, boolean p_220357_, long p_220358_, int p_220359_) {
 +      super(Level.class);
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
-@@ -133,6 +_,11 @@
-       this.f_46420_ = new BiomeManager(this, p_220358_);
-       this.f_46424_ = p_220357_;
-       this.f_220350_ = new CollectingNeighborUpdater(this, p_220359_);
-+      this.initEntitySlices();
-+   }
-+
-+   public void initEntitySlices() {
-+      entitySliceManager = new io.papermc.paper.world.EntitySliceManager(this); // Paper
-    }
- 
-    public boolean m_5776_() {
 @@ -165,6 +_,15 @@
     }
  
@@ -215,6 +206,15 @@
        explosion.m_46061_();
        explosion.m_46075_(true);
        return explosion;
+@@ -446,7 +_,7 @@
+       if (this.m_151570_(p_46716_)) {
+          return null;
+       } else {
+-         return !this.f_46443_ && Thread.currentThread() != this.f_46423_ ? null : this.m_46745_(p_46716_).m_5685_(p_46716_, LevelChunk.EntityCreationType.IMMEDIATE);
++         return (!this.f_46443_ && !io.papermc.paper.util.TickThread.isTickThread() ? null : this.m_46745_(p_46716_).m_5685_(p_46716_, LevelChunk.EntityCreationType.IMMEDIATE));
+       }
+    }
+ 
 @@ -461,6 +_,7 @@
        if (!this.m_151570_(p_46748_)) {
           this.m_46745_(p_46748_).m_8114_(p_46748_);
@@ -241,7 +241,7 @@
 -         }
 -
 -      });
-+      this.entitySliceManager.getEntities(p_46536_, p_46537_, list, p_46538_); // Paper - optimise this call
++      ((ServerLevel)this).getEntityLookup().getEntities(p_46536_, p_46537_, list, p_46538_); // Paper - optimise this call
        return list;
     }
  
@@ -265,7 +265,7 @@
 -      });
 +      // Paper start - optimise this call
 +      if (p_151528_ instanceof net.minecraft.world.entity.EntityType) {
-+         this.entitySliceManager.getEntities((net.minecraft.world.entity.EntityType)p_151528_, p_151529_, list, p_151530_);
++         ((ServerLevel) this).getEntityLookup().getEntities((net.minecraft.world.entity.EntityType)p_151528_, p_151529_, list, p_151530_);
 +      } else {
 +         Predicate<? super T> test = (obj) -> {
 +            return p_151528_.m_141992_(obj) != null;
@@ -273,9 +273,9 @@
 +         p_151530_ = p_151530_ == null ? test : test.and((Predicate)p_151530_);
 +         Class base;
 +         if (p_151528_ == null || (base = p_151528_.m_142225_()) == null || base == Entity.class) {
-+            this.entitySliceManager.getEntities((Entity) null, p_151529_, (List)list, (Predicate)p_151530_);
++            ((ServerLevel) this).getEntityLookup().getEntities((Entity) null, p_151529_, (List)list, (Predicate)p_151530_);
 +         } else {
-+            this.entitySliceManager.getEntities(base, null, p_151529_, (List)list, (Predicate)p_151530_); // Paper - optimise this call
++            ((ServerLevel) this).getEntityLookup().getEntities(base, null, p_151529_, (List)list, (Predicate)p_151530_); // Paper - optimise this call
 +         }
 +      }
 +      // Paper end - optimise this call

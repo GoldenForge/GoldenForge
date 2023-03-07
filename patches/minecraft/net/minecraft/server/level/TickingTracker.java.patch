@@ -1,0 +1,231 @@
+--- a/net/minecraft/server/level/TickingTracker.java
++++ b/net/minecraft/server/level/TickingTracker.java
+@@ -1,114 +_,114 @@
+-package net.minecraft.server.level;
+-
+-import com.mojang.datafixers.util.Pair;
+-import it.unimi.dsi.fastutil.longs.Long2ByteMap;
+-import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+-import java.util.ArrayList;
+-import java.util.List;
+-import net.minecraft.util.SortedArraySet;
+-import net.minecraft.world.level.ChunkPos;
+-
+-public class TickingTracker extends ChunkTracker {
+-   private static final int f_184142_ = 4;
+-   protected final Long2ByteMap f_184141_ = new Long2ByteOpenHashMap();
+-   private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> f_184143_ = new Long2ObjectOpenHashMap<>();
+-
+-   public TickingTracker() {
+-      super(34, 16, 256);
+-      this.f_184141_.defaultReturnValue((byte)33);
+-   }
+-
+-   private SortedArraySet<Ticket<?>> m_184177_(long p_184178_) {
+-      return this.f_184143_.computeIfAbsent(p_184178_, (p_184180_) -> {
+-         return SortedArraySet.m_14246_(4);
+-      });
+-   }
+-
+-   private int m_184159_(SortedArraySet<Ticket<?>> p_184160_) {
+-      return p_184160_.isEmpty() ? 34 : p_184160_.m_14262_().m_9433_();
+-   }
+-
+-   public void m_184151_(long p_184152_, Ticket<?> p_184153_) {
+-      SortedArraySet<Ticket<?>> sortedarrayset = this.m_184177_(p_184152_);
+-      int i = this.m_184159_(sortedarrayset);
+-      sortedarrayset.add(p_184153_);
+-      if (p_184153_.m_9433_() < i) {
+-         this.m_140715_(p_184152_, p_184153_.m_9433_(), true);
+-      }
+-
+-   }
+-
+-   public void m_184165_(long p_184166_, Ticket<?> p_184167_) {
+-      SortedArraySet<Ticket<?>> sortedarrayset = this.m_184177_(p_184166_);
+-      sortedarrayset.remove(p_184167_);
+-      if (sortedarrayset.isEmpty()) {
+-         this.f_184143_.remove(p_184166_);
+-      }
+-
+-      this.m_140715_(p_184166_, this.m_184159_(sortedarrayset), false);
+-   }
+-
+-   public <T> void m_184154_(TicketType<T> p_184155_, ChunkPos p_184156_, int p_184157_, T p_184158_) {
+-      this.m_184151_(p_184156_.m_45588_(), new Ticket<>(p_184155_, p_184157_, p_184158_));
+-   }
+-
+-   public <T> void m_184168_(TicketType<T> p_184169_, ChunkPos p_184170_, int p_184171_, T p_184172_) {
+-      Ticket<T> ticket = new Ticket<>(p_184169_, p_184171_, p_184172_);
+-      this.m_184165_(p_184170_.m_45588_(), ticket);
+-   }
+-
+-   public void m_184146_(int p_184147_) {
+-      List<Pair<Ticket<ChunkPos>, Long>> list = new ArrayList<>();
+-
+-      for(Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : this.f_184143_.long2ObjectEntrySet()) {
+-         for(Ticket<?> ticket : entry.getValue()) {
+-            if (ticket.m_9428_() == TicketType.f_9444_) {
+-               list.add(Pair.of((Ticket<ChunkPos>)ticket, entry.getLongKey()));
+-            }
+-         }
+-      }
+-
+-      for(Pair<Ticket<ChunkPos>, Long> pair : list) {
+-         Long olong = pair.getSecond();
+-         Ticket<ChunkPos> ticket1 = pair.getFirst();
+-         this.m_184165_(olong, ticket1);
+-         ChunkPos chunkpos = new ChunkPos(olong);
+-         TicketType<ChunkPos> tickettype = ticket1.m_9428_();
+-         this.m_184154_(tickettype, chunkpos, p_184147_, chunkpos);
+-      }
+-
+-   }
+-
+-   protected int m_7031_(long p_184164_) {
+-      SortedArraySet<Ticket<?>> sortedarrayset = this.f_184143_.get(p_184164_);
+-      return sortedarrayset != null && !sortedarrayset.isEmpty() ? sortedarrayset.m_14262_().m_9433_() : Integer.MAX_VALUE;
+-   }
+-
+-   public int m_184161_(ChunkPos p_184162_) {
+-      return this.m_6172_(p_184162_.m_45588_());
+-   }
+-
+-   protected int m_6172_(long p_184174_) {
+-      return this.f_184141_.get(p_184174_);
+-   }
+-
+-   protected void m_7351_(long p_184149_, int p_184150_) {
+-      if (p_184150_ > 33) {
+-         this.f_184141_.remove(p_184149_);
+-      } else {
+-         this.f_184141_.put(p_184149_, (byte)p_184150_);
+-      }
+-
+-   }
+-
+-   public void m_184145_() {
+-      this.m_75588_(Integer.MAX_VALUE);
+-   }
+-
+-   public String m_184175_(long p_184176_) {
+-      SortedArraySet<Ticket<?>> sortedarrayset = this.f_184143_.get(p_184176_);
+-      return sortedarrayset != null && !sortedarrayset.isEmpty() ? sortedarrayset.m_14262_().toString() : "no_ticket";
+-   }
+-}
++//package net.minecraft.server.level;
++//
++//import com.mojang.datafixers.util.Pair;
++//import it.unimi.dsi.fastutil.longs.Long2ByteMap;
++//import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
++//import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
++//import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++//import java.util.ArrayList;
++//import java.util.List;
++//import net.minecraft.util.SortedArraySet;
++//import net.minecraft.world.level.ChunkPos;
++//
++//public class TickingTracker extends ChunkTracker {
++//   private static final int INITIAL_TICKET_LIST_CAPACITY = 4;
++//   protected final Long2ByteMap chunks = new Long2ByteOpenHashMap();
++//   private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>();
++//
++//   public TickingTracker() {
++//      super(34, 16, 256);
++//      this.chunks.defaultReturnValue((byte)33);
++//   }
++//
++//   private SortedArraySet<Ticket<?>> getTickets(long p_184178_) {
++//      return this.tickets.computeIfAbsent(p_184178_, (p_184180_) -> {
++//         return SortedArraySet.create(4);
++//      });
++//   }
++//
++//   private int getTicketLevelAt(SortedArraySet<Ticket<?>> p_184160_) {
++//      return p_184160_.isEmpty() ? 34 : p_184160_.first().getTicketLevel();
++//   }
++//
++//   public void addTicket(long p_184152_, Ticket<?> p_184153_) {
++//      SortedArraySet<Ticket<?>> sortedarrayset = this.getTickets(p_184152_);
++//      int i = this.getTicketLevelAt(sortedarrayset);
++//      sortedarrayset.add(p_184153_);
++//      if (p_184153_.getTicketLevel() < i) {
++//         this.update(p_184152_, p_184153_.getTicketLevel(), true);
++//      }
++//
++//   }
++//
++//   public void removeTicket(long p_184166_, Ticket<?> p_184167_) {
++//      SortedArraySet<Ticket<?>> sortedarrayset = this.getTickets(p_184166_);
++//      sortedarrayset.remove(p_184167_);
++//      if (sortedarrayset.isEmpty()) {
++//         this.tickets.remove(p_184166_);
++//      }
++//
++//      this.update(p_184166_, this.getTicketLevelAt(sortedarrayset), false);
++//   }
++//
++//   public <T> void addTicket(TicketType<T> p_184155_, ChunkPos p_184156_, int p_184157_, T p_184158_) {
++//      this.addTicket(p_184156_.toLong(), new Ticket<>(p_184155_, p_184157_, p_184158_));
++//   }
++//
++//   public <T> void removeTicket(TicketType<T> p_184169_, ChunkPos p_184170_, int p_184171_, T p_184172_) {
++//      Ticket<T> ticket = new Ticket<>(p_184169_, p_184171_, p_184172_);
++//      this.removeTicket(p_184170_.toLong(), ticket);
++//   }
++//
++//   public void replacePlayerTicketsLevel(int p_184147_) {
++//      List<Pair<Ticket<ChunkPos>, Long>> list = new ArrayList<>();
++//
++//      for(Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry : this.tickets.long2ObjectEntrySet()) {
++//         for(Ticket<?> ticket : entry.getValue()) {
++//            if (ticket.getType() == TicketType.PLAYER) {
++//               list.add(Pair.of((Ticket<ChunkPos>)ticket, entry.getLongKey()));
++//            }
++//         }
++//      }
++//
++//      for(Pair<Ticket<ChunkPos>, Long> pair : list) {
++//         Long olong = pair.getSecond();
++//         Ticket<ChunkPos> ticket1 = pair.getFirst();
++//         this.removeTicket(olong, ticket1);
++//         ChunkPos chunkpos = new ChunkPos(olong);
++//         TicketType<ChunkPos> tickettype = ticket1.getType();
++//         this.addTicket(tickettype, chunkpos, p_184147_, chunkpos);
++//      }
++//
++//   }
++//
++//   protected int getLevelFromSource(long p_184164_) {
++//      SortedArraySet<Ticket<?>> sortedarrayset = this.tickets.get(p_184164_);
++//      return sortedarrayset != null && !sortedarrayset.isEmpty() ? sortedarrayset.first().getTicketLevel() : Integer.MAX_VALUE;
++//   }
++//
++//   public int getLevel(ChunkPos p_184162_) {
++//      return this.getLevel(p_184162_.toLong());
++//   }
++//
++//   protected int getLevel(long p_184174_) {
++//      return this.chunks.get(p_184174_);
++//   }
++//
++//   protected void setLevel(long p_184149_, int p_184150_) {
++//      if (p_184150_ > 33) {
++//         this.chunks.remove(p_184149_);
++//      } else {
++//         this.chunks.put(p_184149_, (byte)p_184150_);
++//      }
++//
++//   }
++//
++//   public void runAllUpdates() {
++//      this.runUpdates(Integer.MAX_VALUE);
++//   }
++//
++//   public String getTicketDebugString(long p_184176_) {
++//      SortedArraySet<Ticket<?>> sortedarrayset = this.tickets.get(p_184176_);
++//      return sortedarrayset != null && !sortedarrayset.isEmpty() ? sortedarrayset.first().toString() : "no_ticket";
++//   }
++//}

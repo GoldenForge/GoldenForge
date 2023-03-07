@@ -94,7 +94,8 @@ changelog {
 def extraTxts = [
     rootProject.file('CREDITS.txt'),
     rootProject.file('LICENSE.txt'),
-    rootProject.tasks.createChangelog.outputFile
+
+    // rootProject.tasks.createChangelog.outputFile
 ]
 
 task downloadVersionManifest(type: Download) {

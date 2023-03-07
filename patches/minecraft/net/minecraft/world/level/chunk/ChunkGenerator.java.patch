@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/ChunkGenerator.java
++++ b/net/minecraft/world/level/chunk/ChunkGenerator.java
+@@ -203,7 +_,7 @@
+       return CompletableFuture.supplyAsync(Util.m_183946_("init_biomes", () -> {
+          p_223163_.m_183442_(this.f_62137_, p_223160_.m_224579_());
+          return p_223163_;
+-      }), Util.m_183991_());
++      }), p_223159_);
+    }
+ 
+    public abstract void m_213679_(WorldGenRegion p_223043_, long p_223044_, RandomState p_223045_, BiomeManager p_223046_, StructureManager p_223047_, ChunkAccess p_223048_, GenerationStep.Carving p_223049_);

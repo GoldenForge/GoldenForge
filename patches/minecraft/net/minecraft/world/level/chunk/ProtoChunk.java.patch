@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/ProtoChunk.java
 +++ b/net/minecraft/world/level/chunk/ProtoChunk.java
-@@ -49,6 +_,9 @@
+@@ -49,12 +_,21 @@
     private final ProtoChunkTicks<Block> f_63163_;
     private final ProtoChunkTicks<Fluid> f_188165_;
  
@@ -9,6 +9,18 @@
 +
     public ProtoChunk(ChunkPos p_188167_, UpgradeData p_188168_, LevelHeightAccessor p_188169_, Registry<Biome> p_188170_, @Nullable BlendingData p_188171_) {
        this(p_188167_, p_188168_, (LevelChunkSection[])null, new ProtoChunkTicks<>(), new ProtoChunkTicks<>(), p_188169_, p_188170_, p_188171_);
+    }
+ 
+    public ProtoChunk(ChunkPos p_188173_, UpgradeData p_188174_, @Nullable LevelChunkSection[] p_188175_, ProtoChunkTicks<Block> p_188176_, ProtoChunkTicks<Fluid> p_188177_, LevelHeightAccessor p_188178_, Registry<Biome> p_188179_, @Nullable BlendingData p_188180_) {
+       super(p_188173_, p_188174_, p_188178_, p_188179_, 0L, p_188175_, p_188180_);
++      // Paper start - rewrite light engine
++      if (!(this instanceof ImposterProtoChunk)) {
++         this.setBlockNibbles(ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_188178_));
++         this.setSkyNibbles(ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_188178_));
++      }
++      // Paper end - rewrite light engine
+       this.f_63163_ = p_188176_;
+       this.f_188165_ = p_188177_;
     }
 @@ -123,13 +_,13 @@
           if (this.f_187612_[l].m_188008_() && p_63218_.m_60713_(Blocks.f_50016_)) {

@@ -22,7 +22,7 @@
     public boolean m_223451_(ChunkPos p_223452_, int p_223453_) {
 -      return this.f_63495_.m_223471_(p_223452_, p_223453_);
 +     // return this.regionFileCache.isOldChunkAround(p_223452_, p_223453_);
-+      return false;
++      return true; // Paper - (for now, old unoptimised behavior) TODO implement later? the chunk status that blender uses SHOULD already have this radius loaded, no need to go back for it...
     }
  
     public CompoundTag m_188288_(ResourceKey<Level> p_188289_, Supplier<DimensionDataStorage> p_188290_, CompoundTag p_188291_, Optional<ResourceKey<Codec<? extends ChunkGenerator>>> p_188292_) {

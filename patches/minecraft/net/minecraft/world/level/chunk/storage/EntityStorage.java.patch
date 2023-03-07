@@ -1,15 +1,140 @@
 --- a/net/minecraft/world/level/chunk/storage/EntityStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/EntityStorage.java
-@@ -90,8 +_,12 @@
-          ListTag listtag = new ListTag();
-          p_156559_.m_156792_().forEach((p_156567_) -> {
-             CompoundTag compoundtag1 = new CompoundTag();
-+            try {
-             if (p_156567_.m_20223_(compoundtag1)) {
-                listtag.add(compoundtag1);
-+            }
-+            } catch (Exception e) {
-+               f_156535_.error("An Entity type {} has thrown an exception trying to write state. It will not persist. Report this to the mod author", p_156567_.m_6095_(), e);
-             }
+@@ -44,29 +_,23 @@
+    }
  
-          });
+    public CompletableFuture<ChunkEntities<Entity>> m_141930_(ChunkPos p_156551_) {
+-      return this.f_156540_.contains(p_156551_.m_45588_()) ? CompletableFuture.completedFuture(m_156568_(p_156551_)) : this.f_156539_.m_156587_(p_156551_).thenApplyAsync((p_223458_) -> {
+-         if (p_223458_.isEmpty()) {
+-            this.f_156540_.add(p_156551_.m_45588_());
+-            return m_156568_(p_156551_);
+-         } else {
+-            try {
+-               ChunkPos chunkpos = m_156570_(p_223458_.get());
+-               if (!Objects.equals(p_156551_, chunkpos)) {
+-                  f_156535_.error("Chunk file at {} is in the wrong location. (Expected {}, got {})", p_156551_, p_156551_, chunkpos);
+-               }
+-            } catch (Exception exception) {
+-               f_156535_.warn("Failed to parse chunk {} position info", p_156551_, exception);
+-            }
+-
+-            CompoundTag compoundtag = this.m_156572_(p_223458_.get());
+-            ListTag listtag = compoundtag.m_128437_("Entities", 10);
+-            List<Entity> list = EntityType.m_147045_(listtag, this.f_156538_).collect(ImmutableList.toImmutableList());
+-            return new ChunkEntities<>(p_156551_, list);
+-         }
+-      }, this.f_182485_::m_6937_);
+-   }
+-
+-   private static ChunkPos m_156570_(CompoundTag p_156571_) {
++      throw new UnsupportedOperationException(); // Paper - rewrite chunk system - copy out read logic into readEntities
++   }
++
++   @Override
++   public void m_141971_(ChunkEntities<Entity> p_156559_) {
++
++   }
++
++   // Paper start - rewrite chunk system
++   public static List<Entity> readEntities(ServerLevel level, CompoundTag compoundTag) {
++      ListTag listTag = compoundTag.m_128437_("Entities", 10);
++      List<Entity> list = EntityType.m_147045_(listTag, level).collect(ImmutableList.toImmutableList());
++      return list;
++   }
++   // Paper end - rewrite chunk system
++
++   public static ChunkPos m_156570_(CompoundTag p_156571_) {
+       int[] aint = p_156571_.m_128465_("Position");
+       return new ChunkPos(aint[0], aint[1]);
+    }
+@@ -79,42 +_,65 @@
+       return new ChunkEntities<>(p_156569_, ImmutableList.of());
+    }
+ 
+-   public void m_141971_(ChunkEntities<Entity> p_156559_) {
+-      ChunkPos chunkpos = p_156559_.m_156791_();
+-      if (p_156559_.m_156793_()) {
+-         if (this.f_156540_.add(chunkpos.m_45588_())) {
+-            this.f_156539_.m_63538_(chunkpos, (CompoundTag)null);
++   // Paper start - rewrite chunk system
++   public static void copyEntities(final CompoundTag from, final CompoundTag into) {
++      if (from == null) {
++         return;
++      }
++      final ListTag entitiesFrom = from.m_128437_("Entities", net.minecraft.nbt.Tag.f_178203_);
++      if (entitiesFrom == null || entitiesFrom.isEmpty()) {
++         return;
++      }
++
++      final ListTag entitiesInto = into.m_128437_("Entities", net.minecraft.nbt.Tag.f_178203_);
++      into.m_128365_("Entities", entitiesInto); // this is in case into doesn't have any entities
++      entitiesInto.addAll(0, entitiesFrom.m_6426_()); // need to copy, this is coming from the save thread
++   }
++
++   public static CompoundTag saveEntityChunk(List<Entity> entities, ChunkPos chunkPos, ServerLevel level) {
++      return saveEntityChunk0(entities, chunkPos, level, false);
++   }
++   private static CompoundTag saveEntityChunk0(List<Entity> entities, ChunkPos chunkPos, ServerLevel level, boolean force) {
++      if (!force && entities.isEmpty()) {
++         return null;
++      }
++      ListTag listTag = new ListTag();
++      final java.util.Map<net.minecraft.world.entity.EntityType<?>, Integer> savedEntityCounts = new java.util.HashMap<>(); // Paper
++      entities.forEach((entity) -> { // diff here: use entities parameter
++         // Paper start
++         final EntityType<?> entityType = entity.m_6095_();
++         //final int saveLimit = level.paperConfig().chunks.entityPerChunkSaveLimit.getOrDefault(entityType, -1);
++//         if (false) {
++//            if (savedEntityCounts.getOrDefault(entityType, 0) >= saveLimit) {
++//               return;
++//            }
++//            savedEntityCounts.merge(entityType, 1, Integer::sum);
++//         }
++         savedEntityCounts.merge(entityType, 1, Integer::sum);
++         // Paper end
++         CompoundTag compoundTag = new CompoundTag();
++         if (entity.m_20223_(compoundTag)) {
++            listTag.add(compoundTag);
+          }
+ 
+-      } else {
+-         ListTag listtag = new ListTag();
+-         p_156559_.m_156792_().forEach((p_156567_) -> {
+-            CompoundTag compoundtag1 = new CompoundTag();
+-            if (p_156567_.m_20223_(compoundtag1)) {
+-               listtag.add(compoundtag1);
+-            }
++      });
++      CompoundTag compoundTag = new CompoundTag();
++      compoundTag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
++      compoundTag.m_128365_("Entities", listTag);
++      m_156562_(compoundTag, chunkPos);
+ 
+-         });
+-         CompoundTag compoundtag = new CompoundTag();
+-         compoundtag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
+-         compoundtag.m_128365_("Entities", listtag);
+-         m_156562_(compoundtag, chunkpos);
+-         this.f_156539_.m_63538_(chunkpos, compoundtag).exceptionally((p_156554_) -> {
+-            f_156535_.error("Failed to store chunk {}", chunkpos, p_156554_);
+-            return null;
+-         });
+-         this.f_156540_.remove(chunkpos.m_45588_());
+-      }
++      return !force && listTag.isEmpty() ? null : compoundTag;
+    }
++   // Paper end - rewrite chunk system
+ 
+    public void m_182219_(boolean p_182487_) {
+       this.f_156539_.m_182498_(p_182487_).join();
+       this.f_182485_.m_182329_();
+    }
+ 
+-   private CompoundTag m_156572_(CompoundTag p_156573_) {
++   public static CompoundTag m_156572_(CompoundTag p_156573_) {
+       int i = m_156560_(p_156573_);
+-      return NbtUtils.m_129213_(this.f_156534_, DataFixTypes.ENTITY_CHUNK, p_156573_, i);
++      return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.ENTITY_CHUNK, p_156573_, i, SharedConstants.m_183709_().getWorldVersion()); // Paper - route to new converter system
+    }
+ 
+    public static int m_156560_(CompoundTag p_156561_) {

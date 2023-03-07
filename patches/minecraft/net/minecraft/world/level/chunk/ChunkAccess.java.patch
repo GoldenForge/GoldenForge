@@ -17,11 +17,53 @@
     private long f_187615_;
     /** @deprecated */
     @Nullable
-@@ -74,9 +_,11 @@
+@@ -74,9 +_,53 @@
     protected final Map<BlockPos, BlockEntity> f_187610_ = Maps.newHashMap();
     protected final LevelHeightAccessor f_187611_;
     protected final LevelChunkSection[] f_187612_;
 +   public ChunkSerializer.AsyncSaveData asyncsavedata;
++
++   // Paper start - rewrite light engine
++   private volatile ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles;
++
++   private volatile ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles;
++
++   private volatile boolean[] skyEmptinessMap;
++
++   private volatile boolean[] blockEmptinessMap;
++
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getBlockNibbles() {
++      return this.blockNibbles;
++   }
++
++   public void setBlockNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {
++      this.blockNibbles = nibbles;
++   }
++
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getSkyNibbles() {
++      return this.skyNibbles;
++   }
++
++   public void setSkyNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {
++      this.skyNibbles = nibbles;
++   }
++
++   public boolean[] getSkyEmptinessMap() {
++      return this.skyEmptinessMap;
++   }
++
++   public void setSkyEmptinessMap(final boolean[] emptinessMap) {
++      this.skyEmptinessMap = emptinessMap;
++   }
++
++   public boolean[] getBlockEmptinessMap() {
++      return this.blockEmptinessMap;
++   }
++
++   public void setBlockEmptinessMap(final boolean[] emptinessMap) {
++      this.blockEmptinessMap = emptinessMap;
++   }
++   // Paper end - rewrite light engine
  
     public ChunkAccess(ChunkPos p_187621_, UpgradeData p_187622_, LevelHeightAccessor p_187623_, Registry<Biome> p_187624_, long p_187625_, @Nullable LevelChunkSection[] p_187626_, @Nullable BlendingData p_187627_) {
 -      this.f_187604_ = p_187621_;

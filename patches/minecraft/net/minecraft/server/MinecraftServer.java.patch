@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
+@@ -10,6 +_,7 @@
+ import com.mojang.authlib.minecraft.MinecraftSessionService;
+ import com.mojang.datafixers.DataFixer;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.util.TickThread;
+ import it.unimi.dsi.fastutil.longs.LongIterator;
+ import java.awt.image.BufferedImage;
+ import java.io.ByteArrayOutputStream;
 @@ -155,7 +_,8 @@
  import org.slf4j.Logger;
  
@@ -44,7 +52,7 @@
     public static <S extends MinecraftServer> S m_129872_(Function<Thread, S> p_129873_) {
        AtomicReference<S> atomicreference = new AtomicReference<>();
 -      Thread thread = new Thread(() -> {
-+      Thread thread = new Thread(net.minecraftforge.fml.util.thread.SidedThreadGroups.SERVER, () -> {
++      Thread thread = new TickThread(() -> {
           atomicreference.get().m_130011_();
        }, "Server thread");
        thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> {
@@ -80,7 +88,38 @@
           ChunkPos chunkpos = new ChunkPos(serverchunkcache.m_214994_().m_224579_().m_183230_());
           int i = serverchunkcache.m_8481_().m_142051_(p_177897_);
           if (i < p_177897_.m_141937_()) {
-@@ -457,6 +_,7 @@
+@@ -430,6 +_,7 @@
+    }
+ 
+    private void m_129940_(ChunkProgressListener p_129941_) {
++      this.forceTicks = true;
+       ServerLevel serverlevel = this.m_129783_();
+       f_129750_.info("Preparing start region for dimension {}", (Object)serverlevel.m_46472_().m_135782_());
+       BlockPos blockpos = serverlevel.m_220360_();
+@@ -438,15 +_,13 @@
+       serverchunkcache.m_7827_().m_9310_(500);
+       this.f_129726_ = Util.m_137550_();
+       serverchunkcache.m_8387_(TicketType.f_9442_, new ChunkPos(blockpos), 11, Unit.INSTANCE);
+-
+-      while(serverchunkcache.m_8427_() != 441) {
+-         this.f_129726_ = Util.m_137550_() + 10L;
+-         this.m_130012_();
+-      }
+-
+-      this.f_129726_ = Util.m_137550_() + 10L;
+-      this.m_130012_();
+-
++      this.executeModerately();
++
++//      while(serverchunkcache.getTickingGenerated() != 441) {
++//         this.executeModerately();
++//      }
++
++      this.executeModerately();
+       for(ServerLevel serverlevel1 : this.f_129762_.values()) {
+          ForcedChunksSavedData forcedchunkssaveddata = serverlevel1.m_8895_().m_164858_(ForcedChunksSavedData::m_151483_, "chunks");
+          if (forcedchunkssaveddata != null) {
+@@ -457,15 +_,23 @@
                 ChunkPos chunkpos = new ChunkPos(i);
                 serverlevel1.m_7726_().m_6692_(chunkpos, true);
              }
@@ -88,6 +127,131 @@
           }
        }
  
+-      this.f_129726_ = Util.m_137550_() + 10L;
+-      this.m_130012_();
++      this.executeModerately();
+       p_129941_.m_7646_();
+       serverchunkcache.m_7827_().m_9310_(5);
+       this.m_129962_();
+-   }
++      this.forceTicks = false;
++   }
++
++   private void executeModerately() {
++      this.m_18699_();
++      java.util.concurrent.locks.LockSupport.parkNanos("executing tasks", 1000L);
++   }
++   // CraftBukkit end
++
+ 
+    public GameType m_130008_() {
+       return this.f_129749_.m_5464_();
+@@ -481,32 +_,80 @@
+ 
+    public abstract boolean m_6983_();
+ 
++//   public boolean saveAllChunks(boolean p_129886_, boolean p_129887_, boolean p_129888_) {
++//      boolean flag = false;
++//
++//      for(ServerLevel serverlevel : this.getAllLevels()) {
++//         if (!p_129886_) {
++//            LOGGER.info("Saving chunks for level '{}'/{}", serverlevel, serverlevel.dimension().location());
++//         }
++//
++//         serverlevel.save((ProgressListener)null, p_129887_, serverlevel.noSave && !p_129888_);
++//         flag = true;
++//      }
++//
++//      ServerLevel serverlevel2 = this.overworld();
++//      ServerLevelData serverleveldata = this.worldData.overworldData();
++//      serverleveldata.setWorldBorder(serverlevel2.getWorldBorder().createSettings());
++//      this.worldData.setCustomBossEvents(this.getCustomBossEvents().save());
++//      this.storageSource.saveDataTag(this.registryAccess(), this.worldData, this.getPlayerList().getSingleplayerData());
++//      if (p_129887_) {
++//         for(ServerLevel serverlevel1 : this.getAllLevels()) {
++//            LOGGER.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", (Object)serverlevel1.getChunkSource().chunkMap.getStorageName());
++//         }
++//
++//         LOGGER.info("ThreadedAnvilChunkStorage: All dimensions are saved");
++//      }
++//
++//      return flag;
++//   }
++
+    public boolean m_129885_(boolean p_129886_, boolean p_129887_, boolean p_129888_) {
+-      boolean flag = false;
+-
+-      for(ServerLevel serverlevel : this.m_129785_()) {
+-         if (!p_129886_) {
+-            f_129750_.info("Saving chunks for level '{}'/{}", serverlevel, serverlevel.m_46472_().m_135782_());
+-         }
+-
+-         serverlevel.m_8643_((ProgressListener)null, p_129887_, serverlevel.f_8564_ && !p_129888_);
+-         flag = true;
+-      }
+-
+-      ServerLevel serverlevel2 = this.m_129783_();
+-      ServerLevelData serverleveldata = this.f_129749_.m_5996_();
+-      serverleveldata.m_7831_(serverlevel2.m_6857_().m_61970_());
+-      this.f_129749_.m_5917_(this.m_129901_().m_136307_());
+-      this.f_129744_.m_78290_(this.m_206579_(), this.f_129749_, this.m_6846_().m_6960_());
+-      if (p_129887_) {
+-         for(ServerLevel serverlevel1 : this.m_129785_()) {
+-            f_129750_.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", (Object)serverlevel1.m_7726_().f_8325_.m_182285_());
+-         }
+-
+-         f_129750_.info("ThreadedAnvilChunkStorage: All dimensions are saved");
+-      }
+-
+-      return flag;
++      // Paper start - rewrite chunk system - add close param
++      // This allows us to avoid double saving chunks by closing instead of saving then closing
++      return this.saveAllChunks(p_129886_, p_129887_, p_129888_, false);
++   }
++   public boolean saveAllChunks(boolean suppressLogs, boolean flush, boolean force, boolean close) {
++      // Paper end - rewrite chunk system - add close param
++      boolean flag3 = false;
++
++      for (Iterator iterator = this.m_129785_().iterator(); iterator.hasNext(); flag3 = true) {
++         ServerLevel worldserver = (ServerLevel) iterator.next();
++
++         if (!suppressLogs) {
++            MinecraftServer.f_129750_.info("Saving chunks for level '{}'/{}", worldserver, worldserver.m_46472_().m_135782_());
++         }
++         // Paper start - rewrite chunk system
++         worldserver.save((ProgressListener) null, flush, worldserver.f_8564_ && !force, close);
++         if (flush) {
++            MinecraftServer.f_129750_.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", worldserver.m_7726_().f_8325_.m_182285_());
++         }
++         // Paper end - rewrite chunk system
++      }
++
++      // CraftBukkit start - moved to WorldServer.save
++        /*
++        WorldServer worldserver1 = this.overworld();
++        IWorldDataServer iworlddataserver = this.worldData.overworldData();
++
++        iworlddataserver.setWorldBorder(worldserver1.getWorldBorder().createSettings());
++        this.worldData.setCustomBossEvents(this.getCustomBossEvents().save());
++        this.storageSource.saveDataTag(this.registryAccess(), this.worldData, this.getPlayerList().getSingleplayerData());
++        */
++      // CraftBukkit end
++      if (flush) {
++         Iterator iterator1 = this.m_129785_().iterator();
++
++         while (iterator1.hasNext()) {
++            ServerLevel worldserver2 = (ServerLevel) iterator1.next();
++
++            //MinecraftServer.LOGGER.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", worldserver2.getChunkSource().chunkMap.getStorageName()); // Paper - move up
++         }
++
++         MinecraftServer.f_129750_.info("ThreadedAnvilChunkStorage: All dimensions are saved");
++      }
++
++      return flag3;
+    }
+ 
+    public boolean m_195514_(boolean p_195515_, boolean p_195516_, boolean p_195517_) {
 @@ -527,6 +_,8 @@
     }
  
@@ -97,15 +261,44 @@
        if (this.f_177872_.m_142763_()) {
           this.m_236737_();
        }
-@@ -561,6 +_,7 @@
-             serverlevel1.m_7726_().m_201698_(() -> {
-                return true;
-             }, false);
-+            while (serverlevel1.m_7726_().m_8466_()); // Paper - drain tasks
+@@ -550,27 +_,29 @@
+             serverlevel.f_8564_ = false;
           }
+       }
+-
+-      while(this.f_129762_.values().stream().anyMatch((p_202480_) -> {
+-         return p_202480_.m_7726_().f_8325_.m_201907_();
+-      })) {
+-         this.f_129726_ = Util.m_137550_() + 1L;
+-
+-         for(ServerLevel serverlevel1 : this.m_129785_()) {
+-            serverlevel1.m_7726_().m_201915_();
+-            serverlevel1.m_7726_().m_201698_(() -> {
+-               return true;
+-            }, false);
+-         }
+-
+-         this.m_130012_();
+-      }
++//
++//      while(this.levels.values().stream().anyMatch((p_202480_) -> {
++//         return p_202480_.getChunkSource().chunkMap.hasWork();
++//      })) {
++//         this.nextTickTime = Util.getMillis() + 1L;
++//
++//         for(ServerLevel serverlevel1 : this.getAllLevels()) {
++//            serverlevel1.getChunkSource().removeTicketsOnClosing();
++//            serverlevel1.getChunkSource().tick(() -> {
++//               return true;
++//            }, false);
++//            while (serverlevel1.getChunkSource().pollTask()); // Paper - drain tasks
++//         }
++//
++//         this.waitUntilNextTick();
++//      }
  
-          this.m_130012_();
-@@ -571,6 +_,7 @@
+       this.m_129885_(false, true, false);
+ 
        for(ServerLevel serverlevel2 : this.m_129785_()) {
           if (serverlevel2 != null) {
              try {
@@ -118,12 +311,12 @@
        }
  
 +      f_129750_.info("Flushing Chunk IO");
-+      com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.close(true, true); // Paper
++      io.papermc.paper.chunk.system.io.RegionFileIOThread.close(true); // Paper // Paper - rewrite chunk system
 +
     }
  
     public String m_130009_() {
-@@ -613,12 +_,20 @@
+@@ -613,12 +_,22 @@
  
     }
  
@@ -134,6 +327,8 @@
 +   private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
 +   private long lastTick = 0;
 +   private long catchupTime = 0;
++
++   public static volatile RuntimeException chunkSystemCrash; // Paper - rewrite chunk system
     protected void m_130011_() {
        try {
           if (!this.m_7038_()) {
@@ -144,7 +339,7 @@
           this.f_129726_ = Util.m_137550_();
           this.f_129757_.m_134908_(Component.m_237113_(this.f_129709_));
           this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
-@@ -626,20 +_,27 @@
+@@ -626,20 +_,33 @@
           this.f_129757_.m_242958_(this.m_214005_());
           this.m_129878_(this.f_129757_);
  
@@ -154,6 +349,12 @@
           while(this.f_129764_) {
 -            long i = Util.m_137550_() - this.f_129726_;
 -            if (i > 2000L && this.f_129726_ - this.f_129718_ >= 15000L) {
++            // Paper start - rewrite chunk system
++            // guarantee that nothing can stop the server from halting if it can at least still tick
++            if (this.chunkSystemCrash != null) {
++               throw this.chunkSystemCrash;
++            }
++            // Paper end - rewrite chunk system
 +            long i = ((curTime = System.nanoTime()) / (1000L * 1000L)) - this.f_129726_; // Paper
 +            if (i > 5000L && this.f_129726_ - this.f_129718_ >= 30000L) {
                 long j = i / 50L;
@@ -199,10 +400,18 @@
              this.m_6988_();
           }
  
-@@ -706,9 +_,15 @@
-    }
+@@ -704,11 +_,22 @@
  
+       return crashreport;
+    }
+-
++   public boolean forceTicks; // Paper
     private boolean m_129960_() {
++      // Paper start
++      if (this.forceTicks) {
++         return true;
++      }
++      // Paper end
 +      if (isOversleep) return canOversleep();// Paper - because of our changes, this logic is broken
        return this.m_18767_() || Util.m_137550_() < (this.f_129728_ ? this.f_129727_ : this.f_129726_);
     }
