@@ -21,3 +21,48 @@
     public LevelChunkTicks() {
     }
  
+@@ -50,6 +_,7 @@
+    public ScheduledTick<T> m_193195_() {
+       ScheduledTick<T> scheduledtick = this.f_193163_.poll();
+       if (scheduledtick != null) {
++         this.dirty = true; // Paper - add dirty flag
+          this.f_193165_.remove(scheduledtick);
+       }
+ 
+@@ -58,6 +_,7 @@
+ 
+    public void m_183393_(ScheduledTick<T> p_193177_) {
+       if (this.f_193165_.add(p_193177_)) {
++         this.dirty = true; // Paper - add dirty flag
+          this.m_193193_(p_193177_);
+       }
+ 
+@@ -81,7 +_,7 @@
+       while(iterator.hasNext()) {
+          ScheduledTick<T> scheduledtick = iterator.next();
+          if (p_193184_.test(scheduledtick)) {
+-            iterator.remove();
++            iterator.remove(); this.dirty = true; // Paper - add dirty flag
+             this.f_193165_.remove(scheduledtick);
+          }
+       }
+@@ -97,6 +_,7 @@
+    }
+ 
+    public ListTag m_183237_(long p_193174_, Function<T, String> p_193175_) {
++      this.lastSaved = p_193174_; // Paper - add dirty system to level ticks
+       ListTag listtag = new ListTag();
+       if (this.f_193164_ != null) {
+          for(SavedTick<T> savedtick : this.f_193164_) {
+@@ -113,6 +_,11 @@
+ 
+    public void m_193171_(long p_193172_) {
+       if (this.f_193164_ != null) {
++         // Paper start - add dirty system to level chunk ticks
++         if (this.f_193163_.isEmpty()) {
++            this.lastSaved = p_193172_;
++         }
++         // Paper end - add dirty system to level chunk ticks
+          int i = -this.f_193164_.size();
+ 
+          for(SavedTick<T> savedtick : this.f_193164_) {

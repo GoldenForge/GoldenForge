@@ -330,6 +330,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     }
 
     private boolean addEntity(final Entity entity, final boolean fromDisk) {
+        if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.EntityJoinLevelEvent(entity, entity.level, fromDisk))) return false;
         final BlockPos pos = entity.blockPosition();
         final int sectionX = pos.getX() >> 4;
         final int sectionY = Mth.clamp(pos.getY() >> 4, this.minSection, this.maxSection);

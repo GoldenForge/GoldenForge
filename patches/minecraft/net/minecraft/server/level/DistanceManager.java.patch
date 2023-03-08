@@ -470,7 +470,7 @@
 +   }
 +
 +   private SortedArraySet<Ticket<?>> m_140857_(long p_140858_) {
-+      return this.chunkMap.f_140133_.chunkTaskScheduler.chunkHolderManager.getTicketsCopy().getOrDefault(p_140858_, SortedArraySet.m_14246_(4));
++      return this.getChunkHolderManager().getTicketsCopy().getOrDefault(p_140858_, SortedArraySet.m_14246_(4));
     }
  
     public boolean m_201911_() {

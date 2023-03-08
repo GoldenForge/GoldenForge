@@ -8,7 +8,7 @@
  import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
  import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
  import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
-@@ -34,28 +_,62 @@
+@@ -34,27 +_,27 @@
  import net.minecraft.world.level.LevelHeightAccessor;
  import org.slf4j.Logger;
  
@@ -39,43 +39,8 @@
        this.f_156618_ = p_223516_;
 -      this.f_63773_ = new IOWorker(p_223509_, p_223514_, p_223509_.getFileName().toString());
     }
-+
-+    // Paper start - actually unload POI data
-+    public void unloadData(long coordinate) {
-+        ChunkPos chunkPos = new ChunkPos(coordinate);
-+        this.m_63796_(chunkPos);
-+
-+        Long2ObjectMap<Optional<R>> data = this.f_63774_;
-+        int before = data.size();
-+
-+        for (int section = this.f_156618_.m_151560_(); section < this.f_156618_.m_151561_(); ++section) {
-+            data.remove(SectionPos.m_123209_(chunkPos.f_45578_, section, chunkPos.f_45579_));
-+        }
-+
-+        if (before != data.size()) {
-+            this.onUnload(coordinate);
-+        }
-+    }
-+
-+    protected void onUnload(long coordinate) {}
-+
-+    public boolean isEmpty(long coordinate) {
-+        Long2ObjectMap<Optional<R>> data = this.f_63774_;
-+        int x = MCUtil.getCoordinateX(coordinate);
-+        int z = MCUtil.getCoordinateZ(coordinate);
-+        for (int section = this.f_156618_.m_151560_(); section < this.f_156618_.m_151561_(); ++section) {
-+            Optional<R> optional = data.get(SectionPos.m_123209_(x, section, z));
-+            if (optional != null && optional.orElse(null) != null) {
-+                return false;
-+            }
-+        }
-+
-+        return true;
-+    }
-+    // Paper end - actually unload POI data
  
     protected void m_6202_(BooleanSupplier p_63812_) {
-       while(this.m_202164_() && p_63812_.getAsBoolean()) {
 @@ -70,11 +_,11 @@
     }
  
@@ -90,7 +55,7 @@
        if (this.m_156630_(p_63824_)) {
           return Optional.empty();
        } else {
-@@ -115,21 +_,22 @@
+@@ -115,21 +_,17 @@
        }
     }
  
@@ -100,12 +65,7 @@
 -      this.m_63801_(p_63815_, registryops, optional.orElse((CompoundTag)null));
 -   }
 +    private void m_63814_(ChunkPos p_63815_) {
-+        // Paper start - expose function to load in data
-+        this.loadInData(p_63815_, this.tryRead(p_63815_));
-+    }
-+    public void loadInData(ChunkPos chunkPos, CompoundTag compound) {
-+        this.m_63801_(chunkPos, RegistryOps.m_206821_(NbtOps.f_128958_, this.f_223507_), compound);
-+        // Paper end - expose function to load in data
++        throw new IllegalStateException("Only chunk system can load in state, offending class:" + this.getClass().getName()); // Paper - rewrite chunk system;
 +    }
  
 -   private CompletableFuture<Optional<CompoundTag>> m_223532_(ChunkPos p_223533_) {
@@ -127,16 +87,34 @@
     }
  
     private <T> void m_63801_(ChunkPos p_63802_, DynamicOps<T> p_63803_, @Nullable T p_63804_) {
-@@ -162,7 +_,7 @@
+@@ -142,8 +_,16 @@
+          int j = m_63805_(dynamic1);
+          int k = SharedConstants.m_183709_().getWorldVersion();
+          boolean flag = j != k;
+-         Dynamic<T> dynamic = this.f_63778_.update(this.f_63779_.m_14504_(), dynamic1, j, k);
+-         OptionalDynamic<T> optionaldynamic = dynamic.get("Sections");
++         //Dynamic<T> dynamic = this.fixerUpper.update(this.type.getType(), dynamic1, j, k);
++          // Paper start - route to new converter system
++          Dynamic<T> dynamic2;
++          if (this.f_63779_.m_14504_() == net.minecraft.util.datafix.fixes.References.f_16780_) {
++              dynamic2 = new Dynamic<>(dynamic1.getOps(), (T)ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.POI_CHUNK, (CompoundTag)dynamic1.getValue(), j, k));
++          } else {
++              dynamic2 = this.f_63778_.update(this.f_63779_.m_14504_(), dynamic1, j, k);
++          }
++          // Paper end - route to new converter system
++         OptionalDynamic<T> optionaldynamic = dynamic1.get("Sections");
+ 
+          for(int l = this.f_156618_.m_151560_(); l < this.f_156618_.m_151561_(); ++l) {
+             long i1 = m_156627_(p_63802_, l);
+@@ -162,7 +_,6 @@
              });
           }
        }
 -
-+       if (this instanceof net.minecraft.world.entity.ai.village.poi.PoiManager) { ((net.minecraft.world.entity.ai.village.poi.PoiManager)this).queueUnload(p_63802_.longKey, net.minecraft.server.MinecraftServer.currentTickLong + 1); } // Paper - unload POI data
     }
  
     private void m_63825_(ChunkPos p_63826_) {
-@@ -170,13 +_,30 @@
+@@ -170,7 +_,8 @@
        Dynamic<Tag> dynamic = this.m_63798_(p_63826_, registryops);
        Tag tag = dynamic.getValue();
        if (tag instanceof CompoundTag) {
@@ -146,51 +124,12 @@
        } else {
           f_63772_.error("Expected compound tag, got {}", (Object)tag);
        }
- 
-    }
- 
-+
-+    // Paper start - internal get data function, copied from above
-+    private CompoundTag getDataInternal(ChunkPos chunkcoordintpair) {
-+        RegistryOps<Tag> registryOps = RegistryOps.m_206821_(NbtOps.f_128958_, this.f_223507_);
-+        Dynamic<Tag> dynamic = this.m_63798_(chunkcoordintpair, registryOps);
-+        Tag nbtbase = (Tag) dynamic.getValue();
-+
-+        if (nbtbase instanceof CompoundTag) {
-+            return (CompoundTag)nbtbase;
-+        } else {
-+            SectionStorage.f_63772_.error("Expected compound tag, got {}", nbtbase);
-+        }
-+        return null;
-+    }
-+    // Paper end
-+
-    private <T> Dynamic<T> m_63798_(ChunkPos p_63799_, DynamicOps<T> p_63800_) {
-       Map<T, T> map = Maps.newHashMap();
- 
-@@ -232,6 +_,24 @@
+@@ -232,6 +_,7 @@
     }
  
     public void close() throws IOException {
 -      this.f_63773_.close();
 +      //this.worker.close();
++       super.close();
     }
-+
-+
-+    // Paper start - get data function
-+    public CompoundTag getData(ChunkPos chunkcoordintpair) {
-+        // Note: Copied from above
-+        // This is checking if the data needs to be written, then it builds it later in getDataInternal(ChunkCoordIntPair)
-+        if (!this.f_63775_.isEmpty()) {
-+            for (int i = this.f_156618_.m_151560_(); i < this.f_156618_.m_151561_(); ++i) {
-+                long j = SectionPos.m_123196_(chunkcoordintpair, i).m_123252_();
-+
-+                if (this.f_63775_.contains(j)) {
-+                    return this.getDataInternal(chunkcoordintpair);
-+                }
-+            }
-+        }
-+        return null;
-+    }
-+    // Paper end
  }

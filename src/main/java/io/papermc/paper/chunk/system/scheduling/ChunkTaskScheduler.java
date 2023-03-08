@@ -49,8 +49,8 @@ public final class ChunkTaskScheduler {
             return;
         }
         initialised = true;
-        newChunkSystemIOThreads = 2;
-        newChunkSystemWorkerThreads = -6;
+        newChunkSystemIOThreads = -1;
+        newChunkSystemWorkerThreads = -1;
         if (newChunkSystemIOThreads < 0) {
             newChunkSystemIOThreads = 1;
         } else {
@@ -93,7 +93,7 @@ public final class ChunkTaskScheduler {
             "Paper Chunk System Worker Pool", newChunkSystemWorkerThreads,
             (final Thread thread, final Integer id) -> {
                 thread.setPriority(Thread.NORM_PRIORITY - 2);
-                thread.setName("Tuinity Chunk System Worker #" + id.intValue());
+                thread.setName("Paper Chunk System Worker #" + id.intValue());
                 thread.setUncaughtExceptionHandler(NewChunkHolder.CHUNKSYSTEM_UNCAUGHT_EXCEPTION_HANDLER);
             }, (long)(20.0e6)); // 20ms
 

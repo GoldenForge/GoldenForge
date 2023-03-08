@@ -1,0 +1,84 @@
+--- a/net/minecraft/world/level/entity/EntityTickList.java
++++ b/net/minecraft/world/level/entity/EntityTickList.java
+@@ -8,54 +_,51 @@
+ import net.minecraft.world.entity.Entity;
+ 
+ public class EntityTickList {
+-   private Int2ObjectMap<Entity> f_156903_ = new Int2ObjectLinkedOpenHashMap<>();
+-   private Int2ObjectMap<Entity> f_156904_ = new Int2ObjectLinkedOpenHashMap<>();
+-   @Nullable
+-   private Int2ObjectMap<Entity> f_156905_;
++   private final io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Entity> entities = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>(true); // Paper - rewrite this, always keep this updated - why would we EVER tick an entity that's not ticking?
+ 
+    private void m_156907_() {
+-      if (this.f_156905_ == this.f_156903_) {
+-         this.f_156904_.clear();
+-
+-         for(Int2ObjectMap.Entry<Entity> entry : Int2ObjectMaps.fastIterable(this.f_156903_)) {
+-            this.f_156904_.put(entry.getIntKey(), entry.getValue());
+-         }
+-
+-         Int2ObjectMap<Entity> int2objectmap = this.f_156903_;
+-         this.f_156903_ = this.f_156904_;
+-         this.f_156904_ = int2objectmap;
+-      }
++//      if (this.iterated == this.active) {
++//         this.passive.clear();
++//
++//         for(Int2ObjectMap.Entry<Entity> entry : Int2ObjectMaps.fastIterable(this.active)) {
++//            this.passive.put(entry.getIntKey(), entry.getValue());
++//         }
++//
++//         Int2ObjectMap<Entity> int2objectmap = this.active;
++//         this.active = this.passive;
++//         this.passive = int2objectmap;
++//      }
+ 
+    }
+ 
+    public void m_156908_(Entity p_156909_) {
++      io.papermc.paper.util.TickThread.ensureTickThread("Asynchronous entity ticklist addition"); // Paper
+       this.m_156907_();
+-      this.f_156903_.put(p_156909_.m_19879_(), p_156909_);
++      this.entities.add(p_156909_); // Paper - replace with better logic, do not delay removals/additions
+    }
+ 
+    public void m_156912_(Entity p_156913_) {
+       this.m_156907_();
+-      this.f_156903_.remove(p_156913_.m_19879_());
++      this.entities.remove(p_156913_); // Paper - replace with better logic, do not delay removals/additions
+    }
+ 
+    public boolean m_156914_(Entity p_156915_) {
+-      return this.f_156903_.containsKey(p_156915_.m_19879_());
++      return this.entities.contains(p_156915_); // Paper - replace with better logic, do not delay removals/additions
+    }
+ 
+    public void m_156910_(Consumer<Entity> p_156911_) {
+-      if (this.f_156905_ != null) {
+-         throw new UnsupportedOperationException("Only one concurrent iteration supported");
+-      } else {
+-         this.f_156905_ = this.f_156903_;
+-
+-         try {
+-            for(Entity entity : this.f_156903_.values()) {
+-               p_156911_.accept(entity);
+-            }
+-         } finally {
+-            this.f_156905_ = null;
++      io.papermc.paper.util.TickThread.ensureTickThread("Asynchronous entity ticklist iteration"); // Paper
++      // Paper start - replace with better logic, do not delay removals/additions
++      // To ensure nothing weird happens with dimension travelling, do not iterate over new entries...
++      // (by dfl iterator() is configured to not iterate over new entries)
++      io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Entity> iterator = this.entities.iterator();
++      try {
++         while (iterator.hasNext()) {
++            p_156911_.accept(iterator.next());
+          }
+-
++      } finally {
++         iterator.finishedIterating();
+       }
++      // Paper end - replace with better logic, do not delay removals/additions
+    }
+ }

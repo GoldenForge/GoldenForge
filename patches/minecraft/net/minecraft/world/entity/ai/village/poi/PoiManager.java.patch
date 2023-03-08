@@ -14,7 +14,7 @@
  import java.nio.file.Path;
  import java.util.Comparator;
  import java.util.List;
-@@ -38,13 +_,103 @@
+@@ -38,13 +_,30 @@
  public class PoiManager extends SectionStorage<PoiSection> {
     public static final int f_148565_ = 6;
     public static final int f_148566_ = 1;
@@ -41,83 +41,9 @@
     public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
        super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
 -      this.f_27029_ = new PoiManager.DistanceTracker();
--   }
 +      //this.distanceTracker = new PoiManager.DistanceTracker();
 +      this.world = (net.minecraft.server.level.ServerLevel)p_217873_; // Paper
-+   }
-+
-+
-+   // Paper start - actually unload POI data
-+   private final java.util.TreeSet<QueuedUnload> queuedUnloads = new java.util.TreeSet<>();
-+   private final Long2ObjectOpenHashMap<QueuedUnload> queuedUnloadsByCoordinate = new Long2ObjectOpenHashMap<>();
-+
-+   static final class QueuedUnload implements Comparable<QueuedUnload> {
-+
-+      private final long unloadTick;
-+      private final long coordinate;
-+
-+      public QueuedUnload(long unloadTick, long coordinate) {
-+         this.unloadTick = unloadTick;
-+         this.coordinate = coordinate;
-+      }
-+
-+      @Override
-+      public int compareTo(QueuedUnload other) {
-+         if (other.unloadTick == this.unloadTick) {
-+            return Long.compare(this.coordinate, other.coordinate);
-+         } else {
-+            return Long.compare(this.unloadTick, other.unloadTick);
-+         }
-+      }
-+
-+      @Override
-+      public int hashCode() {
-+         int hash = 1;
-+         hash = hash * 31 + Long.hashCode(this.unloadTick);
-+         hash = hash * 31 + Long.hashCode(this.coordinate);
-+         return hash;
-+      }
-+
-+      @Override
-+      public boolean equals(Object obj) {
-+         if (obj == null || obj.getClass() != QueuedUnload.class) {
-+            return false;
-+         }
-+         QueuedUnload other = (QueuedUnload)obj;
-+         return other.unloadTick == this.unloadTick && other.coordinate == this.coordinate;
-+      }
-+   }
-+
-+   long determineDelay(long coordinate) {
-+      if (this.isEmpty(coordinate)) {
-+         return 5 * 60 * 20;
-+      } else {
-+         return 60 * 20;
-+      }
-+   }
-+
-+   public void queueUnload(long coordinate, long minTarget) {
-+      QueuedUnload unload = new QueuedUnload(minTarget + this.determineDelay(coordinate), coordinate);
-+      QueuedUnload existing = this.queuedUnloadsByCoordinate.put(coordinate, unload);
-+      if (existing != null) {
-+         this.queuedUnloads.remove(existing);
-+      }
-+      this.queuedUnloads.add(unload);
-+   }
-+
-+   public void dequeueUnload(long coordinate) {
-+      QueuedUnload unload = this.queuedUnloadsByCoordinate.remove(coordinate);
-+      if (unload != null) {
-+         this.queuedUnloads.remove(unload);
-+      }
-+
-+   }
-+
-+
-+   @Override
-+   public void unloadData(long coordinate) {
-+      super.unloadData(coordinate);
-+   }
+    }
 +
  
     public void m_217919_(BlockPos p_217920_, Holder<PoiType> p_217921_) {
