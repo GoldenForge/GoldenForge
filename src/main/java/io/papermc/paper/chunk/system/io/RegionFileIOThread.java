@@ -557,7 +557,6 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
         final ChunkDataTask task = taskController.tasks.compute(key, (final ChunkCoordinate keyInMap, final ChunkDataTask taskRunning) -> {
             if (taskRunning == null || taskRunning.failedWrite) {
                 // no task is scheduled or the previous write failed - meaning we need to overwrite it
-                GoldenForge.LOGGER.info("scheduleSaveInternal");
 
                 // create task
                 final ChunkDataTask newTask = new ChunkDataTask(world, chunkX, chunkZ, taskController, RegionFileIOThread.this, priority);
@@ -1263,7 +1262,6 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             CompoundTag write = this.inProgressWrite;
 
             if (write == NOTHING_TO_WRITE) {
-                GoldenForge.LOGGER.info("NOTHING_TO_WRITE");
                 final ChunkDataTask inMap = this.taskController.tasks.compute(chunkKey, (final ChunkCoordinate keyInMap, final ChunkDataTask valueInMap) -> {
                     if (valueInMap == null) {
                         throw new IllegalStateException("Write completed concurrently, expected this task: " + ChunkDataTask.this.toString() + ", report this!");

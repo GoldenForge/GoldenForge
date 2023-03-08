@@ -943,7 +943,7 @@
  
     }
  
-@@ -917,12 +_,72 @@
+@@ -917,12 +_,71 @@
           return "cancelled";
        }
     }
@@ -969,7 +969,6 @@
 +   @Override
 +   public void m_63502_(ChunkPos chunkcoordintpair, CompoundTag nbttagcompound) throws IOException {
 +      // Paper start - rewrite chunk system
-+      GoldenForge.LOGGER.info("ChunkMap#write");
 +      if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
 +         io.papermc.paper.chunk.system.io.RegionFileIOThread.scheduleSave(
 +                 this.f_140133_, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, nbttagcompound,
