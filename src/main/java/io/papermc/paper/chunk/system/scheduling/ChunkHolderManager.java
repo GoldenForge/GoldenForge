@@ -6,7 +6,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
-import io.papermc.paper.ConfigTemp;
 import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
@@ -112,11 +111,11 @@ public final class ChunkHolderManager {
     public void close(final boolean save, final boolean halt) {
         TickThread.ensureTickThread("Closing world off-main");
         if (halt) {
-            LOGGER.info("Waiting 60s for chunk system to halt for world '" + this.world.dimension().toString() + "'");
+            LOGGER.info("Waiting 60s for chunk system to halt for world '" + this.world.getWorld().getName() + "'");
             if (!this.taskScheduler.halt(true, TimeUnit.SECONDS.toNanos(60L))) {
-                LOGGER.warn("Failed to halt world generation/loading tasks for world '" + this.world.dimension().toString() + "'");
+                LOGGER.warn("Failed to halt world generation/loading tasks for world '" + this.world.getWorld().getName() + "'");
             } else {
-                LOGGER.info("Halted chunk system for world '" + this.world.dimension().toString() + "'");
+                LOGGER.info("Halted chunk system for world '" + this.world.getWorld().getName() + "'");
             }
         }
 
@@ -132,17 +131,17 @@ public final class ChunkHolderManager {
         try {
             this.world.chunkDataControllerNew.getCache().close();
         } catch (final IOException ex) {
-            LOGGER.error("Failed to close chunk regionfile cache for world '" + this.world.dimension().toString() + "'", ex);
+            LOGGER.error("Failed to close chunk regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
         }
         try {
             this.world.entityDataControllerNew.getCache().close();
         } catch (final IOException ex) {
-            LOGGER.error("Failed to close entity regionfile cache for world '" + this.world.dimension().toString() + "'", ex);
+            LOGGER.error("Failed to close entity regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
         }
         try {
             this.world.poiDataControllerNew.getCache().close();
         } catch (final IOException ex) {
-            LOGGER.error("Failed to close poi regionfile cache for world '" + this.world.dimension().toString() + "'", ex);
+            LOGGER.error("Failed to close poi regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
         }
     }
 
@@ -156,8 +155,8 @@ public final class ChunkHolderManager {
     public void autoSave() {
         final List<NewChunkHolder> reschedule = new ArrayList<>();
         final long currentTick = MinecraftServer.currentTickLong;
-        final long maxSaveTime = currentTick - ConfigTemp.autoSavePeriod;
-        for (int autoSaved = 0; autoSaved < ConfigTemp.maxAutoSaveChunksPerTick && !this.autoSaveQueue.isEmpty();) {
+        final long maxSaveTime = currentTick - 6000;
+        for (int autoSaved = 0; autoSaved < 24 && !this.autoSaveQueue.isEmpty();) {
             final NewChunkHolder holder = this.autoSaveQueue.first();
 
             if (holder.lastAutoSave > maxSaveTime) {
@@ -187,7 +186,7 @@ public final class ChunkHolderManager {
         final List<NewChunkHolder> holders = this.getChunkHolders();
 
         if (logProgress) {
-            LOGGER.info("Saving all chunkholders for world '" + this.world.dimension().toString() + "'");
+            LOGGER.info("Saving all chunkholders for world '" + this.world.getWorld().getName() + "'");
         }
 
         final DecimalFormat format = new DecimalFormat("#0.00");
@@ -223,7 +222,7 @@ public final class ChunkHolderManager {
             } catch (final ThreadDeath thr) {
                 throw thr;
             } catch (final Throwable thr) {
-                LOGGER.error("Failed to save chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + this.world.dimension().toString() + "'", thr);
+                LOGGER.error("Failed to save chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + this.world.getWorld().getName() + "'", thr);
             }
             if (needsFlush && (saved % flushInterval) == 0) {
                 needsFlush = false;
@@ -233,7 +232,7 @@ public final class ChunkHolderManager {
                 final long currTime = System.nanoTime();
                 if ((currTime - lastLog) > TimeUnit.SECONDS.toNanos(10L)) {
                     lastLog = currTime;
-                    LOGGER.info("Saved " + saved + " chunks (" + format.format((double)(i+1)/(double)len * 100.0) + "%) in world '" + this.world.dimension().toString() + "'");
+                    LOGGER.info("Saved " + saved + " chunks (" + format.format((double)(i+1)/(double)len * 100.0) + "%) in world '" + this.world.getWorld().getName() + "'");
                 }
             }
         }
@@ -241,7 +240,7 @@ public final class ChunkHolderManager {
             RegionFileIOThread.flush();
         }
         if (logProgress) {
-            LOGGER.info("Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi + " poi chunks in world '" + this.world.dimension().toString() + "' in " + format.format(1.0E-9 * (System.nanoTime() - start)) + "s");
+            LOGGER.info("Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi + " poi chunks in world '" + this.world.getWorld().getName() + "' in " + format.format(1.0E-9 * (System.nanoTime() - start)) + "s");
         }
     }
 
@@ -1035,7 +1034,7 @@ public final class ChunkHolderManager {
             }
         } catch (final InterruptedException ignore) {}
 
-        LOGGER.error("Failed to acquire ticket and scheduling lock before timeout for world " + this.world.dimension().toString());
+        LOGGER.error("Failed to acquire ticket and scheduling lock before timeout for world " + this.world.getWorld().getName());
 
         // because we read without locks, it may throw exceptions for fastutil maps
         // so just try until it works...

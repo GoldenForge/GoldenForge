@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionFileVersion.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFileVersion.java
+@@ -14,7 +_,7 @@
+ import net.minecraft.util.FastBufferedInputStream;
+ 
+ public class RegionFileVersion {
+-   private static final Int2ObjectMap<RegionFileVersion> f_63746_ = new Int2ObjectOpenHashMap<>();
++   public static final Int2ObjectMap<RegionFileVersion> f_63746_ = new Int2ObjectOpenHashMap<>();
+    public static final RegionFileVersion f_63743_ = m_63758_(new RegionFileVersion(1, (p_63767_) -> {
+       return new FastBufferedInputStream(new GZIPInputStream(p_63767_));
+    }, (p_63769_) -> {

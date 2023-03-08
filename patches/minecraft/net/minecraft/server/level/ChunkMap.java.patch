@@ -43,6 +43,14 @@
  import net.minecraft.server.level.progress.ChunkProgressListener;
  import net.minecraft.server.network.ServerPlayerConnection;
  import net.minecraft.util.CsvOutput;
+@@ -96,6 +_,7 @@
+ import net.minecraft.world.phys.Vec3;
+ import org.apache.commons.lang3.mutable.MutableBoolean;
+ import org.apache.commons.lang3.mutable.MutableObject;
++import org.goldenforge.GoldenForge;
+ import org.slf4j.Logger;
+ 
+ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
 @@ -110,35 +_,155 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
@@ -935,18 +943,14 @@
  
     }
  
-@@ -917,12 +_,71 @@
+@@ -917,12 +_,72 @@
           return "cancelled";
        }
     }
--
--   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) {
--      return this.m_223454_(p_214964_).thenApplyAsync((p_214907_) -> {
--         return p_214907_.map(this::m_214947_);
 +   // Paper start - Asynchronous chunk io
 +   @Nullable
 +   @Override
-+   public CompoundTag read(ChunkPos chunkcoordintpair) throws IOException {
++   public CompoundTag readSync(ChunkPos chunkcoordintpair) throws IOException {
 +      // Paper start - rewrite chunk system
 +      if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
 +         return io.papermc.paper.chunk.system.io.RegionFileIOThread.loadData(
@@ -955,12 +959,17 @@
 +         );
 +      }
 +      // Paper end - rewrite chunk system
-+      return super.read(chunkcoordintpair);
++      return super.readSync(chunkcoordintpair);
 +   }
-+
+ 
+-   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) {
+-      return this.m_223454_(p_214964_).thenApplyAsync((p_214907_) -> {
+-         return p_214907_.map(this::m_214947_);
+-      }, Util.m_183991_());
 +   @Override
 +   public void m_63502_(ChunkPos chunkcoordintpair, CompoundTag nbttagcompound) throws IOException {
 +      // Paper start - rewrite chunk system
++      GoldenForge.LOGGER.info("ChunkMap#write");
 +      if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
 +         io.papermc.paper.chunk.system.io.RegionFileIOThread.scheduleSave(
 +                 this.f_140133_, chunkcoordintpair.f_45578_, chunkcoordintpair.f_45579_, nbttagcompound,
@@ -969,45 +978,45 @@
 +      }
 +      // Paper end - rewrite chunk system
 +      super.m_63502_(chunkcoordintpair, nbttagcompound);
-+   }
-+   // Paper end
-+
-+   //GOldenforge: compatibility with chunky
-+   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) throws IOException {
-+      return CompletableFuture.completedFuture(this.read(p_214964_)).thenApplyAsync((p_214907_) -> {
-+         return Optional.of(this.m_214947_(p_214907_));
-+         //return p_214907_.map(this::upgradeChunkTag);
-       }, Util.m_183991_());
     }
-+   public CompletableFuture<Optional<CompoundTag>> readChunk0(ChunkPos p_214964_) throws IOException {
-+      return CompletableFuture.completedFuture(null).thenApply((a) -> {
-+         try {
-+            return read(p_214964_);
-+         } catch (IOException e) {
-+            throw new RuntimeException(e);
-+         }
-+      }).thenApplyAsync((optional) -> {
-+         return Optional.of(this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, optional, this.f_140136_.m_187743_()));
-+      }, f_140135_);
-+   }
-+
-+   private CompoundTag readChunkInternal(ChunkPos p_214964_) throws IOException {
-+      CompoundTag nbttagcompound = this.read(p_214964_);
-+      // Paper start - Cache chunk status on disk
-+      if (nbttagcompound == null) {
-+         return null;
-+      }
-+
-+      nbttagcompound = this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, nbttagcompound, this.f_140136_.m_187743_());
-+      if (nbttagcompound == null) {
-+         return null;
-+      }
-+
-+      //this.updateChunkStatusOnDisk(pos, nbttagcompound);
-+
-+      return nbttagcompound;
-+      // Paper end
-+   }
++   // Paper end
++//
++//   //GOldenforge: compatibility with chunky
++//   private CompletableFuture<Optional<CompoundTag>> readChunk(ChunkPos p_214964_) throws IOException {
++//      return CompletableFuture.completedFuture(this.read(p_214964_)).thenApplyAsync((p_214907_) -> {
++//         return Optional.of(this.upgradeChunkTag(p_214907_));
++//         //return p_214907_.map(this::upgradeChunkTag);
++//      }, Util.backgroundExecutor());
++//   }
++//   public CompletableFuture<Optional<CompoundTag>> readChunk0(ChunkPos p_214964_) throws IOException {
++//      return CompletableFuture.completedFuture(null).thenApply((a) -> {
++//         try {
++//            return read(p_214964_);
++//         } catch (IOException e) {
++//            throw new RuntimeException(e);
++//         }
++//      }).thenApplyAsync((optional) -> {
++//         return Optional.of(this.upgradeChunkTag(this.level.dimension(), this.overworldDataStorage, optional, this.generator.getTypeNameForDataFixer()));
++//      }, mainThreadExecutor);
++//   }
++//
++//   private CompoundTag readChunkInternal(ChunkPos p_214964_) throws IOException {
++//      CompoundTag nbttagcompound = this.read(p_214964_);
++//      // Paper start - Cache chunk status on disk
++//      if (nbttagcompound == null) {
++//         return null;
++//      }
++//
++//      nbttagcompound = this.upgradeChunkTag(this.level.dimension(), this.overworldDataStorage, nbttagcompound, this.generator.getTypeNameForDataFixer());
++//      if (nbttagcompound == null) {
++//         return null;
++//      }
++//
++//      //this.updateChunkStatusOnDisk(pos, nbttagcompound);
++//
++//      return nbttagcompound;
++//      // Paper end
++//   }
  
     private CompoundTag m_214947_(CompoundTag p_214948_) {
        return this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, p_214948_, this.f_140136_.m_187743_());

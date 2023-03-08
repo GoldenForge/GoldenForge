@@ -5,10 +5,19 @@
  
                    try {
 -                     CompoundTag compoundtag = chunkstorage.m_223454_(chunkpos).join().orElse((CompoundTag)null);
-+                     CompoundTag compoundtag = chunkstorage.read(chunkpos);
++                     CompoundTag compoundtag = chunkstorage.readSync(chunkpos);
                       if (compoundtag != null) {
                          int k = ChunkStorage.m_63505_(compoundtag);
                          ChunkGenerator chunkgenerator = this.f_185925_.m_204655_().m_6246_(WorldGenSettings.m_190052_(resourcekey2)).m_63990_();
+@@ -128,7 +_,7 @@
+                         }, compoundtag, chunkgenerator.m_187743_());
+                         ChunkPos chunkpos1 = new ChunkPos(compoundtag1.m_128451_("xPos"), compoundtag1.m_128451_("zPos"));
+                         if (!chunkpos1.equals(chunkpos)) {
+-                           f_18797_.warn("Chunk {} has invalid position {}", chunkpos, chunkpos1);
++                           f_18797_.warn("Chunk {} has invalid position {}", chunkpos, chunkstorage);
+                         }
+ 
+                         boolean flag2 = k < SharedConstants.m_183709_().getWorldVersion();
 @@ -160,6 +_,8 @@
                       }
  

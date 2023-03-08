@@ -53,7 +53,7 @@
     public ServerChunkCache(ServerLevel p_214982_, LevelStorageSource.LevelStorageAccess p_214983_, DataFixer p_214984_, StructureTemplateManager p_214985_, Executor p_214986_, ChunkGenerator p_214987_, int p_214988_, int p_214989_, boolean p_214990_, ChunkProgressListener p_214991_, ChunkStatusUpdateListener p_214992_, Supplier<DimensionDataStorage> p_214993_) {
        this.f_8329_ = p_214982_;
        this.f_8332_ = new ServerChunkCache.MainThreadExecutor(p_214982_);
-@@ -80,6 +_,212 @@
+@@ -80,6 +_,225 @@
        this.m_8488_();
     }
  
@@ -97,6 +97,19 @@
 +      if (cachedChunk != null && cachedChunk.coordinateKey == chunk.coordinateKey) {
 +         this.lastLoadedChunks[cacheKey] = null;
 +      }
++   }
++
++   public LevelChunk getChunkAtIfCachedImmediately(int x, int z) {
++      long k = ChunkPos.m_45589_(x, z);
++
++      // Note: Bypass cache since we need to check ticket level, and to make this MT-Safe
++
++      ChunkHolder playerChunk = this.m_8364_(k);
++      if (playerChunk == null) {
++         return null;
++      }
++
++      return playerChunk.getFullChunkNowUnchecked();
 +   }
 +
 +   public final LevelChunk getChunkAtIfLoadedMainThread(int x, int z) {

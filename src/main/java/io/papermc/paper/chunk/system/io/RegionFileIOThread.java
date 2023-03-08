@@ -15,8 +15,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.RegionFile;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
+import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
-
 import java.io.IOException;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.CompletableFuture;
@@ -557,6 +557,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
         final ChunkDataTask task = taskController.tasks.compute(key, (final ChunkCoordinate keyInMap, final ChunkDataTask taskRunning) -> {
             if (taskRunning == null || taskRunning.failedWrite) {
                 // no task is scheduled or the previous write failed - meaning we need to overwrite it
+                GoldenForge.LOGGER.info("scheduleSaveInternal");
 
                 // create task
                 final ChunkDataTask newTask = new ChunkDataTask(world, chunkX, chunkZ, taskController, RegionFileIOThread.this, priority);
@@ -726,17 +727,17 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
         for (int i = 0; i < expectedCompletions; ++i) {
             final RegionFileType type = types[i];
             reads[i] = RegionFileIOThread.loadDataAsync(world, chunkX, chunkZ, type,
-                (final CompoundTag data, final Throwable throwable) -> {
-                    if (throwable != null) {
-                        ret.setThrowable(type, throwable);
-                    } else {
-                        ret.setData(type, data);
-                    }
+                    (final CompoundTag data, final Throwable throwable) -> {
+                        if (throwable != null) {
+                            ret.setThrowable(type, throwable);
+                        } else {
+                            ret.setData(type, data);
+                        }
 
-                    if (completions.incrementAndGet() == expectedCompletions) {
-                        onComplete.accept(ret);
-                    }
-                }, intendingToBlock, priority);
+                        if (completions.incrementAndGet() == expectedCompletions) {
+                            onComplete.accept(ret);
+                        }
+                    }, intendingToBlock, priority);
         }
 
         return new CancellableReads(reads);
@@ -858,9 +859,9 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
 
                 // set up task
                 final ChunkDataTask newTask = new ChunkDataTask(
-                    world, chunkX, chunkZ, taskController, RegionFileIOThread.this, priority
+                        world, chunkX, chunkZ, taskController, RegionFileIOThread.this, priority
                 );
-                newTask.inProgressRead = new InProgressRead();
+                newTask.inProgressRead = new RegionFileIOThread.InProgressRead();
                 newTask.inProgressRead.waiters.add(onComplete);
 
                 callbackInfo.tasksNeedsScheduling = true;
@@ -964,9 +965,9 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
     static final class CancellableRead implements Cancellable {
 
         private BiConsumer<CompoundTag, Throwable> callback;
-        private ChunkDataTask task;
+        private RegionFileIOThread.ChunkDataTask task;
 
-        CancellableRead(final BiConsumer<CompoundTag, Throwable> callback, final ChunkDataTask task) {
+        CancellableRead(final BiConsumer<CompoundTag, Throwable> callback, final RegionFileIOThread.ChunkDataTask task) {
             this.callback = callback;
             this.task = task;
         }
@@ -974,7 +975,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
         @Override
         public boolean cancel() {
             final BiConsumer<CompoundTag, Throwable> callback = this.callback;
-            final ChunkDataTask task = this.task;
+            final RegionFileIOThread.ChunkDataTask task = this.task;
 
             if (callback == null || task == null) {
                 return false;
@@ -983,7 +984,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             this.callback = null;
             this.task = null;
 
-            final InProgressRead read = task.inProgressRead;
+            final RegionFileIOThread.InProgressRead read = task.inProgressRead;
 
             // read can be null if no read was scheduled (i.e no regionfile existed or chunk in regionfile didn't)
             return (read != null && read.waiters.remove(callback));
@@ -1031,7 +1032,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             return this.waiters.add(callback);
         }
 
-        void complete(final ChunkDataTask task, final CompoundTag value, final Throwable throwable) {
+        void complete(final RegionFileIOThread.ChunkDataTask task, final CompoundTag value, final Throwable throwable) {
             this.value = value;
             this.throwable = throwable;
 
@@ -1086,7 +1087,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
         // This class is intended for HashMap/ConcurrentHashMap usage, which do treeify bin nodes if the chain
         // is too large. So we should implement compareTo to help.
         @Override
-        public int compareTo(final ChunkCoordinate other) {
+        public int compareTo(final RegionFileIOThread.ChunkCoordinate other) {
             return Long.compare(this.key, other.key);
         }
 
@@ -1122,7 +1123,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             final RegionFile regionFile;
             synchronized (cache) {
                 try {
-                    regionFile = cache.getRegionFile(new ChunkPos(chunkX, chunkZ), true);
+                    regionFile = cache.getRegionFile(new ChunkPos(chunkX, chunkZ), existingOnly, true);
                 } catch (final IOException ex) {
                     throw new RuntimeException(ex);
                 }
@@ -1164,7 +1165,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
 
         private static final Logger LOGGER = LogUtils.getLogger();
 
-        InProgressRead inProgressRead;
+        RegionFileIOThread.InProgressRead inProgressRead;
         volatile CompoundTag inProgressWrite = NOTHING_TO_WRITE; // only needs to be acquire/release
 
         boolean failedWrite;
@@ -1172,7 +1173,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
         final ServerLevel world;
         final int chunkX;
         final int chunkZ;
-        final ChunkDataController taskController;
+        final RegionFileIOThread.ChunkDataController taskController;
 
         final PrioritisedExecutor.PrioritisedTask prioritisedTask;
 
@@ -1192,7 +1193,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
          * it fails to properly propagate write failures thanks to writes overwriting each other
          */
 
-        public ChunkDataTask(final ServerLevel world, final int chunkX, final int chunkZ, final ChunkDataController taskController,
+        public ChunkDataTask(final ServerLevel world, final int chunkX, final int chunkZ, final RegionFileIOThread.ChunkDataController taskController,
                              final PrioritisedExecutor executor, final PrioritisedExecutor.Priority priority) {
             this.world = world;
             this.chunkX = chunkX;
@@ -1209,7 +1210,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
 
         @Override
         public void run() {
-            final InProgressRead read = this.inProgressRead;
+            final RegionFileIOThread.InProgressRead read = this.inProgressRead;
             final ChunkCoordinate chunkKey = new ChunkCoordinate(CoordinateUtils.getChunkKey(this.chunkX, this.chunkZ));
 
             if (read != null) {
@@ -1262,6 +1263,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             CompoundTag write = this.inProgressWrite;
 
             if (write == NOTHING_TO_WRITE) {
+                GoldenForge.LOGGER.info("NOTHING_TO_WRITE");
                 final ChunkDataTask inMap = this.taskController.tasks.compute(chunkKey, (final ChunkCoordinate keyInMap, final ChunkDataTask valueInMap) -> {
                     if (valueInMap == null) {
                         throw new IllegalStateException("Write completed concurrently, expected this task: " + ChunkDataTask.this.toString() + ", report this!");
@@ -1288,15 +1290,13 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                 } catch (final ThreadDeath thr) {
                     throw thr;
                 } catch (final Throwable thr) {
-                    failedWrite = thr instanceof IOException;
-                    LOGGER.error("Failed to write chunk data for task: " + this.toString(), thr);
-//                    if (thr instanceof RegionFileStorage.RegionFileSizeException) {
-//                        final int maxSize = RegionFile.MAX_CHUNK_SIZE / (1024 * 1024);
-//                        LOGGER.error("Chunk at (" + this.chunkX + "," + this.chunkZ + ") in '" + this.world.dimension() + "' exceeds max size of " + maxSize + "MiB, it has been deleted from disk.");
-//                    } else {
-//                        failedWrite = thr instanceof IOException;
-//                        LOGGER.error("Failed to write chunk data for task: " + this.toString(), thr);
-//                    }
+                    if (thr instanceof RegionFileStorage.RegionFileSizeException) {
+                        final int maxSize = RegionFile.MAX_CHUNK_SIZE / (1024 * 1024);
+                        LOGGER.error("Chunk at (" + this.chunkX + "," + this.chunkZ + ") in '" + this.world.dimension() + "' exceeds max size of " + maxSize + "MiB, it has been deleted from disk.");
+                    } else {
+                        failedWrite = thr instanceof IOException;
+                        LOGGER.error("Failed to write chunk data for task: " + this.toString(), thr);
+                    }
                 }
 
                 final boolean finalFailWrite = failedWrite;

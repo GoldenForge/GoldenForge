@@ -115,7 +115,7 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
             ), throwable);
 
             if (!(throwable instanceof ThreadDeath)) {
-                LOGGER.error("Failed to complete status for chunk: status:" + this.toStatus + ", chunk: (" + this.chunkX + "," + this.chunkZ + "), world: " + this.world.dimension(), throwable);
+                LOGGER.error("Failed to complete status for chunk: status:" + this.toStatus + ", chunk: (" + this.chunkX + "," + this.chunkZ + "), world: " + this.world.getWorld().getName(), throwable);
             } else {
                 // ensure the chunk system can respond, then die
                 throw (ThreadDeath)throwable;

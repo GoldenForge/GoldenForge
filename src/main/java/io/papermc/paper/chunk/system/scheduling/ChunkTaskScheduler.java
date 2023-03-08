@@ -40,7 +40,7 @@ public final class ChunkTaskScheduler {
     static int newChunkSystemGenParallelism;
     static int newChunkSystemLoadParallelism;
 
-    public static ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool workerThreads;
+    public static PrioritisedThreadPool workerThreads;
 
     private static boolean initialised = false;
 
@@ -49,8 +49,8 @@ public final class ChunkTaskScheduler {
             return;
         }
         initialised = true;
-        newChunkSystemIOThreads = 4;
-        newChunkSystemWorkerThreads = 6;
+        newChunkSystemIOThreads = -1;
+        newChunkSystemWorkerThreads = -1;
         if (newChunkSystemIOThreads < 0) {
             newChunkSystemIOThreads = 1;
         } else {
@@ -89,11 +89,11 @@ public final class ChunkTaskScheduler {
         ChunkTaskScheduler.newChunkSystemLoadParallelism = newChunkSystemWorkerThreads;
 
         io.papermc.paper.chunk.system.io.RegionFileIOThread.init(newChunkSystemIOThreads);
-        workerThreads = new ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool(
+        workerThreads = new PrioritisedThreadPool(
             "Paper Chunk System Worker Pool", newChunkSystemWorkerThreads,
             (final Thread thread, final Integer id) -> {
                 thread.setPriority(Thread.NORM_PRIORITY - 2);
-                thread.setName("Paper Chunk System Worker #" + id.intValue());
+                thread.setName("Tuinity Chunk System Worker #" + id.intValue());
                 thread.setUncaughtExceptionHandler(NewChunkHolder.CHUNKSYSTEM_UNCAUGHT_EXCEPTION_HANDLER);
             }, (long)(20.0e6)); // 20ms
 
@@ -189,7 +189,7 @@ public final class ChunkTaskScheduler {
         this.world = world;
         this.workers = workers;
 
-        final String worldName = world.dimension().toString();
+        final String worldName = world.getWorld().getName();
         this.genExecutor = workers.createExecutor("Chunk single-threaded generation executor for world '" + worldName + "'", 1);
         // same as genExecutor, as there are race conditions between updating blocks in FEATURE status while lighting chunks
         this.lightExecutor = this.genExecutor;
@@ -727,7 +727,7 @@ public final class ChunkTaskScheduler {
 
         @Override
         public String toString() {
-            return "[( " + this.chunkX + "," + this.chunkZ + ") in '" + this.world.dimension() + "']";
+            return "[( " + this.chunkX + "," + this.chunkZ + ") in '" + this.world.getWorld().getName() + "']";
         }
     }
 

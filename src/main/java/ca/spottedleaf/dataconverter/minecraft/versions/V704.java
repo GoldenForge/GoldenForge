@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -201,7 +202,7 @@ public final class V704 {
                 possibleId = null;
             }
 
-            final String itemName = Registry.ITEM.getKey(item).toString();
+            final String itemName = ForgeRegistries.ITEMS.getKey(item).toString();
             final String mappedTo = ITEM_ID_TO_TILE_ENTITY_ID.get(itemName);
             if (mappedTo == null) {
                 LOGGER.error("Item id " + itemName + " does not contain tile mapping! (V704)");

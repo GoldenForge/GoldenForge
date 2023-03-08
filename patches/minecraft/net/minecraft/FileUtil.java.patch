@@ -1,0 +1,13 @@
+--- a/net/minecraft/FileUtil.java
++++ b/net/minecraft/FileUtil.java
+@@ -16,6 +_,10 @@
+    private static final int f_179920_ = 255;
+    private static final Pattern f_133726_ = Pattern.compile(".*\\.|(?:COM|CLOCK\\$|CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?", 2);
+ 
++   public static void createDirectoriesSafe(Path path) throws IOException {
++      Files.createDirectories(Files.exists(path) ? path.toRealPath() : path);
++   }
++
+    public static String m_133730_(Path p_133731_, String p_133732_, String p_133733_) throws IOException {
+       for(char c0 : SharedConstants.f_136184_) {
+          p_133732_ = p_133732_.replace(c0, '_');

@@ -163,7 +163,7 @@ public final class ChunkLightTask extends ChunkProgressionTask {
                 }
             } catch (final Throwable thr) {
                 if (!(thr instanceof ThreadDeath)) {
-                    LOGGER.fatal("Failed to light chunk " + task.fromChunk.getPos().toString() + " in world '" + this.lightEngine.getWorld().dimension()+ "'", thr);
+                    LOGGER.fatal("Failed to light chunk " + task.fromChunk.getPos().toString() + " in world '" + this.lightEngine.getWorld().getWorld().getName() + "'", thr);
                 }
 
                 task.complete(null, thr);

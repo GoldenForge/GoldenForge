@@ -312,7 +312,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                 // run converters
                 // note: upgradeChunkTag copies the data already
                 final CompoundTag converted = chunkMap.upgradeChunkTag(
-                    this.world.dimension(), chunkMap.overworldDataStorage, data, chunkMap.generator.getTypeNameForDataFixer());
+                    this.world.dimension(), chunkMap.overworldDataStorage, data, chunkMap.generator.getTypeNameForDataFixer()
+                );
                 // deserialize
                 final ProtoChunk chunkHolder = ChunkSerializer.read(
                     this.world, chunkMap.getPoiManager(), chunkPos, converted

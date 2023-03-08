@@ -99,7 +99,7 @@ public abstract class ChunkProgressionTask {
 
     @Override
     public String toString() {
-        return "ChunkProgressionTask{class: " + this.getClass().getName() + ", for world: " + this.world.dimension() +
+        return "ChunkProgressionTask{class: " + this.getClass().getName() + ", for world: " + this.world.getWorld().getName() +
             ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
             ", status: " + this.getTargetStatus().toString() + ", scheduled: " + this.isScheduled() + "}";
     }

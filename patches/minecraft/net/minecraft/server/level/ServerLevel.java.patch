@@ -31,7 +31,7 @@
     public boolean f_8564_;
     private final SleepStatus f_143245_;
     private int f_8551_;
-@@ -184,10 +_,114 @@
+@@ -184,10 +_,115 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
     private final EndDragonFight f_8559_;
@@ -44,6 +44,7 @@
 +   private net.minecraftforge.common.util.LevelCapabilityData capabilityData;
 +
 +   // Paper start - rewrite chunk system
++
 +   public final io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler chunkTaskScheduler;
 +   public final io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController chunkDataControllerNew
 +           = new io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController(io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.CHUNK_DATA) {
@@ -60,7 +61,7 @@
 +
 +      @Override
 +      public net.minecraft.nbt.CompoundTag readData(int chunkX, int chunkZ) throws IOException {
-+         return ServerLevel.this.m_7726_().f_8325_.read(new ChunkPos(chunkX, chunkZ));
++         return ServerLevel.this.m_7726_().f_8325_.readSync(new ChunkPos(chunkX, chunkZ));
 +      }
 +   };
 +   public final io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController poiDataControllerNew

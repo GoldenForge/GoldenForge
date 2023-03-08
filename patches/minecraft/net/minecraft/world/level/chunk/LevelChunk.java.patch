@@ -35,7 +35,7 @@
     @Nullable
     private Supplier<ChunkHolder.FullChunkStatus> f_62790_;
     @Nullable
-@@ -77,13 +_,283 @@
+@@ -77,13 +_,284 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -46,6 +46,7 @@
 +   }
 +   // Paper end
 +
++   public boolean mustNotSave = false;
 +   boolean loadedTicketLevel; public final boolean wasLoadCallbackInvoked() { return this.loadedTicketLevel; } // Paper - public accessor
  
     public LevelChunk(Level p_187945_, ChunkPos p_187946_) {

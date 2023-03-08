@@ -100,7 +100,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
 
     @Override
     public String toString() {
-        return "GenericDataLoadTask{class: " + this.getClass().getName() + ", world: " + this.world.dimension() +
+        return "GenericDataLoadTask{class: " + this.getClass().getName() + ", world: " + this.world.getWorld().getName() +
             ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
             ", type: " + this.type.toString() + "}";
     }

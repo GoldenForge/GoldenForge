@@ -1,0 +1,30 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionBitmap.java
++++ b/net/minecraft/world/level/chunk/storage/RegionBitmap.java
+@@ -9,6 +_,27 @@
+ public class RegionBitmap {
+    private final BitSet f_63608_ = new BitSet();
+ 
++   // Paper start
++   public final void copyFrom(RegionBitmap other) {
++      BitSet thisBitset = this.f_63608_;
++      BitSet otherBitset = other.f_63608_;
++
++      for (int i = 0; i < Math.max(thisBitset.size(), otherBitset.size()); ++i) {
++         thisBitset.set(i, otherBitset.get(i));
++      }
++   }
++
++   public final boolean tryAllocate(int from, int length) {
++      BitSet bitset = this.f_63608_;
++      int firstSet = bitset.nextSetBit(from);
++      if (firstSet > 0 && firstSet < (from + length)) {
++         return false;
++      }
++      bitset.set(from, from + length);
++      return true;
++   }
++   // Paper end
++
+    public void m_63612_(int p_63613_, int p_63614_) {
+       this.f_63608_.set(p_63613_, p_63613_ + p_63614_);
+    }

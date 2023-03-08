@@ -35,7 +35,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,21 @@
+@@ -104,8 +_,31 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -44,7 +44,17 @@
 +   public java.util.ArrayList<net.minecraftforge.common.util.BlockSnapshot> capturedBlockSnapshots = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> freshBlockEntities = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> pendingFreshBlockEntities = new java.util.ArrayList<>();
++   public WorldPaper getWorld() {
++      return worldPaper;
++   }
 +
++   WorldPaper worldPaper = new WorldPaper();
++   public class WorldPaper {
++
++      public String getName() {
++         return Level.this.m_46472_().toString();
++      }
++   }
 +
 +   protected final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom(java.util.concurrent.ThreadLocalRandom.current().nextLong()); public net.minecraft.util.RandomSource getThreadUnsafeRandom() { return this.randomTickRandom; } // Pufferfish - move thread unsafe random initialization // Pufferfish - getter
 +

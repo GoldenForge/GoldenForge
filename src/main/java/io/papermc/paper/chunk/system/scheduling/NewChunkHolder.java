@@ -800,7 +800,7 @@ public final class NewChunkHolder {
         final ChunkEntitySlices entityChunk = state.entityChunk();
         final PoiChunk poiChunk = state.poiChunk();
 
-        final boolean shouldLevelChunkNotSave = (chunk instanceof LevelChunk levelChunk);
+        final boolean shouldLevelChunkNotSave = (chunk instanceof LevelChunk levelChunk && levelChunk.mustNotSave);
 
         // unload chunk data
         if (chunk != null) {
@@ -1742,9 +1742,9 @@ public final class NewChunkHolder {
             }
         }
 
-        boolean canSaveChunk = !(chunk instanceof LevelChunk levelChunk) &&
+        boolean canSaveChunk = !(chunk instanceof LevelChunk levelChunk && levelChunk.mustNotSave) &&
                                 (chunk != null && ((shutdown || chunk instanceof LevelChunk) && chunk.isUnsaved()));
-        boolean canSavePOI = !(chunk instanceof LevelChunk levelChunk) && (poi != null && poi.isDirty());
+        boolean canSavePOI = !(chunk instanceof LevelChunk levelChunk && levelChunk.mustNotSave) && (poi != null && poi.isDirty());
         boolean canSaveEntities = entities != null;
 
             if (canSaveChunk) {
@@ -1789,7 +1789,7 @@ public final class NewChunkHolder {
             } catch (final ThreadDeath death) {
                 throw death;
             } catch (final Throwable throwable) {
-                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + this.world.dimension() + "', falling back to synchronous save", throwable);
+                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + this.world.getWorld().getName() + "', falling back to synchronous save", throwable);
                 this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
                     final CompoundTag synchronousSave;
                     try {
@@ -1798,13 +1798,13 @@ public final class NewChunkHolder {
                     } catch (final ThreadDeath death) {
                         throw death;
                     } catch (final Throwable throwable2) {
-                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.dimension() + "', chunk data will be lost", throwable2);
+                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
                         AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
                         return;
                     }
 
                     AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
-                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.dimension() + "' synchronously");
+                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
 
                 }, PrioritisedExecutor.Priority.HIGHEST);
                 return;
@@ -1815,7 +1815,7 @@ public final class NewChunkHolder {
         @Override
         public String toString() {
             return "AsyncChunkSerializeTask{" +
-                "chunk={pos=" + this.chunk.getPos() + ",world=\"" + this.world.dimension() + "\"}" +
+                "chunk={pos=" + this.chunk.getPos() + ",world=\"" + this.world.getWorld().getName() + "\"}" +
                 "}";
         }
     }
@@ -1845,7 +1845,7 @@ public final class NewChunkHolder {
                 } catch (final ThreadDeath death) {
                     throw death;
                 } catch (final Throwable thr) {
-                    LOGGER.error("Failed to prepare async chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.dimension() + "', falling back to synchronous save", thr);
+                    LOGGER.error("Failed to prepare async chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "', falling back to synchronous save", thr);
                     // fall through to synchronous save
                 }
             }
@@ -1856,7 +1856,7 @@ public final class NewChunkHolder {
             if (unloading) {
                 completing = true;
                 this.completeAsyncChunkDataSave(save);
-                LOGGER.info("Successfully serialized chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.dimension() + "' synchronously");
+                LOGGER.info("Successfully serialized chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "' synchronously");
             } else {
                 RegionFileIOThread.scheduleSave(this.world, this.chunkX, this.chunkZ, save, RegionFileIOThread.RegionFileType.CHUNK_DATA);
             }
@@ -1864,7 +1864,7 @@ public final class NewChunkHolder {
         } catch (final ThreadDeath death) {
             throw death;
         } catch (final Throwable thr) {
-            LOGGER.error("Failed to save chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.dimension() + "'");
+            LOGGER.error("Failed to save chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "'");
             if (unloading && !completing) {
                 this.completeAsyncChunkDataSave(null);
             }
@@ -1887,7 +1887,7 @@ public final class NewChunkHolder {
                 try {
                     mergeFrom = RegionFileIOThread.loadData(this.world, this.chunkX, this.chunkZ, RegionFileIOThread.RegionFileType.ENTITY_DATA, PrioritisedExecutor.Priority.BLOCKING);
                 } catch (final Exception ex) {
-                    LOGGER.error("Cannot merge transient entities for chunk (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.dimension() + "', data on disk will be replaced", ex);
+                    LOGGER.error("Cannot merge transient entities for chunk (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "', data on disk will be replaced", ex);
                 }
             }
 
@@ -1912,7 +1912,7 @@ public final class NewChunkHolder {
         } catch (final ThreadDeath death) {
             throw death;
         } catch (final Throwable thr) {
-            LOGGER.error("Failed to save entity data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.dimension() + "'");
+            LOGGER.error("Failed to save entity data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "'");
         }
 
         return true;
@@ -1938,7 +1938,7 @@ public final class NewChunkHolder {
         } catch (final ThreadDeath death) {
             throw death;
         } catch (final Throwable thr) {
-            LOGGER.error("Failed to save poi data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.dimension() + "'");
+            LOGGER.error("Failed to save poi data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "'");
         }
 
         return true;
@@ -1954,7 +1954,7 @@ public final class NewChunkHolder {
         final ChunkHolder.FullChunkStatus currentFullStatus = fullChunkStatus < 0 || fullChunkStatus >= CHUNK_STATUS_BY_ID.length ? null : CHUNK_STATUS_BY_ID[fullChunkStatus];
         final ChunkHolder.FullChunkStatus pendingFullStatus = pendingChunkStatus < 0 || pendingChunkStatus >= CHUNK_STATUS_BY_ID.length ? null : CHUNK_STATUS_BY_ID[pendingChunkStatus];
         return "NewChunkHolder{" +
-            "world=" + this.world.dimension() +
+            "world=" + this.world.getWorld().getName() +
             ", chunkX=" + this.chunkX +
             ", chunkZ=" + this.chunkZ +
             ", entityChunkFromDisk=" + (entityChunk != null && !entityChunk.isTransient()) +

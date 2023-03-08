@@ -29,7 +29,7 @@
  import net.minecraft.world.entity.EntityType;
  import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.level.ChunkPos;
-@@ -74,26 +_,78 @@
+@@ -74,26 +_,105 @@
     public static final String f_223446_ = "BlockLight";
     public static final String f_223447_ = "SkyLight";
  
@@ -44,7 +44,34 @@
 +         this.protoChunk = protoChunk;
 +         this.tasks = tasks;
 +      }
++
 +   }
++
++   // Paper start - guard against serializing mismatching coordinates
++   // TODO Note: This needs to be re-checked each update
++   public static ChunkPos getChunkCoordinate(CompoundTag chunkData) {
++      final int dataVersion = ChunkStorage.m_63505_(chunkData);
++      if (dataVersion < 2842) { // Level tag is removed after this version
++         final CompoundTag levelData = chunkData.m_128469_("Level");
++         return new ChunkPos(levelData.m_128451_("xPos"), levelData.m_128451_("zPos"));
++      } else {
++         return new ChunkPos(chunkData.m_128451_("xPos"), chunkData.m_128451_("zPos"));
++      }
++   }
++   // Paper end
++
++   // Paper start
++   // TODO: Check on update
++   public static long getLastWorldSaveTime(CompoundTag chunkData) {
++      final int dataVersion = ChunkStorage.m_63505_(chunkData);
++      if (dataVersion < 2842) { // Level tag is removed after this version
++         final CompoundTag levelData = chunkData.m_128469_("Level");
++         return levelData.m_128454_("LastUpdate");
++      } else {
++         return chunkData.m_128454_("LastUpdate");
++      }
++   }
++   // Paper end
 +
 +//   public static ProtoChunk read(ServerLevel world, PoiManager poiStorage, ChunkPos chunkPos, CompoundTag nbt) {
 +//      // Paper start - add variant for async calls
@@ -211,7 +238,7 @@
        } else {
           ProtoChunk protochunk1 = (ProtoChunk)chunkaccess;
           ListTag listtag4 = p_188234_.m_128437_("entities", 10);
-@@ -252,10 +_,69 @@
+@@ -252,10 +_,45 @@
              protochunk1.m_188186_(generationstep$carving, new CarvingMask(compoundtag4.m_128467_(s1), chunkaccess.m_141937_()));
           }
  
@@ -223,38 +250,16 @@
  
 +   // Paper start - async chunk save for unload
 +   public record AsyncSaveData(
-+           DataLayer[] blockLight,
-+           DataLayer[] skyLight,
 +           Tag blockTickList, // non-null if we had to go to the server's tick list
 +           Tag fluidTickList, // non-null if we had to go to the server's tick list
 +           ListTag blockEntities,
 +           long worldTime
 +   ) {}
 +
++
 +   // must be called sync
 +   public static AsyncSaveData getAsyncSaveData(ServerLevel world, ChunkAccess chunk) {
-+      ChunkPos chunkPos = chunk.m_7697_();
-+
-+      ThreadedLevelLightEngine lightenginethreaded = world.m_7726_().m_7827_();
-+
-+      DataLayer[] blockLight = new DataLayer[lightenginethreaded.m_164448_() - lightenginethreaded.m_164447_()];
-+      DataLayer[] skyLight = new DataLayer[lightenginethreaded.m_164448_() - lightenginethreaded.m_164447_()];
-+
-+      for (int i = lightenginethreaded.m_164447_(); false && i < lightenginethreaded.m_164448_(); ++i) { // Paper - don't run loop, we don't need to - light data is per chunk now
-+         DataLayer blockArray = lightenginethreaded.m_75814_(LightLayer.BLOCK).m_8079_(SectionPos.m_123196_(chunkPos, i));
-+         DataLayer skyArray = lightenginethreaded.m_75814_(LightLayer.SKY).m_8079_(SectionPos.m_123196_(chunkPos, i));
-+
-+         // copy data for safety
-+         if (blockArray != null) {
-+            blockArray = blockArray.m_62569_();
-+         }
-+         if (skyArray != null) {
-+            skyArray = skyArray.m_62569_();
-+         }
-+
-+         blockLight[i - lightenginethreaded.m_164447_()] = blockArray;
-+         skyLight[i - lightenginethreaded.m_164447_()] = skyArray;
-+      }
++      org.spigotmc.AsyncCatcher.catchOp("preparation of chunk data for async save");
 +
 +      final CompoundTag tickLists = new CompoundTag();
 +      ChunkSerializer.m_188235_(world, tickLists, chunk.m_183568_());
@@ -268,8 +273,6 @@
 +      }
 +
 +      return new AsyncSaveData(
-+              blockLight,
-+              skyLight,
 +              tickLists.m_128423_(f_188228_),
 +              tickLists.m_128423_(f_188229_),
 +              blockEntitiesSerialized,
