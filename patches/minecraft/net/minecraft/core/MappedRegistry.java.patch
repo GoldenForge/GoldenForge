@@ -1,5 +1,32 @@
 --- a/net/minecraft/core/MappedRegistry.java
 +++ b/net/minecraft/core/MappedRegistry.java
+@@ -37,13 +_,11 @@
+ public class MappedRegistry<T> extends WritableRegistry<T> {
+    private static final Logger f_211050_ = LogUtils.getLogger();
+    private final ObjectList<Holder.Reference<T>> f_122672_ = new ObjectArrayList<>(256);
+-   private final Object2IntMap<T> f_122673_ = Util.m_137469_(new Object2IntOpenCustomHashMap<>(Util.m_137583_()), (p_194539_) -> {
+-      p_194539_.defaultReturnValue(-1);
+-   });
+-   private final Map<ResourceLocation, Holder.Reference<T>> f_205841_ = new HashMap<>();
+-   private final Map<ResourceKey<T>, Holder.Reference<T>> f_205842_ = new HashMap<>();
+-   private final Map<T, Holder.Reference<T>> f_205843_ = new IdentityHashMap<>();
+-   private final Map<T, Lifecycle> f_122676_ = new IdentityHashMap<>();
++   private final it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap<T> f_122673_ = new it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap<T>(2048);// Paper - use bigger expected size to reduce collisions and direct intent for FastUtil to be identity map
++   private final Map<ResourceLocation, Holder.Reference<T>> f_205841_ = new HashMap<>(2048); // Paper - use bigger expected size to reduce collisions
++   private final Map<ResourceKey<T>, Holder.Reference<T>> f_205842_ = new HashMap<>(2048); // Paper - use bigger expected size to reduce collisions
++   private final Map<T, Holder.Reference<T>> f_205843_ = new IdentityHashMap<>(2048); // Paper - use bigger expected size to reduce collisions
++   private final Map<T, Lifecycle> f_122676_ = new IdentityHashMap<>(2048); // Paper - use bigger expected size to reduce collisions
+    private Lifecycle f_122677_;
+    private volatile Map<TagKey<T>, HolderSet.Named<T>> f_205844_ = new IdentityHashMap<>();
+    private boolean f_205845_;
+@@ -57,6 +_,7 @@
+ 
+    public MappedRegistry(ResourceKey<? extends Registry<T>> p_205849_, Lifecycle p_205850_, @Nullable Function<T, Holder.Reference<T>> p_205851_) {
+       super(p_205849_, p_205850_);
++      this.f_122673_.defaultReturnValue(-1); // Paper
+       this.f_122677_ = p_205850_;
+       this.f_205846_ = p_205851_;
+       if (p_205851_ != null) {
 @@ -83,14 +_,24 @@
        return this.m_205857_(p_205853_, p_205854_, p_205855_, p_205856_, true);
     }

@@ -3,28 +3,15 @@ package com.destroystokyo.paper;
 public class PaperConfig {
 
 
-    public static int playerMinChunkLoadRadius;
-    public static boolean playerAutoConfigureSendViewDistance;
-    public static int playerMaxConcurrentChunkSends;
-    public static double playerTargetChunkSendRate;
-    public static double globalMaxChunkSendRate;
-    public static boolean playerFrustumPrioritisation;
-    public static double globalMaxChunkLoadRate;
-    public static double playerMaxConcurrentChunkLoads;
-    public static double globalMaxConcurrentChunkLoads;
-    public static double playerMaxChunkLoadRate;
-
-     static {
-        playerMinChunkLoadRadius = 2;
-        playerMaxConcurrentChunkSends = 2;
-        playerAutoConfigureSendViewDistance = true;
-        playerTargetChunkSendRate = 100.0;
-        globalMaxChunkSendRate = -1.0;
-        playerFrustumPrioritisation = false;
-        globalMaxChunkLoadRate = -1.0;
-        playerMaxConcurrentChunkLoads = 20.0;
-        globalMaxConcurrentChunkLoads = 500.0;
-        playerMaxChunkLoadRate = -1.0;
-    }
+    public static int minLoadRadius = 2;
+    public static int maxConcurrentSends = 2;
+    public static boolean autoconfigSendDistance = true;
+    public static double targetPlayerChunkSendRate = 100.0;
+    public static double globalMaxChunkSendRate = -1.0;
+    public static boolean enableFrustumPriority = false;
+    public static double globalMaxChunkLoadRate = -1.0;
+    public static double playerMaxConcurrentLoads = 20.0;
+    public static double globalMaxConcurrentLoads = 500.0;
+    public static double playerMaxChunkLoadRate = -1.0;
 
 }

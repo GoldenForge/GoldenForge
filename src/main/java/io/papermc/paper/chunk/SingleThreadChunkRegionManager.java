@@ -1,13 +1,12 @@
 package io.papermc.paper.chunk;
 
-import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import io.papermc.paper.util.MCUtil;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;

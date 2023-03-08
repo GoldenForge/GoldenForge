@@ -1,10 +1,10 @@
 package io.papermc.paper.chunk;
 
+import com.destroystokyo.paper.PaperConfig;
 import com.destroystokyo.paper.util.misc.PlayerAreaMap;
 import com.destroystokyo.paper.util.misc.PooledLinkedHashSets;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.IntervalledCounter;
-import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.TickThread;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
@@ -13,14 +13,13 @@ import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
 import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
+import io.papermc.paper.util.MCUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.apache.commons.lang3.mutable.MutableObject;
-import org.goldenforge.GoldenConfig;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -249,13 +248,13 @@ public final class PlayerChunkLoader {
         this.broadcastMap = new PlayerAreaMap(pooledHashSets,
                 null,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     PlayerChunkLoader.this.onChunkLeave(player, rangeX, rangeZ);
                 });
         this.loadMap = new PlayerAreaMap(pooledHashSets,
                 null,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState != null) {
                         return;
                     }
@@ -264,7 +263,7 @@ public final class PlayerChunkLoader {
         this.loadTicketCleanup = new PlayerAreaMap(pooledHashSets,
                 null,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState != null) {
                         return;
                     }
@@ -276,7 +275,7 @@ public final class PlayerChunkLoader {
                 });
         this.tickMap = new PlayerAreaMap(pooledHashSets,
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState.size() != 1) {
                         return;
                     }
@@ -289,7 +288,7 @@ public final class PlayerChunkLoader {
                     PlayerChunkLoader.this.chunkMap.level.getChunkSource().addTicketAtLevel(TicketType.PLAYER, chunkPos, TICK_TICKET_LEVEL, chunkPos);
                 },
                 (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-                 PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
+                 com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
                     if (newState != null) {
                         return;
                     }
@@ -363,25 +362,25 @@ public final class PlayerChunkLoader {
         }
 
         return !(data.hasSentChunk(chunkX - 1, chunkZ) && data.hasSentChunk(chunkX + 1, chunkZ) &&
-            data.hasSentChunk(chunkX, chunkZ - 1) && data.hasSentChunk(chunkX, chunkZ + 1));
+                data.hasSentChunk(chunkX, chunkZ - 1) && data.hasSentChunk(chunkX, chunkZ + 1));
     }
 
     protected int getMaxConcurrentChunkSends() {
-        return GoldenConfig.maxConcurrentSends;
+        return PaperConfig.maxConcurrentSends;
     }
 
     protected int getMaxChunkLoads() {
-        double config = GoldenConfig.playerMaxConcurrentLoads;
-        double max = GoldenConfig.globalMaxConcurrentLoads;
+        double config = PaperConfig.playerMaxConcurrentLoads;
+        double max = PaperConfig.globalMaxConcurrentLoads;
         return (int)Math.ceil(Math.min(config * MinecraftServer.getServer().getPlayerCount(), max <= 1.0 ? Double.MAX_VALUE : max));
     }
 
     protected long getTargetSendPerPlayerAddend() {
-        return GoldenConfig.targetPlayerChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / GoldenConfig.targetPlayerChunkSendRate);
+        return PaperConfig.targetPlayerChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / PaperConfig.targetPlayerChunkSendRate);
     }
 
     protected long getMaxSendAddend() {
-        return GoldenConfig.globalMaxChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / GoldenConfig.globalMaxChunkSendRate);
+        return PaperConfig.globalMaxChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / PaperConfig.globalMaxChunkSendRate);
     }
 
     public void onChunkPlayerTickReady(final int chunkX, final int chunkZ) {
@@ -662,8 +661,8 @@ public final class PlayerChunkLoader {
                 // priority >= 0.0 implies rate limited chunks
 
                 final int currentChunkLoads = this.concurrentChunkLoads;
-                if (currentChunkLoads >= maxLoads || (GoldenConfig.globalMaxChunkLoadRate > 0 && (TICKET_ADDITION_COUNTER_SHORT.getRate() >= GoldenConfig.globalMaxChunkLoadRate || TICKET_ADDITION_COUNTER_LONG.getRate() >= GoldenConfig.globalMaxChunkLoadRate))
-                    || (GoldenConfig.playerMaxChunkLoadRate > 0.0 && (data.ticketAdditionCounterShort.getRate() >= GoldenConfig.playerMaxChunkLoadRate || data.ticketAdditionCounterLong.getRate() >= GoldenConfig.playerMaxChunkLoadRate))) {
+                if (currentChunkLoads >= maxLoads || (PaperConfig.globalMaxChunkLoadRate > 0 && (TICKET_ADDITION_COUNTER_SHORT.getRate() >= PaperConfig.globalMaxChunkLoadRate || TICKET_ADDITION_COUNTER_LONG.getRate() >= PaperConfig.globalMaxChunkLoadRate))
+                        || (PaperConfig.playerMaxChunkLoadRate > 0.0 && (data.ticketAdditionCounterShort.getRate() >= PaperConfig.playerMaxChunkLoadRate || data.ticketAdditionCounterLong.getRate() >= PaperConfig.playerMaxChunkLoadRate))) {
                     // don't poll, we didn't load it
                     this.chunkLoadQueue.add(data);
                     break;
@@ -817,7 +816,7 @@ public final class PlayerChunkLoader {
             final int tickViewDistance = this.tickViewDistance == -1 ? this.loader.getTickDistance() : this.tickViewDistance;
             final int loadViewDistance = Math.max(tickViewDistance + 1, this.loadViewDistance == -1 ? this.loader.getLoadDistance() : this.loadViewDistance);
             final int clientViewDistance = this.getClientViewDistance();
-            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!GoldenConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
+            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!PaperConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
             return sendViewDistance;
         }
 
@@ -934,14 +933,14 @@ public final class PlayerChunkLoader {
             final int loadViewDistance = Math.max(tickViewDistance + 1, this.loadViewDistance == -1 ? this.loader.getLoadDistance() : this.loadViewDistance);
             // send view cannot be greater-than load view
             final int clientViewDistance = this.getClientViewDistance();
-            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!GoldenConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
+            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!PaperConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
 
             final double posX = this.player.getX();
             final double posZ = this.player.getZ();
             final float yaw = MCUtil.normalizeYaw(this.player.getYRot() + 90.0f); // mc yaw 0 is along the positive z axis, but obviously this is really dumb - offset so we are at positive x-axis
 
             // in general, we really only want to prioritise chunks in front if we know we're moving pretty fast into them.
-            final boolean useLookPriority = GoldenConfig.enableFrustumPriority && (this.player.getDeltaMovement().horizontalDistanceSqr() > LOOK_PRIORITY_SPEED_THRESHOLD ||
+            final boolean useLookPriority = PaperConfig.enableFrustumPriority && (this.player.getDeltaMovement().horizontalDistanceSqr() > LOOK_PRIORITY_SPEED_THRESHOLD ||
                     this.player.getAbilities().flying);
 
             // make sure we're in the send queue
@@ -954,14 +953,14 @@ public final class PlayerChunkLoader {
                             && tickViewDistance == this.lastTickDistance
 
                             && (this.usingLookingPriority ? (
-                                    // has our block stayed the same (this also accounts for chunk change)?
-                                    Mth.floor(this.lastLocX) == Mth.floor(posX)
+                            // has our block stayed the same (this also accounts for chunk change)?
+                            Mth.floor(this.lastLocX) == Mth.floor(posX)
                                     && Mth.floor(this.lastLocZ) == Mth.floor(posZ)
-                            ) : (
-                                    // has our chunk stayed the same
-                                    (Mth.floor(this.lastLocX) >> 4) == (Mth.floor(posX) >> 4)
+                    ) : (
+                            // has our chunk stayed the same
+                            (Mth.floor(this.lastLocX) >> 4) == (Mth.floor(posX) >> 4)
                                     && (Mth.floor(this.lastLocZ) >> 4) == (Mth.floor(posZ) >> 4)
-                            ))
+                    ))
 
                             // has our decision about look priority changed?
                             && this.usingLookingPriority == useLookPriority
@@ -1063,10 +1062,10 @@ public final class PlayerChunkLoader {
 
                     final double priority;
 
-                    if (squareDistance <= GoldenConfig.minLoadRadius) {
+                    if (squareDistance <= PaperConfig.minLoadRadius) {
                         // priority should be negative, and we also want to order it from center outwards
                         // so we want (0,0) to be the smallest, and (minLoadedRadius,minLoadedRadius) to be the greatest
-                        priority = -((2 * GoldenConfig.minLoadRadius + 1) - manhattanDistance);
+                        priority = -((2 * PaperConfig.minLoadRadius + 1) - manhattanDistance);
                     } else {
                         if (prioritised) {
                             // we don't prioritise these chunks above others because we also want to make sure some chunks

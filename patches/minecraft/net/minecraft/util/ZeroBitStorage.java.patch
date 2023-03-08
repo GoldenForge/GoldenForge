@@ -1,0 +1,42 @@
+--- a/net/minecraft/util/ZeroBitStorage.java
++++ b/net/minecraft/util/ZeroBitStorage.java
+@@ -13,18 +_,18 @@
+    }
+ 
+    public int m_13516_(int p_184796_, int p_184797_) {
+-      Validate.inclusiveBetween(0L, (long)(this.f_184788_ - 1), (long)p_184796_);
+-      Validate.inclusiveBetween(0L, 0L, (long)p_184797_);
++//      Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184796_);
++//      Validate.inclusiveBetween(0L, 0L, (long)p_184797_);
+       return 0;
+    }
+ 
+    public void m_13524_(int p_184802_, int p_184803_) {
+-      Validate.inclusiveBetween(0L, (long)(this.f_184788_ - 1), (long)p_184802_);
+-      Validate.inclusiveBetween(0L, 0L, (long)p_184803_);
++//      Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184802_);
++//      Validate.inclusiveBetween(0L, 0L, (long)p_184803_);
+    }
+ 
+    public int m_13514_(int p_184794_) {
+-      Validate.inclusiveBetween(0L, (long)(this.f_184788_ - 1), (long)p_184794_);
++      //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184794_);
+       return 0;
+    }
+ 
+@@ -39,6 +_,15 @@
+    public int m_144604_() {
+       return 0;
+    }
++
++   // Paper start
++   @Override
++   public void forEach(DataBitConsumer consumer) {
++      for(int i = 0; i < this.f_184788_; ++i) {
++         consumer.accept(i, 0);
++      }
++   }
++   // Paper end
+ 
+    public void m_13519_(IntConsumer p_184799_) {
+       for(int i = 0; i < this.f_184788_; ++i) {

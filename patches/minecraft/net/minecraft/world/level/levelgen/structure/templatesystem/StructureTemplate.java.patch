@@ -1,5 +1,20 @@
 --- a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplate.java
 +++ b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplate.java
+@@ -5,12 +_,8 @@
+ import com.google.common.collect.Maps;
+ import com.mojang.datafixers.util.Pair;
+ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+-import java.util.Comparator;
+-import java.util.Iterator;
+-import java.util.List;
+-import java.util.Locale;
+-import java.util.Map;
+-import java.util.Optional;
++
++import java.util.*;
+ import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
+ import net.minecraft.SharedConstants;
 @@ -201,6 +_,10 @@
        return m_74593_(p_74565_, p_74564_.m_74401_(), p_74564_.m_74404_(), p_74564_.m_74407_());
     }
@@ -100,3 +115,12 @@
                    ((Mob)p_205061_).m_6518_(p_74524_, p_74524_.m_6436_(new BlockPos(vec31)), MobSpawnType.STRUCTURE, (SpawnGroupData)null, compoundtag);
                 }
  
+@@ -690,7 +_,7 @@
+ 
+    public static final class Palette {
+       private final List<StructureTemplate.StructureBlockInfo> f_74645_;
+-      private final Map<Block, List<StructureTemplate.StructureBlockInfo>> f_74646_ = Maps.newHashMap();
++      private final Map<Block, List<StructureTemplate.StructureBlockInfo>> f_74646_ = Collections.synchronizedMap(Maps.newHashMap());
+ 
+       Palette(List<StructureTemplate.StructureBlockInfo> p_74648_) {
+          this.f_74645_ = p_74648_;

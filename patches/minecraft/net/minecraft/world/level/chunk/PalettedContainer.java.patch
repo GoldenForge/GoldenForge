@@ -8,6 +8,47 @@
     private static final int f_188031_ = 0;
     private final PaletteResize<T> f_63070_ = (p_238275_, p_238276_) -> {
        return 0;
+@@ -34,11 +_,11 @@
+    private final ThreadingDetector f_199441_ = new ThreadingDetector("PalettedContainer");
+ 
+    public void m_63084_() {
+-      this.f_199441_.m_199416_();
++      //this.threadingDetector.checkAndLock();
+    }
+ 
+    public void m_63120_() {
+-      this.f_199441_.m_199422_();
++      //this.threadingDetector.checkAndUnlock();
+    }
+ 
+    public static <T> Codec<PalettedContainer<T>> m_238371_(IdMap<T> p_238372_, Codec<T> p_238373_, PalettedContainer.Strategy p_238374_, T p_238375_) {
+@@ -89,7 +_,7 @@
+       return p_188052_ != null && configuration.equals(p_188052_.f_188100_()) ? p_188052_ : configuration.m_188091_(this.f_63071_, this, this.f_188033_.m_188144_());
+    }
+ 
+-   public int m_7248_(int p_63142_, T p_63143_) {
++   public synchronized int m_7248_(int p_63142_, T p_63143_) {
+       PalettedContainer.Data<T> data = this.f_188032_;
+       PalettedContainer.Data<T> data1 = this.m_188051_(data, p_63142_);
+       data1.m_188111_(data.f_188102_, data.f_188101_);
+@@ -97,7 +_,7 @@
+       return data1.f_188102_.m_6796_(p_63143_);
+    }
+ 
+-   public T m_63091_(int p_63092_, int p_63093_, int p_63094_, T p_63095_) {
++   public synchronized T m_63091_(int p_63092_, int p_63093_, int p_63094_, T p_63095_) {
+       this.m_63084_();
+ 
+       Object object;
+@@ -131,7 +_,7 @@
+ 
+    }
+ 
+-   private void m_63132_(int p_63133_, T p_63134_) {
++   private synchronized void m_63132_(int p_63133_, T p_63134_) {
+       int i = this.f_188032_.f_188102_.m_6796_(p_63134_);
+       this.f_188032_.f_188101_.m_13524_(p_63133_, i);
+    }
 @@ -140,7 +_,7 @@
        return this.m_63085_(this.f_188033_.m_188145_(p_63088_, p_63089_, p_63090_));
     }
@@ -17,3 +58,45 @@
        PalettedContainer.Data<T> data = this.f_188032_;
        return data.f_188102_.m_5795_(data.f_188101_.m_13514_(p_63086_));
     }
+@@ -154,7 +_,7 @@
+       });
+    }
+ 
+-   public void m_63118_(FriendlyByteBuf p_63119_) {
++   public synchronized void m_63118_(FriendlyByteBuf p_63119_) {
+       this.m_63084_();
+ 
+       try {
+@@ -169,7 +_,7 @@
+ 
+    }
+ 
+-   public void m_63135_(FriendlyByteBuf p_63136_) {
++   public synchronized void m_63135_(FriendlyByteBuf p_63136_) {
+       this.m_63084_();
+ 
+       try {
+@@ -219,7 +_,7 @@
+       return DataResult.success(new PalettedContainer<>(p_188068_, p_188069_, configuration, bitstorage, list));
+    }
+ 
+-   public PalettedContainerRO.PackedData<T> m_188064_(IdMap<T> p_188065_, PalettedContainer.Strategy p_188066_) {
++   public synchronized PalettedContainerRO.PackedData<T> m_188064_(IdMap<T> p_188065_, PalettedContainer.Strategy p_188066_) {
+       this.m_63084_();
+ 
+       PalettedContainerRO.PackedData palettedcontainerro$packeddata;
+@@ -301,6 +_,14 @@
+          return new PalettedContainer.Data<>(this, bitstorage, palette);
+       }
+    }
++
++   // Paper start
++   public void forEachLocation(PalettedContainer.CountConsumer<T> consumer) {
++      this.f_188032_.f_188101_.forEach((int location, int data) -> {
++         consumer.m_63144_(this.f_188032_.f_188102_.m_5795_(data), location);
++      });
++   }
++   // Paper end
+ 
+    @FunctionalInterface
+    public interface CountConsumer<T> {

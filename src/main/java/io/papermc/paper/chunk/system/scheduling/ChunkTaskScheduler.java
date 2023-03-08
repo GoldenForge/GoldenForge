@@ -49,8 +49,8 @@ public final class ChunkTaskScheduler {
             return;
         }
         initialised = true;
-        newChunkSystemIOThreads = -1;
-        newChunkSystemWorkerThreads = -1;
+        newChunkSystemIOThreads = 4;
+        newChunkSystemWorkerThreads = 6;
         if (newChunkSystemIOThreads < 0) {
             newChunkSystemIOThreads = 1;
         } else {

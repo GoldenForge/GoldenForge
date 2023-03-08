@@ -75,7 +75,7 @@
  
     public void m_63514_() {
 -      this.f_63495_.m_182498_(true).join();
-+      com.destroystokyo.paper.io.PaperFileIOThread.Holder.INSTANCE.flush(); // Paper - nuke IO worker
++      io.papermc.paper.chunk.system.io.RegionFileIOThread.flush(); // Paper - rewrite chunk system
     }
  
     public void close() throws IOException {

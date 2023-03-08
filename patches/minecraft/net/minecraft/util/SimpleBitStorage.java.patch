@@ -66,3 +66,33 @@
        int i = this.m_184739_(p_184729_);
        long j = this.f_184707_[i];
        int k = (p_184729_ - i * this.f_184711_) * this.f_184708_;
+@@ -117,6 +_,29 @@
+    public int m_144604_() {
+       return this.f_184708_;
+    }
++
++   // Paper start
++   @Override
++   public final void forEach(DataBitConsumer consumer) {
++      int i = 0;
++      long[] along = this.f_184707_;
++      int j = along.length;
++
++      for (int k = 0; k < j; ++k) {
++         long l = along[k];
++
++         for (int i1 = 0; i1 < this.f_184711_; ++i1) {
++            consumer.accept(i, (int) (l & this.f_184709_));
++            l >>= this.f_184708_;
++            ++i;
++            if (i >= this.f_184710_) {
++               return;
++            }
++         }
++      }
++   }
++   // Paper end
++
+ 
+    public void m_13519_(IntConsumer p_184734_) {
+       int i = 0;
