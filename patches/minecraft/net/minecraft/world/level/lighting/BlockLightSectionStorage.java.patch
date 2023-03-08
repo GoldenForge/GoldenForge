@@ -1,0 +1,34 @@
+--- a/net/minecraft/world/level/lighting/BlockLightSectionStorage.java
++++ b/net/minecraft/world/level/lighting/BlockLightSectionStorage.java
+@@ -9,22 +_,24 @@
+ 
+ public class BlockLightSectionStorage extends LayerLightSectionStorage<BlockLightSectionStorage.BlockDataLayerStorageMap> {
+    protected BlockLightSectionStorage(LightChunkGetter p_75511_) {
+-      super(LightLayer.BLOCK, p_75511_, new BlockLightSectionStorage.BlockDataLayerStorageMap(new Long2ObjectOpenHashMap<>()));
++      super(LightLayer.BLOCK, p_75511_, new BlockLightSectionStorage.BlockDataLayerStorageMap(new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<>(), false)); // Paper - avoid copying light data
+    }
+ 
++   @Override
+    protected int m_6181_(long p_75513_) {
+-      long i = SectionPos.m_123235_(p_75513_);
+-      DataLayer datalayer = this.m_75758_(i, false);
+-      return datalayer == null ? 0 : datalayer.m_62560_(SectionPos.m_123207_(BlockPos.m_121983_(p_75513_)), SectionPos.m_123207_(BlockPos.m_122008_(p_75513_)), SectionPos.m_123207_(BlockPos.m_122015_(p_75513_)));
++      long l = SectionPos.m_123235_(p_75513_);
++      DataLayer dataLayer = this.m_75758_(l, false);
++      return dataLayer == null ? 0 : dataLayer.m_62560_(SectionPos.m_123207_(BlockPos.m_121983_(p_75513_)), SectionPos.m_123207_(BlockPos.m_122008_(p_75513_)), SectionPos.m_123207_(BlockPos.m_122015_(p_75513_)));
+    }
+ 
+    protected static final class BlockDataLayerStorageMap extends DataLayerStorageMap<BlockLightSectionStorage.BlockDataLayerStorageMap> {
+-      public BlockDataLayerStorageMap(Long2ObjectOpenHashMap<DataLayer> p_75515_) {
+-         super(p_75515_);
++      public BlockDataLayerStorageMap(com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<DataLayer> long2objectopenhashmap, boolean isVisible) { // Paper - avoid copying light data
++         super(long2objectopenhashmap, isVisible); // Paper - avoid copying light data
+       }
+ 
++      @Override
+       public BlockLightSectionStorage.BlockDataLayerStorageMap m_5972_() {
+-         return new BlockLightSectionStorage.BlockDataLayerStorageMap(this.f_75518_.clone());
++         return new BlockDataLayerStorageMap(this.data, true); // Paper - avoid copying light data
+       }
+    }
+ }

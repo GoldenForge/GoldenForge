@@ -1,0 +1,11 @@
+--- a/net/minecraft/server/dedicated/DedicatedServerProperties.java
++++ b/net/minecraft/server/dedicated/DedicatedServerProperties.java
+@@ -79,7 +_,7 @@
+    public final int f_139719_ = this.m_139832_("max-world-size", (p_139771_) -> {
+       return Mth.m_14045_(p_139771_, 1, 29999984);
+    }, 29999984);
+-   public final boolean f_139720_ = this.m_139836_("sync-chunk-writes", true);
++   public final boolean f_139720_ = this.m_139836_("sync-chunk-writes", true) && Boolean.getBoolean("Paper.enable-sync-chunk-writes"); // Paper - hide behind flag
+    public final boolean f_139721_ = this.m_139836_("enable-jmx-monitoring", false);
+    public final boolean f_139722_ = this.m_139836_("enable-status", true);
+    public final boolean f_183716_ = this.m_139836_("hide-online-players", false);

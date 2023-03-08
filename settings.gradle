@@ -6,7 +6,7 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'ForgeRoot'
+rootProject.name = 'GoldenForge'
 
 include 'fmlloader'
 include 'fmlcore'

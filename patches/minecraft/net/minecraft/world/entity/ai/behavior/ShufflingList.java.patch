@@ -1,0 +1,48 @@
+--- a/net/minecraft/world/entity/ai/behavior/ShufflingList.java
++++ b/net/minecraft/world/entity/ai/behavior/ShufflingList.java
+@@ -14,13 +_,26 @@
+ public class ShufflingList<U> {
+    protected final List<ShufflingList.WeightedEntry<U>> f_147917_;
+    private final RandomSource f_147918_ = RandomSource.m_216327_();
++   private final boolean isUnsafe; // Paper
+ 
+    public ShufflingList() {
++      // Paper start
++      this(true);
++   }
++   public ShufflingList(boolean isUnsafe) {
++      this.isUnsafe = isUnsafe;
++      // Paper end
+       this.f_147917_ = Lists.newArrayList();
+    }
+ 
+    private ShufflingList(List<ShufflingList.WeightedEntry<U>> p_147921_) {
+-      this.f_147917_ = Lists.newArrayList(p_147921_);
++      // Paper start
++      this(p_147921_, true);
++   }
++   private ShufflingList(List<ShufflingList.WeightedEntry<U>> list, boolean isUnsafe) {
++      this.isUnsafe = isUnsafe;
++      // Paper end
++      this.f_147917_ = Lists.newArrayList(list);
+    }
+ 
+    public static <U> Codec<ShufflingList<U>> m_147927_(Codec<U> p_147928_) {
+@@ -35,11 +_,12 @@
+    }
+ 
+    public ShufflingList<U> m_147922_() {
+-      this.f_147917_.forEach((p_147924_) -> {
+-         p_147924_.m_147941_(this.f_147918_.m_188501_());
+-      });
+-      this.f_147917_.sort(Comparator.comparingDouble(ShufflingList.WeightedEntry::m_147946_));
+-      return this;
++      // Paper start - make concurrent safe, work off a clone of the list
++      List<ShufflingList.WeightedEntry<U>> list = this.isUnsafe ? Lists.newArrayList(this.f_147917_) : this.f_147917_;
++      list.forEach(entry -> entry.m_147941_(this.f_147918_.m_188501_()));
++      list.sort(Comparator.comparingDouble(ShufflingList.WeightedEntry::m_147946_));
++      return this.isUnsafe ? new ShufflingList<>(list, this.isUnsafe) : this;
++      // Paper end
+    }
+ 
+    public Stream<U> m_147932_() {

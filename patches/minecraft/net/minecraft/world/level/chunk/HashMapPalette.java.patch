@@ -1,0 +1,30 @@
+--- a/net/minecraft/world/level/chunk/HashMapPalette.java
++++ b/net/minecraft/world/level/chunk/HashMapPalette.java
+@@ -19,7 +_,7 @@
+    }
+ 
+    public HashMapPalette(IdMap<T> p_187904_, int p_187905_, PaletteResize<T> p_187906_) {
+-      this(p_187904_, p_187905_, p_187906_, CrudeIncrementalIntIdentityHashBiMap.m_184237_(1 << p_187905_));
++      this(p_187904_, p_187905_, p_187906_, CrudeIncrementalIntIdentityHashBiMap.m_184237_((1 << p_187905_) + 1)); // Paper - Avoid unnecessary resize operation in CrudeIncrementalIntIdentityHashBiMap
+    }
+ 
+    private HashMapPalette(IdMap<T> p_199915_, int p_199916_, PaletteResize<T> p_199917_, CrudeIncrementalIntIdentityHashBiMap<T> p_199918_) {
+@@ -36,10 +_,16 @@
+    public int m_6796_(T p_62673_) {
+       int i = this.f_62658_.m_7447_(p_62673_);
+       if (i == -1) {
+-         i = this.f_62658_.m_13569_(p_62673_);
+-         if (i >= 1 << this.f_62662_) {
++         // Paper start - Avoid unnecessary resize operation in CrudeIncrementalIntIdentityHashBiMap and optimize
++         // We use size() instead of the result from add(K)
++         // This avoids adding another object unnecessarily
++         // Without this change, + 2 would be required in the constructor
++         if (this.f_62658_.m_13562_() >= 1 << this.f_62662_) {
+             i = this.f_62659_.m_7248_(this.f_62662_ + 1, p_62673_);
++         } else {
++            i = this.f_62658_.m_13569_(p_62673_);
+          }
++         // Paper end
+       }
+ 
+       return i;

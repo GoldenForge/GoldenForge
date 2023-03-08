@@ -45,7 +45,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,169 @@
+@@ -65,97 +_,180 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -113,6 +113,12 @@
 +         this.chunkMap.needsChangeBroadcasting.add(this);
 +      }
 +      // Paper end - optimise chunk tick iteration
++      // Paper start - optimise checkDespawn
++      LevelChunk chunk = this.getFullChunkNowUnchecked();
++      if (chunk != null) {
++         chunk.updateGeneralAreaCache();
++      }
++      // Paper end - optimise checkDespawn
 +   }
 +
 +   public void onChunkRemove() {
@@ -121,6 +127,12 @@
 +         this.chunkMap.needsChangeBroadcasting.remove(this);
 +      }
 +      // Paper end - optimise chunk tick iterationn
++      // Paper start - optimise checkDespawn
++      LevelChunk chunk = this.getFullChunkNowUnchecked();
++      if (chunk != null) {
++         chunk.removeGeneralAreaCache();
++      }
++      // Paper end - optimise checkDespaw
 +   }
 +   public final io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder; // Paper - rewrite chunk system
 +   public ChunkHolder(ChunkPos p_142986_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.PlayerProvider p_142991_, io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder) { // Paper - rewrite chunk system) {
@@ -143,7 +155,6 @@
        this.f_140011_ = new ShortSet[p_142988_.m_151559_()];
 -   }
 +      this.chunkMap = (ChunkMap)p_142991_; // Paper
-+      this.onChunkAdd(); // Paper - optimise anyPlayerCloseEnoughForSpawning
 +   }
 +
 +   // Paper start

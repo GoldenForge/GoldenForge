@@ -120,7 +120,7 @@
     public static final class Palette {
        private final List<StructureTemplate.StructureBlockInfo> f_74645_;
 -      private final Map<Block, List<StructureTemplate.StructureBlockInfo>> f_74646_ = Maps.newHashMap();
-+      private final Map<Block, List<StructureTemplate.StructureBlockInfo>> f_74646_ = Collections.synchronizedMap(Maps.newHashMap());
++      private final Map<Block, List<StructureTemplate.StructureBlockInfo>> f_74646_ = Maps.newConcurrentMap(); // Paper
  
        Palette(List<StructureTemplate.StructureBlockInfo> p_74648_) {
           this.f_74645_ = p_74648_;

@@ -35,7 +35,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,31 @@
+@@ -104,8 +_,105 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -61,6 +61,80 @@
 +   public final ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
 +      return ((ServerLevel)this).f_8547_.getChunkAtIfLoadedImmediately(x, z);
 +   }
++
++   public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
++      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(x, z);
++   }
++
++   // Paper start
++   @Override
++   public boolean m_7232_(int chunkX, int chunkZ) {
++      return this.getChunkIfLoaded(chunkX, chunkZ) != null;
++   }
++   // Paper end
++   // Paper start - optimise checkDespawn
++   public final List<net.minecraft.server.level.ServerPlayer> getNearbyPlayers(@Nullable Entity source, double sourceX, double sourceY,
++                                                                               double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++      LevelChunk chunk;
++      if (maxRange < 0.0 || maxRange >= net.minecraft.server.level.ChunkMap.GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE ||
++              (chunk = (LevelChunk)this.getChunkIfLoadedImmediately(Mth.m_14107_(sourceX) >> 4, Mth.m_14107_(sourceZ) >> 4)) == null) {
++         return this.getNearbyPlayersSlow(source, sourceX, sourceY, sourceZ, maxRange, predicate);
++      }
++
++      List<net.minecraft.server.level.ServerPlayer> ret = new java.util.ArrayList<>();
++      chunk.getNearestPlayers(sourceX, sourceY, sourceZ, predicate, maxRange, ret);
++      return ret;
++   }
++
++   private List<net.minecraft.server.level.ServerPlayer> getNearbyPlayersSlow(@Nullable Entity source, double sourceX, double sourceY,
++                                                                              double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++      List<net.minecraft.server.level.ServerPlayer> ret = new java.util.ArrayList<>();
++      double maxRangeSquared = maxRange * maxRange;
++
++      for (net.minecraft.server.level.ServerPlayer player : (List<net.minecraft.server.level.ServerPlayer>)this.m_6907_()) {
++         if ((maxRange < 0.0 || player.m_20275_(sourceX, sourceY, sourceZ) < maxRangeSquared)) {
++            if (predicate == null || predicate.test(player)) {
++               ret.add(player);
++            }
++         }
++      }
++
++      return ret;
++   }
++
++   private net.minecraft.server.level.ServerPlayer getNearestPlayerSlow(@Nullable Entity source, double sourceX, double sourceY,
++                                                                        double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++      net.minecraft.server.level.ServerPlayer closest = null;
++      double closestRangeSquared = maxRange < 0.0 ? Double.MAX_VALUE : maxRange * maxRange;
++
++      for (net.minecraft.server.level.ServerPlayer player : (List<net.minecraft.server.level.ServerPlayer>)this.m_6907_()) {
++         double distanceSquared = player.m_20275_(sourceX, sourceY, sourceZ);
++         if (distanceSquared < closestRangeSquared && (predicate == null || predicate.test(player))) {
++            closest = player;
++            closestRangeSquared = distanceSquared;
++         }
++      }
++
++      return closest;
++   }
++
++
++   public final net.minecraft.server.level.ServerPlayer getNearestPlayer(@Nullable Entity source, double sourceX, double sourceY,
++                                                                         double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
++      LevelChunk chunk;
++      if (maxRange < 0.0 || maxRange >= net.minecraft.server.level.ChunkMap.GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE ||
++              (chunk = (LevelChunk)this.getChunkIfLoadedImmediately(Mth.m_14107_(sourceX) >> 4, Mth.m_14107_(sourceZ) >> 4)) == null) {
++         return this.getNearestPlayerSlow(source, sourceX, sourceY, sourceZ, maxRange, predicate);
++      }
++
++      return chunk.findNearestPlayer(sourceX, sourceY, sourceZ, maxRange, predicate);
++   }
++
++   @Override
++   public @Nullable Player m_5788_(double d0, double d1, double d2, double d3, @Nullable Predicate<Entity> predicate) {
++      return this.getNearestPlayer(null, d0, d1, d2, d3, predicate);
++   }
++   // Paper end - optimise checkDespawn
  
     protected Level(WritableLevelData p_220352_, ResourceKey<Level> p_220353_, Holder<DimensionType> p_220354_, Supplier<ProfilerFiller> p_220355_, boolean p_220356_, boolean p_220357_, long p_220358_, int p_220359_) {
 +      super(Level.class);

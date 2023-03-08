@@ -51,7 +51,7 @@
  import org.slf4j.Logger;
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
-@@ -110,35 +_,155 @@
+@@ -110,35 +_,169 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -104,6 +104,13 @@
 +   private final com.destroystokyo.paper.util.misc.PooledLinkedHashSets<ServerPlayer> pooledLinkedPlayerHashSets = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets<>();
 +   public final io.papermc.paper.chunk.PlayerChunkLoader playerChunkManager = new io.papermc.paper.chunk.PlayerChunkLoader(this, this.pooledLinkedPlayerHashSets); // Paper - replace chunk loader
 +   public final ReferenceOpenHashSet<ChunkHolder> needsChangeBroadcasting = new ReferenceOpenHashSet<>();
++
++   // Paper start - optimise checkDespawn
++   public static final int GENERAL_AREA_MAP_SQUARE_RADIUS = 40;
++   public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE = 16.0 * (GENERAL_AREA_MAP_SQUARE_RADIUS - 1);
++   public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE_SQUARED = GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE * GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE;
++   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerGeneralAreaMap;
++   // Paper end - optimise checkDespawn
 +
 +   // Paper start
 +   public final List<io.papermc.paper.chunk.SingleThreadChunkRegionManager> regionManagers = new java.util.ArrayList<>();
@@ -208,14 +215,21 @@
 +
 +   void addPlayerToDistanceMaps(ServerPlayer player) {
 +      this.playerChunkManager.addPlayer(player); // Paper - replace chunk loader
++      int chunkX = MCUtil.getChunkCoordinate(player.m_20185_());
++      int chunkZ = MCUtil.getChunkCoordinate(player.m_20189_());
++      this.playerGeneralAreaMap.add(player, chunkX, chunkZ, GENERAL_AREA_MAP_SQUARE_RADIUS); // Paper - optimise checkDespawn
 +   }
 +
 +   void removePlayerFromDistanceMaps(ServerPlayer player) {
 +      this.playerChunkManager.removePlayer(player); // Paper - replace chunk loader
++      this.playerGeneralAreaMap.remove(player); // Paper - optimise checkDespawns
 +   }
 +
 +   void updateMaps(ServerPlayer player) {
++      int chunkX = MCUtil.getChunkCoordinate(player.m_20185_());
++      int chunkZ = MCUtil.getChunkCoordinate(player.m_20189_());
 +      this.playerChunkManager.updatePlayer(player); // Paper - replace chunk loader
++      this.playerGeneralAreaMap.update(player, chunkX, chunkZ, GENERAL_AREA_MAP_SQUARE_RADIUS); // Paper - optimise checkDespawn
 +   }
 +
 +
@@ -223,7 +237,7 @@
     public ChunkMap(ServerLevel p_214836_, LevelStorageSource.LevelStorageAccess p_214837_, DataFixer p_214838_, StructureTemplateManager p_214839_, Executor p_214840_, BlockableEventLoop<Runnable> p_214841_, LightChunkGetter p_214842_, ChunkGenerator p_214843_, ChunkProgressListener p_214844_, ChunkStatusUpdateListener p_214845_, Supplier<DimensionDataStorage> p_214846_, int p_214847_, boolean p_214848_) {
        super(p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
        this.f_214833_ = p_214839_;
-@@ -153,19 +_,33 @@
+@@ -153,19 +_,51 @@
        }
  
        this.f_140135_ = p_214841_;
@@ -261,6 +275,24 @@
 +      this.dataRegionManager = new io.papermc.paper.chunk.SingleThreadChunkRegionManager(this.f_140133_, 2, (1.0 / 3.0), 1, 6, "Data", DataRegionData::new, DataRegionSectionData::new);
 +      this.regionManagers.add(this.dataRegionManager);
 +      // Paper end
++
++      // Paper start - optimise checkDespawn
++      this.playerGeneralAreaMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets,
++              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
++               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
++                 LevelChunk chunk = ChunkMap.this.f_140133_.m_7726_().getChunkAtIfCachedImmediately(rangeX, rangeZ);
++                 if (chunk != null) {
++                    chunk.updateGeneralAreaCache(newState);
++                 }
++              },
++              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
++               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
++                 LevelChunk chunk = ChunkMap.this.f_140133_.m_7726_().getChunkAtIfCachedImmediately(rangeX, rangeZ);
++                 if (chunk != null) {
++                    chunk.updateGeneralAreaCache(newState);
++                 }
++              });
++      // Paper end - optimise checkDespawn
     }
  
     protected ChunkGenerator m_183719_() {

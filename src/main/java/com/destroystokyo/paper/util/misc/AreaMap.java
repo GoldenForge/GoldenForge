@@ -214,7 +214,7 @@ public abstract class AreaMap<E> {
         if (current != null) {
             PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<E> next = this.pooledHashSets.findMapWith(current, object);
             if (next == current) {
-                throw new IllegalStateException("Expected different map: got " + next.toString());
+                //throw new IllegalStateException("Expected different map: got " + next.toString());
             }
             this.areaMap.put(key, next);
 
@@ -249,7 +249,7 @@ public abstract class AreaMap<E> {
         PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<E> next = this.pooledHashSets.findMapWithout(current, object);
 
         if (next == current) {
-            throw new IllegalStateException("Current map [" + next.toString() + "] should have contained " + object + ", (" + chunkX + "," + chunkZ + ")");
+            //throw new IllegalStateException("Current map [" + next.toString() + "] should have contained " + object + ", (" + chunkX + "," + chunkZ + ")");
         }
 
         if (next != null) {

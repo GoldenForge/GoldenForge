@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/level/entity/EntitySectionStorage.java
++++ b/net/minecraft/world/level/entity/EntitySectionStorage.java
+@@ -77,6 +_,7 @@
+       long i = SectionPos.m_123209_(p_156859_, 0, p_156860_);
+       long j = SectionPos.m_123209_(p_156859_, -1, p_156860_);
+       return this.f_156853_.subSet(i, j + 1L);
++
+    }
+ 
+    public Stream<EntitySection<T>> m_156888_(long p_156889_) {

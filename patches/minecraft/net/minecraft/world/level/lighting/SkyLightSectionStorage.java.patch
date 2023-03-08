@@ -1,0 +1,126 @@
+--- a/net/minecraft/world/level/lighting/SkyLightSectionStorage.java
++++ b/net/minecraft/world/level/lighting/SkyLightSectionStorage.java
+@@ -21,7 +_,7 @@
+    private volatile boolean f_75865_;
+ 
+    protected SkyLightSectionStorage(LightChunkGetter p_75868_) {
+-      super(LightLayer.SKY, p_75868_, new SkyLightSectionStorage.SkyDataLayerStorageMap(new Long2ObjectOpenHashMap<>(), new Long2IntOpenHashMap(), Integer.MAX_VALUE));
++      super(LightLayer.SKY, p_75868_, new SkyLightSectionStorage.SkyDataLayerStorageMap(new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<>(), new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Int(), Integer.MAX_VALUE, false)); // Paper - avoid copying light data
+    }
+ 
+    protected int m_6181_(long p_75880_) {
+@@ -31,8 +_,9 @@
+    protected int m_164457_(long p_164458_, boolean p_164459_) {
+       long i = SectionPos.m_123235_(p_164458_);
+       int j = SectionPos.m_123225_(i);
+-      SkyLightSectionStorage.SkyDataLayerStorageMap skylightsectionstorage$skydatalayerstoragemap = p_164459_ ? this.f_75732_ : this.f_75731_;
+-      int k = skylightsectionstorage$skydatalayerstoragemap.f_75901_.get(SectionPos.m_123240_(i));
++      synchronized (this.visibleUpdateLock) { // Paper - avoid copying light data
++      SkyLightSectionStorage.SkyDataLayerStorageMap skylightsectionstorage$skydatalayerstoragemap = (SkyLightSectionStorage.SkyDataLayerStorageMap) this.f_75731_; // Paper - avoid copying light data - must be after lock acquire
++      int k = skylightsectionstorage$skydatalayerstoragemap.otherData.getVisibleAsync(SectionPos.m_123240_(i)); // Paper - avoid copying light data
+       if (k != skylightsectionstorage$skydatalayerstoragemap.f_75900_ && j < k) {
+          DataLayer datalayer = this.m_75761_(skylightsectionstorage$skydatalayerstoragemap, i);
+          if (datalayer == null) {
+@@ -51,19 +_,20 @@
+       } else {
+          return p_164459_ && !this.m_75892_(i) ? 0 : 15;
+       }
++      } // Paper - avoid copying light data
+    }
+ 
+    protected void m_6177_(long p_75885_) {
+       int i = SectionPos.m_123225_(p_75885_);
+       if ((this.f_75732_).f_75900_ > i) {
+          (this.f_75732_).f_75900_ = i;
+-         (this.f_75732_).f_75901_.defaultReturnValue((this.f_75732_).f_75900_);
++         (this.f_75732_).otherData.queueDefaultReturnValue((this.f_75732_).f_75900_); // Paper - avoid copying light data
+       }
+ 
+       long j = SectionPos.m_123240_(p_75885_);
+-      int k = (this.f_75732_).f_75901_.get(j);
++      int k = (this.f_75732_).otherData.getUpdating(j); // Paper - avoid copying light data
+       if (k < i + 1) {
+-         (this.f_75732_).f_75901_.put(j, i + 1);
++         (this.f_75732_).otherData.queueUpdate(j, i + 1); // Paper - avoid copying light data
+          if (this.f_75864_.contains(j)) {
+             this.m_75896_(p_75885_);
+             if (k > (this.f_75732_).f_75900_) {
+@@ -99,19 +_,19 @@
+       }
+ 
+       int j = SectionPos.m_123225_(p_75887_);
+-      if ((this.f_75732_).f_75901_.get(i) == j + 1) {
++      if ((this.f_75732_).otherData.getUpdating(i) == j + 1) {  // Paper - avoid copying light data
+          long k;
+          for(k = p_75887_; !this.m_75791_(k) && this.m_75870_(j); k = SectionPos.m_123191_(k, Direction.DOWN)) {
+             --j;
+          }
+ 
+          if (this.m_75791_(k)) {
+-            (this.f_75732_).f_75901_.put(i, j + 1);
++            (this.f_75732_).otherData.queueUpdate(i, j + 1); // Paper - avoid copying light data
+             if (flag) {
+                this.m_75896_(k);
+             }
+          } else {
+-            (this.f_75732_).f_75901_.remove(i);
++            (this.f_75732_).otherData.queueRemove(i); // Paper - avoid copying light data
+          }
+       }
+ 
+@@ -124,7 +_,7 @@
+    protected void m_7358_(long p_75877_, boolean p_75878_) {
+       this.m_75785_();
+       if (p_75878_ && this.f_75864_.add(p_75877_)) {
+-         int i = (this.f_75732_).f_75901_.get(p_75877_);
++         int i = (this.f_75732_).otherData.getUpdating(p_75877_); // Paper - avoid copying light data
+          if (i != (this.f_75732_).f_75900_) {
+             long j = SectionPos.m_123209_(SectionPos.m_123213_(p_75877_), i - 1, SectionPos.m_123230_(p_75877_));
+             this.m_75896_(j);
+@@ -146,7 +_,7 @@
+          return datalayer;
+       } else {
+          long i = SectionPos.m_123191_(p_75883_, Direction.UP);
+-         int j = (this.f_75732_).f_75901_.get(SectionPos.m_123240_(p_75883_));
++         int j = (this.f_75732_).otherData.getUpdating(SectionPos.m_123240_(p_75883_)); // Paper - avoid copying light data
+          if (j != (this.f_75732_).f_75900_ && SectionPos.m_123225_(i) < j) {
+             DataLayer datalayer1;
+             while((datalayer1 = this.m_75758_(i, true)) == null) {
+@@ -268,7 +_,7 @@
+ 
+    protected boolean m_75890_(long p_75891_) {
+       long i = SectionPos.m_123240_(p_75891_);
+-      int j = (this.f_75732_).f_75901_.get(i);
++      int j = (this.f_75732_).otherData.getUpdating(i);  // Paper - avoid copying light data
+       return j == (this.f_75732_).f_75900_ || SectionPos.m_123225_(p_75891_) >= j;
+    }
+ 
+@@ -279,17 +_,21 @@
+ 
+    protected static final class SkyDataLayerStorageMap extends DataLayerStorageMap<SkyLightSectionStorage.SkyDataLayerStorageMap> {
+       int f_75900_;
+-      final Long2IntOpenHashMap f_75901_;
++      private final com.destroystokyo.paper.util.map.QueuedChangesMapLong2Int otherData; // Paper - avoid copying light data
+ 
+-      public SkyDataLayerStorageMap(Long2ObjectOpenHashMap<DataLayer> p_75903_, Long2IntOpenHashMap p_75904_, int p_75905_) {
+-         super(p_75903_);
+-         this.f_75901_ = p_75904_;
+-         p_75904_.defaultReturnValue(p_75905_);
+-         this.f_75900_ = p_75905_;
++      // Paper start - avoid copying light data
++      public SkyDataLayerStorageMap(com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<DataLayer> arrays, com.destroystokyo.paper.util.map.QueuedChangesMapLong2Int columnToTopSection, int minSectionY, boolean isVisible) {
++         super(arrays, isVisible);
++         this.otherData = columnToTopSection;
++         otherData.queueDefaultReturnValue(minSectionY);
++         // Paper end
++         this.f_75900_ = minSectionY;
+       }
+ 
++      @Override
+       public SkyLightSectionStorage.SkyDataLayerStorageMap m_5972_() {
+-         return new SkyLightSectionStorage.SkyDataLayerStorageMap(this.f_75518_.clone(), this.f_75901_.clone(), this.f_75900_);
++         this.otherData.performUpdatesLockMap(); // Paper - avoid copying light data
++         return new SkyLightSectionStorage.SkyDataLayerStorageMap(this.data, this.otherData, this.f_75900_, true); // Paper - avoid copying light data
+       }
+    }
+ }

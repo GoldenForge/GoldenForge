@@ -1,0 +1,31 @@
+--- a/net/minecraft/world/level/entity/EntityLookup.java
++++ b/net/minecraft/world/level/entity/EntityLookup.java
+@@ -9,12 +_,20 @@
+ import java.util.UUID;
+ import java.util.function.Consumer;
+ import javax.annotation.Nullable;
++
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.Level;
+ import org.slf4j.Logger;
+ 
+ public class EntityLookup<T extends EntityAccess> {
+    private static final Logger f_156806_ = LogUtils.getLogger();
+    private final Int2ObjectMap<T> f_156807_ = new Int2ObjectLinkedOpenHashMap<>();
+    private final Map<UUID, T> f_156808_ = Maps.newHashMap();
++   private ServerLevel level;
++
++   public EntityLookup(ServerLevel level) {
++      this.level = level;
++   }
+ 
+    public <U extends T> void m_156816_(EntityTypeTest<T, U> p_156817_, Consumer<U> p_156818_) {
+       for(T t : this.f_156807_.values()) {
+@@ -56,6 +_,6 @@
+    }
+ 
+    public int m_156821_() {
+-      return this.f_156808_.size();
++      return level.getEntityLookup().count();
+    }
+ }

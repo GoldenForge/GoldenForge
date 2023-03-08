@@ -49,6 +49,10 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     private final Object2ReferenceOpenHashMap<UUID, Entity> entityByUUID = new Object2ReferenceOpenHashMap<>();
     private final EntityList accessibleEntities = new EntityList();
 
+    public int count() {
+        return entityByUUID.size();
+    }
+
     public EntityLookup(final ServerLevel world, final LevelCallback<Entity> worldCallback) {
         this.world = world;
         this.minSection = WorldUtil.getMinSection(world);

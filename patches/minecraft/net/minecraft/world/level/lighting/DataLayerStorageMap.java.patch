@@ -1,0 +1,73 @@
+--- a/net/minecraft/world/level/lighting/DataLayerStorageMap.java
++++ b/net/minecraft/world/level/lighting/DataLayerStorageMap.java
+@@ -9,10 +_,24 @@
+    private final long[] f_75519_ = new long[2];
+    private final DataLayer[] f_75520_ = new DataLayer[2];
+    private boolean f_75521_;
+-   protected final Long2ObjectOpenHashMap<DataLayer> f_75518_;
+-
+-   protected DataLayerStorageMap(Long2ObjectOpenHashMap<DataLayer> p_75523_) {
+-      this.f_75518_ = p_75523_;
++   protected final com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<DataLayer> data; // Paper - avoid copying light data
++   protected final boolean isVisible; // Paper - avoid copying light data
++   java.util.function.Function<Long, DataLayer> lookup; // Paper - faster branchless lookup
++
++
++   // Paper start - avoid copying light data
++   protected DataLayerStorageMap(com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<DataLayer> data, boolean isVisible) {
++      if (isVisible) {
++         data.performUpdatesLockMap();
++      }
++      this.data = data;
++      this.isVisible = isVisible;
++      if (isVisible) {
++         lookup = data::getVisibleAsync;
++      } else {
++         lookup = data::getUpdating;
++      }
++      // Paper end - avoid copying light data
+       this.m_75531_();
+       this.f_75521_ = true;
+    }
+@@ -20,12 +_,14 @@
+    public abstract M m_5972_();
+ 
+    public void m_75524_(long p_75525_) {
+-      this.f_75518_.put(p_75525_, this.f_75518_.get(p_75525_).m_62569_());
++      if (this.isVisible) { throw new IllegalStateException("writing to visible data"); } // Paper - avoid copying light data
++      this.data.queueUpdate(p_75525_, ((DataLayer) this.data.getUpdating(p_75525_)).m_62569_()); // Paper - avoid copying light data
+       this.m_75531_();
+    }
+ 
+    public boolean m_75529_(long p_75530_) {
+-      return this.f_75518_.containsKey(p_75530_);
++      return lookup.apply(p_75530_) != null; // Paper - avoid copying light data
++
+    }
+ 
+    @Nullable
+@@ -38,7 +_,7 @@
+          }
+       }
+ 
+-      DataLayer datalayer = this.f_75518_.get(p_75533_);
++      DataLayer datalayer = lookup.apply(p_75533_); // Paper - avoid copying light data
+       if (datalayer == null) {
+          return null;
+       } else {
+@@ -58,11 +_,13 @@
+ 
+    @Nullable
+    public DataLayer m_75535_(long p_75536_) {
+-      return this.f_75518_.remove(p_75536_);
++      if (this.isVisible) { throw new IllegalStateException("writing to visible data"); } // Paper - avoid copying light data
++      return (DataLayer) this.data.queueRemove(p_75536_); // Paper - avoid copying light data
+    }
+ 
+    public void m_75526_(long p_75527_, DataLayer p_75528_) {
+-      this.f_75518_.put(p_75527_, p_75528_);
++      if (this.isVisible) { throw new IllegalStateException("writing to visible data"); } // Paper - avoid copying light data
++      this.data.queueUpdate(p_75527_, p_75528_); // Paper - avoid copying light data
+    }
+ 
+    public void m_75531_() {

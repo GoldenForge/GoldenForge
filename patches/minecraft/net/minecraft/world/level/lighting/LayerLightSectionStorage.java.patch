@@ -1,0 +1,56 @@
+--- a/net/minecraft/world/level/lighting/LayerLightSectionStorage.java
++++ b/net/minecraft/world/level/lighting/LayerLightSectionStorage.java
+@@ -27,7 +_,7 @@
+    protected final LongSet f_75728_ = new LongOpenHashSet();
+    protected final LongSet f_75729_ = new LongOpenHashSet();
+    protected final LongSet f_75730_ = new LongOpenHashSet();
+-   protected volatile M f_75731_;
++   protected volatile M f_75731_; protected final Object visibleUpdateLock = new Object(); // Paper - diff on change, should be "visible" - force compile fail on usage change
+    protected final M f_75732_;
+    protected final LongSet f_75733_ = new LongOpenHashSet();
+    protected final LongSet f_75734_ = new LongOpenHashSet();
+@@ -52,7 +_,15 @@
+ 
+    @Nullable
+    protected DataLayer m_75758_(long p_75759_, boolean p_75760_) {
+-      return this.m_75761_((M)(p_75760_ ? this.f_75732_ : this.f_75731_), p_75759_);
++      // Paper start - avoid copying light data
++      if (p_75760_) {
++         return this.m_75761_(this.f_75732_, p_75759_);
++      } else {
++         synchronized (this.visibleUpdateLock) {
++            return this.m_75761_(this.f_75731_, p_75759_);
++         }
++      }
++      // Paper end - avoid copying light data
+    }
+ 
+    @Nullable
+@@ -339,18 +_,20 @@
+ 
+    protected void m_75790_() {
+       if (!this.f_75733_.isEmpty()) {
+-         M m = this.f_75732_.m_5972_();
+-         m.m_75534_();
+-         this.f_75731_ = m;
++         synchronized (this.visibleUpdateLock) { // Paper - avoid copying light data
++            M dataLayerStorageMap = this.f_75732_.m_5972_();
++            dataLayerStorageMap.m_75534_();
++            this.f_75731_ = dataLayerStorageMap; // Paper - avoid copying light data
++         } // Paper - avoid copying light data
+          this.f_75733_.clear();
+       }
+ 
+       if (!this.f_75734_.isEmpty()) {
+-         LongIterator longiterator = this.f_75734_.iterator();
++         LongIterator longIterator = this.f_75734_.iterator();
+ 
+-         while(longiterator.hasNext()) {
+-            long i = longiterator.nextLong();
+-            this.f_75739_.m_6506_(this.f_75738_, SectionPos.m_123184_(i));
++         while(longIterator.hasNext()) {
++            long l = longIterator.nextLong();
++            this.f_75739_.m_6506_(this.f_75738_, SectionPos.m_123184_(l));
+          }
+ 
+          this.f_75734_.clear();

@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/ai/behavior/GateBehavior.java
++++ b/net/minecraft/world/entity/ai/behavior/GateBehavior.java
+@@ -16,7 +_,7 @@
+    private final Set<MemoryModuleType<?>> f_22868_;
+    private final GateBehavior.OrderPolicy f_22869_;
+    private final GateBehavior.RunningPolicy f_22870_;
+-   private final ShufflingList<Behavior<? super E>> f_22871_ = new ShufflingList<>();
++   private final ShufflingList<Behavior<? super E>> f_22871_ = new ShufflingList<>(false); // Paper - don't use a clone);
+ 
+    public GateBehavior(Map<MemoryModuleType<?>, MemoryStatus> p_22873_, Set<MemoryModuleType<?>> p_22874_, GateBehavior.OrderPolicy p_22875_, GateBehavior.RunningPolicy p_22876_, List<Pair<Behavior<? super E>, Integer>> p_22877_) {
+       super(p_22873_);

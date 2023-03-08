@@ -8,3 +8,16 @@
     List<Entity> m_6249_(@Nullable Entity p_45936_, AABB p_45937_, Predicate<? super Entity> p_45938_);
  
     <T extends Entity> List<T> m_142425_(EntityTypeTest<Entity, T> p_151464_, AABB p_151465_, Predicate<? super T> p_151466_);
+@@ -126,6 +_,12 @@
+    default Player m_45941_(TargetingConditions p_45942_, double p_45943_, double p_45944_, double p_45945_) {
+       return this.m_45982_(this.m_6907_(), p_45942_, (LivingEntity)null, p_45943_, p_45944_, p_45945_);
+    }
++
++   // Paper start
++   default @Nullable Player findNearbyPlayer(Entity entity, double maxDistance, @Nullable Predicate<Entity> predicate) {
++      return this.m_5788_(entity.m_20185_(), entity.m_20186_(), entity.m_20189_(), maxDistance, predicate);
++   }
++   // Paper end
+ 
+    @Nullable
+    default <T extends LivingEntity> T m_45963_(Class<? extends T> p_45964_, TargetingConditions p_45965_, @Nullable LivingEntity p_45966_, double p_45967_, double p_45968_, double p_45969_, AABB p_45970_) {

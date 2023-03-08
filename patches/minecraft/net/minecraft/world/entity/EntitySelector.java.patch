@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/entity/EntitySelector.java
++++ b/net/minecraft/world/entity/EntitySelector.java
+@@ -30,6 +_,12 @@
+    private EntitySelector() {
+    }
+ 
++   // Paper start
++   public static final Predicate<Entity> PLAYER_AFFECTS_SPAWNING = (entity) -> {
++      return !entity.m_5833_() && entity.m_6084_() && entity instanceof Player player && player.affectsSpawning;
++   };
++   // Paper end
++
+    public static Predicate<Entity> m_20410_(double p_20411_, double p_20412_, double p_20413_, double p_20414_) {
+       double d0 = p_20414_ * p_20414_;
+       return (p_20420_) -> {

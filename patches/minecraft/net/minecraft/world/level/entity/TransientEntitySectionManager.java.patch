@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/level/entity/TransientEntitySectionManager.java
 +++ b/net/minecraft/world/level/entity/TransientEntitySectionManager.java
+@@ -19,7 +_,7 @@
+    private final LevelEntityGetter<T> f_157640_;
+ 
+    public TransientEntitySectionManager(Class<T> p_157643_, LevelCallback<T> p_157644_) {
+-      this.f_157637_ = new EntityLookup<>();
++      this.f_157637_ = new EntityLookup<>(null);
+       this.f_157638_ = new EntitySectionStorage<>(p_157643_, (p_157647_) -> {
+          return this.f_157639_.contains(p_157647_) ? Visibility.TICKING : Visibility.TRACKED;
+       });
 @@ -92,11 +_,13 @@
  
     class Callback implements EntityInLevelCallback {
