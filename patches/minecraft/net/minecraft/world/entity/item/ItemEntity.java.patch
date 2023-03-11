@@ -1,6 +1,14 @@
 --- a/net/minecraft/world/entity/item/ItemEntity.java
 +++ b/net/minecraft/world/entity/item/ItemEntity.java
-@@ -43,6 +_,10 @@
+@@ -12,6 +_,7 @@
+ import net.minecraft.network.syncher.EntityDataAccessor;
+ import net.minecraft.network.syncher.EntityDataSerializers;
+ import net.minecraft.network.syncher.SynchedEntityData;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.sounds.SoundSource;
+ import net.minecraft.stats.Stats;
+@@ -43,6 +_,11 @@
     @Nullable
     private UUID f_31982_;
     public final float f_31983_;
@@ -8,6 +16,7 @@
 +    * The maximum age of this EntityItem.  The item is expired once this is reached.
 +    */
 +   public int lifespan = 6000;
++   private int lastTick = MinecraftServer.currentTick - 1; // CraftBukkit
  
     public ItemEntity(EntityType<? extends ItemEntity> p_31991_, Level p_31992_) {
        super(p_31991_, p_31992_);
@@ -46,7 +55,7 @@
              }
  
              this.m_20256_(this.m_20184_().m_82542_((double)f1, 0.98D, (double)f1));
-@@ -150,7 +_,14 @@
+@@ -150,12 +_,36 @@
              }
           }
  
@@ -62,6 +71,28 @@
              this.m_146870_();
           }
  
+       }
+    }
++
++   // Spigot start - copied from above
++   @Override
++   public void inactiveTick() {
++      // CraftBukkit start - Use wall time for pickup and despawn timers
++      int elapsedTicks = MinecraftServer.currentTick - this.lastTick;
++      if (this.f_31986_ != 32767) this.f_31986_ -= elapsedTicks;
++      this.f_31986_ = Math.max(0, this.f_31986_); // Paper - don't go below 0
++      if (this.f_31985_ != -32768) this.f_31985_ += elapsedTicks;
++      this.lastTick = MinecraftServer.currentTick;
++      // CraftBukkit end
++
++      if (!this.f_19853_.f_46443_ && this.f_31985_ >= this.lifespan) { // Spigot // Paper
++         this.m_146870_();
++      }
++   }
++   // Spigot end
+ 
+    private void m_32067_() {
+       Vec3 vec3 = this.m_20184_();
 @@ -208,6 +_,8 @@
           return false;
        } else if (p_32028_.m_41782_() ^ p_32027_.m_41782_()) {

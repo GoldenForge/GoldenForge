@@ -35,7 +35,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,105 @@
+@@ -104,8 +_,112 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -135,6 +135,13 @@
 +      return this.getNearestPlayer(null, d0, d1, d2, d3, predicate);
 +   }
 +   // Paper end - optimise checkDespawn
++
++   // Paper start
++   public int wakeupInactiveRemainingAnimals;
++   public int wakeupInactiveRemainingFlying;
++   public int wakeupInactiveRemainingMonsters;
++   public int wakeupInactiveRemainingVillagers;
++   // Paper end
  
     protected Level(WritableLevelData p_220352_, ResourceKey<Level> p_220353_, Holder<DimensionType> p_220354_, Supplier<ProfilerFiller> p_220355_, boolean p_220356_, boolean p_220357_, long p_220358_, int p_220359_) {
 +      super(Level.class);

@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/entity/PathfinderMob.java
++++ b/net/minecraft/world/entity/PathfinderMob.java
+@@ -9,6 +_,7 @@
+ 
+ public abstract class PathfinderMob extends Mob {
+    protected static final float f_186010_ = 0.0F;
++   public BlockPos movingTarget = null; public BlockPos getMovingTarget() { return movingTarget; } // Paper
+ 
+    protected PathfinderMob(EntityType<? extends PathfinderMob> p_21683_, Level p_21684_) {
+       super(p_21683_, p_21684_);

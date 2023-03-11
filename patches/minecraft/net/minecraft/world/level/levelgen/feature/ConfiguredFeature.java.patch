@@ -1,0 +1,32 @@
+--- a/net/minecraft/world/level/levelgen/feature/ConfiguredFeature.java
++++ b/net/minecraft/world/level/levelgen/feature/ConfiguredFeature.java
+@@ -1,6 +_,10 @@
+ package net.minecraft.world.level.levelgen.feature;
+ 
++import com.ishland.c2me.opts.allocs.common.PooledFeatureContext;
++import com.ishland.c2me.opts.allocs.common.SimpleObjectPool;
+ import com.mojang.serialization.Codec;
++
++import java.util.Optional;
+ import java.util.stream.Stream;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+@@ -21,7 +_,17 @@
+    public static final Codec<HolderSet<ConfiguredFeature<?, ?>>> f_65375_ = RegistryCodecs.m_206279_(Registry.f_122881_, f_65373_);
+ 
+    public boolean m_224953_(WorldGenLevel p_224954_, ChunkGenerator p_224955_, RandomSource p_224956_, BlockPos p_224957_) {
+-      return this.f_65377_.m_225028_(this.f_65378_, p_224954_, p_224955_, p_224956_, p_224957_);
++      //return this.feature.place(this.config, p_224954_, p_224955_, p_224956_, p_224957_);
++      if (!p_224954_.m_180807_(p_224957_)) return false;
++      final SimpleObjectPool<PooledFeatureContext<?>> pool = PooledFeatureContext.POOL.get();
++      final PooledFeatureContext<FC> context = (PooledFeatureContext<FC>) pool.alloc();
++      try {
++         context.reInit(Optional.empty(), p_224954_, p_224955_, p_224956_, p_224957_, this.f_65378_);
++         return this.f_65377_.m_142674_(context);
++      } finally {
++         context.reInit();
++         pool.release(context);
++      }
+    }
+ 
+    public Stream<ConfiguredFeature<?, ?>> m_65398_() {

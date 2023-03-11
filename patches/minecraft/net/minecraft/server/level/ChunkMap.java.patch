@@ -975,7 +975,7 @@
  
     }
  
-@@ -917,12 +_,71 @@
+@@ -917,17 +_,129 @@
           return "cancelled";
        }
     }
@@ -1051,6 +1051,64 @@
  
     private CompoundTag m_214947_(CompoundTag p_214948_) {
        return this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, p_214948_, this.f_140136_.m_187743_());
+    }
+ 
++   public ChunkStatus getChunkStatusOnDisk(ChunkPos chunkPos) throws IOException {
++      net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFile(chunkPos, true);
++
++      if (regionFile == null || !regionFileCache.chunkExists(chunkPos)) {
++         return null;
++      }
++
++      ChunkStatus status = regionFile.getStatusIfCached(chunkPos.f_45578_, chunkPos.f_45579_);
++
++      if (status != null) {
++         return status;
++      }
++
++      this.m_214963_(chunkPos);
++
++      return regionFile.getStatusIfCached(chunkPos.f_45578_, chunkPos.f_45579_);
++   }
++
++   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) {
++      // Paper start - Cache chunk status on disk
++      try {
++         return CompletableFuture.completedFuture(Optional.ofNullable(this.readConvertChunkSync(p_214964_)));
++      } catch (Throwable thr) {
++         return CompletableFuture.failedFuture(thr);
++      }
++      // Paper end - Cache chunk status on disk
++   }
++
++   @Nullable
++   public CompoundTag readConvertChunkSync(ChunkPos pos) throws IOException {
++      CompoundTag nbttagcompound = this.readSync(pos);
++      // Paper start - Cache chunk status on disk
++      if (nbttagcompound == null) {
++         return null;
++      }
++
++      nbttagcompound = this.m_214947_(nbttagcompound); // CraftBukkit
++      if (nbttagcompound == null) {
++         return null;
++      }
++
++      this.updateChunkStatusOnDisk(pos, nbttagcompound);
++
++      return nbttagcompound;
++      // Paper end
++   }
++
++   public void updateChunkStatusOnDisk(ChunkPos chunkPos, @Nullable CompoundTag compound) throws IOException {
++      net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFile(chunkPos, false);
++
++      regionFile.setStatus(chunkPos.f_45578_, chunkPos.f_45579_, ChunkSerializer.getStatus(compound));
++   }
++
+    boolean m_183879_(ChunkPos p_183880_) {
+       long i = p_183880_.m_45588_();
+       if (!this.f_140145_.m_140847_(i)) {
 @@ -984,29 +_,31 @@
           if (!flag) {
              this.f_140145_.m_140802_(SectionPos.m_235861_(p_140193_), p_140193_);
@@ -1092,7 +1150,7 @@
        return sectionpos;
     }
  
-@@ -1051,61 +_,79 @@
+@@ -1051,63 +_,82 @@
           }
        }
  
@@ -1219,7 +1277,10 @@
 +      if (!(p_140200_ instanceof net.minecraftforge.entity.PartEntity)) {
           EntityType<?> entitytype = p_140200_.m_6095_();
           int i = entitytype.m_20681_() * 16;
++         i = org.spigotmc.TrackingRange.getEntityTrackingRange(p_140200_, i); // Spigot
           if (i != 0) {
+             int j = entitytype.m_20682_();
+             if (this.f_140150_.containsKey(p_140200_.m_19879_())) {
 @@ -1231,9 +_,10 @@
           }
        }

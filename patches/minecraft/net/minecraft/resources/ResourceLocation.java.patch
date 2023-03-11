@@ -1,15 +1,35 @@
 --- a/net/minecraft/resources/ResourceLocation.java
 +++ b/net/minecraft/resources/ResourceLocation.java
-@@ -125,6 +_,12 @@
-       return i;
+@@ -27,6 +_,7 @@
+    public static final String f_179909_ = "realms";
+    protected final String f_135804_;
+    protected final String f_135805_;
++   private String cachedString = null;
+ 
+    protected ResourceLocation(String[] p_135814_) {
+       this.f_135804_ = StringUtils.isEmpty(p_135814_[0]) ? "minecraft" : p_135814_[0];
+@@ -98,7 +_,10 @@
     }
  
+    public String toString() {
+-      return this.f_135804_ + ":" + this.f_135805_;
++      if (this.cachedString != null) return this.cachedString;
++      final String s = this.f_135804_ + ":" + this.f_135805_;
++      this.cachedString = s;
++      return s;
+    }
+ 
+    public boolean equals(Object p_135846_) {
+@@ -123,6 +_,12 @@
+       }
+ 
+       return i;
++   }
++
 +   // Normal compare sorts by path first, this compares namespace first.
 +   public int compareNamespaced(ResourceLocation o) {
 +      int ret = this.f_135804_.compareTo(o.f_135804_);
 +      return ret != 0 ? ret : this.f_135805_.compareTo(o.f_135805_);
-+   }
-+
-    public String m_179910_() {
-       return this.toString().replace('/', '_').replace(':', '_');
     }
+ 
+    public String m_179910_() {

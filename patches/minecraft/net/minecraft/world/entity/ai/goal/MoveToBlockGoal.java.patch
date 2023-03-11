@@ -1,0 +1,33 @@
+--- a/net/minecraft/world/entity/ai/goal/MoveToBlockGoal.java
++++ b/net/minecraft/world/entity/ai/goal/MoveToBlockGoal.java
+@@ -14,7 +_,7 @@
+    protected int f_25600_;
+    protected int f_25601_;
+    private int f_25604_;
+-   protected BlockPos f_25602_ = BlockPos.f_121853_;
++   protected BlockPos f_25602_ = BlockPos.f_121853_; @Deprecated public final BlockPos getTargetPosition() { return this.f_25602_; } @Deprecated public void setTargetPosition(BlockPos pos) { this.f_25602_ = pos; f_25598_.movingTarget = pos != BlockPos.f_121853_ ? pos : null; } // Paper - OBFHELPER
+    private boolean f_25605_;
+    private final int f_25606_;
+    private final int f_25607_;
+@@ -23,6 +_,13 @@
+    public MoveToBlockGoal(PathfinderMob p_25609_, double p_25610_, int p_25611_) {
+       this(p_25609_, p_25610_, p_25611_, 1);
+    }
++   // Paper start - activation range improvements
++   @Override
++   public void m_8041_() {
++      super.m_8041_();
++      setTargetPosition(BlockPos.f_121853_);
++   }
++   // Paper end
+ 
+    public MoveToBlockGoal(PathfinderMob p_25613_, double p_25614_, int p_25615_, int p_25616_) {
+       this.f_25598_ = p_25613_;
+@@ -109,6 +_,7 @@
+                   blockpos$mutableblockpos.m_122154_(blockpos, i1, k - 1, j1);
+                   if (this.f_25598_.m_21444_(blockpos$mutableblockpos) && this.m_6465_(this.f_25598_.f_19853_, blockpos$mutableblockpos)) {
+                      this.f_25602_ = blockpos$mutableblockpos;
++                     setTargetPosition(blockpos$mutableblockpos.m_7949_()); // Paper
+                      return true;
+                   }
+                }

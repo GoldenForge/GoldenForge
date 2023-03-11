@@ -289,6 +289,14 @@
        if (flag) {
           this.m_8886_();
        }
+@@ -298,6 +_,7 @@
+             profilerfiller.m_7238_();
+          }
+ 
++         org.spigotmc.ActivationRange.activateEntities(this); // Spigot
+          this.f_143243_.m_156910_((p_184065_) -> {
+             if (!p_184065_.m_213877_()) {
+                if (this.m_143342_(p_184065_)) {
 @@ -306,7 +_,7 @@
                    profilerfiller.m_6180_("checkDespawn");
                    p_184065_.m_6043_();
@@ -448,7 +456,7 @@
     }
  
     private void m_184112_(BlockPos p_184113_, Block p_184114_) {
-@@ -635,7 +_,7 @@
+@@ -635,10 +_,12 @@
        if (blockstate.m_60713_(p_184114_)) {
           blockstate.m_222963_(this, p_184113_, this.f_46441_);
        }
@@ -457,14 +465,51 @@
     }
  
     public void m_8647_(Entity p_8648_) {
-@@ -665,6 +_,7 @@
++      io.papermc.paper.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
++      final boolean isActive = org.spigotmc.ActivationRange.checkIfActive(p_8648_);
+       p_8648_.m_146867_();
+       ProfilerFiller profilerfiller = this.m_46473_();
+       ++p_8648_.f_19797_;
+@@ -646,7 +_,11 @@
+          return Registry.f_122826_.m_7981_(p_8648_.m_6095_()).toString();
+       });
+       profilerfiller.m_6174_("tickNonPassenger");
+-      p_8648_.m_8119_();
++      if (isActive) {
++         p_8648_.m_8119_();
++      } else {
++         p_8648_.inactiveTick();
++      }
+       this.m_46473_().m_7238_();
+ 
+       for(Entity entity : p_8648_.m_20197_()) {
+@@ -658,6 +_,9 @@
+    private void m_8662_(Entity p_8663_, Entity p_8664_) {
+       if (!p_8664_.m_213877_() && p_8664_.m_20202_() == p_8663_) {
+          if (p_8664_ instanceof Player || this.f_143243_.m_156914_(p_8664_)) {
++            // Paper - EAR 2
++            final boolean isActive = org.spigotmc.ActivationRange.checkIfActive(p_8664_);
++            // Paper end
+             p_8664_.m_146867_();
+             ++p_8664_.f_19797_;
+             ProfilerFiller profilerfiller = this.m_46473_();
+@@ -665,7 +_,15 @@
                 return Registry.f_122826_.m_7981_(p_8664_.m_6095_()).toString();
              });
              profilerfiller.m_6174_("tickPassenger");
-+            if (p_8664_.canUpdate())
-             p_8664_.m_6083_();
+-            p_8664_.m_6083_();
++            if (isActive) {
++               if (p_8664_.canUpdate())
++                  p_8664_.m_6083_();
++            } else {
++               p_8664_.m_20256_(Vec3.f_82478_);
++               p_8664_.inactiveTick();
++               // copied from inside of if (isPassenger()) of passengerTick, but that ifPassenger is unnecessary
++               p_8663_.m_7332_(p_8664_);
++            }
              profilerfiller.m_7238_();
  
+             for(Entity entity : p_8664_.m_20197_()) {
 @@ -682,27 +_,87 @@
        return !this.f_8548_.m_7762_(this, p_8697_, p_8696_) && this.m_6857_().m_61937_(p_8697_);
     }

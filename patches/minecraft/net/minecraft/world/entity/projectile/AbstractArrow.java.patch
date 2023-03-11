@@ -1,5 +1,33 @@
 --- a/net/minecraft/world/entity/projectile/AbstractArrow.java
 +++ b/net/minecraft/world/entity/projectile/AbstractArrow.java
+@@ -52,7 +_,7 @@
+    private static final int f_150119_ = 4;
+    @Nullable
+    private BlockState f_36696_;
+-   protected boolean f_36703_;
++   public boolean f_36703_;
+    protected int f_36704_;
+    public AbstractArrow.Pickup f_36705_ = AbstractArrow.Pickup.DISALLOWED;
+    public int f_36706_;
+@@ -65,6 +_,18 @@
+    @Nullable
+    private List<Entity> f_36702_;
+ 
++   // Spigot Start
++   @Override
++   public void inactiveTick()
++   {
++      if ( this.f_36703_ )
++      {
++         this.f_36697_ += 1;
++      }
++      super.inactiveTick();
++   }
++   // Spigot End
++
+    protected AbstractArrow(EntityType<? extends AbstractArrow> p_36721_, Level p_36722_) {
+       super(p_36721_, p_36722_);
+    }
 @@ -149,7 +_,7 @@
           --this.f_36706_;
        }

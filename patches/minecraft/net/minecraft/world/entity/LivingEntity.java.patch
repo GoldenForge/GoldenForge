@@ -16,6 +16,39 @@
     public static final int f_147166_ = 2;
     public static final int f_147167_ = 4;
     public static final int f_147168_ = 98;
+@@ -154,7 +_,7 @@
+    public static final float f_147165_ = 0.5F;
+    private final AttributeMap f_20943_;
+    private final CombatTracker f_20944_ = new CombatTracker(this);
+-   private final Map<MobEffect, MobEffectInstance> f_20945_ = Maps.newHashMap();
++   public final Map<MobEffect, MobEffectInstance> f_20945_ = Maps.newHashMap();
+    private final NonNullList<ItemStack> f_20946_ = NonNullList.m_122780_(2, ItemStack.f_41583_);
+    private final NonNullList<ItemStack> f_20947_ = NonNullList.m_122780_(4, ItemStack.f_41583_);
+    public boolean f_20911_;
+@@ -193,7 +_,7 @@
+    protected float f_20896_;
+    protected int f_20897_;
+    protected float f_20898_;
+-   protected boolean f_20899_;
++   public boolean f_20899_;
+    public float f_20900_;
+    public float f_20901_;
+    public float f_20902_;
+@@ -228,6 +_,14 @@
+    protected Brain<?> f_20939_;
+    private boolean f_217034_;
+ 
++   // Spigot start
++   public void inactiveTick()
++   {
++      super.inactiveTick();
++      ++this.f_20891_; // Above all the floats
++   }
++   // Spigot end
++
+    protected LivingEntity(EntityType<? extends LivingEntity> p_20966_, Level p_20967_) {
+       super(p_20966_, p_20967_);
+       this.f_20943_ = new AttributeMap(DefaultAttributes.m_22297_(p_20966_));
 @@ -274,7 +_,7 @@
     }
  

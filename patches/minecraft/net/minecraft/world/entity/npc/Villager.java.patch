@@ -1,5 +1,68 @@
 --- a/net/minecraft/world/entity/npc/Villager.java
 +++ b/net/minecraft/world/entity/npc/Villager.java
+@@ -86,6 +_,7 @@
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.ServerLevelAccessor;
+ import net.minecraft.world.phys.AABB;
++import org.goldenforge.GoldenConfig;
+ import org.slf4j.Logger;
+ 
+ public class Villager extends AbstractVillager implements ReputationEventHandler, VillagerDataHolder {
+@@ -203,9 +_,35 @@
+       return this.f_35366_;
+    }
+ 
++   // Spigot Start
++   @Override
++   public void inactiveTick() {
++      // SPIGOT-3874, SPIGOT-3894, SPIGOT-3846, SPIGOT-5286 :(
++      // Paper start
++      if (this.m_35303_() > 0) {
++         this.m_35319_(this.m_35303_() - 1);
++      }
++      if (this.m_6142_()) {
++         if (GoldenConfig.tickInactiveVillagers) {
++            this.m_8024_();
++         } else {
++            this.mobTick(true);
++         }
++      }
++      m_35530_();
++      // Paper end
++
++      super.inactiveTick();
++   }
++   // Spigot End
++
+    protected void m_8024_() {
++      mobTick(false);
++   }
++
++   protected void mobTick(boolean inactive) {
+       this.f_19853_.m_46473_().m_6180_("villagerBrain");
+-      this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
++      if (!inactive) this.m_6274_().m_21865_((ServerLevel) this.f_19853_, this); // Paper
+       this.f_19853_.m_46473_().m_7238_();
+       if (this.f_35366_) {
+          this.f_35366_ = false;
+@@ -229,7 +_,7 @@
+          this.f_35375_ = null;
+       }
+ 
+-      if (!this.m_21525_() && this.f_19796_.m_188503_(100) == 0) {
++      if (!inactive && !this.m_21525_() && this.f_19796_.m_188503_(100) == 0) { // Paper
+          Raid raid = ((ServerLevel)this.f_19853_).m_8832_(this.m_20183_());
+          if (raid != null && raid.m_37782_() && !raid.m_37706_()) {
+             this.f_19853_.m_7605_(this, (byte)42);
+@@ -240,6 +_,8 @@
+          this.m_7996_();
+       }
+ 
++      if (inactive) return; // Paper
++
+       super.m_8024_();
+    }
+ 
 @@ -254,7 +_,7 @@
  
     public InteractionResult m_6071_(Player p_35472_, InteractionHand p_35473_) {

@@ -1,0 +1,42 @@
+--- a/net/minecraft/nbt/ListTag.java
++++ b/net/minecraft/nbt/ListTag.java
+@@ -2,6 +_,8 @@
+ 
+ import com.google.common.collect.Iterables;
+ import com.google.common.collect.Lists;
++import it.unimi.dsi.fastutil.objects.ObjectArrayList;
++
+ import java.io.DataInput;
+ import java.io.DataOutput;
+ import java.io.IOException;
+@@ -24,7 +_,8 @@
+             } else {
+                p_128794_.m_6800_(32L * (long)i);
+                TagType<?> tagtype = TagTypes.m_129397_(b0);
+-               List<Tag> list = Lists.newArrayListWithCapacity(i);
++               //List<Tag> list = Lists.newArrayListWithCapacity(i);
++               List<Tag> list = new ObjectArrayList<>();
+ 
+                for(int j = 0; j < i; ++j) {
+                   list.add(tagtype.m_7300_(p_128792_, p_128793_ + 1, p_128794_));
+@@ -107,7 +_,7 @@
+    }
+ 
+    public ListTag() {
+-      this(Lists.newArrayList(), (byte)0);
++      this(new ObjectArrayList<>(), (byte)0);
+    }
+ 
+    public void m_6434_(DataOutput p_128734_) throws IOException {
+@@ -305,8 +_,9 @@
+    }
+ 
+    public ListTag m_6426_() {
+-      Iterable<Tag> iterable = (Iterable<Tag>)(TagTypes.m_129397_(this.f_128717_).m_7064_() ? this.f_128716_ : Iterables.transform(this.f_128716_, Tag::m_6426_));
+-      List<Tag> list = Lists.newArrayList(iterable);
++      Iterable<Tag> iterable = TagTypes.m_129397_(this.f_128717_).m_7064_() ? this.f_128716_ : Iterables.transform(this.f_128716_, Tag::m_6426_);
++      List<Tag> list = new ObjectArrayList<>(this.f_128716_.size());
++      iterable.forEach(list::add);
+       return new ListTag(list, this.f_128717_);
+    }
+ 

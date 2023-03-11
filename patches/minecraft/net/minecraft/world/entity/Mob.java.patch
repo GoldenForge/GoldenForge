@@ -7,6 +7,26 @@
  import com.google.common.collect.ImmutableSet;
  import com.google.common.collect.Maps;
  import java.util.Arrays;
+@@ -178,6 +_,19 @@
+       return this.f_21365_;
+    }
+ 
++   // Paper start
++   @Override
++   public void inactiveTick() {
++      super.inactiveTick();
++      if (this.f_21345_.inactiveTick()) {
++         this.f_21345_.m_25373_();
++      }
++      if (this.f_21346_.inactiveTick()) {
++         this.f_21346_.m_25373_();
++      }
++   }
++   // Paper end
++
+    public MoveControl m_21566_() {
+       if (this.m_20159_() && this.m_20202_() instanceof Mob) {
+          Mob mob = (Mob)this.m_20202_();
 @@ -210,7 +_,11 @@
     }
  

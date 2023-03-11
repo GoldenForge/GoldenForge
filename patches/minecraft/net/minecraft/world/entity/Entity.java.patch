@@ -112,8 +112,10 @@
 +   // Paper end
 +   protected final RandomSource f_19796_ = SHARED_RANDOM;
     public int f_19797_;
-    private int f_19831_ = -this.m_6101_();
-    protected boolean f_19798_;
+-   private int f_19831_ = -this.m_6101_();
+-   protected boolean f_19798_;
++   public int f_19831_ = -this.m_6101_();
++   public boolean f_19798_;
 +   @Deprecated // Forge: Use forgeFluidTypeHeight instead
     protected Object2DoubleMap<TagKey<Fluid>> f_19799_ = new Object2DoubleArrayMap<>(2);
     protected boolean f_19800_;
@@ -121,7 +123,18 @@
     private final Set<TagKey<Fluid>> f_19801_ = new HashSet<>();
     public int f_19802_;
     protected boolean f_19803_ = true;
-@@ -230,7 +_,28 @@
+@@ -208,8 +_,8 @@
+    private final VecDeltaCodec f_216985_ = new VecDeltaCodec();
+    public boolean f_19811_;
+    public boolean f_19812_;
+-   private int f_19839_;
+-   protected boolean f_19817_;
++   public int f_19839_;
++   public boolean f_19817_;
+    protected int f_19818_;
+    protected BlockPos f_19819_;
+    private boolean f_19840_;
+@@ -230,13 +_,49 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -142,14 +155,35 @@
 +              || this instanceof net.minecraft.world.entity.vehicle.AbstractMinecart;
 +   }
 +
++   // Spigot start
 +   public final org.spigotmc.ActivationRange.ActivationType activationType = org.spigotmc.ActivationRange.initializeEntityActivationType(this);
-+
++   public final boolean defaultActivationState;
++   public long activatedTick = Integer.MIN_VALUE;
++   public void inactiveTick() { }
++   // Spigot end
++   // Paper start
++   public long activatedImmunityTick = Integer.MIN_VALUE; // Paper
++   public boolean isTemporarilyActive = false; // Paper
++   final org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = org.spigotmc.TrackingRange.getTrackingRangeType(this);
 +
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
        this.f_19847_ = p_19870_;
        this.f_19853_ = p_19871_;
        this.f_19815_ = p_19870_.m_20680_();
+       this.f_19825_ = Vec3.f_82478_;
+       this.f_19826_ = BlockPos.f_121853_;
+       this.f_185933_ = ChunkPos.f_186419_;
++      // Spigot start
++      if (f_19853_ != null) {
++         this.defaultActivationState = org.spigotmc.ActivationRange.initializeEntityActivationState(this);
++      } else {
++         this.defaultActivationState = false;
++      }
++      // Spigot end
+       this.f_19804_ = new SynchedEntityData(this);
+       this.f_19804_.m_135372_(f_19805_, (byte)0);
+       this.f_19804_.m_135372_(f_19832_, this.m_6062_());
 @@ -248,7 +_,11 @@
        this.f_19804_.m_135372_(f_146800_, 0);
        this.m_8097_();
@@ -180,6 +214,29 @@
        }
  
        this.m_146871_();
+@@ -557,6 +_,8 @@
+       } else {
+          this.f_146810_ = this.m_6060_();
+          if (p_19973_ == MoverType.PISTON) {
++            this.activatedTick = Math.max(this.activatedTick, MinecraftServer.currentTick + 20); // Paper
++            this.activatedImmunityTick = Math.max(this.activatedImmunityTick, MinecraftServer.currentTick + 20);   // Paper
+             p_19974_ = this.m_20133_(p_19974_);
+             if (p_19974_.equals(Vec3.f_82478_)) {
+                return;
+@@ -569,6 +_,13 @@
+             this.f_19865_ = Vec3.f_82478_;
+             this.m_20256_(Vec3.f_82478_);
+          }
++         // Paper start - ignore movement changes while inactive.
++         if (isTemporarilyActive && !(this instanceof ItemEntity || this instanceof net.minecraft.world.entity.vehicle.AbstractMinecart) && p_19974_ == m_20184_() && p_19973_ == MoverType.SELF) {
++            m_20256_(Vec3.f_82478_);
++            this.f_19853_.m_46473_().m_7238_();
++            return;
++         }
++         // Paper end
+ 
+          p_19974_ = this.m_5763_(p_19974_, p_19973_);
+          Vec3 vec3 = this.m_20272_(p_19974_);
 @@ -623,7 +_,7 @@
                 double d1 = vec3.f_82479_;
                 double d2 = vec3.f_82480_;

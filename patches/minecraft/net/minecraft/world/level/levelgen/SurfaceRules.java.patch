@@ -1,0 +1,68 @@
+--- a/net/minecraft/world/level/levelgen/SurfaceRules.java
++++ b/net/minecraft/world/level/levelgen/SurfaceRules.java
+@@ -26,6 +_,7 @@
+ import net.minecraft.world.level.chunk.ChunkAccess;
+ import net.minecraft.world.level.levelgen.placement.CaveSurface;
+ import net.minecraft.world.level.levelgen.synth.NormalNoise;
++import org.spongepowered.asm.mixin.Unique;
+ 
+ public class SurfaceRules {
+    public static final SurfaceRules.ConditionSource f_189375_ = m_202176_(0, false, CaveSurface.FLOOR);
+@@ -277,6 +_,12 @@
+       int f_189559_;
+       int f_189560_;
+ 
++      private int lazyPosX;
++      private int lazyPosY;
++      private int lazyPosZ;
++      private Holder<Biome> lastBiome = null;
++      private ResourceKey<Biome> lastBiomeKey = null;
++
+       protected Context(SurfaceSystem p_224616_, RandomState p_224617_, ChunkAccess p_224618_, NoiseChunk p_224619_, Function<BlockPos, Holder<Biome>> p_224620_, Registry<Biome> p_224621_, WorldGenerationContext p_224622_) {
+          this.f_189535_ = p_224616_;
+          this.f_224614_ = p_224617_;
+@@ -284,6 +_,12 @@
+          this.f_189541_ = p_224619_;
+          this.f_189542_ = p_224620_;
+          this.f_189544_ = p_224622_;
++
++         this.f_189555_ = () -> {
++            if (this.lastBiome == null)
++               return this.lastBiome = this.f_189542_.apply(this.f_189554_.m_122178_(this.lazyPosX, this.lazyPosY, this.lazyPosZ));
++            return this.lastBiome;
++         };
+       }
+ 
+       protected void m_189569_(int p_189570_, int p_189571_) {
+@@ -295,14 +_,28 @@
+       }
+ 
+       protected void m_189576_(int p_189577_, int p_189578_, int p_189579_, int p_189580_, int p_189581_, int p_189582_) {
++         // TODO [VanillaCopy]
+          ++this.f_189553_;
+-         this.f_189555_ = Suppliers.memoize(() -> {
+-            return this.f_189542_.apply(this.f_189554_.m_122178_(p_189580_, p_189581_, p_189582_));
+-         });
+          this.f_189557_ = p_189581_;
+          this.f_189558_ = p_189579_;
+          this.f_189559_ = p_189578_;
+          this.f_189560_ = p_189577_;
++
++         // set lazy values
++         this.lazyPosX = p_189580_;
++         this.lazyPosY = p_189581_;
++         this.lazyPosZ = p_189582_;
++         // clear cache
++         this.lastBiome = null;
++         this.lastBiomeKey = null;
++//         ++this.lastUpdateY;
++//         this.biome = Suppliers.memoize(() -> {
++//            return this.biomeGetter.apply(this.pos.set(p_189580_, p_189581_, p_189582_));
++//         });
++//         this.blockY = p_189581_;
++//         this.waterHeight = p_189579_;
++//         this.stoneDepthBelow = p_189578_;
++//         this.stoneDepthAbove = p_189577_;
+       }
+ 
+       protected double m_202181_() {

@@ -1,0 +1,32 @@
+--- a/net/minecraft/world/entity/ai/goal/GoalSelector.java
++++ b/net/minecraft/world/entity/ai/goal/GoalSelector.java
+@@ -30,6 +_,7 @@
+    private final EnumSet<Goal.Flag> f_25347_ = EnumSet.noneOf(Goal.Flag.class);
+    private int f_148095_;
+    private int f_25348_ = 3;
++   private int curRate;
+ 
+    public GoalSelector(Supplier<ProfilerFiller> p_25351_) {
+       this.f_25346_ = p_25351_;
+@@ -52,6 +_,21 @@
+          return p_25367_.m_26015_() == p_25364_;
+       });
+    }
++
++   // Paper start
++   public boolean inactiveTick() {
++      this.curRate++;
++      return this.curRate % this.f_25348_ == 0;
++   }
++   public boolean hasTasks() {
++      for (WrappedGoal task : this.f_25345_) {
++         if (task.m_7620_()) {
++            return true;
++         }
++      }
++      return false;
++   }
++   // Paper end
+ 
+    private static boolean m_186075_(WrappedGoal p_186076_, EnumSet<Goal.Flag> p_186077_) {
+       for(Goal.Flag goal$flag : p_186076_.m_7684_()) {
