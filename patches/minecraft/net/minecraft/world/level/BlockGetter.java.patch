@@ -9,7 +9,12 @@
     @Nullable
     BlockEntity m_7702_(BlockPos p_45570_);
  
-@@ -32,7 +_,7 @@
+@@ -29,10 +_,12 @@
+ 
+    BlockState m_8055_(BlockPos p_45571_);
+ 
++   @Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition);
++
     FluidState m_6425_(BlockPos p_45569_);
  
     default int m_7146_(BlockPos p_45572_) {

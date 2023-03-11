@@ -242,6 +242,34 @@
     }
  
     public void m_46590_(BlockPos p_46591_, Block p_46592_, Direction p_46593_) {
+@@ -311,6 +_,27 @@
+       return this.m_7726_().m_7827_();
+    }
+ 
++   @Override
++   public void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {
++      ((ServerLevel)this).getEntityLookup().getEntities(except, box, into, predicate);
++   }
++
++   @Override
++   public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {
++      ((ServerLevel)this).getEntityLookup().getHardCollidingEntities(except, box, into, predicate);
++   }
++
++   @Override
++   @Nullable
++   public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++      if (!m_46739_(blockposition)) {
++         return Blocks.f_50016_.m_49966_();
++      }
++      ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4);
++
++      return chunk == null ? null : chunk.m_8055_(blockposition);
++   }
++
+    public BlockState m_8055_(BlockPos p_46732_) {
+       if (this.m_151570_(p_46732_)) {
+          return Blocks.f_50626_.m_49966_();
 @@ -377,38 +_,98 @@
        (this.f_151504_ ? this.f_151503_ : this.f_151512_).add(p_151526_);
     }

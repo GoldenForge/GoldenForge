@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/phys/AABB.java
++++ b/net/minecraft/world/phys/AABB.java
+@@ -25,6 +_,17 @@
+       this.f_82293_ = Math.max(p_82297_, p_82300_);
+    }
+ 
++   // Paper start
++   public AABB(double minX, double minY, double minZ, double maxX, double maxY, double maxZ, boolean dummy) {
++      this.f_82288_ = minX;
++      this.f_82289_ = minY;
++      this.f_82290_ = minZ;
++      this.f_82291_ = maxX;
++      this.f_82292_ = maxY;
++      this.f_82293_ = maxZ;
++   }
++   // Paper end
++
+    public AABB(BlockPos p_82305_) {
+       this((double)p_82305_.m_123341_(), (double)p_82305_.m_123342_(), (double)p_82305_.m_123343_(), (double)(p_82305_.m_123341_() + 1), (double)(p_82305_.m_123342_() + 1), (double)(p_82305_.m_123343_() + 1));
+    }

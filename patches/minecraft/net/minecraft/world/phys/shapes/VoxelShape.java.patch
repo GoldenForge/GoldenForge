@@ -1,0 +1,30 @@
+--- a/net/minecraft/world/phys/shapes/VoxelShape.java
++++ b/net/minecraft/world/phys/shapes/VoxelShape.java
+@@ -16,11 +_,16 @@
+ import net.minecraft.world.phys.Vec3;
+ 
+ public abstract class VoxelShape {
+-   protected final DiscreteVoxelShape f_83211_;
++   public final DiscreteVoxelShape f_83211_;
+    @Nullable
+    private VoxelShape[] f_83212_;
+ 
+-   VoxelShape(DiscreteVoxelShape p_83214_) {
++   // Paper start
++   public boolean intersects(AABB shape) {
++      return Shapes.m_83157_(this, new io.papermc.paper.voxel.AABBVoxelShape(shape), BooleanOp.f_82689_);
++   }
++   // Paper end
++   protected VoxelShape(DiscreteVoxelShape p_83214_) {
+       this.f_83211_ = p_83214_;
+    }
+ 
+@@ -163,7 +_,7 @@
+       }
+    }
+ 
+-   private VoxelShape m_83294_(Direction p_83295_) {
++   protected VoxelShape m_83294_(Direction p_83295_) {
+       Direction.Axis direction$axis = p_83295_.m_122434_();
+       DoubleList doublelist = this.m_7700_(direction$axis);
+       if (doublelist.size() == 2 && DoubleMath.fuzzyEquals(doublelist.getDouble(0), 0.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(doublelist.getDouble(1), 1.0D, 1.0E-7D)) {

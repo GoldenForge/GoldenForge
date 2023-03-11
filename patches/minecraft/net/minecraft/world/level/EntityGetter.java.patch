@@ -1,13 +1,35 @@
 --- a/net/minecraft/world/level/EntityGetter.java
 +++ b/net/minecraft/world/level/EntityGetter.java
-@@ -18,6 +_,7 @@
+@@ -18,6 +_,11 @@
  import net.minecraft.world.phys.shapes.VoxelShape;
  
  public interface EntityGetter {
 +
++   void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++
++   void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++
     List<Entity> m_6249_(@Nullable Entity p_45936_, AABB p_45937_, Predicate<? super Entity> p_45938_);
  
     <T extends Entity> List<T> m_142425_(EntityTypeTest<Entity, T> p_151464_, AABB p_151465_, Predicate<? super T> p_151466_);
+@@ -37,7 +_,7 @@
+          return true;
+       } else {
+          for(Entity entity : this.m_45933_(p_45939_, p_45940_.m_83215_())) {
+-            if (!entity.m_213877_() && entity.f_19850_ && (p_45939_ == null || !entity.m_20365_(p_45939_)) && Shapes.m_83157_(p_45940_, Shapes.m_83064_(entity.m_20191_()), BooleanOp.f_82689_)) {
++            if (!entity.m_213877_() && entity.f_19850_ && (p_45939_ == null || !entity.m_20365_(p_45939_)) && p_45940_.intersects(entity.m_20191_())) { // Paper
+                return false;
+             }
+          }
+@@ -55,7 +_,7 @@
+          return List.of();
+       } else {
+          Predicate<Entity> predicate = p_186451_ == null ? EntitySelector.f_185987_ : EntitySelector.f_20408_.and(p_186451_::m_7337_);
+-         List<Entity> list = this.m_6249_(p_186451_, p_186452_.m_82400_(1.0E-7D), predicate);
++         List<Entity> list = this.m_6249_(p_186451_, p_186452_.m_82400_(-1.0E-7D), predicate); // Paper - needs to be negated, or else we get things we don't collide with
+          if (list.isEmpty()) {
+             return List.of();
+          } else {
 @@ -126,6 +_,12 @@
     default Player m_45941_(TargetingConditions p_45942_, double p_45943_, double p_45944_, double p_45945_) {
        return this.m_45982_(this.m_6907_(), p_45942_, (LivingEntity)null, p_45943_, p_45944_, p_45945_);

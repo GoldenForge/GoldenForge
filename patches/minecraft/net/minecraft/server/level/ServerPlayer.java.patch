@@ -35,6 +35,24 @@
     }
  
     private void m_9201_(ServerLevel p_9202_) {
+@@ -272,7 +_,7 @@
+             BlockPos blockpos1 = PlayerRespawnLogic.m_183928_(p_9202_, blockpos.m_123341_() + j2 - i, blockpos.m_123343_() + k2 - i);
+             if (blockpos1 != null) {
+                this.m_20035_(blockpos1, 0.0F, 0.0F);
+-               if (p_9202_.m_45786_(this)) {
++               if (p_9202_.noCollision(this, this.m_20191_(), true)) { // Paper - make sure this loads chunks, we default to NOT loading now
+                   break;
+                }
+             }
+@@ -280,7 +_,7 @@
+       } else {
+          this.m_20035_(blockpos, 0.0F, 0.0F);
+ 
+-         while(!p_9202_.m_45786_(this) && this.m_20186_() < (double)(p_9202_.m_151558_() - 1)) {
++         while(!p_9202_.noCollision(this, this.m_20191_(), true) && this.m_20186_() < (double)(p_9202_.m_151558_() - 1)) { // Paper - make sure this loads chunks, we default to NOT loading now
+             this.m_6034_(this.m_20185_(), this.m_20186_() + 1.0D, this.m_20189_());
+          }
+       }
 @@ -550,6 +_,7 @@
  
     public void m_6667_(DamageSource p_9035_) {

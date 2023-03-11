@@ -22,6 +22,18 @@
        this.f_63163_ = p_188176_;
        this.f_188165_ = p_188177_;
     }
+@@ -71,6 +_,11 @@
+       return new ChunkAccess.TicksToSave(this.f_63163_, this.f_188165_);
+    }
+ 
++   @Override
++   public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++      return this.m_8055_(blockposition);
++   }
++
+    public BlockState m_8055_(BlockPos p_63264_) {
+       int i = p_63264_.m_123342_();
+       if (this.m_151562_(i)) {
 @@ -123,13 +_,13 @@
           if (this.f_187612_[l].m_188008_() && p_63218_.m_60713_(Blocks.f_50016_)) {
              return p_63218_;

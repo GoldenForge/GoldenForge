@@ -432,6 +432,36 @@
        for(BlockEntity blockentity : p_196851_.m_63292_().values()) {
           this.m_142169_(blockentity);
        }
+@@ -147,7 +_,29 @@
+       }
+    }
+ 
++   // Paper start - Optimize getBlockData to reduce instructions
++
++   @Override
++   public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++      return this.m_8055_(blockposition);
++   }
++   @Override
+    public BlockState m_8055_(BlockPos p_62923_) {
++      return this.getBlockStateFinal(p_62923_.m_123341_(), p_62923_.m_123342_(), p_62923_.m_123343_());
++   }
++
++   public final BlockState getBlockStateFinal(final int x, final int y, final int z) {
++      // Method body / logic copied from below
++      final int i = this.m_151564_(y);
++      if (i < 0 || i >= this.f_187612_.length || this.f_187612_[i].f_62969_ == 0 || this.f_187612_[i].m_188008_()) {
++         return Blocks.f_50016_.m_49966_();
++      }
++      // Inlined ChunkSection.getType() and DataPaletteBlock.a(int,int,int)
++      return this.f_187612_[i].f_62972_.m_63085_((y & 15) << 8 | (z & 15) << 4 | x & 15);
++
++   }
++
++   public BlockState getBlockState_old(BlockPos p_62923_) {
+       int i = p_62923_.m_123341_();
+       int j = p_62923_.m_123342_();
+       int k = p_62923_.m_123343_();
 @@ -237,14 +_,14 @@
              boolean flag2 = blockstate.m_155947_();
              if (!this.f_62776_.f_46443_) {

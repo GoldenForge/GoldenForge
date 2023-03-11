@@ -1,8 +1,32 @@
 --- a/net/minecraft/server/level/WorldGenRegion.java
 +++ b/net/minecraft/server/level/WorldGenRegion.java
-@@ -416,4 +_,5 @@
+@@ -147,6 +_,17 @@
+       }
+    }
+ 
++   @Nullable
++   public ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
++      return this.m_6522_(x, z, ChunkStatus.f_62326_, false);
++   }
++
++   @Override
++   public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++      ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4);
++      return chunk == null ? null : chunk.m_8055_(blockposition);
++   }
++
+    public boolean m_7232_(int p_9574_, int p_9575_) {
+       return p_9574_ >= this.f_9487_.f_45578_ && p_9574_ <= this.f_9488_.f_45578_ && p_9575_ >= this.f_9487_.f_45579_ && p_9575_ <= this.f_9488_.f_45579_;
+    }
+@@ -416,4 +_,11 @@
     public long m_183596_() {
        return this.f_184182_.getAndIncrement();
     }
++
++   @Override
++   public void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {}
++
++   @Override
++   public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {}
 +
  }

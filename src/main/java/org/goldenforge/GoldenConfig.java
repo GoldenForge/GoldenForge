@@ -14,6 +14,9 @@ public class GoldenConfig {
     public static double playerMaxChunkLoadRate = -1.0;
 
 
+    // Misc
+    public static boolean preventMovingIntoUnloadedChunks = false;
+
     // Activation Range
 
     public static int animalActivationRange = 32;

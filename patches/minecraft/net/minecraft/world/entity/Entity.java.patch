@@ -1,7 +1,11 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -118,7 +_,7 @@
+@@ -116,9 +_,11 @@
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraft.world.scores.PlayerTeam;
  import net.minecraft.world.scores.Team;
++import org.goldenforge.GoldenConfig;
++import org.goldenforge.GoldenForge;
  import org.slf4j.Logger;
  
 -public abstract class Entity implements Nameable, EntityAccess, CommandSource {
@@ -134,7 +138,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,49 @@
+@@ -230,13 +_,51 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -165,6 +169,8 @@
 +   public long activatedImmunityTick = Integer.MIN_VALUE; // Paper
 +   public boolean isTemporarilyActive = false; // Paper
 +   final org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = org.spigotmc.TrackingRange.getTrackingRangeType(this);
++   public boolean collidingWithWorldBorder; // Paper
++   public boolean collisionLoadChunks = false; // Paper
 +
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
@@ -237,7 +243,7 @@
  
           p_19974_ = this.m_5763_(p_19974_, p_19973_);
           Vec3 vec3 = this.m_20272_(p_19974_);
-@@ -623,7 +_,7 @@
+@@ -623,14 +_,14 @@
                 double d1 = vec3.f_82479_;
                 double d2 = vec3.f_82480_;
                 double d3 = vec3.f_82481_;
@@ -246,7 +252,25 @@
                 boolean flag1 = blockstate.m_204336_(BlockTags.f_13082_) || blockstate.m_60713_(Blocks.f_152499_);
                 if (!flag1) {
                    d2 = 0.0D;
-@@ -662,25 +_,23 @@
+                }
+ 
+-               this.f_19787_ += (float)vec3.m_165924_() * 0.6F;
+-               this.f_19788_ += (float)Math.sqrt(d1 * d1 + d2 * d2 + d3 * d3) * 0.6F;
++               this.f_19787_ += (float) vec3.m_165924_() * 0.6F;
++               this.f_19788_ += (float) Math.sqrt(d1 * d1 + d2 * d2 + d3 * d3) * 0.6F;
+                if (this.f_19788_ > this.f_19829_ && !blockstate.m_60795_()) {
+                   this.f_19829_ = this.m_6059_();
+                   if (this.m_20069_()) {
+@@ -638,7 +_,7 @@
+                         Entity entity = this.m_20160_() && this.m_6688_() != null ? this.m_6688_() : this;
+                         float f = entity == this ? 0.35F : 0.4F;
+                         Vec3 vec32 = entity.m_20184_();
+-                        float f1 = Math.min(1.0F, (float)Math.sqrt(vec32.f_82479_ * vec32.f_82479_ * (double)0.2F + vec32.f_82480_ * vec32.f_82480_ + vec32.f_82481_ * vec32.f_82481_ * (double)0.2F) * f);
++                        float f1 = Math.min(1.0F, (float) Math.sqrt(vec32.f_82479_ * vec32.f_82479_ * (double) 0.2F + vec32.f_82480_ * vec32.f_82480_ + vec32.f_82481_ * vec32.f_82481_ * (double) 0.2F) * f);
+                         this.m_5625_(f1);
+                      }
+ 
+@@ -662,10 +_,45 @@
  
              this.m_146872_();
              float f2 = this.m_6041_();
@@ -254,38 +278,48 @@
 -            if (this.f_19853_.m_46847_(this.m_20191_().m_82406_(1.0E-6D)).noneMatch((p_20127_) -> {
 -               return p_20127_.m_204336_(BlockTags.f_13076_) || p_20127_.m_60713_(Blocks.f_49991_);
 -            })) {
--               if (this.f_19831_ <= 0) {
--                  this.m_7311_(-this.m_6101_());
--               }
--
--               if (this.f_146810_ && (this.f_146808_ || this.m_20071_())) {
--                  this.m_146873_();
--               }
--            }
--
--            if (this.m_6060_() && (this.f_146808_ || this.m_20071_())) {
 +            this.m_20256_(this.m_20184_().m_82542_((double) f2, 1.0D, (double) f2));
-+         }
-+         if (this.f_19853_.m_46847_(this.m_20191_().m_82406_(1.0E-6D)).noneMatch((p_20127_) -> p_20127_.m_204336_(BlockTags.f_13076_) || p_20127_.m_60713_(Blocks.f_49991_))) {
-+            if (this.f_19831_ <= 0) {
-                this.m_7311_(-this.m_6101_());
-             }
- 
--            this.f_19853_.m_46473_().m_7238_();
--         }
-+            if (this.f_146810_ && (this.f_146808_ || this.m_20071_() || this.isInFluidType((fluidType, height) -> this.canFluidExtinguish(fluidType)))) {
-+               this.m_146873_();
++            // Paper start - remove expensive streams from here
++            boolean noneMatch = true;
++            AABB fireSearchBox = this.m_20191_().m_82406_(1.0E-6D);
++            {
++               int minX = Mth.m_14107_(fireSearchBox.f_82288_);
++               int minY = Mth.m_14107_(fireSearchBox.f_82289_);
++               int minZ = Mth.m_14107_(fireSearchBox.f_82290_);
++               int maxX = Mth.m_14107_(fireSearchBox.f_82291_);
++               int maxY = Mth.m_14107_(fireSearchBox.f_82292_);
++               int maxZ = Mth.m_14107_(fireSearchBox.f_82293_);
++               fire_search_loop:
++               for (int fz = minZ; fz <= maxZ; ++fz) {
++                  for (int fx = minX; fx <= maxX; ++fx) {
++                     for (int fy = minY; fy <= maxY; ++fy) {
++                        net.minecraft.world.level.chunk.LevelChunk chunk = (net.minecraft.world.level.chunk.LevelChunk) this.f_19853_.getChunkIfLoadedImmediately(fx >> 4, fz >> 4);
++                        if (chunk == null) {
++                           // Vanilla rets an empty stream if all the chunks are not loaded, so noneMatch will be true
++                           // even if we're in lava/fire
++                           noneMatch = true;
++                           break fire_search_loop;
++                        }
++                        if (!noneMatch) {
++                           // don't do get type, we already know we're in fire - we just need to check the chunks
++                           // loaded state
++                           continue;
++                        }
++
++                        BlockState type = chunk.getBlockStateFinal(fx, fy, fz);
++                        if (type.m_204336_(BlockTags.f_13076_) || type.m_60713_(Blocks.f_49991_)) {
++                           noneMatch = false;
++                           // can't break, we need to retain vanilla behavior by ensuring ALL chunks are loaded
++                        }
++                     }
++                  }
++               }
 +            }
-+         }
-+
-+         if (this.m_6060_() && (this.f_146808_ || this.m_20071_() || this.isInFluidType((fluidType, height) -> this.canFluidExtinguish(fluidType)))) {
-+            this.m_7311_(-this.m_6101_());
-+         }
-+
-+         this.f_19853_.m_46473_().m_7238_();
-       }
-    }
- 
++            if (noneMatch) {
++               // Paper end - remove expensive streams from here
+                if (this.f_19831_ <= 0) {
+                   this.m_7311_(-this.m_6101_());
+                }
 @@ -728,10 +_,10 @@
        int j = Mth.m_14107_(this.f_19825_.f_82480_ - (double)p_216987_);
        int k = Mth.m_14107_(this.f_19825_.f_82481_);
@@ -299,22 +333,108 @@
              return blockpos1;
           }
        }
-@@ -804,10 +_,11 @@
-       boolean flag1 = p_20273_.f_82480_ != vec3.f_82480_;
-       boolean flag2 = p_20273_.f_82481_ != vec3.f_82481_;
-       boolean flag3 = this.f_19861_ || flag1 && p_20273_.f_82480_ < 0.0D;
+@@ -797,29 +_,78 @@
+    }
+ 
+    private Vec3 m_20272_(Vec3 p_20273_) {
+-      AABB aabb = this.m_20191_();
+-      List<VoxelShape> list = this.f_19853_.m_183134_(this, aabb.m_82369_(p_20273_));
+-      Vec3 vec3 = p_20273_.m_82556_() == 0.0D ? p_20273_ : m_198894_(this, p_20273_, aabb, this.f_19853_, list);
+-      boolean flag = p_20273_.f_82479_ != vec3.f_82479_;
+-      boolean flag1 = p_20273_.f_82480_ != vec3.f_82480_;
+-      boolean flag2 = p_20273_.f_82481_ != vec3.f_82481_;
+-      boolean flag3 = this.f_19861_ || flag1 && p_20273_.f_82480_ < 0.0D;
 -      if (this.f_19793_ > 0.0F && flag3 && (flag || flag2)) {
 -         Vec3 vec31 = m_198894_(this, new Vec3(p_20273_.f_82479_, (double)this.f_19793_, p_20273_.f_82481_), aabb, this.f_19853_, list);
 -         Vec3 vec32 = m_198894_(this, new Vec3(0.0D, (double)this.f_19793_, 0.0D), aabb.m_82363_(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), this.f_19853_, list);
 -         if (vec32.f_82480_ < (double)this.f_19793_) {
-+      float stepHeight = getStepHeight();
-+      if (stepHeight > 0.0F && flag3 && (flag || flag2)) {
-+         Vec3 vec31 = m_198894_(this, new Vec3(p_20273_.f_82479_, (double)stepHeight, p_20273_.f_82481_), aabb, this.f_19853_, list);
-+         Vec3 vec32 = m_198894_(this, new Vec3(0.0D, (double)stepHeight, 0.0D), aabb.m_82363_(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), this.f_19853_, list);
-+         if (vec32.f_82480_ < (double)stepHeight) {
-             Vec3 vec33 = m_198894_(this, new Vec3(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), aabb.m_82383_(vec32), this.f_19853_, list).m_82549_(vec32);
-             if (vec33.m_165925_() > vec31.m_165925_()) {
-                vec31 = vec33;
+-            Vec3 vec33 = m_198894_(this, new Vec3(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), aabb.m_82383_(vec32), this.f_19853_, list).m_82549_(vec32);
+-            if (vec33.m_165925_() > vec31.m_165925_()) {
+-               vec31 = vec33;
+-            }
+-         }
+-
+-         if (vec31.m_165925_() > vec3.m_165925_()) {
+-            return vec31.m_82549_(m_198894_(this, new Vec3(0.0D, -vec31.f_82480_ + p_20273_.f_82480_, 0.0D), aabb.m_82383_(vec31), this.f_19853_, list));
+-         }
+-      }
+-
+-      return vec3;
++      // Paper start - optimise collisions
++      // This is a copy of vanilla's except that it uses strictly AABB math
++      if (p_20273_.f_82479_ == 0.0 && p_20273_.f_82480_ == 0.0 && p_20273_.f_82481_ == 0.0) {
++         return p_20273_;
++      }
++
++      final Level world = this.f_19853_;
++      final AABB currBoundingBox = this.m_20191_();
++
++      if (io.papermc.paper.util.CollisionUtil.isEmpty(currBoundingBox)) {
++         return p_20273_;
++      }
++
++      final List<AABB> potentialCollisions = io.papermc.paper.util.CachedLists.getTempCollisionList();
++      try {
++         final double stepHeight = (double)this.f_19793_;
++         final AABB collisionBox;
++
++         if (p_20273_.f_82479_ == 0.0 && p_20273_.f_82481_ == 0.0 && p_20273_.f_82480_ != 0.0) {
++            if (p_20273_.f_82480_ > 0.0) {
++               collisionBox = io.papermc.paper.util.CollisionUtil.cutUpwards(currBoundingBox, p_20273_.f_82480_);
++            } else {
++               collisionBox = io.papermc.paper.util.CollisionUtil.cutDownwards(currBoundingBox, p_20273_.f_82480_);
++            }
++         } else {
++            if (stepHeight > 0.0 && (this.f_19861_ || (p_20273_.f_82480_ < 0.0)) && (p_20273_.f_82479_ != 0.0 || p_20273_.f_82481_ != 0.0)) {
++               // don't bother getting the collisions if we don't need them.
++               if (p_20273_.f_82480_ <= 0.0) {
++                  collisionBox = io.papermc.paper.util.CollisionUtil.expandUpwards(currBoundingBox.m_82363_(p_20273_.f_82479_, p_20273_.f_82480_, p_20273_.f_82481_), stepHeight);
++               } else {
++                  collisionBox = currBoundingBox.m_82363_(p_20273_.f_82479_, Math.max(stepHeight, p_20273_.f_82480_), p_20273_.f_82481_);
++               }
++            } else {
++               collisionBox = currBoundingBox.m_82363_(p_20273_.f_82479_, p_20273_.f_82480_, p_20273_.f_82481_);
++            }
++         }
++
++         io.papermc.paper.util.CollisionUtil.getCollisions(world, this, collisionBox, potentialCollisions, false, GoldenConfig.preventMovingIntoUnloadedChunks,
++                 false, false, null, null);
++
++         if (collidingWithWorldBorder = io.papermc.paper.util.CollisionUtil.isCollidingWithBorderEdge(world.m_6857_(), collisionBox)) { // Paper - this line *is* correct, ignore the IDE warning about assignments being used as a condition
++            io.papermc.paper.util.CollisionUtil.addBoxesToIfIntersects(world.m_6857_().m_61946_(), collisionBox, potentialCollisions);
++         }
++
++         final Vec3 limitedMoveVector = io.papermc.paper.util.CollisionUtil.performCollisions(p_20273_, currBoundingBox, potentialCollisions);
++
++         if (stepHeight > 0.0
++                 && (this.f_19861_ || (limitedMoveVector.f_82480_ != p_20273_.f_82480_ && p_20273_.f_82480_ < 0.0))
++                 && (limitedMoveVector.f_82479_ != p_20273_.f_82479_ || limitedMoveVector.f_82481_ != p_20273_.f_82481_)) {
++            Vec3 vec3d2 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(p_20273_.f_82479_, stepHeight, p_20273_.f_82481_), currBoundingBox, potentialCollisions);
++            final Vec3 vec3d3 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(0.0, stepHeight, 0.0), currBoundingBox.m_82363_(p_20273_.f_82479_, 0.0, p_20273_.f_82481_), potentialCollisions);
++
++            if (vec3d3.f_82480_ < stepHeight) {
++               final Vec3 vec3d4 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), currBoundingBox.m_82383_(vec3d3), potentialCollisions).m_82549_(vec3d3);
++
++               if (vec3d4.m_165925_() > vec3d2.m_165925_()) {
++                  vec3d2 = vec3d4;
++               }
++            }
++
++            if (vec3d2.m_165925_() > limitedMoveVector.m_165925_()) {
++               return vec3d2.m_82549_(io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(0.0D, -vec3d2.f_82480_ + p_20273_.f_82480_, 0.0D), currBoundingBox.m_82383_(vec3d2), potentialCollisions));
++            }
++
++            return limitedMoveVector;
++         } else {
++            return limitedMoveVector;
++         }
++      } finally {
++         io.papermc.paper.util.CachedLists.returnTempCollisionList(potentialCollisions);
++      }
++      // Paper end - optimise collisions
+    }
+ 
+    public static Vec3 m_198894_(@Nullable Entity p_198895_, Vec3 p_198896_, AABB p_198897_, Level p_198898_, List<VoxelShape> p_198899_) {
 @@ -934,7 +_,7 @@
     protected void m_7355_(BlockPos p_20135_, BlockState p_20136_) {
        if (!p_20136_.m_60767_().m_76332_()) {
@@ -443,6 +563,41 @@
           this.f_19853_.m_7967_(itementity);
           return itementity;
        }
+@@ -1677,10 +_,30 @@
+       } else {
+          float f = this.f_19815_.f_20377_ * 0.8F;
+          AABB aabb = AABB.m_165882_(this.m_146892_(), (double)f, 1.0E-6D, (double)f);
+-         return BlockPos.m_121921_(aabb).anyMatch((p_201942_) -> {
+-            BlockState blockstate = this.f_19853_.m_8055_(p_201942_);
+-            return !blockstate.m_60795_() && blockstate.m_60828_(this.f_19853_, p_201942_) && Shapes.m_83157_(blockstate.m_60812_(this.f_19853_, p_201942_).m_83216_((double)p_201942_.m_123341_(), (double)p_201942_.m_123342_(), (double)p_201942_.m_123343_()), Shapes.m_83064_(aabb), BooleanOp.f_82689_);
+-         });
++         BlockPos.MutableBlockPos blockposition = new BlockPos.MutableBlockPos();
++         int minX = Mth.m_14107_(aabb.f_82288_);
++         int minY = Mth.m_14107_(aabb.f_82289_);
++         int minZ = Mth.m_14107_(aabb.f_82290_);
++         int maxX = Mth.m_14107_(aabb.f_82291_);
++         int maxY = Mth.m_14107_(aabb.f_82292_);
++         int maxZ = Mth.m_14107_(aabb.f_82293_);
++         for (int fz = minZ; fz <= maxZ; ++fz) {
++            for (int fx = minX; fx <= maxX; ++fx) {
++               for (int fy = minY; fy <= maxY; ++fy) {
++                  net.minecraft.world.level.chunk.LevelChunk chunk = (net.minecraft.world.level.chunk.LevelChunk)this.f_19853_.getChunkIfLoadedImmediately(fx >> 4, fz >> 4);
++                  if (chunk == null) {
++                     continue;
++                  }
++
++                  BlockState iblockdata = chunk.getBlockStateFinal(fx, fy, fz);
++                  blockposition.m_122178_(fx, fy, fz);
++                  if (!iblockdata.m_60795_() && iblockdata.m_60828_(this.f_19853_, blockposition) && Shapes.m_83157_(iblockdata.m_60812_(this.f_19853_, blockposition).m_83216_((double) blockposition.m_123341_(), (double) blockposition.m_123342_(), (double) blockposition.m_123343_()), Shapes.m_83064_(aabb), BooleanOp.f_82689_)) {
++                     return true;
++                  }
++               }
++            }
++         }
++         return false;
+       }
+    }
+ 
 @@ -1698,6 +_,7 @@
  
     public void m_6083_() {

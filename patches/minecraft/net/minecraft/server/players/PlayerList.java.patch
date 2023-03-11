@@ -244,14 +244,16 @@
        this.f_11196_.remove(p_11237_);
        p_11237_.m_9236_().m_143261_(p_11237_, Entity.RemovalReason.DISCARDED);
        BlockPos blockpos = p_11237_.m_8961_();
-@@ -445,6 +_,7 @@
+@@ -445,7 +_,8 @@
           serverplayer.f_8906_.m_9829_(new ClientboundGameEventPacket(ClientboundGameEventPacket.f_132153_, 0.0F));
        }
  
+-      while(!serverlevel1.m_45786_(serverplayer) && serverplayer.m_20186_() < (double)serverlevel1.m_151558_()) {
 +      serverlevel1.m_7726_().m_8387_(net.minecraft.server.level.TicketType.f_9448_, new net.minecraft.world.level.ChunkPos(serverplayer.m_146903_() >> 4, serverplayer.m_146907_() >> 4), 1, serverplayer.m_19879_()); // Paper
-       while(!serverlevel1.m_45786_(serverplayer) && serverplayer.m_20186_() < (double)serverlevel1.m_151558_()) {
++      while(!serverlevel1.noCollision(serverplayer, serverplayer.m_20191_(), true) && serverplayer.m_20186_() < (double)serverlevel1.m_151558_()) {
           serverplayer.m_6034_(serverplayer.m_20185_(), serverplayer.m_20186_() + 1.0D, serverplayer.m_20189_());
        }
+ 
 @@ -462,6 +_,7 @@
        this.f_11197_.put(serverplayer.m_20148_(), serverplayer);
        serverplayer.m_143429_();

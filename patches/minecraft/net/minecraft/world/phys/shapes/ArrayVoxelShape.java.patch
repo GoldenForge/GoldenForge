@@ -1,0 +1,198 @@
+--- a/net/minecraft/world/phys/shapes/ArrayVoxelShape.java
++++ b/net/minecraft/world/phys/shapes/ArrayVoxelShape.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.phys.shapes;
+ 
++import it.unimi.dsi.fastutil.doubles.AbstractDoubleList;
+ import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
+ import it.unimi.dsi.fastutil.doubles.DoubleList;
+ import java.util.Arrays;
+@@ -16,17 +_,28 @@
+    }
+ 
+    ArrayVoxelShape(DiscreteVoxelShape p_82567_, DoubleList p_82568_, DoubleList p_82569_, DoubleList p_82570_) {
+-      super(p_82567_);
+-      int i = p_82567_.m_82828_() + 1;
+-      int j = p_82567_.m_82845_() + 1;
+-      int k = p_82567_.m_82852_() + 1;
+-      if (i == p_82568_.size() && j == p_82569_.size() && k == p_82570_.size()) {
+-         this.f_82563_ = p_82568_;
+-         this.f_82564_ = p_82569_;
+-         this.f_82565_ = p_82570_;
++      // Paper start - optimise multi-aabb shapes
++      this(p_82567_, p_82568_, p_82569_, p_82570_, null, 0.0, 0.0, 0.0);
++   }
++   ArrayVoxelShape(DiscreteVoxelShape shape, DoubleList xPoints, DoubleList yPoints, DoubleList zPoints, net.minecraft.world.phys.AABB[] boundingBoxesRepresentation, double offsetX, double offsetY, double offsetZ) {
++      // Paper end - optimise multi-aabb shapes
++      super(shape);
++      int i = shape.m_82828_() + 1;
++      int j = shape.m_82845_() + 1;
++      int k = shape.m_82852_() + 1;
++      if (i == xPoints.size() && j == yPoints.size() && k == zPoints.size()) {
++         this.f_82563_ = xPoints;
++         this.f_82564_ = yPoints;
++         this.f_82565_ = zPoints;
+       } else {
+          throw (IllegalArgumentException)Util.m_137570_(new IllegalArgumentException("Lengths of point arrays must be consistent with the size of the VoxelShape."));
+       }
++      // Paper start - optimise multi-aabb shapes
++      this.boundingBoxesRepresentation = boundingBoxesRepresentation == null ? this.m_83299_().toArray(EMPTY) : boundingBoxesRepresentation;
++      this.offsetX = offsetX;
++      this.offsetY = offsetY;
++      this.offsetZ = offsetZ;
++      // Paper end - optimise multi-aabb shapes
+    }
+ 
+    protected DoubleList m_7700_(Direction.Axis p_82577_) {
+@@ -41,4 +_,151 @@
+             throw new IllegalArgumentException();
+       }
+    }
++
++   // Paper start
++   public static final class DoubleListOffsetExposed extends AbstractDoubleList {
++
++      public final DoubleArrayList list;
++      public final double offset;
++
++      public DoubleListOffsetExposed(final DoubleArrayList list, final double offset) {
++         this.list = list;
++         this.offset = offset;
++      }
++
++      @Override
++      public double getDouble(final int index) {
++         return this.list.getDouble(index) + this.offset;
++      }
++
++      @Override
++      public int size() {
++         return this.list.size();
++      }
++   }
++
++   static final net.minecraft.world.phys.AABB[] EMPTY = new net.minecraft.world.phys.AABB[0];
++   final net.minecraft.world.phys.AABB[] boundingBoxesRepresentation;
++
++   final double offsetX;
++   final double offsetY;
++   final double offsetZ;
++
++   public final net.minecraft.world.phys.AABB[] getBoundingBoxesRepresentation() {
++      return this.boundingBoxesRepresentation;
++   }
++
++   public final double getOffsetX() {
++      return this.offsetX;
++   }
++
++   public final double getOffsetY() {
++      return this.offsetY;
++   }
++
++   public final double getOffsetZ() {
++      return this.offsetZ;
++   }
++
++   @Override
++   public java.util.List<net.minecraft.world.phys.AABB> m_83299_() {
++      if (this.boundingBoxesRepresentation == null) {
++         return super.m_83299_();
++      }
++      java.util.List<net.minecraft.world.phys.AABB> ret = new java.util.ArrayList<>(this.boundingBoxesRepresentation.length);
++
++      double offX = this.offsetX;
++      double offY = this.offsetY;
++      double offZ = this.offsetZ;
++
++      for (net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++         ret.add(boundingBox.m_82386_(offX, offY, offZ));
++      }
++
++      return ret;
++   }
++
++   protected static DoubleArrayList getList(DoubleList from) {
++      if (from instanceof DoubleArrayList) {
++         return (DoubleArrayList)from;
++      } else {
++         return DoubleArrayList.wrap(from.toDoubleArray());
++      }
++   }
++
++   @Override
++   public VoxelShape m_83216_(double x, double y, double z) {
++      if (x == 0.0 && y == 0.0 && z == 0.0) {
++         return this;
++      }
++      DoubleListOffsetExposed xPoints, yPoints, zPoints;
++      double offsetX, offsetY, offsetZ;
++
++      if (this.f_82563_ instanceof DoubleListOffsetExposed) {
++         xPoints = new DoubleListOffsetExposed(((DoubleListOffsetExposed)this.f_82563_).list, offsetX = this.offsetX + x);
++         yPoints = new DoubleListOffsetExposed(((DoubleListOffsetExposed)this.f_82564_).list, offsetY = this.offsetY + y);
++         zPoints = new DoubleListOffsetExposed(((DoubleListOffsetExposed)this.f_82565_).list, offsetZ = this.offsetZ + z);
++      } else {
++         xPoints = new DoubleListOffsetExposed(getList(this.f_82563_), offsetX = x);
++         yPoints = new DoubleListOffsetExposed(getList(this.f_82564_), offsetY = y);
++         zPoints = new DoubleListOffsetExposed(getList(this.f_82565_), offsetZ = z);
++      }
++
++      return new ArrayVoxelShape(this.f_83211_, xPoints, yPoints, zPoints, this.boundingBoxesRepresentation, offsetX, offsetY, offsetZ);
++   }
++
++   @Override
++   public final boolean intersects(net.minecraft.world.phys.AABB axisalingedbb) {
++      // this can be optimised by checking an "overall shape" first, but not needed
++      double offX = this.offsetX;
++      double offY = this.offsetY;
++      double offZ = this.offsetZ;
++
++      for (net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++         if (io.papermc.paper.util.CollisionUtil.voxelShapeIntersect(axisalingedbb, boundingBox.f_82288_ + offX, boundingBox.f_82289_ + offY, boundingBox.f_82290_ + offZ,
++                 boundingBox.f_82291_ + offX, boundingBox.f_82292_ + offY, boundingBox.f_82293_ + offZ)) {
++            return true;
++         }
++      }
++
++      return false;
++   }
++
++   @Override
++   public void m_83286_(Shapes.DoubleLineConsumer doubleLineConsumer) {
++      if (this.boundingBoxesRepresentation == null) {
++         super.m_83286_(doubleLineConsumer);
++         return;
++      }
++      for (final net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++         doubleLineConsumer.m_83161_(boundingBox.f_82288_ + this.offsetX, boundingBox.f_82289_ + this.offsetY, boundingBox.f_82290_ + this.offsetZ,
++                 boundingBox.f_82291_ + this.offsetX, boundingBox.f_82292_ + this.offsetY, boundingBox.f_82293_ + this.offsetZ);
++      }
++   }
++
++   @Override
++   public VoxelShape m_83296_() {
++      if (this == Shapes.m_83040_() || this.boundingBoxesRepresentation.length == 0) {
++         return this;
++      }
++
++      VoxelShape simplified = Shapes.m_83040_();
++      for (final net.minecraft.world.phys.AABB boundingBox : this.boundingBoxesRepresentation) {
++         simplified = Shapes.m_83148_(simplified, Shapes.m_83048_(boundingBox.f_82288_ + this.offsetX, boundingBox.f_82289_ + this.offsetY, boundingBox.f_82290_ + this.offsetZ,
++                 boundingBox.f_82291_ + this.offsetX, boundingBox.f_82292_ + this.offsetY, boundingBox.f_82293_ + this.offsetZ), BooleanOp.f_82695_);
++      }
++
++      if (!(simplified instanceof ArrayVoxelShape)) {
++         return simplified;
++      }
++
++      final net.minecraft.world.phys.AABB[] boundingBoxesRepresentation = ((ArrayVoxelShape)simplified).getBoundingBoxesRepresentation();
++
++      if (boundingBoxesRepresentation.length == 1) {
++         return new io.papermc.paper.voxel.AABBVoxelShape(boundingBoxesRepresentation[0]).m_83296_();
++      }
++
++      return simplified;
++   }
++   // Paper end
+ }

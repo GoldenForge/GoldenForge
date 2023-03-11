@@ -72,15 +72,20 @@
     public abstract static class BlockStateBase extends StateHolder<Block, BlockState> {
        private final int f_60594_;
        private final boolean f_60595_;
-@@ -443,7 +_,22 @@
+@@ -443,6 +_,33 @@
           this.f_60605_ = blockbehaviour$properties.f_60901_;
           this.f_60606_ = blockbehaviour$properties.f_60902_;
           this.f_222962_ = blockbehaviour$properties.f_222978_.apply(this.m_7160_());
--      }
 +         this.conditionallyFullOpaque = this.f_60601_ & this.f_60595_; // Paper
 +
 +      }
 +
++      // Paper start
++      protected boolean shapeExceedsCube = true;
++      public final boolean shapeExceedsCube() {
++         return this.shapeExceedsCube;
++      }
++      // Paper end
 +      // Paper start - starlight
 +      protected int opacityIfCached = -1;
 +      // ret -1 if opacity is dynamic, or -1 if the block is conditionally full opaque, else return opacity in [0, 15]
@@ -93,9 +98,54 @@
 +         return this.conditionallyFullOpaque;
 +      }
 +      // Paper end - starlight
++
++      private long blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_SPECIAL_BLOCK;
++
++      public final long getBlockCollisionBehavior() {
++         return this.blockCollisionBehavior;
+       }
  
        public void m_60611_() {
-          if (!this.m_60734_().m_49967_()) {
+@@ -450,6 +_,39 @@
+             this.f_60593_ = new BlockBehaviour.BlockStateBase.Cache(this.m_7160_());
+          }
+ 
++         this.shapeExceedsCube = this.f_60593_ == null || this.f_60593_.f_60843_; // Paper - moved from actual method to here
++         this.opacityIfCached = this.f_60593_ == null || this.isConditionallyFullOpaque() ? -1 : this.f_60593_.f_60848_; // Paper - starlight - cache opacity for light
++
++         // Paper start
++         if (io.papermc.paper.util.CollisionUtil.isSpecialCollidingBlock(this)) {
++            this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_SPECIAL_BLOCK;
++         } else {
++            try {
++               // There is NOTHING HACKY ABOUT THIS AT ALLLLLLLLLLLLLLL
++               VoxelShape constantShape = this.m_60742_(null, null, null);
++               if (constantShape == null) {
++                  this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_UNKNOWN_BLOCK;
++               } else {
++                  constantShape = constantShape.m_83296_();
++                  if (constantShape.m_83281_()) {
++                     this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_EMPTY_BLOCK;
++                  } else {
++                     final List<net.minecraft.world.phys.AABB> boxes = constantShape.m_83299_();
++                     if (constantShape == net.minecraft.world.phys.shapes.Shapes.getFullUnoptimisedCube() || (boxes.size() == 1 && boxes.get(0).equals(net.minecraft.world.phys.shapes.Shapes.BLOCK_OPTIMISED.aabb))) {
++                        this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_FULL_BLOCK;
++                     } else {
++                        this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_UNKNOWN_BLOCK;
++                     }
++                  }
++               }
++            } catch (final Error error) {
++               throw error;
++            } catch (final Throwable throwable) {
++               this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_UNKNOWN_BLOCK;
++            }
++         }
++         // Paper end
++
+       }
+ 
+       public Block m_60734_() {
 @@ -492,18 +_,22 @@
           return this.f_60595_;
        }

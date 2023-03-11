@@ -1,0 +1,14 @@
+--- a/net/minecraft/world/level/EmptyBlockGetter.java
++++ b/net/minecraft/world/level/EmptyBlockGetter.java
+@@ -20,6 +_,11 @@
+       return Blocks.f_50016_.m_49966_();
+    }
+ 
++   @Override
++   public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++      return Blocks.f_50016_.m_49966_();
++   }
++
+    public FluidState m_6425_(BlockPos p_45865_) {
+       return Fluids.f_76191_.m_76145_();
+    }

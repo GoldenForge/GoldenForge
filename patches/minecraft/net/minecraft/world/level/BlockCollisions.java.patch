@@ -1,0 +1,100 @@
+--- a/net/minecraft/world/level/BlockCollisions.java
++++ b/net/minecraft/world/level/BlockCollisions.java
+@@ -14,6 +_,7 @@
+ import net.minecraft.world.phys.shapes.CollisionContext;
+ import net.minecraft.world.phys.shapes.Shapes;
+ import net.minecraft.world.phys.shapes.VoxelShape;
++import org.goldenforge.GoldenConfig;
+ 
+ public class BlockCollisions extends AbstractIterator<VoxelShape> {
+    private final AABB f_186392_;
+@@ -65,40 +_,59 @@
+    protected VoxelShape computeNext() {
+       while(true) {
+          if (this.f_186394_.m_122304_()) {
+-            int i = this.f_186394_.m_122305_();
+-            int j = this.f_186394_.m_122306_();
+-            int k = this.f_186394_.m_122307_();
++            int i = this.f_186394_.m_122305_(); final int x = i; // Paper
++            int j = this.f_186394_.m_122306_(); final int y = j; // Paper
++            int k = this.f_186394_.m_122307_(); final int z = k; // Paper
+             int l = this.f_186394_.m_122308_();
+             if (l == 3) {
+                continue;
+             }
+-
+-            BlockGetter blockgetter = this.m_186411_(i, k);
+-            if (blockgetter == null) {
+-               continue;
+-            }
+-
+-            this.f_186395_.m_122178_(i, j, k);
+-            BlockState blockstate = blockgetter.m_8055_(this.f_186395_);
+-            if (this.f_186398_ && !blockstate.m_60828_(blockgetter, this.f_186395_) || l == 1 && !blockstate.m_60779_() || l == 2 && !blockstate.m_60713_(Blocks.f_50110_)) {
+-               continue;
+-            }
+-
+-            VoxelShape voxelshape = blockstate.m_60742_(this.f_186397_, this.f_186395_, this.f_186393_);
+-            if (voxelshape == Shapes.m_83144_()) {
+-               if (!this.f_186392_.m_82314_((double)i, (double)j, (double)k, (double)i + 1.0D, (double)j + 1.0D, (double)k + 1.0D)) {
+-                  continue;
+-               }
+-
+-               return voxelshape.m_83216_((double)i, (double)j, (double)k);
+-            }
+-
+-            VoxelShape voxelshape1 = voxelshape.m_83216_((double)i, (double)j, (double)k);
+-            if (!Shapes.m_83157_(voxelshape1, this.f_186396_, BooleanOp.f_82689_)) {
+-               continue;
+-            }
+-
+-            return voxelshape1;
++            // Paper start - ensure we don't load chunks
++            final @Nullable Entity source = this.f_186393_ instanceof net.minecraft.world.phys.shapes.EntityCollisionContext entityContext ? entityContext.m_193113_() : null;
++            boolean far = source != null && io.papermc.paper.util.MCUtil.distanceSq(source.m_20185_(), y, source.m_20189_(), x, y, z) > 14;
++            this.f_186395_.m_122178_(x, y, z);
++
++            BlockState blockState;
++            if (this.f_186397_ instanceof net.minecraft.server.level.WorldGenRegion) {
++               BlockGetter blockGetter = this.m_186411_(x, z);
++               if (blockGetter == null) {
++                  continue;
++               }
++               blockState = blockGetter.m_8055_(this.f_186395_);
++            } else if ((!far && source instanceof net.minecraft.server.level.ServerPlayer) || (source != null && source.collisionLoadChunks)) {
++               blockState = this.f_186397_.m_8055_(this.f_186395_);
++            } else {
++               blockState = this.f_186397_.getBlockStateIfLoaded(this.f_186395_);
++            }
++
++            if (blockState == null) {
++               if (!(source instanceof net.minecraft.server.level.ServerPlayer) || GoldenConfig.preventMovingIntoUnloadedChunks) {
++                  return Shapes.m_83064_(far ? source.m_20191_() : new AABB(new BlockPos(x, y, z)));
++               }
++               // Paper end
++               continue;
++            }
++
++            // Paper - moved up
++            if (/*this.onlySuffocatingBlocks && (!blockState.isSuffocating(blockGetter, this.pos)) ||*/ l == 1 && !blockState.m_60779_() || l == 2 && !blockState.m_60713_(Blocks.f_50110_)) { // Paper - onlySuffocatingBlocks is only true on the client, so we don't care about it here
++               continue;
++            }
++
++            VoxelShape voxelShape = blockState.m_60742_(this.f_186397_, this.f_186395_, this.f_186393_);
++            if (voxelShape == Shapes.m_83144_()) {
++               if (!io.papermc.paper.util.CollisionUtil.voxelShapeIntersect(this.f_186392_, (double)i, (double)j, (double)k, (double)i + 1.0D, (double)j + 1.0D, (double)k + 1.0D)) { // Paper - keep vanilla behavior for voxelshape intersection - See comment in CollisionUtil
++                  continue;
++               }
++
++               return voxelShape.m_83216_((double)i, (double)j, (double)k);
++            }
++
++            VoxelShape voxelShape2 = voxelShape.m_83216_((double)i, (double)j, (double)k);
++            if (!Shapes.m_83157_(voxelShape2, this.f_186396_, BooleanOp.f_82689_)) {
++               continue;
++            }
++
++            return voxelShape2;
+          }
+ 
+          return this.endOfData();
