@@ -27,7 +27,7 @@ public abstract class AreaMap<E> {
 
     // we use linked for better iteration.
     // map of: coordinate to set of objects in coordinate
-    protected final Long2ObjectOpenHashMap<PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<E>> areaMap = new Long2ObjectOpenHashMap<>(1024, 0.7f);
+    protected Long2ObjectOpenHashMap<PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<E>> areaMap = new Long2ObjectOpenHashMap<>(1024, 0.7f);
     protected final PooledLinkedHashSets<E> pooledHashSets;
 
     protected final ChangeCallback<E> addCallback;

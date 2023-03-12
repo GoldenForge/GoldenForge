@@ -285,7 +285,7 @@
        this.f_8557_ = false;
        profilerfiller.m_7238_();
 -      boolean flag = !this.f_8546_.isEmpty() || !this.m_8902_().isEmpty();
-+      boolean flag = !this.f_8546_.isEmpty() || net.minecraftforge.common.world.ForgeChunkManager.hasForcedChunks(this); //Forge: Replace vanilla's has forced chunk check with forge's that checks both the vanilla and forge added ones
++      boolean flag = true || !this.f_8546_.isEmpty() || net.minecraftforge.common.world.ForgeChunkManager.hasForcedChunks(this); //Forge: Replace vanilla's has forced chunk check with forge's that checks both the vanilla and forge added ones  // CraftBukkit - this prevents entity cleanup, other issues on servers with no players
        if (flag) {
           this.m_8886_();
        }
@@ -843,7 +843,7 @@
     }
  
     public void m_184102_(LevelChunk p_184103_) {
-@@ -1486,31 +_,42 @@
+@@ -1486,31 +_,45 @@
  
     public void close() throws IOException {
        super.close();
@@ -858,8 +858,10 @@
  
     public boolean m_143319_(long p_143320_) {
 -      return this.f_143244_.m_157507_(p_143320_);
--   }
-+      return this.getChunkIfLoadedImmediately(ChunkPos.m_45592_(p_143320_), ChunkPos.m_45602_(p_143320_)) != null;   }
++      // Paper start - rewrite chunk system
++      return this.getChunkIfLoadedImmediately(ChunkPos.m_45592_(p_143320_), ChunkPos.m_45602_(p_143320_)) != null;
++      // Paper end - rewrite chunk system
+    }
  
     private boolean m_184110_(long p_184111_) {
 -      return this.m_143319_(p_184111_) && this.f_8547_.m_143239_(p_184111_);

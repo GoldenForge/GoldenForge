@@ -31,12 +31,18 @@
  import net.minecraft.server.level.progress.ChunkProgressListener;
  import net.minecraft.util.VisibleForDebug;
  import net.minecraft.util.profiling.ProfilerFiller;
-@@ -50,9 +_,9 @@
+@@ -45,14 +_,15 @@
+ import net.minecraft.world.level.storage.DimensionDataStorage;
+ import net.minecraft.world.level.storage.LevelData;
+ import net.minecraft.world.level.storage.LevelStorageSource;
++import org.goldenforge.GoldenConfig;
+ 
+ public class ServerChunkCache extends ChunkSource {
     private static final List<ChunkStatus> f_8326_ = ChunkStatus.m_62349_();
     private final DistanceManager f_8327_;
     public final ServerLevel f_8329_;
 -   final Thread f_8330_;
-+   public final Thread f_8330_;
++   public Thread f_8330_;
     final ThreadedLevelLightEngine f_8331_;
 -   private final ServerChunkCache.MainThreadExecutor f_8332_;
 +   public final ServerChunkCache.MainThreadExecutor f_8332_;
@@ -580,13 +586,64 @@
        this.m_8489_();
        this.f_8329_.m_46473_().m_6182_("chunks");
        if (p_201914_) {
-+         this.f_8325_.playerChunkManager.tick(); // Paper - this is mostly is to account for view distance changes
++         this.f_8325_.playerChunkManager.tick(); // Paper - this is mostly is to account for view distance changes);
           this.m_8490_();
        }
  
-@@ -333,33 +_,61 @@
-          NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.m_186524_(l, this.f_8329_.m_8583_(), this::m_8370_, new LocalMobCapCalculator(this.f_8325_));
-          this.f_8340_ = naturalspawner$spawnstate;
+@@ -323,6 +_,33 @@
+       if (flag) {
+          this.f_8325_.m_140421_();
+       } else {
++         // Paper start - optimize isOutisdeRange
++         ChunkMap playerChunkMap = this.f_8325_;
++         for (ServerPlayer player : this.f_8329_.f_8546_) {
++            if (!player.affectsSpawning || player.m_5833_()) {
++               playerChunkMap.playerMobSpawnMap.remove(player);
++               continue;
++            }
++
++            int viewDistance = this.f_8325_.getEffectiveViewDistance();
++
++            // copied and modified from isOutisdeRange
++            int chunkRange = GoldenConfig.mobSpawnRange;
++            chunkRange = (chunkRange > viewDistance) ? (byte)viewDistance : chunkRange;
++            chunkRange = (chunkRange > DistanceManager.MOB_SPAWN_RANGE) ? DistanceManager.MOB_SPAWN_RANGE : chunkRange;
++            if (playerChunkMap.playerChunkTickRangeMap.getLastViewDistance(player) == -1) {
++               playerChunkMap.playerMobSpawnMap.remove(player);
++               continue;
++            }
++
++            int range = Math.min(chunkRange, 32); // limit to max view distance
++            int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20185_());
++            int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20189_());
++
++            playerChunkMap.playerMobSpawnMap.addOrUpdate(player, chunkX, chunkZ, range);
++            player.lastEntitySpawnRadiusSquared = (double)((range << 4) * (range << 4)); // used in anyPlayerCloseEnoughForSpawning
++         }
++         // Paper end - optimize isOutisdeRange
+          LevelData leveldata = this.f_8329_.m_6106_();
+          ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
+          profilerfiller.m_6180_("pollingChunks");
+@@ -330,36 +_,77 @@
+          boolean flag1 = leveldata.m_6793_() % 400L == 0L;
+          profilerfiller.m_6180_("naturalSpawnCount");
+          int l = this.f_8327_.m_140816_();
+-         NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.m_186524_(l, this.f_8329_.m_8583_(), this::m_8370_, new LocalMobCapCalculator(this.f_8325_));
+-         this.f_8340_ = naturalspawner$spawnstate;
++         //NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, new LocalMobCapCalculator(this.chunkMap));
++         // Paper start - per player mob spawning
++         NaturalSpawner.SpawnState spawnercreature_d; // moved down
++         if ((this.f_8336_ || this.f_8335_) && this.f_8325_.playerMobDistanceMap != null) { // don't count mobs when animals and monsters are disabled
++            // re-set mob counts
++            for (ServerPlayer player : this.f_8329_.f_8546_) {
++               Arrays.fill(player.mobCounts, 0);
++            }
++            spawnercreature_d = NaturalSpawner.createState(l, this.f_8329_.m_8583_(), this::m_8370_, null, true);
++         } else {
++            spawnercreature_d = NaturalSpawner.createState(l, this.f_8329_.m_8583_(), this::m_8370_, this.f_8325_.playerMobDistanceMap == null ? new LocalMobCapCalculator(this.f_8325_) : null, false);
++         }
++         // Paper end
++         this.f_8340_ = spawnercreature_d;
           profilerfiller.m_6182_("filteringLoadedChunks");
 -         List<ServerChunkCache.ChunkAndHolder> list = Lists.newArrayListWithCapacity(l);
 -
@@ -625,9 +682,10 @@
 -         }
 +         //Collections.shuffle(list);
 +
++         // Paper - only shuffle if per-player mob spawning is disabled
 +         // Paper start - optimise chunk tick iteration
 +         Iterator<LevelChunk> iterator1;
-+         if (/*this.level.paperConfig.perPlayerMobSpawns*/ false) {
++         if (GoldenConfig.perPlayerMobSpawns) {
 +            iterator1 = this.entityTickingChunks.iterator();
 +         } else {
 +            iterator1 = this.entityTickingChunks.unsafeIterator();
@@ -649,8 +707,8 @@
 +                  ChunkPos chunkpos = levelchunk1.m_7697_();
 +                  if ((this.f_8329_.m_201916_(chunkpos) && this.f_8325_.m_183879_(chunkpos)) || this.f_8327_.shouldForceTicks(chunkpos.m_45588_())) {
 +                     levelchunk1.m_187632_(j);
-+                     if (flag2 && (this.f_8335_ || this.f_8336_) && this.f_8329_.m_6857_().m_61927_(chunkpos)) {
-+                        NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, naturalspawner$spawnstate, this.f_8336_, this.f_8335_, flag1);
++                     if (flag2 && (this.f_8335_ || this.f_8336_) && this.f_8329_.m_6857_().m_61927_(chunkpos) && this.f_8325_.anyPlayerCloseEnoughForSpawning(holder, chunkpos, true)) { // Spigot // Paper - optimise anyPlayerCloseEnoughForSpawning & optimise chunk tick iteration
++                        NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, spawnercreature_d, this.f_8336_, this.f_8335_, flag1);
 +                     }
 +
 +                     if (true && this.f_8329_.m_183438_(chunkpos.m_45588_())) { // Paper - replace player chunk loader system

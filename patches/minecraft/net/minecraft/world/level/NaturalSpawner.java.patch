@@ -1,13 +1,44 @@
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -48,6 +_,7 @@
+@@ -10,12 +_,15 @@
+ import java.util.function.Consumer;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import net.minecraft.client.multiplayer.ClientChunkCache;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.QuartPos;
+ import net.minecraft.core.Registry;
+ import net.minecraft.nbt.CompoundTag;
++import net.minecraft.server.level.ServerChunkCache;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.tags.BiomeTags;
+ import net.minecraft.tags.BlockTags;
+@@ -46,8 +_,10 @@
+ import net.minecraft.world.level.material.FluidState;
+ import net.minecraft.world.level.pathfinder.PathComputationType;
  import net.minecraft.world.phys.Vec3;
++import org.goldenforge.GoldenConfig;
  import org.slf4j.Logger;
  
 +// TODO: ForgeHooks.canEntitySpawn
  public final class NaturalSpawner {
     private static final Logger f_46977_ = LogUtils.getLogger();
     private static final int f_151589_ = 24;
+@@ -64,6 +_,11 @@
+    }
+ 
+    public static NaturalSpawner.SpawnState m_186524_(int p_186525_, Iterable<Entity> p_186526_, NaturalSpawner.ChunkGetter p_186527_, LocalMobCapCalculator p_186528_) {
++      // Paper start - add countMobs parameter
++      return createState(p_186525_, p_186526_, p_186527_, p_186528_, false);
++   }
++
++   public static NaturalSpawner.SpawnState createState(int p_186525_, Iterable<Entity> p_186526_, NaturalSpawner.ChunkGetter p_186527_, LocalMobCapCalculator p_186528_, boolean countMobs) {
+       PotentialCalculator potentialcalculator = new PotentialCalculator();
+       Object2IntOpenHashMap<MobCategory> object2intopenhashmap = new Object2IntOpenHashMap<>();
+       Iterator iterator = p_186526_.iterator();
 @@ -84,7 +_,7 @@
              mob = (Mob)entity;
           } while(mob.m_21532_() || mob.m_8023_());
@@ -17,6 +48,93 @@
           if (mobcategory != MobCategory.MISC) {
              Entity entity_f = entity;
              BlockPos blockpos = entity.m_20183_();
+@@ -94,11 +_,16 @@
+                   potentialcalculator.m_47192_(entity_f.m_20183_(), mobspawnsettings$mobspawncost.m_48400_());
+                }
+ 
+-               if (entity_f instanceof Mob) {
++               if (p_186528_ != null && entity_f instanceof Mob) {
+                   p_186528_.m_186512_(p_186541_.m_7697_(), mobcategory);
+                }
+ 
+                object2intopenhashmap.addTo(mobcategory, 1);
++               // Paper start
++               if (countMobs) {
++                  ((ServerChunkCache) p_186541_.f_62776_.m_7726_()).f_8325_.updatePlayerMobTypeMap(entity_f);
++               }
++               // Paper end
+             });
+          }
+       }
+@@ -112,8 +_,39 @@
+       p_47030_.m_46473_().m_6180_("spawner");
+ 
+       for(MobCategory mobcategory : f_46979_) {
+-         if ((p_47033_ || !mobcategory.m_21609_()) && (p_47034_ || mobcategory.m_21609_()) && (p_47035_ || !mobcategory.m_21610_()) && p_47032_.m_186548_(mobcategory, p_47031_.m_7697_())) {
+-            m_47045_(mobcategory, p_47030_, p_47031_, p_47032_::m_47127_, p_47032_::m_47131_);
++
++
++         // Paper start - only allow spawns upto the limit per chunk and update count afterwards
++         int limit = mobcategory.m_21608_();
++         int currEntityCount = p_47032_.f_47111_.getInt(mobcategory);
++         int k1 = limit * p_47032_.m_47126_() / NaturalSpawner.f_46978_;
++         int difference = k1 - currEntityCount;
++
++         if (GoldenConfig.perPlayerMobSpawns) {
++            int minDiff = Integer.MAX_VALUE;
++            final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<net.minecraft.server.level.ServerPlayer> inRange = p_47030_.m_7726_().f_8325_.playerMobDistanceMap.getObjectsInRange(p_47031_.m_7697_());
++            if (inRange != null) {
++               final Object[] backingSet = inRange.getBackingSet();
++               for (int k = 0; k < backingSet.length; k++) {
++                  if (!(backingSet[k] instanceof final net.minecraft.server.level.ServerPlayer player)) {
++                     continue;
++                  }
++                  minDiff = Math.min(limit - p_47030_.m_7726_().f_8325_.getMobCountNear(player, mobcategory), minDiff);
++               }
++            }
++            difference = (minDiff == Integer.MAX_VALUE) ? 0 : minDiff;
++         }
++
++         if ((p_47033_ || !mobcategory.m_21609_()) && (p_47034_ || mobcategory.m_21609_()) && (p_47035_ || !mobcategory.m_21610_()) && difference > 0) {
++            // Paper
++
++            NaturalSpawner.SpawnPredicate spawnercreature_c = p_47032_::m_47127_;
++//            // Paper start
++//            int spawnCount = NaturalSpawner.spawnCategoryForChunk(mobcategory, p_47030_, p_47031_, spawnercreature_c, p_47032_::afterSpawn,
++//                    difference, GoldenConfig.perPlayerMobSpawns ? p_47030_.getChunkSource().chunkMap::updatePlayerMobTypeMap : null);
++//            p_47032_.mobCategoryCounts.mergeInt(mobcategory, spawnCount, Integer::sum);
++//            // Paper end
++           m_47045_(mobcategory, p_47030_, p_47031_, p_47032_::m_47127_, p_47032_::m_47131_);
+          }
+       }
+ 
+@@ -121,9 +_,14 @@
+    }
+ 
+    public static void m_47045_(MobCategory p_47046_, ServerLevel p_47047_, LevelChunk p_47048_, NaturalSpawner.SpawnPredicate p_47049_, NaturalSpawner.AfterSpawnCallback p_47050_) {
++      // Paper start - add parameters and int ret type
++      spawnCategoryForChunk(p_47046_, p_47047_, p_47048_, p_47049_, p_47050_, Integer.MAX_VALUE, null);
++   }
++   public static void spawnCategoryForChunk(MobCategory p_47046_, ServerLevel p_47047_, LevelChunk p_47048_, NaturalSpawner.SpawnPredicate p_47049_, NaturalSpawner.AfterSpawnCallback p_47050_, int maxSpawns, Consumer<Entity> trackEntity) {
++      // Paper end - add parameters and int ret type
+       BlockPos blockpos = m_47062_(p_47047_, p_47048_);
+       if (blockpos.m_123342_() >= p_47047_.m_141937_() + 1) {
+-         m_47038_(p_47046_, p_47047_, p_47048_, blockpos, p_47049_, p_47050_);
++         m_47038_(p_47046_, p_47047_, p_47048_, blockpos, p_47049_, p_47050_); // Paper
+       }
+    }
+ 
+@@ -140,9 +_,9 @@
+       ChunkGenerator chunkgenerator = p_47040_.m_7726_().m_8481_();
+       int i = p_47042_.m_123342_();
+       BlockState blockstate = p_47041_.m_8055_(p_47042_);
++      int j = 0;
+       if (!blockstate.m_60796_(p_47041_, p_47042_)) {
+          BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
+-         int j = 0;
+ 
+          for(int k = 0; k < 3; ++k) {
+             int l = p_47042_.m_123341_();
 @@ -159,7 +_,7 @@
                 blockpos$mutableblockpos.m_122178_(l, i, i1);
                 double d0 = (double)l + 0.5D;
@@ -26,7 +144,22 @@
                 if (player != null) {
                    double d2 = player.m_20275_(d0, (double)i, d1);
                    if (m_47024_(p_47040_, p_47041_, blockpos$mutableblockpos, d2)) {
-@@ -180,13 +_,15 @@
+@@ -173,21 +_,32 @@
+                         k1 = mobspawnsettings$spawnerdata.f_48405_ + p_47040_.f_46441_.m_188503_(1 + mobspawnsettings$spawnerdata.f_48406_ - mobspawnsettings$spawnerdata.f_48405_);
+                      }
+ 
+-                     if (m_220421_(p_47040_, p_47039_, structuremanager, chunkgenerator, mobspawnsettings$spawnerdata, blockpos$mutableblockpos, d2) && p_47043_.m_47106_(mobspawnsettings$spawnerdata.f_48404_, blockpos$mutableblockpos, p_47041_)) {
++                     // Paper start
++                     Boolean doSpawning = m_220421_(p_47040_, p_47039_, structuremanager, chunkgenerator, mobspawnsettings$spawnerdata, blockpos$mutableblockpos, d2);
++                     if (doSpawning == null) {
++                        return; // Paper
++                     }
++                     if (doSpawning && p_47043_.m_47106_(mobspawnsettings$spawnerdata.f_48404_, blockpos$mutableblockpos, p_47041_)) {
++                        // Paper end
+                         Mob mob = m_46988_(p_47040_, mobspawnsettings$spawnerdata.f_48404_);
+                         if (mob == null) {
+-                           return;
++                           return; // Paper
                          }
  
                          mob.m_7678_(d0, (double)i, d1, p_47040_.f_46441_.m_188501_() * 360.0F, 0.0F);
@@ -40,10 +173,15 @@
                             p_47040_.m_47205_(mob);
                             p_47044_.m_47100_(mob, p_47041_);
 -                           if (j >= mob.m_5792_()) {
-+                           if (j >= net.minecraftforge.event.ForgeEventFactory.getMaxSpawnPackSize(mob)) {
-                               return;
+-                              return;
++                           if (GoldenConfig.perPlayerMobSpawns) {
++                              p_47040_.m_7726_().f_8325_.updatePlayerMobTypeMap(mob);
++                           }
++                           if (j >= net.minecraftforge.event.ForgeEventFactory.getMaxSpawnPackSize(mob)) { // Paper
++                              return; // Paper
                             }
  
+                            if (mob.m_7296_(l1)) {
 @@ -266,7 +_,8 @@
     }
  
@@ -92,3 +230,12 @@
                             if (mob.m_5545_(p_220451_, MobSpawnType.CHUNK_GENERATION) && mob.m_6914_(p_220451_)) {
                                spawngroupdata = mob.m_6518_(p_220451_, p_220451_.m_6436_(mob.m_20183_()), MobSpawnType.CHUNK_GENERATION, spawngroupdata, (CompoundTag)null);
                                p_220451_.m_47205_(mob);
+@@ -482,7 +_,7 @@
+          this.f_47112_.m_47192_(blockpos, d0);
+          MobCategory mobcategory = entitytype.m_20674_();
+          this.f_47111_.addTo(mobcategory, 1);
+-         this.f_186542_.m_186512_(new ChunkPos(blockpos), mobcategory);
++         if (this.f_186542_ != null) this.f_186542_.m_186512_(new ChunkPos(blockpos), mobcategory);
+       }
+ 
+       public int m_47126_() {

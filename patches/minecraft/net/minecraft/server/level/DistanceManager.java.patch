@@ -37,15 +37,13 @@
     static final Logger f_140758_ = LogUtils.getLogger();
     private static final int f_143205_ = 2;
     static final int f_140759_ = 33 + ChunkStatus.m_62370_(ChunkStatus.f_62326_) - 2;
-@@ -44,56 +_,71 @@
+@@ -44,56 +_,72 @@
     private static final int f_183899_ = 32;
     private static final int f_183900_ = 33;
     final Long2ObjectMap<ObjectSet<ServerPlayer>> f_140760_ = new Long2ObjectOpenHashMap<>();
 -   final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> f_140761_ = new Long2ObjectOpenHashMap<>();
 -   private final DistanceManager.ChunkTicketTracker f_140762_ = new DistanceManager.ChunkTicketTracker();
-+   //final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>();
-+   //private final DistanceManager.ChunkTicketTracker ticketTracker = new DistanceManager.ChunkTicketTracker();
-    private final DistanceManager.FixedPlayerDistanceChunkTracker f_140763_ = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
+-   private final DistanceManager.FixedPlayerDistanceChunkTracker f_140763_ = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
 -   private final TickingTracker f_183901_ = new TickingTracker();
 -   private final DistanceManager.PlayerTicketTracker f_140764_ = new DistanceManager.PlayerTicketTracker(33);
 -   final Set<ChunkHolder> f_140765_ = Sets.newHashSet();
@@ -58,6 +56,10 @@
 -   private int f_183902_ = 10;
 -
 -   protected DistanceManager(Executor p_140774_, Executor p_140775_) {
++   //final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>();
++   //private final DistanceManager.ChunkTicketTracker ticketTracker = new DistanceManager.ChunkTicketTracker();
++   public static final int MOB_SPAWN_RANGE = 8;
++   //private final DistanceManager.FixedPlayerDistanceChunkTracker naturalSpawnChunkCounter = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
 +   //private final TickingTracker tickingTicketsTracker = new TickingTracker();
 +   //private final DistanceManager.PlayerTicketTracker playerTicketManager = new DistanceManager.PlayerTicketTracker(33);
 +   //final Set<ChunkHolder> chunksToUpdateFutures = Sets.newHashSet();
@@ -303,12 +305,14 @@
        }
  
     }
-@@ -226,52 +_,62 @@
+@@ -225,176 +_,145 @@
+       this.f_140760_.computeIfAbsent(i, (p_183921_) -> {
           return new ObjectOpenHashSet();
        }).add(p_140804_);
-       this.f_140763_.m_140715_(i, 0, true);
+-      this.f_140763_.m_140715_(i, 0, true);
 -      this.f_140764_.m_140715_(i, 0, true);
 -      this.f_183901_.m_184154_(TicketType.f_9444_, chunkpos, this.m_183918_(), chunkpos);
++      //this.naturalSpawnChunkCounter.update(i, 0, true);
 +      //this.playerTicketManager.update(i, 0, true);
 +      //this.tickingTicketsTracker.addTicket(TicketType.PLAYER, chunkpos, this.getPlayerTicketLevel(), chunkpos);
     }
@@ -325,9 +329,10 @@
 +      if (objectset != null) objectset.remove(p_140830_); // Paper - some state corruption happens here, don't crash, clean up gracefully.
 +      if (objectset == null || objectset.isEmpty()) { // Paper
           this.f_140760_.remove(i);
-          this.f_140763_.m_140715_(i, Integer.MAX_VALUE, false);
+-         this.f_140763_.m_140715_(i, Integer.MAX_VALUE, false);
 -         this.f_140764_.m_140715_(i, Integer.MAX_VALUE, false);
 -         this.f_183901_.m_184168_(TicketType.f_9444_, chunkpos, this.m_183918_(), chunkpos);
++         //this.naturalSpawnChunkCounter.update(i, Integer.MAX_VALUE, false);
 +         //this.playerTicketManager.update(i, Integer.MAX_VALUE, false);
 +         //this.tickingTicketsTracker.removeTicket(TicketType.PLAYER, chunkpos, this.getPlayerTicketLevel(), chunkpos);
        }
@@ -386,8 +391,21 @@
 +   // Paper end
  
     public int m_140816_() {
-       this.f_140763_.m_6410_();
-@@ -284,117 +_,72 @@
+-      this.f_140763_.m_6410_();
+-      return this.f_140763_.f_140886_.size();
++      // Paper start - use distance map to implement
++      // note: this is the spawn chunk count
++      return this.chunkMap.playerChunkTickRangeMap.size();
++      // Paper end - use distance map to implement
+    }
+ 
+    public boolean m_140847_(long p_140848_) {
+-      this.f_140763_.m_6410_();
+-      return this.f_140763_.f_140886_.containsKey(p_140848_);
++      // Paper start - use distance map to implement
++      // note: this is the is spawn chunk method
++      return this.chunkMap.playerChunkTickRangeMap.getObjectsInRange(p_140848_) != null;
++      // Paper end - use distance map to implement
     }
  
     public String m_140837_() {

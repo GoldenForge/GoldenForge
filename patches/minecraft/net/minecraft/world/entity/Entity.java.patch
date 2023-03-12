@@ -1,11 +1,26 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -116,9 +_,11 @@
+@@ -5,6 +_,7 @@
+ import com.google.common.collect.Lists;
+ import com.google.common.collect.Sets;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.util.MCUtil;
+ import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
+ import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
+ import java.util.Arrays;
+@@ -85,7 +_,6 @@
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.Blocks;
+-import net.minecraft.world.level.block.FenceGateBlock;
+ import net.minecraft.world.level.block.HoneyBlock;
+ import net.minecraft.world.level.block.Mirror;
+ import net.minecraft.world.level.block.RenderShape;
+@@ -116,9 +_,10 @@
  import net.minecraft.world.phys.shapes.VoxelShape;
  import net.minecraft.world.scores.PlayerTeam;
  import net.minecraft.world.scores.Team;
 +import org.goldenforge.GoldenConfig;
-+import org.goldenforge.GoldenForge;
  import org.slf4j.Logger;
  
 -public abstract class Entity implements Nameable, EntityAccess, CommandSource {
@@ -138,7 +153,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,51 @@
+@@ -230,13 +_,75 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -168,7 +183,31 @@
 +   // Paper start
 +   public long activatedImmunityTick = Integer.MIN_VALUE; // Paper
 +   public boolean isTemporarilyActive = false; // Paper
++   // Paper start - optimise entity tracking
 +   final org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = org.spigotmc.TrackingRange.getTrackingRangeType(this);
++   public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> getPlayersInTrackRange() {
++      // determine highest range of passengers
++      if (this.f_19823_.isEmpty()) {
++         return ((ServerLevel)this.f_19853_).m_7726_().f_8325_.playerEntityTrackerTrackMaps[this.trackingRangeType.ordinal()]
++                 .getObjectsInRange(MCUtil.getCoordinateKey(this));
++      }
++      Iterable<Entity> passengers = this.m_146897_();
++      net.minecraft.server.level.ChunkMap chunkMap = ((ServerLevel)this.f_19853_).m_7726_().f_8325_;
++      org.spigotmc.TrackingRange.TrackingRangeType type = this.trackingRangeType;
++      int range = chunkMap.getEntityTrackerRange(type.ordinal());
++
++      for (Entity passenger : passengers) {
++         org.spigotmc.TrackingRange.TrackingRangeType passengerType = passenger.trackingRangeType;
++         int passengerRange = chunkMap.getEntityTrackerRange(passengerType.ordinal());
++         if (passengerRange > range) {
++            type = passengerType;
++            range = passengerRange;
++         }
++      }
++
++      return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
++   }
++   // Paper end - optimise entity tracking
 +   public boolean collidingWithWorldBorder; // Paper
 +   public boolean collisionLoadChunks = false; // Paper
 +

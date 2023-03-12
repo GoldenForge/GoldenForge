@@ -5,7 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 /**
  * @author Spottedleaf
  */
-public final class PlayerAreaMap extends AreaMap<ServerPlayer> {
+public class PlayerAreaMap extends AreaMap<ServerPlayer> {
 
     public PlayerAreaMap() {
         super();

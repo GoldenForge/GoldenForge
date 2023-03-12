@@ -1,6 +1,12 @@
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -183,6 +_,12 @@
+@@ -178,11 +_,18 @@
+ import net.minecraft.world.phys.shapes.Shapes;
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ import org.apache.commons.lang3.StringUtils;
++import org.goldenforge.GoldenConfig;
+ import org.slf4j.Logger;
+ 
  public class ServerGamePacketListenerImpl implements ServerPlayerConnection, TickablePacketListener, ServerGamePacketListener {
     static final Logger f_9744_ = LogUtils.getLogger();
     private static final int f_143608_ = 15000;
@@ -13,11 +19,13 @@
     public static final double f_215198_ = Mth.m_144952_(6.0D);
     private static final int f_215199_ = -1;
     private static final int f_241635_ = 4096;
-@@ -226,6 +_,7 @@
+@@ -226,6 +_,9 @@
     private final SignedMessageChain.Decoder f_240889_;
     private final LastSeenMessagesValidator f_241654_ = new LastSeenMessagesValidator();
     private final FutureChain f_241681_;
 +   public Runnable playerJoinReady; // Paper
++   private int allowedPlayerTicks = 1;
++   private int lastTick = MinecraftServer.currentTick;
  
     public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_) {
        this.f_9745_ = p_9770_;
@@ -55,6 +63,42 @@
     }
  
     public void m_7376_(ServerboundAcceptTeleportationPacket p_9835_) {
+@@ -876,14 +_,32 @@
+                   } else {
+                      ++this.f_9740_;
+                      int i = this.f_9740_ - this.f_9741_;
+-                     if (i > 5) {
+-                        f_9744_.debug("{} is sending move packets too frequently ({} packets since last tick)", this.f_9743_.m_7755_().getString(), i);
++                     // CraftBukkit start - handle custom speeds and skipped ticks
++                     this.allowedPlayerTicks += (System.currentTimeMillis() / 50) - this.lastTick;
++                     this.allowedPlayerTicks = Math.max(this.allowedPlayerTicks, 1);
++                     this.lastTick = (int) (System.currentTimeMillis() / 50);
++
++                     if (i > Math.max(this.allowedPlayerTicks, 5)) {
++                        ServerGamePacketListenerImpl.f_9744_.debug("{} is sending move packets too frequently ({} packets since last tick)", this.f_9743_.m_7755_().getString(), i);
+                         i = 1;
+                      }
+ 
++                     if (p_9874_.f_134125_ || d11 > 0) {
++                        this.allowedPlayerTicks -= 1;
++                     } else {
++                        this.allowedPlayerTicks = 20;
++                     }
++                     double speed;
++                     if (this.f_9743_.m_150110_().f_35935_) {
++                        speed = this.f_9743_.m_150110_().f_35939_ * 20f;
++                     } else {
++                        speed = this.f_9743_.m_150110_().f_35940_ * 10f;
++                     }
++
+                      if (!this.f_9743_.m_8958_() && (!this.f_9743_.m_9236_().m_46469_().m_46207_(GameRules.f_46148_) || !this.f_9743_.m_21255_())) {
+                         float f2 = this.f_9743_.m_21255_() ? 300.0F : 100.0F;
+-                        if (d11 - d10 > (double)(f2 * (float)i) && !this.m_9956_()) {
++                        if (d11 - d10 > Math.max(f2, Math.pow((double) (GoldenConfig.movedTooQuicklyMultiplier * (float) i * speed), 2)) && !this.m_9956_()) {
++                           // CraftBukkit end
+                            f_9744_.warn("{} moved too quickly! {},{},{}", this.f_9743_.m_7755_().getString(), d7, d8, d9);
+                            this.m_9774_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), this.f_9743_.m_146908_(), this.f_9743_.m_146909_());
+                            return;
 @@ -1040,7 +_,7 @@
        Vec3 vec3 = blockhitresult.m_82450_();
        BlockPos blockpos = blockhitresult.m_82425_();
@@ -109,7 +153,7 @@
                    ItemStack itemstack = ServerGamePacketListenerImpl.this.f_9743_.m_21120_(p_143679_).m_41777_();
                    InteractionResult interactionresult = p_143680_.m_143694_(ServerGamePacketListenerImpl.this.f_9743_, entity, p_143679_);
                    if (interactionresult.m_19077_()) {
-@@ -1552,12 +_,16 @@
+@@ -1552,15 +_,19 @@
  
                 public void m_142143_(InteractionHand p_143682_, Vec3 p_143683_) {
                    this.m_143678_(p_143682_, (p_143686_, p_143687_, p_143688_) -> {
@@ -125,7 +169,11 @@
 +                     if(ServerGamePacketListenerImpl.this.f_9743_.canHit(entity, 3))
                       ServerGamePacketListenerImpl.this.f_9743_.m_5706_(entity);
                    } else {
-                      ServerGamePacketListenerImpl.this.m_9942_(Component.m_237115_("multiplayer.disconnect.invalid_entity_attacked"));
+-                     ServerGamePacketListenerImpl.this.m_9942_(Component.m_237115_("multiplayer.disconnect.invalid_entity_attacked"));
++                     //ServerGamePacketListenerImpl.this.disconnect(Component.translatable("multiplayer.disconnect.invalid_entity_attacked"));
+                      ServerGamePacketListenerImpl.f_9744_.warn("Player {} tried to attack an invalid entity", (Object)ServerGamePacketListenerImpl.this.f_9743_.m_7755_().getString());
+                   }
+                }
 @@ -1757,6 +_,7 @@
     }
  

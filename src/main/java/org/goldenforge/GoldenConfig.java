@@ -16,7 +16,9 @@ public class GoldenConfig {
 
     // Misc
     public static boolean preventMovingIntoUnloadedChunks = false;
-
+    public static double movedTooQuicklyMultiplier = 10.0D;
+    public static byte mobSpawnRange = 8;
+    public static boolean perPlayerMobSpawns = true;
     // Activation Range
 
     public static int animalActivationRange = 32;
@@ -45,5 +47,12 @@ public class GoldenConfig {
     // Paper end
     public static boolean tickInactiveVillagers = true;
     public static boolean ignoreSpectatorActivation = false;
+
+    // Tracking range
+    public static int playerTrackingRange = 48;
+    public static int animalTrackingRange = 48;
+    public static int monsterTrackingRange = 48;
+    public static int miscTrackingRange = 32;
+    public static int otherTrackingRange = 64;
 
 }

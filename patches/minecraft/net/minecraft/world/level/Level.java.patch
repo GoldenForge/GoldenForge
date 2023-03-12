@@ -31,7 +31,7 @@
     private final List<TickingBlockEntity> f_151503_ = Lists.newArrayList();
     private boolean f_151504_;
 -   private final Thread f_46423_;
-+   public final Thread f_46423_;
++   public Thread f_46423_;
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
