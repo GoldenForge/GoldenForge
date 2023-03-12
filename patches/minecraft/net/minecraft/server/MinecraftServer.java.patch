@@ -8,7 +8,11 @@
  import it.unimi.dsi.fastutil.longs.LongIterator;
  import java.awt.image.BufferedImage;
  import java.io.ByteArrayOutputStream;
-@@ -155,7 +_,8 @@
+@@ -152,10 +_,12 @@
+ import net.minecraft.world.phys.Vec2;
+ import net.minecraft.world.phys.Vec3;
+ import org.apache.commons.lang3.Validate;
++import org.goldenforge.tpsmonitor.TpsMonitorManager;
  import org.slf4j.Logger;
  
  public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements CommandSource, AutoCloseable {
@@ -321,7 +325,7 @@
     }
  
     public String m_130009_() {
-@@ -613,12 +_,22 @@
+@@ -613,12 +_,76 @@
  
     }
  
@@ -334,6 +338,59 @@
 +   private long catchupTime = 0;
 +
 +   public static volatile RuntimeException chunkSystemCrash; // Paper - rewrite chunk system
++
++   public final RollingAverage tps1 = new RollingAverage(60);
++   public final RollingAverage tps5 = new RollingAverage(60 * 5);
++   public final RollingAverage tps15 = new RollingAverage(60 * 15);
++
++   public static class RollingAverage {
++      private final int size;
++      private long time;
++      private java.math.BigDecimal total;
++      private int index = 0;
++      private final java.math.BigDecimal[] samples;
++      private final long[] times;
++
++      RollingAverage(int size) {
++         this.size = size;
++         this.time = size * SEC_IN_NANO;
++         this.total = dec(TPS).multiply(dec(SEC_IN_NANO)).multiply(dec(size));
++         this.samples = new java.math.BigDecimal[size];
++         this.times = new long[size];
++         for (int i = 0; i < size; i++) {
++            this.samples[i] = dec(TPS);
++            this.times[i] = SEC_IN_NANO;
++         }
++      }
++
++      private static java.math.BigDecimal dec(long t) {
++         return new java.math.BigDecimal(t);
++      }
++      public void add(java.math.BigDecimal x, long t) {
++         time -= times[index];
++         total = total.subtract(samples[index].multiply(dec(times[index])));
++         samples[index] = x;
++         times[index] = t;
++         time += t;
++         total = total.add(x.multiply(dec(t)));
++         if (++index == size) {
++            index = 0;
++         }
++      }
++
++      public double getAverage() {
++         return total.divide(dec(time), 30, java.math.RoundingMode.HALF_UP).doubleValue();
++      }
++   }
++   private static final java.math.BigDecimal TPS_BASE = new java.math.BigDecimal(1E9).multiply(new java.math.BigDecimal(20));
++
++   public double[] getTPS() {
++      return new double[] {
++              net.minecraft.server.MinecraftServer.getServer().tps1.getAverage(),
++              net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
++              net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
++      };
++   }
     protected void m_130011_() {
        try {
           if (!this.m_7038_()) {
@@ -341,10 +398,11 @@
           }
  
 +         net.minecraftforge.server.ServerLifecycleHooks.handleServerStarted(this);
++         new TpsMonitorManager();
           this.f_129726_ = Util.m_137550_();
           this.f_129757_.m_134908_(Component.m_237113_(this.f_129709_));
           this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
-@@ -626,20 +_,33 @@
+@@ -626,20 +_,41 @@
           this.f_129757_.m_242958_(this.m_214005_());
           this.m_129878_(this.f_129757_);
  
@@ -369,7 +427,15 @@
              }
  
 +            ++MinecraftServer.currentTickLong; // Paper
-+            ++MinecraftServer.currentTick;
++            if ( ++MinecraftServer.currentTick % 20 == 0 )
++            {
++               final long diff = curTime - tickSection;
++               java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
++               tps1.add(currentTps, diff);
++               tps5.add(currentTps, diff);
++               tps15.add(currentTps, diff);
++               tickSection = curTime;
++            }
 +
              if (this.f_177877_) {
                 this.f_177877_ = false;
@@ -529,7 +595,7 @@
  
     public void m_6367_(TickTask p_129957_) {
        this.m_129905_().m_6174_("runTask");
-@@ -789,6 +_,14 @@
+@@ -789,7 +_,16 @@
  
     public void m_5705_(BooleanSupplier p_129871_) {
        long i = Util.m_137569_();
@@ -542,8 +608,10 @@
 +      // Paper end
 +      net.minecraftforge.event.ForgeEventFactory.onPreServerTick(p_129871_, this);
        ++this.f_129766_;
++      TpsMonitorManager.get().tick();
        this.m_5703_(p_129871_);
        if (i - this.f_129724_ >= 5000000000L) {
+          this.f_129724_ = i;
 @@ -810,15 +_,33 @@
              Collections.shuffle(Arrays.asList(agameprofile));
              this.f_129757_.m_134914_().m_134924_(agameprofile);
