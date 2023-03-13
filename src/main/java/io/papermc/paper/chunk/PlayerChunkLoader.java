@@ -1,10 +1,10 @@
 package io.papermc.paper.chunk;
 
-import com.destroystokyo.paper.PaperConfig;
 import com.destroystokyo.paper.util.misc.PlayerAreaMap;
 import com.destroystokyo.paper.util.misc.PooledLinkedHashSets;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.IntervalledCounter;
+import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.TickThread;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
@@ -13,13 +13,14 @@ import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
 import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
-import io.papermc.paper.util.MCUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.apache.commons.lang3.mutable.MutableObject;
+import org.goldenforge.config.GoldenForgeConfig;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -366,21 +367,21 @@ public final class PlayerChunkLoader {
     }
 
     protected int getMaxConcurrentChunkSends() {
-        return PaperConfig.maxConcurrentSends;
+        return GoldenForgeConfig.SERVER.maxConcurrentSends.get();
     }
 
     protected int getMaxChunkLoads() {
-        double config = PaperConfig.playerMaxConcurrentLoads;
-        double max = PaperConfig.globalMaxConcurrentLoads;
+        double config = GoldenForgeConfig.SERVER.playerMaxConcurrentLoads.get();
+        double max = GoldenForgeConfig.SERVER.globalMaxConcurrentLoads.get();
         return (int)Math.ceil(Math.min(config * MinecraftServer.getServer().getPlayerCount(), max <= 1.0 ? Double.MAX_VALUE : max));
     }
 
     protected long getTargetSendPerPlayerAddend() {
-        return PaperConfig.targetPlayerChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / PaperConfig.targetPlayerChunkSendRate);
+        return GoldenForgeConfig.SERVER.targetPlayerChunkSendRate.get() <= 1.0 ? 0L : (long)Math.round(1.0e9 / GoldenForgeConfig.SERVER.targetPlayerChunkSendRate.get());
     }
 
     protected long getMaxSendAddend() {
-        return PaperConfig.globalMaxChunkSendRate <= 1.0 ? 0L : (long)Math.round(1.0e9 / PaperConfig.globalMaxChunkSendRate);
+        return GoldenForgeConfig.SERVER.globalMaxChunkSendRate.get() <= 1.0 ? 0L : (long)Math.round(1.0e9 / GoldenForgeConfig.SERVER.globalMaxChunkSendRate.get());
     }
 
     public void onChunkPlayerTickReady(final int chunkX, final int chunkZ) {
@@ -652,8 +653,8 @@ public final class PlayerChunkLoader {
                 // priority >= 0.0 implies rate limited chunks
 
                 final int currentChunkLoads = this.concurrentChunkLoads;
-                if (currentChunkLoads >= maxLoads || (PaperConfig.globalMaxChunkLoadRate > 0 && (TICKET_ADDITION_COUNTER_SHORT.getRate() >= PaperConfig.globalMaxChunkLoadRate || TICKET_ADDITION_COUNTER_LONG.getRate() >= PaperConfig.globalMaxChunkLoadRate))
-                        || (PaperConfig.playerMaxChunkLoadRate > 0.0 && (data.ticketAdditionCounterShort.getRate() >= PaperConfig.playerMaxChunkLoadRate || data.ticketAdditionCounterLong.getRate() >= PaperConfig.playerMaxChunkLoadRate))) {
+                if (currentChunkLoads >= maxLoads || (GoldenForgeConfig.SERVER.globalMaxChunkLoadRate.get() > 0 && (TICKET_ADDITION_COUNTER_SHORT.getRate() >= GoldenForgeConfig.SERVER.globalMaxChunkLoadRate.get() || TICKET_ADDITION_COUNTER_LONG.getRate() >= GoldenForgeConfig.SERVER.globalMaxChunkLoadRate.get()))
+                        || (GoldenForgeConfig.SERVER.playerMaxChunkLoadRate.get() > 0.0 && (data.ticketAdditionCounterShort.getRate() >= GoldenForgeConfig.SERVER.playerMaxChunkLoadRate.get() || data.ticketAdditionCounterLong.getRate() >= GoldenForgeConfig.SERVER.playerMaxChunkLoadRate.get()))) {
                     // don't poll, we didn't load it
                     this.chunkLoadQueue.add(data);
                     break;
@@ -807,7 +808,7 @@ public final class PlayerChunkLoader {
             final int tickViewDistance = this.tickViewDistance == -1 ? this.loader.getTickDistance() : this.tickViewDistance;
             final int loadViewDistance = Math.max(tickViewDistance + 1, this.loadViewDistance == -1 ? this.loader.getLoadDistance() : this.loadViewDistance);
             final int clientViewDistance = this.getClientViewDistance();
-            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!PaperConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
+            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!GoldenForgeConfig.SERVER.autoconfigSendDistance.get() || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
             return sendViewDistance;
         }
 
@@ -924,14 +925,14 @@ public final class PlayerChunkLoader {
             final int loadViewDistance = Math.max(tickViewDistance + 1, this.loadViewDistance == -1 ? this.loader.getLoadDistance() : this.loadViewDistance);
             // send view cannot be greater-than load view
             final int clientViewDistance = this.getClientViewDistance();
-            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!PaperConfig.autoconfigSendDistance || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
+            final int sendViewDistance = Math.min(loadViewDistance, this.sendViewDistance == -1 ? (!GoldenForgeConfig.SERVER.autoconfigSendDistance.get() || clientViewDistance == -1 ? this.loader.getSendDistance() : clientViewDistance + 1) : this.sendViewDistance);
 
             final double posX = this.player.getX();
             final double posZ = this.player.getZ();
             final float yaw = MCUtil.normalizeYaw(this.player.getYRot() + 90.0f); // mc yaw 0 is along the positive z axis, but obviously this is really dumb - offset so we are at positive x-axis
 
             // in general, we really only want to prioritise chunks in front if we know we're moving pretty fast into them.
-            final boolean useLookPriority = PaperConfig.enableFrustumPriority && (this.player.getDeltaMovement().horizontalDistanceSqr() > LOOK_PRIORITY_SPEED_THRESHOLD ||
+            final boolean useLookPriority = GoldenForgeConfig.SERVER.enableFrustumPriority.get() && (this.player.getDeltaMovement().horizontalDistanceSqr() > LOOK_PRIORITY_SPEED_THRESHOLD ||
                     this.player.getAbilities().flying);
 
             // make sure we're in the send queue
@@ -1053,10 +1054,10 @@ public final class PlayerChunkLoader {
 
                     final double priority;
 
-                    if (squareDistance <= PaperConfig.minLoadRadius) {
+                    if (squareDistance <= GoldenForgeConfig.SERVER.minLoadRadius.get()) {
                         // priority should be negative, and we also want to order it from center outwards
                         // so we want (0,0) to be the smallest, and (minLoadedRadius,minLoadedRadius) to be the greatest
-                        priority = -((2 * PaperConfig.minLoadRadius + 1) - manhattanDistance);
+                        priority = -((2 * GoldenForgeConfig.SERVER.minLoadRadius.get() + 1) - manhattanDistance);
                     } else {
                         if (prioritised) {
                             // we don't prioritise these chunks above others because we also want to make sure some chunks

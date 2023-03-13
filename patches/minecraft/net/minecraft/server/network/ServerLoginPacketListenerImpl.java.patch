@@ -1,10 +1,11 @@
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-@@ -38,6 +_,7 @@
+@@ -38,6 +_,8 @@
  import net.minecraft.util.SignatureValidator;
  import net.minecraft.world.entity.player.ProfilePublicKey;
  import org.apache.commons.lang3.Validate;
 +import org.goldenforge.VelocityProxy;
++import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
  public class ServerLoginPacketListenerImpl implements TickablePacketListener, ServerLoginPacketListener {
@@ -82,7 +83,7 @@
           } else {
 -            this.f_10019_ = ServerLoginPacketListenerImpl.State.READY_TO_ACCEPT;
 +            // Paper start - Velocity support
-+            if (true) {
++            if (GoldenForgeConfig.SERVER.isVelocityEnabled.get()) {
 +               this.velocityLoginMessageId = java.util.concurrent.ThreadLocalRandom.current().nextInt();
 +               net.minecraft.network.FriendlyByteBuf buf = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
 +               buf.writeByte(VelocityProxy.MAX_SUPPORTED_FORWARDING_VERSION);
@@ -141,7 +142,7 @@
  
     public void m_7223_(ServerboundCustomQueryPacket p_10045_) {
 -      this.m_10053_(Component.m_237115_("multiplayer.disconnect.unexpected_query_response"));
-+      if (p_10045_.m_179824_() == this.velocityLoginMessageId) {
++      if (GoldenForgeConfig.SERVER.isVelocityEnabled.get() && p_10045_.m_179824_() == this.velocityLoginMessageId) {
 +         net.minecraft.network.FriendlyByteBuf buf = p_10045_.m_179825_();
 +         if (buf == null) {
 +            this.m_10053_(Component.m_237113_("This server requires you to connect with Velocity."));

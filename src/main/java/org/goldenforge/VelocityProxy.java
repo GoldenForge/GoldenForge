@@ -14,6 +14,7 @@ import javax.crypto.spec.SecretKeySpec;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.ProfilePublicKey;
+import org.goldenforge.config.GoldenForgeConfig;
 
 public class VelocityProxy {
     private static final int SUPPORTED_FORWARDING_VERSION = 1;
@@ -32,7 +33,7 @@ public class VelocityProxy {
 
         try {
             final Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec("hKLVmqnTDpyJ".getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            mac.init(new SecretKeySpec(GoldenForgeConfig.SERVER.velocityForwardingToken.get().getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
             final byte[] mySignature = mac.doFinal(data);
             if (!MessageDigest.isEqual(signature, mySignature)) {
                 return false;

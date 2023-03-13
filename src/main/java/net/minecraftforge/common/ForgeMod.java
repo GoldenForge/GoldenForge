@@ -113,6 +113,7 @@ import org.apache.logging.log4j.MarkerManager;
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import org.goldenforge.GoldenForge;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -424,6 +425,7 @@ public class ForgeMod
 
     public ForgeMod()
     {
+        GoldenForge.init();
         LOGGER.info(FORGEMOD,"Forge mod loading, version {}, for MC {} with MCP {}", ForgeVersion.getVersion(), MCPVersion.getMCVersion(), MCPVersion.getMCPVersion());
         INSTANCE = this;
         MinecraftForge.initialize();

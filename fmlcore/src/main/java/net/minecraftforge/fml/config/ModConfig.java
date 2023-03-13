@@ -68,12 +68,12 @@ public class ModConfig
         return this.configData;
     }
 
-    void setConfigData(final CommentedConfig configData) {
+    public void setConfigData(final CommentedConfig configData) {
         this.configData = configData;
         this.spec.acceptConfig(this.configData);
     }
 
-    void fireEvent(final IConfigEvent configEvent) {
+    public void fireEvent(final IConfigEvent configEvent) {
         this.container.dispatchConfigEvent(configEvent);
     }
 

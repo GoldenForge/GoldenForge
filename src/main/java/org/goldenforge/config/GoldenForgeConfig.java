@@ -1,0 +1,147 @@
+/*
+ * Copyright (c) Forge Development LLC and contributors
+ * SPDX-License-Identifier: LGPL-2.1-only
+ */
+
+package org.goldenforge.config;
+
+import static net.minecraftforge.fml.Logging.FORGEMOD;
+
+import net.minecraftforge.common.ForgeConfigSpec;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
+import org.apache.commons.lang3.tuple.Pair;
+import org.apache.logging.log4j.LogManager;
+
+import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
+import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
+import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
+
+
+public class GoldenForgeConfig {
+    public static class Server {
+
+        public static ConfigValue<Integer> ioThreads;
+        public static ConfigValue<Integer> workerThreads;
+
+        public static ConfigValue<Integer> minLoadRadius;
+        public static ConfigValue<Integer> maxConcurrentSends;
+        public static ConfigValue<Boolean> autoconfigSendDistance;
+        public static ConfigValue<Double> targetPlayerChunkSendRate;
+        public static ConfigValue<Double> globalMaxChunkSendRate;
+        public static ConfigValue<Boolean> enableFrustumPriority;
+        public static ConfigValue<Double> globalMaxChunkLoadRate;
+        public static ConfigValue<Double> playerMaxConcurrentLoads;
+        public static ConfigValue<Double> globalMaxConcurrentLoads;
+        public static ConfigValue<Double> playerMaxChunkLoadRate;
+
+
+        public static ConfigValue<Boolean> isVelocityEnabled;
+        public static ConfigValue<String> velocityForwardingToken;
+
+        Server(ForgeConfigSpec.Builder builder) {
+            builder.comment("GoldenForge Configuration")
+                    .push("ChunkSystem");
+
+            ioThreads = builder
+                    .comment("he number of threads the server should use for world saving and chunk loading. The default (-1) indicates that Paper will utilize half of your system's threads for chunk loading unless otherwise specified. There is also a maximum default of 4 threads used for saving and loading chunks. This can be overridden by adding -Dpaper.maxChunkThreads=[number] to your startup arguments")
+                    .worldRestart()
+                    .define("ioThreads", -1);
+
+
+            workerThreads = builder
+                    .comment("he number of threads the server should use for world generation loading chunks.")
+                    .worldRestart()
+                    .define("workerThreads", -1);
+
+            maxConcurrentSends = builder
+                    .comment("The maximum number of chunks that will be queued to send at any one time. Lower values will help alleviate server-side networking bottlenecks such as anti-xray or compression; however, it is unlikely to help users with a poor internet connection.")
+                    .worldRestart()
+                    .define("maxConcurrentSends", 2);
+
+
+            minLoadRadius = builder
+                    .comment("The radius of chunks around a player that are not throttled for chunk loading. The number of chunks affected is actually the configured value plus one, as this config controls the number of chunks the client will actually be able to render.")
+                    .worldRestart()
+                    .define("minLoadRadius", 2);
+
+            maxConcurrentSends = builder
+                    .comment("The maximum number of chunks that will be queued to send at any one time. Lower values will help alleviate server-side networking bottlenecks such as anti-xray or compression; however, it is unlikely to help users with a poor internet connection.")
+                    .worldRestart()
+                    .define("maxConcurrentSends", 2);
+
+            autoconfigSendDistance = builder
+                    .comment("Whether to use the client's view distance for the chunk send distance of the server. This will exclusively change the radius of chunks sent to the client and will not affect server-side chunk loading or ticking.")
+                    .worldRestart()
+                    .define("autoconfigSendDistance", true);
+
+            targetPlayerChunkSendRate = builder
+                    .comment("The maximum number of chunks sent to an individual player within one second.")
+                    .worldRestart()
+                    .define("targetPlayerChunkSendRate", 100.0);
+
+            globalMaxChunkSendRate = builder
+                    .comment("The maximum number of chunks loaded per second for the whole server. Takes priority over player-max-chunk-load-rate.")
+                    .worldRestart()
+                    .define("globalMaxChunkSendRate", (double)-1);
+
+            enableFrustumPriority = builder
+                    .comment("Whether to attempt to load chunks in front of the player before loading chunks to their sides or behind. Due to the client reacting poorly to receiving chunks out of order, this is disabled by default and not generally recommended for use.")
+                    .worldRestart()
+                    .define("enableFrustumPriority", false);
+
+            globalMaxChunkLoadRate = builder
+                    .comment("The maximum number of chunks loaded per second for the whole server. Takes priority over player-max-chunk-load-rate.")
+                    .worldRestart()
+                    .define("globalMaxChunkLoadRate", (double)-1);
+
+            playerMaxConcurrentLoads = builder
+                    .comment("The maximum number of chunk loads processed per player at one time.")
+                    .worldRestart()
+                    .define("playerMaxConcurrentLoads",20.0);
+
+            globalMaxConcurrentLoads = builder
+                    .comment("The maximum number of chunk loads processed for the whole server one time. This will override player-max-concurrent-loads if exceeded.")
+                    .worldRestart()
+                    .define("globalMaxConcurrentLoads",500.0);
+
+            playerMaxChunkLoadRate = builder
+                    .comment(": The maximum number of chunks loaded per second per player.")
+                    .worldRestart()
+                    .define("playerMaxChunkLoadRate",(double)-1);
+
+            builder.pop();
+
+            builder.push("Velocity support");
+
+            isVelocityEnabled = builder
+                    .comment("Enable or disable velocity support")
+                    .worldRestart()
+                    .define("isVelocityEnabled", false);
+
+            velocityForwardingToken = builder
+                    .comment("The velocity modern forwarding token. Don't forget to disable online-mode in server.properties.")
+                    .worldRestart()
+                    .define("velocityForwardingToken", "");
+
+            builder.pop();
+        }
+    }
+    public static ForgeConfigSpec serverSpec;
+    public static Server SERVER;
+    public GoldenForgeConfig() {
+        final Pair<Server, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Server::new);
+        serverSpec = specPair.getRight();
+        System.out.println(SERVER.ioThreads.get());
+    }
+
+    @SubscribeEvent
+    public static void onLoad(final ModConfigEvent.Loading configEvent) {
+        LogManager.getLogger().debug(FORGEMOD, "Loaded forge config file {}", configEvent.getConfig().getFileName());
+    }
+
+    @SubscribeEvent
+    public static void onFileChange(final ModConfigEvent.Reloading configEvent) {
+        LogManager.getLogger().debug(FORGEMOD, "Forge config just got changed on the file system!");
+    }
+}

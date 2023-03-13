@@ -21,6 +21,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.bukkit.Bukkit;
+import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -49,8 +50,8 @@ public final class ChunkTaskScheduler {
             return;
         }
         initialised = true;
-        newChunkSystemIOThreads = -1;
-        newChunkSystemWorkerThreads = -1;
+        newChunkSystemIOThreads = GoldenForgeConfig.SERVER.ioThreads.get();
+        newChunkSystemWorkerThreads = GoldenForgeConfig.SERVER.workerThreads.get();
         if (newChunkSystemIOThreads < 0) {
             newChunkSystemIOThreads = 1;
         } else {
