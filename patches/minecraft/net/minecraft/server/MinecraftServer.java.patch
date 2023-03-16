@@ -40,7 +40,7 @@
     protected long f_129726_ = Util.m_137550_();
     private long f_129727_;
     private boolean f_129728_;
-@@ -235,12 +_,17 @@
+@@ -235,29 +_,36 @@
     private String f_129739_;
     private MinecraftServer.ReloadableResources f_129740_;
     private final StructureTemplateManager f_236720_;
@@ -60,7 +60,12 @@
           atomicreference.get().m_130011_();
        }, "Server thread");
        thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> {
-@@ -252,12 +_,14 @@
+          f_129750_.error("Uncaught exception in server thread", p_177910_);
+       });
+-      if (Runtime.getRuntime().availableProcessors() > 4) {
++      if (Util.VIRTUAL_PROCESSOR_AMOUNT > 4) {
+          thread.setPriority(8);
+       }
  
        S s = p_129873_.apply(thread);
        atomicreference.set(s);

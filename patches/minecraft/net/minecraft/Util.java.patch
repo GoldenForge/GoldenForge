@@ -1,9 +1,23 @@
 --- a/net/minecraft/Util.java
 +++ b/net/minecraft/Util.java
-@@ -81,6 +_,23 @@
+@@ -72,6 +_,7 @@
+ import net.minecraft.util.TimeSource;
+ import net.minecraft.util.datafix.DataFixers;
+ import net.minecraft.world.level.block.state.properties.Property;
++import org.goldenforge.util.ServerWorkerThread;
+ import org.slf4j.Logger;
+ 
+ public class Util {
+@@ -79,8 +_,27 @@
+    private static final int f_183935_ = 255;
+    private static final String f_183936_ = "max.bg.threads";
     private static final AtomicInteger f_137442_ = new AtomicInteger(1);
-    private static final ExecutorService f_137443_ = m_137477_("Bootstrap");
-    private static final ExecutorService f_137444_ = m_137477_("Main");
+-   private static final ExecutorService f_137443_ = m_137477_("Bootstrap");
+-   private static final ExecutorService f_137444_ = m_137477_("Main");
++   private static final ExecutorService f_137443_ = makeExecutor("Bootstrap", -2, 2); // Paper - add -2 priority
++   private static final ExecutorService f_137444_ = makeExecutor("Main", -1, 2); // Paper - add -1 priority
++
++   public static final int VIRTUAL_PROCESSOR_AMOUNT = 8;
 +
 +   // Paper start - don't submit BLOCKING PROFILE LOOKUPS to the world gen thread
 +   public static final ExecutorService PROFILE_EXECUTOR = Executors.newFixedThreadPool(2, new java.util.concurrent.ThreadFactory() {
@@ -24,6 +38,18 @@
     private static final ExecutorService f_137445_ = m_137586_();
     private static final DateTimeFormatter f_241646_ = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", Locale.ROOT);
     public static TimeSource.NanoTimeSource f_137440_ = System::nanoTime;
+@@ -152,6 +_,11 @@
+       return executorservice;
+    }
+ 
++    public static ExecutorService makeExecutor(String s, int priorityModifier, int threads) { // Paper - add priority
++        //Legend edit method to allocate a reasonable pool
++        return new java.util.concurrent.ThreadPoolExecutor(threads, threads,0L, TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<Runnable>(), target -> new ServerWorkerThread(target, s, priorityModifier));
++   }
++
+    private static int m_183993_() {
+       String s = System.getProperty("max.bg.threads");
+       if (s != null) {
 @@ -170,6 +_,11 @@
        return 255;
     }
@@ -36,6 +62,15 @@
     public static ExecutorService m_183988_() {
        return f_137443_;
     }
+@@ -222,7 +_,7 @@
+       throw p_137560_ instanceof RuntimeException ? (RuntimeException)p_137560_ : new RuntimeException(p_137560_);
+    }
+ 
+-   private static void m_137495_(Thread p_137496_, Throwable p_137497_) {
++   public static void m_137495_(Thread p_137496_, Throwable p_137497_) {
+       m_137570_(p_137497_);
+       if (p_137497_ instanceof CompletionException) {
+          p_137497_ = p_137497_.getCause();
 @@ -248,7 +_,7 @@
        try {
           type = DataFixers.m_14512_().getSchema(DataFixUtils.makeKey(SharedConstants.m_183709_().getWorldVersion())).getChoiceType(p_137552_, p_137553_);

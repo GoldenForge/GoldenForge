@@ -26,10 +26,13 @@ public class GoldenForge {
     public static void init() {
         File configDir = new File(".", "goldenforge"); configDir.mkdirs();
         new GoldenForgeConfig();
-        ModConfig config = new ModConfig(ModConfig.Type.SERVER, GoldenForgeConfig.serverSpec, ModLoadingContext.get().getActiveContainer(), "goldenforge.toml");
+        ModConfig config = new ModConfig(ModConfig.Type.SERVER, GoldenForgeConfig.serverSpec, ModLoadingContext.get().getActiveContainer(), "goldenforge.toml", true);
         openConfig(config, configDir.toPath());
         final IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.register(GoldenForgeConfig.class);
+
+        GoldenForge.LOGGER.info(GoldenForgeConfig.SERVER.isVelocityEnabled.get());
+        GoldenForge.LOGGER.info(GoldenForgeConfig.SERVER.velocityForwardingToken.get());
     }
 
     private static void openConfig(final ModConfig config, final Path configBasePath) {

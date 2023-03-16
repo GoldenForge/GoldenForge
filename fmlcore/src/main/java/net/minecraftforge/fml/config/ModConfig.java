@@ -35,6 +35,14 @@ public class ModConfig
         ConfigTracker.INSTANCE.trackConfig(this);
     }
 
+    public ModConfig(final Type type, final IConfigSpec<?> spec, final ModContainer container, final String fileName, boolean no) {
+        this.type = type;
+        this.spec = spec;
+        this.fileName = fileName;
+        this.container = container;
+        this.configHandler = ConfigFileTypeHandler.TOML;
+    }
+
     public ModConfig(final Type type, final IConfigSpec<?> spec, final ModContainer activeContainer) {
         this(type, spec, activeContainer, defaultConfigName(type, activeContainer.getModId()));
     }

@@ -16,6 +16,7 @@ import org.apache.logging.log4j.LogManager;
 import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
 import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
 import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
+import org.goldenforge.GoldenForge;
 
 
 public class GoldenForgeConfig {
@@ -132,7 +133,8 @@ public class GoldenForgeConfig {
     public GoldenForgeConfig() {
         final Pair<Server, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Server::new);
         serverSpec = specPair.getRight();
-        System.out.println(SERVER.ioThreads.get());
+        GoldenForge.LOGGER.info(SERVER.isVelocityEnabled.get());
+        GoldenForge.LOGGER.info(SERVER.velocityForwardingToken.get());
     }
 
     @SubscribeEvent
