@@ -38,6 +38,15 @@
     private static final ExecutorService f_137445_ = m_137586_();
     private static final DateTimeFormatter f_241646_ = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss", Locale.ROOT);
     public static TimeSource.NanoTimeSource f_137440_ = System::nanoTime;
+@@ -115,7 +_,7 @@
+    }
+ 
+    public static long m_137569_() {
+-      return f_137440_.getAsLong();
++      return System.nanoTime(); // Paper
+    }
+ 
+    public static long m_137574_() {
 @@ -152,6 +_,11 @@
        return executorservice;
     }
@@ -62,6 +71,14 @@
     public static ExecutorService m_183988_() {
        return f_137443_;
     }
+@@ -185,6 +_,7 @@
+    public static void m_137580_() {
+       m_137531_(f_137444_);
+       m_137531_(f_137445_);
++      m_137531_(PROFILE_EXECUTOR);
+    }
+ 
+    private static void m_137531_(ExecutorService p_137532_) {
 @@ -222,7 +_,7 @@
        throw p_137560_ instanceof RuntimeException ? (RuntimeException)p_137560_ : new RuntimeException(p_137560_);
     }
