@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/entity/ai/Brain.java
++++ b/net/minecraft/world/entity/ai/Brain.java
+@@ -23,6 +_,9 @@
+ import java.util.function.Supplier;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.Reference2ReferenceLinkedOpenHashMap;
++import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+ import net.minecraft.core.Registry;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.util.VisibleForDebug;
+@@ -42,8 +_,8 @@
+    static final Logger f_21841_ = LogUtils.getLogger();
+    private final Supplier<Codec<Brain<E>>> f_21842_;
+    private static final int f_147338_ = 20;
+-   private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> f_21843_ = Maps.newHashMap();
+-   private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> f_21844_ = Maps.newLinkedHashMap();
++   private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> f_21843_ = new Reference2ReferenceOpenHashMap<>(Maps.newHashMap());
++   private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> f_21844_ = new Reference2ReferenceLinkedOpenHashMap<>(Maps.newLinkedHashMap());
+    private final Map<Integer, Map<Activity, Set<Behavior<? super E>>>> f_21845_ = Maps.newTreeMap();
+    private Schedule f_21846_ = Schedule.f_38012_;
+    private final Map<Activity, Set<Pair<MemoryModuleType<?>, MemoryStatus>>> f_21847_ = Maps.newHashMap();

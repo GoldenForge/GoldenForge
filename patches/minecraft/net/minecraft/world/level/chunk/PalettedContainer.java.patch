@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/level/chunk/PalettedContainer.java
 +++ b/net/minecraft/world/level/chunk/PalettedContainer.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.level.chunk;
+ 
++import com.abdelaziz.canary.common.world.chunk.CanaryHashPalette;
+ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.DataResult;
+ import com.mojang.serialization.codecs.RecordCodecBuilder;
 @@ -24,6 +_,7 @@
  import net.minecraft.util.ZeroBitStorage;
  
@@ -8,9 +15,13 @@
     private static final int f_188031_ = 0;
     private final PaletteResize<T> f_63070_ = (p_238275_, p_238276_) -> {
        return 0;
-@@ -34,11 +_,11 @@
+@@ -33,12 +_,15 @@
+    private final PalettedContainer.Strategy f_188033_;
     private final ThreadingDetector f_199441_ = new ThreadingDetector("PalettedContainer");
  
++   private static final ThreadLocal<short[]> CACHED_ARRAY_4096 = ThreadLocal.withInitial(() -> new short[4096]);
++   private static final ThreadLocal<short[]> CACHED_ARRAY_64 = ThreadLocal.withInitial(() -> new short[64]);
++
     public void m_63084_() {
 -      this.f_199441_.m_199416_();
 +      //this.threadingDetector.checkAndLock();
@@ -76,15 +87,129 @@
        this.m_63084_();
  
        try {
-@@ -219,7 +_,7 @@
+@@ -219,33 +_,62 @@
        return DataResult.success(new PalettedContainer<>(p_188068_, p_188069_, configuration, bitstorage, list));
     }
  
 -   public PalettedContainerRO.PackedData<T> m_188064_(IdMap<T> p_188065_, PalettedContainer.Strategy p_188066_) {
+-      this.m_63084_();
+-
+-      PalettedContainerRO.PackedData palettedcontainerro$packeddata;
+-      try {
+-         HashMapPalette<T> hashmappalette = new HashMapPalette<>(p_188065_, this.f_188032_.f_188101_.m_144604_(), this.f_63070_);
+-         int i = p_188066_.m_188144_();
+-         int[] aint = new int[i];
+-         this.f_188032_.f_188101_.m_197970_(aint);
+-         m_198189_(aint, (p_198178_) -> {
+-            return hashmappalette.m_6796_(this.f_188032_.f_188102_.m_5795_(p_198178_));
+-         });
+-         int j = p_188066_.m_188151_(p_188065_, hashmappalette.m_62680_());
+-         Optional<LongStream> optional;
+-         if (j != 0) {
+-            SimpleBitStorage simplebitstorage = new SimpleBitStorage(j, i, aint);
+-            optional = Optional.of(Arrays.stream(simplebitstorage.m_13513_()));
 +   public synchronized PalettedContainerRO.PackedData<T> m_188064_(IdMap<T> p_188065_, PalettedContainer.Strategy p_188066_) {
-       this.m_63084_();
++      // The palette that will be serialized
++      CanaryHashPalette<T> hashPalette = null;
++      Optional<LongStream> data = Optional.empty();
++      List<T> elements = null;
++
++      final Palette<T> palette = this.f_188032_.f_188102_();
++      final BitStorage storage = this.f_188032_.f_188101_();
++      if (storage instanceof ZeroBitStorage || palette.m_62680_() == 1) {
++         // If the palette only contains one entry, don't attempt to repack it.
++         elements = List.of(palette.m_5795_(0));
++      } else if (palette instanceof CanaryHashPalette<T> lithiumHashPalette) {
++         hashPalette = lithiumHashPalette;
++      }
++
++      if (elements == null) {
++         CanaryHashPalette<T> compactedPalette = new CanaryHashPalette<>(p_188065_, storage.m_144604_(), this.f_63070_);
++         short[] array = this.getOrCreate(p_188066_.m_188144_());
++
++         ((SimpleBitStorage) storage).compact(this.f_188032_.f_188102_(), compactedPalette, array);
++
++         // If the palette didn't change during compaction, do a simple copy of the data array
++         if (hashPalette != null && hashPalette.m_62680_() == compactedPalette.m_62680_() && storage.m_144604_() == p_188066_.m_188151_(p_188065_, hashPalette.m_62680_())) { // paletteSize can de-sync from palette - see https://github.com/CaffeineMC/lithium-fabric/issues/279
++            data = this.asOptional(storage.m_13513_().clone());
++            elements = hashPalette.getElements();
+          } else {
+-            optional = Optional.empty();
++            int bits = p_188066_.m_188151_(p_188065_, compactedPalette.m_62680_());
++            if (bits != 0) {
++               // Re-pack the integer array as the palette has changed size
++               SimpleBitStorage copy = new SimpleBitStorage(bits, array.length);
++               for (int i = 0; i < array.length; ++i) {
++                  copy.m_13524_(i, array[i]);
++               }
++
++               // We don't need to clone the data array as we are the sole owner of it
++               data = this.asOptional(copy.m_13513_());
++            }
++
++            elements = compactedPalette.getElements();
+          }
+-
+-         palettedcontainerro$packeddata = new PalettedContainerRO.PackedData<>(hashmappalette.m_187917_(), optional);
+-      } finally {
+-         this.m_63120_();
+       }
  
-       PalettedContainerRO.PackedData palettedcontainerro$packeddata;
+-      return palettedcontainerro$packeddata;
++      this.m_63120_();
++      return new PalettedContainerRO.PackedData<>(elements, data);
++   }
++
++   private Optional<LongStream> asOptional(long[] data) {
++      return Optional.of(Arrays.stream(data));
++   }
++
++   private short[] getOrCreate(int size) {
++      return switch (size) {
++         case 64 -> CACHED_ARRAY_64.get();
++         case 4096 -> CACHED_ARRAY_4096.get();
++         default -> new short[size];
++      };
+    }
+ 
+    private static <T> void m_198189_(int[] p_198190_, IntUnaryOperator p_198191_) {
+@@ -281,17 +_,25 @@
+    }
+ 
+    public void m_63099_(PalettedContainer.CountConsumer<T> p_63100_) {
+-      if (this.f_188032_.f_188102_.m_62680_() == 1) {
+-         p_63100_.m_63144_(this.f_188032_.f_188102_.m_5795_(0), this.f_188032_.f_188101_.m_13521_());
+-      } else {
+-         Int2IntOpenHashMap int2intopenhashmap = new Int2IntOpenHashMap();
+-         this.f_188032_.f_188101_.m_13519_((p_238269_) -> {
+-            int2intopenhashmap.addTo(p_238269_, 1);
+-         });
+-         int2intopenhashmap.int2IntEntrySet().forEach((p_238271_) -> {
+-            p_63100_.m_63144_(this.f_188032_.f_188102_.m_5795_(p_238271_.getIntKey()), p_238271_.getIntValue());
+-         });
+-      }
++      int len = this.f_188032_.f_188102_().m_62680_();
++
++      // Do not allocate huge arrays if we're using a large palette
++      if (len > 4096) {
++         return;
++      }
++
++      short[] counts = new short[len];
++
++      this.f_188032_.f_188101_().m_13519_(i -> counts[i]++);
++
++      for (int i = 0; i < counts.length; i++) {
++         T obj = this.f_188032_.f_188102_().m_5795_(i);
++
++         if (obj != null) {
++            p_63100_.m_63144_(obj, counts[i]);
++         }
++      }
++
+    }
+ 
+    static record Configuration<T>(Palette.Factory f_188085_, int f_188086_) {
 @@ -301,6 +_,14 @@
           return new PalettedContainer.Data<>(this, bitstorage, palette);
        }

@@ -1,0 +1,35 @@
+--- a/net/minecraft/util/random/WeightedRandomList.java
++++ b/net/minecraft/util/random/WeightedRandomList.java
+@@ -1,7 +_,10 @@
+ package net.minecraft.util.random;
+ 
++import com.abdelaziz.canary.common.util.collections.HashedReferenceList;
+ import com.google.common.collect.ImmutableList;
+ import com.mojang.serialization.Codec;
++
++import java.util.Collections;
+ import java.util.List;
+ import java.util.Optional;
+ import net.minecraft.util.RandomSource;
+@@ -9,10 +_,12 @@
+ public class WeightedRandomList<E extends WeightedEntry> {
+    private final int f_146324_;
+    private final ImmutableList<E> f_146325_;
++   private final List<E> entryHashList;
+ 
+    WeightedRandomList(List<? extends E> p_146327_) {
+       this.f_146325_ = ImmutableList.copyOf(p_146327_);
+       this.f_146324_ = WeightedRandom.m_146312_(p_146327_);
++      this.entryHashList = this.f_146325_.size() > 4 ? this.f_146325_ : Collections.unmodifiableList(new HashedReferenceList<>(this.f_146325_));
+    }
+ 
+    public static <E extends WeightedEntry> WeightedRandomList<E> m_146332_() {
+@@ -42,7 +_,7 @@
+    }
+ 
+    public List<E> m_146338_() {
+-      return this.f_146325_;
++      return this.entryHashList;
+    }
+ 
+    public static <E extends WeightedEntry> Codec<WeightedRandomList<E>> m_146333_(Codec<E> p_146334_) {

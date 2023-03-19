@@ -1821,7 +1821,7 @@ public final class NewChunkHolder {
     }
 
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
-        if (!chunk.isUnsaved() || !(chunk instanceof ImposterProtoChunk || chunk instanceof LevelChunk)) {
+        if (!chunk.isUnsaved()) {
             if (unloading) {
                 this.completeAsyncChunkDataSave(null);
             }

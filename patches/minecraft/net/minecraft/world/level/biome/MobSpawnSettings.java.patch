@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/biome/MobSpawnSettings.java
 +++ b/net/minecraft/world/level/biome/MobSpawnSettings.java
-@@ -38,20 +_,32 @@
+@@ -38,20 +_,34 @@
     private final float f_48328_;
     private final Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> f_48329_;
     private final Map<EntityType<?>, MobSpawnSettings.MobSpawnCost> f_48330_;
@@ -9,7 +9,10 @@
  
     MobSpawnSettings(float p_196689_, Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> p_196690_, Map<EntityType<?>, MobSpawnSettings.MobSpawnCost> p_196691_) {
        this.f_48328_ = p_196689_;
-       this.f_48329_ = ImmutableMap.copyOf(p_196690_);
+-      this.f_48329_ = ImmutableMap.copyOf(p_196690_);
++      f_48329_ = Maps.newEnumMap(MobCategory.class);
++      f_48329_.putAll(p_196690_);
++
        this.f_48330_ = ImmutableMap.copyOf(p_196691_);
 +      this.typesView = java.util.Collections.unmodifiableSet(this.f_48329_.keySet());
 +      this.costView = java.util.Collections.unmodifiableSet(this.f_48330_.keySet());

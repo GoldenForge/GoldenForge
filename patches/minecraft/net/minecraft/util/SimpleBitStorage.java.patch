@@ -1,5 +1,14 @@
 --- a/net/minecraft/util/SimpleBitStorage.java
 +++ b/net/minecraft/util/SimpleBitStorage.java
+@@ -2,6 +_,8 @@
+ 
+ import java.util.function.IntConsumer;
+ import javax.annotation.Nullable;
++
++import net.minecraft.world.level.chunk.Palette;
+ import org.apache.commons.lang3.Validate;
+ 
+ public class SimpleBitStorage implements BitStorage {
 @@ -11,8 +_,8 @@
     private final long f_184709_;
     private final int f_184710_;
@@ -22,9 +31,47 @@
        this.f_184714_ = f_184706_[i + 2];
        int j = (p_184725_ + this.f_184711_ - 1) / this.f_184711_;
        if (p_184726_ != null) {
-@@ -73,14 +_,14 @@
+@@ -72,15 +_,52 @@
+ 
     }
  
++   public <T> void compact(Palette<T> srcPalette, Palette<T> dstPalette, short[] out) {
++      if (this.f_184710_ >= Short.MAX_VALUE) {
++         throw new IllegalStateException("Array too large");
++      }
++
++      if (this.f_184710_ != out.length) {
++         throw new IllegalStateException("Array size mismatch");
++      }
++
++      short[] mappings = new short[(int) (this.f_184709_ + 1)];
++
++      int idx = 0;
++
++      for (long word : this.f_184707_) {
++         long bits = word;
++
++         for (int elementIdx = 0; elementIdx < this.f_184711_; ++elementIdx) {
++            int value = (int) (bits & this.f_184709_);
++            int remappedId = mappings[value];
++
++            if (remappedId == 0) {
++               remappedId = dstPalette.m_6796_(srcPalette.m_5795_(value)) + 1;
++               mappings[value] = (short) remappedId;
++            }
++
++            out[idx] = (short) (remappedId - 1);
++            bits >>= this.f_184708_;
++
++            ++idx;
++
++            if (idx >= this.f_184710_) {
++               return;
++            }
++         }
++      }
++   }
++
     private int m_184739_(int p_184740_) {
 -      long i = Integer.toUnsignedLong(this.f_184712_);
 -      long j = Integer.toUnsignedLong(this.f_184713_);

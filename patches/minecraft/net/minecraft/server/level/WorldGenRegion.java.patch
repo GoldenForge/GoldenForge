@@ -1,6 +1,63 @@
 --- a/net/minecraft/server/level/WorldGenRegion.java
 +++ b/net/minecraft/server/level/WorldGenRegion.java
-@@ -147,6 +_,17 @@
+@@ -1,5 +_,6 @@
+ package net.minecraft.server.level;
+ 
++import com.abdelaziz.canary.common.util.Pos;
+ import com.mojang.logging.LogUtils;
+ import java.util.Collections;
+ import java.util.List;
+@@ -82,6 +_,12 @@
+    private final AtomicLong f_184182_ = new AtomicLong();
+    private static final ResourceLocation f_215158_ = new ResourceLocation("worldgen_region_random");
+ 
++   // Array view of the chunks in the region to avoid an unnecessary de-reference
++   private ChunkAccess[] chunksArr;
++
++   // The starting position of this region
++   private int minChunkX, minChunkZ;
++
+    public WorldGenRegion(ServerLevel p_143484_, List<ChunkAccess> p_143485_, ChunkStatus p_143486_, int p_143487_) {
+       this.f_143480_ = p_143486_;
+       this.f_143481_ = p_143487_;
+@@ -102,6 +_,11 @@
+          this.f_9488_ = p_143485_.get(p_143485_.size() - 1).m_7697_();
+          this.f_215157_ = p_143484_.m_215010_().m_220468_(this);
+       }
++
++      this.minChunkX = this.f_9487_.f_45578_;
++      this.minChunkZ = this.f_9487_.f_45579_;
++
++      this.chunksArr = p_143485_.toArray(new ChunkAccess[0]);
+    }
+ 
+    public boolean m_215159_(ChunkPos p_215160_, int p_215161_) {
+@@ -117,7 +_,23 @@
+    }
+ 
+    public ChunkAccess m_6325_(int p_9507_, int p_9508_) {
+-      return this.m_46819_(p_9507_, p_9508_, ChunkStatus.f_62314_);
++      int x = p_9507_ - this.minChunkX;
++      int z = p_9508_ - this.minChunkZ;
++      int w = this.f_9478_;
++
++      if (x >= 0 && z >= 0 && x < w && z < w) {
++         return this.chunksArr[x + z * w];
++      } else {
++         throw new NullPointerException("No chunk exists at " + new ChunkPos(p_9507_, p_9508_));
++      }
++   }
++
++   /**
++    * Use our chunk fetch function
++    */
++   public ChunkAccess m_46865_(BlockPos pos) {
++      // Skip checking chunk.getStatus().isAtLeast(ChunkStatus.EMPTY) here, because it is always true
++      return this.m_6325_(Pos.ChunkCoord.fromBlockCoord(pos.m_123341_()), Pos.ChunkCoord.fromBlockCoord(pos.m_123343_()));
+    }
+ 
+    @Nullable
+@@ -147,12 +_,31 @@
        }
     }
  
@@ -18,6 +75,21 @@
     public boolean m_7232_(int p_9574_, int p_9575_) {
        return p_9574_ >= this.f_9487_.f_45578_ && p_9574_ <= this.f_9488_.f_45578_ && p_9575_ >= this.f_9487_.f_45579_ && p_9575_ <= this.f_9488_.f_45579_;
     }
+ 
+    public BlockState m_8055_(BlockPos p_9587_) {
+-      return this.m_6325_(SectionPos.m_123171_(p_9587_.m_123341_()), SectionPos.m_123171_(p_9587_.m_123343_())).m_8055_(p_9587_);
++      int x = (Pos.ChunkCoord.fromBlockCoord(p_9587_.m_123341_())) - this.minChunkX;
++      int z = (Pos.ChunkCoord.fromBlockCoord(p_9587_.m_123343_())) - this.minChunkZ;
++      int w = this.f_9478_;
++
++      if (x >= 0 && z >= 0 && x < w && z < w) {
++         return this.chunksArr[x + z * w].m_8055_(p_9587_);
++      } else {
++         throw new NullPointerException("No chunk exists at " + new ChunkPos(p_9587_));
++      }
+    }
+ 
+    public FluidState m_6425_(BlockPos p_9577_) {
 @@ -416,4 +_,11 @@
     public long m_183596_() {
        return this.f_184182_.getAndIncrement();

@@ -92,11 +92,10 @@
     }
  
     public boolean m_49967_() {
-@@ -489,6 +_,75 @@
-    protected ImmutableMap<BlockState, VoxelShape> m_152458_(Function<BlockState, VoxelShape> p_152459_) {
+@@ -490,6 +_,75 @@
        return this.f_49792_.m_61056_().stream().collect(ImmutableMap.toImmutableMap(Function.identity(), p_152459_));
     }
-+
+ 
 +   /* ======================================== FORGE START =====================================*/
 +   private Object renderProperties;
 +
@@ -165,6 +164,36 @@
 +   }
 +
 +   /* ========================================= FORGE END ======================================*/
- 
++
     /** @deprecated */
     @Deprecated
+    public Holder.Reference<Block> m_204297_() {
+@@ -511,10 +_,17 @@
+       private final BlockState f_49981_;
+       private final Direction f_49982_;
+ 
++      private int hash;
+       public BlockStatePairKey(BlockState p_49984_, BlockState p_49985_, Direction p_49986_) {
+          this.f_49980_ = p_49984_;
+          this.f_49981_ = p_49985_;
+          this.f_49982_ = p_49986_;
++
++         int hash = this.f_49980_.hashCode();
++         hash = 31 * hash + this.f_49981_.hashCode();
++         hash = 31 * hash + this.f_49982_.hashCode();
++
++         this.hash = hash;
+       }
+ 
+       public boolean equals(Object p_49988_) {
+@@ -529,9 +_,7 @@
+       }
+ 
+       public int hashCode() {
+-         int i = this.f_49980_.hashCode();
+-         i = 31 * i + this.f_49981_.hashCode();
+-         return 31 * i + this.f_49982_.hashCode();
++         return this.hash;
+       }
+    }
+ }

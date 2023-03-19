@@ -1,6 +1,21 @@
 --- a/net/minecraft/world/entity/ai/goal/GoalSelector.java
 +++ b/net/minecraft/world/entity/ai/goal/GoalSelector.java
-@@ -30,6 +_,7 @@
+@@ -10,6 +_,8 @@
+ import java.util.Set;
+ import java.util.function.Supplier;
+ import java.util.stream.Stream;
++
++import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
+ import net.minecraft.util.profiling.ProfilerFiller;
+ import org.slf4j.Logger;
+ 
+@@ -25,11 +_,12 @@
+       }
+    };
+    private final Map<Goal.Flag, WrappedGoal> f_25344_ = new EnumMap<>(Goal.Flag.class);
+-   private final Set<WrappedGoal> f_25345_ = Sets.newLinkedHashSet();
++   private final Set<WrappedGoal> f_25345_ = new ObjectLinkedOpenHashSet<>(Sets.newLinkedHashSet());
+    private final Supplier<ProfilerFiller> f_25346_;
     private final EnumSet<Goal.Flag> f_25347_ = EnumSet.noneOf(Goal.Flag.class);
     private int f_148095_;
     private int f_25348_ = 3;

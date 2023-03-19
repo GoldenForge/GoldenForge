@@ -1,8 +1,23 @@
 --- a/net/minecraft/world/entity/ai/attributes/AttributeMap.java
 +++ b/net/minecraft/world/entity/ai/attributes/AttributeMap.java
-@@ -22,9 +_,11 @@
-    private final Map<Attribute, AttributeInstance> f_22139_ = Maps.newHashMap();
-    private final Set<AttributeInstance> f_22140_ = Sets.newHashSet();
+@@ -10,6 +_,9 @@
+ import java.util.UUID;
+ import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
++import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+ import net.minecraft.Util;
+ import net.minecraft.core.Registry;
+ import net.minecraft.nbt.CompoundTag;
+@@ -19,12 +_,14 @@
+ 
+ public class AttributeMap {
+    private static final Logger f_22138_ = LogUtils.getLogger();
+-   private final Map<Attribute, AttributeInstance> f_22139_ = Maps.newHashMap();
+-   private final Set<AttributeInstance> f_22140_ = Sets.newHashSet();
++   private final Map<Attribute, AttributeInstance> f_22139_ = new Reference2ReferenceOpenHashMap<>(0);
++   private final Set<AttributeInstance> f_22140_ = new ReferenceOpenHashSet<>(0);
     private final AttributeSupplier f_22141_;
 +   private final java.util.function.Function<Attribute, AttributeInstance> createInstance; // Pufferfish
  

@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java
 +++ b/net/minecraft/world/level/levelgen/NoiseBasedChunkGenerator.java
+@@ -63,6 +_,7 @@
+    private final Registry<NormalNoise.NoiseParameters> f_188604_;
+    protected final Holder<NoiseGeneratorSettings> f_64318_;
+    private final Aquifer.FluidPicker f_188607_;
++   private int cachedSeaLevel;
+ 
+    public NoiseBasedChunkGenerator(Registry<StructureSet> p_224206_, Registry<NormalNoise.NoiseParameters> p_224207_, BiomeSource p_224208_, Holder<NoiseGeneratorSettings> p_224209_) {
+       super(p_224206_, Optional.empty(), p_224208_);
 @@ -83,7 +_,7 @@
        return CompletableFuture.supplyAsync(Util.m_183946_("init_biomes", () -> {
           this.m_224291_(p_224300_, p_224299_, p_224301_, p_224302_);
@@ -18,3 +26,12 @@
              for(LevelChunkSection levelchunksection1 : set) {
                 levelchunksection1.m_63006_();
              }
+@@ -359,7 +_,7 @@
+    }
+ 
+    public int m_6337_() {
+-      return this.f_64318_.m_203334_().f_64444_();
++      return this.cachedSeaLevel = this.f_64318_.m_203334_().f_64444_();
+    }
+ 
+    public int m_142062_() {

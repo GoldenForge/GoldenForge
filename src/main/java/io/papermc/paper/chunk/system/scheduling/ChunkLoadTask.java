@@ -417,7 +417,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                 // run converters
                 final int dataVersion = !data.contains(SharedConstants.DATA_VERSION_TAG, 99) ? 1945 : data.getInt(SharedConstants.DATA_VERSION_TAG);
                 final CompoundTag converted = MCDataConverter.convertTag(
-                    MCTypeRegistry.POI_CHUNK, data, dataVersion, SharedConstants.getCurrentVersion().getWorldVersion()
+                    MCTypeRegistry.POI_CHUNK, data, dataVersion, SharedConstants.getCurrentVersion().getDataVersion().getVersion()
                 );
 
                 // now we need to parse it

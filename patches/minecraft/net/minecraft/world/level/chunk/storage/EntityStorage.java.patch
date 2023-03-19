@@ -134,7 +134,7 @@
 +   public static CompoundTag m_156572_(CompoundTag p_156573_) {
        int i = m_156560_(p_156573_);
 -      return NbtUtils.m_129213_(this.f_156534_, DataFixTypes.ENTITY_CHUNK, p_156573_, i);
-+      return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.ENTITY_CHUNK, p_156573_, i, SharedConstants.m_183709_().getWorldVersion()); // Paper - route to new converter system
++      return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.ENTITY_CHUNK, p_156573_, i, SharedConstants.m_183709_().m_183476_().m_193006_()); // Paper - route to new converter system
     }
  
     public static int m_156560_(CompoundTag p_156561_) {
