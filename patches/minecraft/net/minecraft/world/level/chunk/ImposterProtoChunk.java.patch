@@ -49,3 +49,17 @@
     public ImposterProtoChunk(LevelChunk p_187920_, boolean p_187921_) {
        super(p_187920_.m_7697_(), UpgradeData.f_63320_, p_187920_.f_187611_, p_187920_.m_62953_().m_5962_().m_175515_(Registry.f_122885_), p_187920_.m_183407_());
        this.f_62685_ = p_187920_;
+@@ -45,6 +_,13 @@
+    public BlockState m_8055_(BlockPos p_62749_) {
+       return this.f_62685_.m_8055_(p_62749_);
+    }
++   // Paper start
++   @Override
++   public final BlockState getBlockState(final int x, final int y, final int z) {
++      return this.f_62685_.getBlockStateFinal(x, y, z);
++   }
++   // Paper end
++
+ 
+    public FluidState m_6425_(BlockPos p_62736_) {
+       return this.f_62685_.m_6425_(p_62736_);

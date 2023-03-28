@@ -148,6 +148,15 @@
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
+@@ -145,7 +_,7 @@
+    }
+ 
+    public boolean m_46739_(BlockPos p_46740_) {
+-      return !this.m_151570_(p_46740_) && m_46457_(p_46740_);
++      return p_46740_.isInsideBuildHeightAndWorldBoundsHorizontal(this); // Paper - use better/optimized check
+    }
+ 
+    public static boolean m_46741_(BlockPos p_46742_) {
 @@ -165,6 +_,15 @@
     }
  

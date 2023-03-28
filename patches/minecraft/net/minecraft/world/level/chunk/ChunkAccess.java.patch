@@ -72,6 +72,15 @@
        this.f_187606_ = p_187622_;
        this.f_187611_ = p_187623_;
        this.f_187612_ = new LevelChunkSection[p_187623_.m_151559_()];
+@@ -106,7 +_,7 @@
+    public GameEventDispatcher m_142336_(int p_156113_) {
+       return GameEventDispatcher.f_157829_;
+    }
+-
++   public abstract BlockState getBlockState(final int x, final int y, final int z); // Paper
+    @Nullable
+    public abstract BlockState m_6978_(BlockPos p_62087_, BlockState p_62088_, boolean p_62089_);
+ 
 @@ -407,4 +_,9 @@
  
     public static record TicksToSave(SerializableTickContainer<Block> f_187680_, SerializableTickContainer<Fluid> f_187681_) {

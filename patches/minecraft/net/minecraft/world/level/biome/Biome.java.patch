@@ -12,34 +12,6 @@
        }), BiomeGenerationSettings.f_47778_.forGetter((p_220548_) -> {
           return p_220548_.f_47438_;
        }), MobSpawnSettings.f_48327_.forGetter((p_220546_) -> {
-@@ -66,14 +_,20 @@
-    private final BiomeGenerationSettings f_47438_;
-    private final MobSpawnSettings f_47439_;
-    private final BiomeSpecialEffects f_47443_;
--   private final ThreadLocal<Long2FloatLinkedOpenHashMap> f_47444_ = ThreadLocal.withInitial(() -> {
-+//   private final ThreadLocal<Long2FloatLinkedOpenHashMap> temperatureCache = ThreadLocal.withInitial(() -> {
-+//      return Util.make(() -> {
-+//         Long2FloatLinkedOpenHashMap long2floatlinkedopenhashmap = new Long2FloatLinkedOpenHashMap(1024, 0.25F) {
-+//            protected void rehash(int p_47580_) {
-+//            }
-+//         };
-+//         long2floatlinkedopenhashmap.defaultReturnValue(Float.NaN);
-+//         return long2floatlinkedopenhashmap;
-+//      });
-+//   });
-+   private final ThreadLocal<gg.airplane.structs.Long2FloatAgingCache> f_47444_ = ThreadLocal.withInitial(() -> {
-       return Util.m_137537_(() -> {
--         Long2FloatLinkedOpenHashMap long2floatlinkedopenhashmap = new Long2FloatLinkedOpenHashMap(1024, 0.25F) {
--            protected void rehash(int p_47580_) {
--            }
--         };
--         long2floatlinkedopenhashmap.defaultReturnValue(Float.NaN);
--         return long2floatlinkedopenhashmap;
-+         return new gg.airplane.structs.Long2FloatAgingCache(f_151655_);
-+         // Pufferfish end
-       });
-    });
- 
 @@ -82,6 +_,7 @@
        this.f_47438_ = p_220532_;
        this.f_47439_ = p_220533_;
@@ -57,29 +29,6 @@
     }
  
     public Biome.Precipitation m_47530_() {
-@@ -114,17 +_,15 @@
-    @Deprecated
-    private float m_47505_(BlockPos p_47506_) {
-       long i = p_47506_.m_121878_();
--      Long2FloatLinkedOpenHashMap long2floatlinkedopenhashmap = this.f_47444_.get();
--      float f = long2floatlinkedopenhashmap.get(i);
-+      // Pufferfish start
-+      gg.airplane.structs.Long2FloatAgingCache cache = this.f_47444_.get();
-+      float f = cache.getValue(i);
-       if (!Float.isNaN(f)) {
-          return f;
-       } else {
-          float f1 = this.m_47528_(p_47506_);
--         if (long2floatlinkedopenhashmap.size() == 1024) {
--            long2floatlinkedopenhashmap.removeFirstFloat();
--         }
--
--         long2floatlinkedopenhashmap.put(i, f1);
-+         cache.putValue(i, f1);
-+         // Pufferfish end
-          return f1;
-       }
-    }
 @@ -188,7 +_,7 @@
     }
  

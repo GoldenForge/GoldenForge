@@ -22,7 +22,7 @@
        this.f_63163_ = p_188176_;
        this.f_188165_ = p_188177_;
     }
-@@ -71,6 +_,11 @@
+@@ -71,15 +_,24 @@
        return new ChunkAccess.TicksToSave(this.f_63163_, this.f_188165_);
     }
  
@@ -32,8 +32,25 @@
 +   }
 +
     public BlockState m_8055_(BlockPos p_63264_) {
-       int i = p_63264_.m_123342_();
-       if (this.m_151562_(i)) {
+-      int i = p_63264_.m_123342_();
+-      if (this.m_151562_(i)) {
++      // Paper start
++      return getBlockState(p_63264_.m_123341_(), p_63264_.m_123342_(), p_63264_.m_123343_());
++   }
++   public BlockState getBlockState(final int x, final int y, final int z) {
++      if (this.m_151562_(y)) {
+          return Blocks.f_50626_.m_49966_();
+       } else {
+-         LevelChunkSection levelchunksection = this.m_183278_(this.m_151564_(i));
+-         return levelchunksection.m_188008_() ? Blocks.f_50016_.m_49966_() : levelchunksection.m_62982_(p_63264_.m_123341_() & 15, i & 15, p_63264_.m_123343_() & 15);
++         LevelChunkSection levelChunkSection = this.m_7103_()[this.m_151564_(y)];
++         return levelChunkSection.m_188008_() ? Blocks.f_50016_.m_49966_() : levelChunkSection.m_62982_(x & 15, y & 15, z & 15);
+       }
+    }
++   // Paper end
+ 
+    public FluidState m_6425_(BlockPos p_63239_) {
+       int i = p_63239_.m_123342_();
 @@ -123,13 +_,13 @@
           if (this.f_187612_[l].m_188008_() && p_63218_.m_60713_(Blocks.f_50016_)) {
              return p_63218_;

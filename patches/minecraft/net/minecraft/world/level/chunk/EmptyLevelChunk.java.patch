@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/EmptyLevelChunk.java
 +++ b/net/minecraft/world/level/chunk/EmptyLevelChunk.java
-@@ -16,6 +_,40 @@
+@@ -16,6 +_,46 @@
  public class EmptyLevelChunk extends LevelChunk {
     private final Holder<Biome> f_204420_;
  
@@ -37,6 +37,12 @@
 +   @Override
 +   public void setBlockEmptinessMap(final boolean[] emptinessMap) {}
 +   // Paper end - starlight
++   // Paper start
++   @Override
++   public BlockState getBlockState(int x, int y, int z) {
++      return Blocks.f_50626_.m_49966_();
++   }
++   // Paper end
 +
     public EmptyLevelChunk(Level p_204422_, ChunkPos p_204423_, Holder<Biome> p_204424_) {
        super(p_204422_, p_204423_);

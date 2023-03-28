@@ -432,7 +432,7 @@
        for(BlockEntity blockentity : p_196851_.m_63292_().values()) {
           this.m_142169_(blockentity);
        }
-@@ -147,7 +_,29 @@
+@@ -147,7 +_,34 @@
        }
     }
  
@@ -445,6 +445,11 @@
 +   @Override
     public BlockState m_8055_(BlockPos p_62923_) {
 +      return this.getBlockStateFinal(p_62923_.m_123341_(), p_62923_.m_123342_(), p_62923_.m_123343_());
++   }
++
++   @Override
++   public BlockState getBlockState(final int x, final int y, final int z) {
++      return this.getBlockStateFinal(x, y, z);
 +   }
 +
 +   public final BlockState getBlockStateFinal(final int x, final int y, final int z) {
