@@ -130,11 +130,9 @@ public class GoldenForgeConfig {
     }
     public static ForgeConfigSpec serverSpec;
     public static Server SERVER;
-    public GoldenForgeConfig() {
+    static {
         final Pair<Server, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Server::new);
         serverSpec = specPair.getRight();
-        GoldenForge.LOGGER.info(SERVER.isVelocityEnabled.get());
-        GoldenForge.LOGGER.info(SERVER.velocityForwardingToken.get());
     }
 
     @SubscribeEvent
