@@ -6,7 +6,7 @@
 </div>
 
 # How goldenforge is working ?
-We integrate paper optimizations in the forge keeping in mind mod compatibility. Goldenforge achieves a great improvement in performance (benchmark coming soon) while ensuring  compatibility and stability.
+We integrate paper optimizations in the forge keeping in mind mod compatibility. Goldenforge achieves a great performance improvement (benchmark coming soon) while ensuring  compatibility and stability.
 
 **Contact**
 [Discord](https://discord.gg/g3e5J8tX6e)
