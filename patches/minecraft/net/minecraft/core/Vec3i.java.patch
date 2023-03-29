@@ -1,0 +1,15 @@
+--- a/net/minecraft/core/Vec3i.java
++++ b/net/minecraft/core/Vec3i.java
+@@ -33,6 +_,12 @@
+       return f_123287_.flatXmap(m_194645_(p_194651_), m_194645_(p_194651_));
+    }
+ 
++   // Paper start
++   public final boolean isInsideBuildHeightAndWorldBoundsHorizontal(net.minecraft.world.level.LevelHeightAccessor levelHeightAccessor) {
++      return m_123341_() >= -30000000 && m_123343_() >= -30000000 && m_123341_() < 30000000 && m_123343_() < 30000000 && !levelHeightAccessor.m_151562_(m_123342_());
++   }
++   // Paper end
++
+    public Vec3i(int p_123296_, int p_123297_, int p_123298_) {
+       this.f_123285_ = p_123296_;
+       this.f_123286_ = p_123297_;

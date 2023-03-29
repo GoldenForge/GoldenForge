@@ -9,6 +9,15 @@
  import org.slf4j.Logger;
  
  public class ServerLoginPacketListenerImpl implements TickablePacketListener, ServerLoginPacketListener {
+@@ -48,7 +_,7 @@
+    private final byte[] f_10017_;
+    final MinecraftServer f_10018_;
+    public final Connection f_10013_;
+-   ServerLoginPacketListenerImpl.State f_10019_ = ServerLoginPacketListenerImpl.State.HELLO;
++   public ServerLoginPacketListenerImpl.State f_10019_ = ServerLoginPacketListenerImpl.State.HELLO;
+    private int f_10020_;
+    @Nullable
+    public GameProfile f_10021_;
 @@ -58,6 +_,8 @@
     @Nullable
     private ProfilePublicKey.Data f_240234_;
@@ -176,3 +185,12 @@
     }
  
     protected GameProfile m_10038_(GameProfile p_10039_) {
+@@ -271,7 +_,7 @@
+       return new GameProfile(uuid, p_10039_.getName());
+    }
+ 
+-   static enum State {
++   public static enum State {
+       HELLO,
+       KEY,
+       AUTHENTICATING,
