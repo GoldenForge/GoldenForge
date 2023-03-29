@@ -17,7 +17,7 @@ import java.nio.file.Path;
 public class GoldenForge {
     public static Logger LOGGER = LogManager.getLogger("GoldenForge");
 
-    public static String VERSION = "ALPHA-0.0.2";
+    public static String VERSION = "ALPHA-0.0.3";
 
     public static String getBranding() {
         return "Goldenforge " + VERSION;
