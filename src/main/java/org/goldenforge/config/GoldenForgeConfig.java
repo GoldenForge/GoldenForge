@@ -40,6 +40,8 @@ public class GoldenForgeConfig {
         public static ConfigValue<Boolean> isVelocityEnabled;
         public static ConfigValue<String> velocityForwardingToken;
 
+        public static ConfigValue<Integer> maxJoinsPerTick;
+
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -124,6 +126,14 @@ public class GoldenForgeConfig {
                     .comment("The velocity modern forwarding token. Don't forget to disable online-mode in server.properties.")
                     .worldRestart()
                     .define("velocityForwardingToken", "");
+
+            builder.pop();
+
+            builder.push("Misc");
+            maxJoinsPerTick = builder
+                    .comment("Adjusts how many players are able to join in a single server tick.")
+                    .worldRestart()
+                    .define("maxJoinsPerTick", 5);
 
             builder.pop();
         }

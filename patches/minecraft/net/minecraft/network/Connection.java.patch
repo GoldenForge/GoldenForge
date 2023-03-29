@@ -1,6 +1,6 @@
 --- a/net/minecraft/network/Connection.java
 +++ b/net/minecraft/network/Connection.java
-@@ -31,12 +_,15 @@
+@@ -31,16 +_,20 @@
  import java.util.concurrent.RejectedExecutionException;
  import javax.annotation.Nullable;
  import javax.crypto.Cipher;
@@ -16,6 +16,11 @@
  import net.minecraft.server.RunningOnDifferentThreadException;
  import net.minecraft.util.LazyLoadedValue;
  import net.minecraft.util.Mth;
+ import org.apache.commons.lang3.Validate;
++import org.goldenforge.config.GoldenForgeConfig;
+ import org.slf4j.Logger;
+ import org.slf4j.Marker;
+ import org.slf4j.MarkerFactory;
 @@ -71,7 +_,7 @@
     private final PacketFlow f_129466_;
     private final Queue<Connection.PacketHolder> f_129467_ = Queues.newConcurrentLinkedQueue();
@@ -25,7 +30,7 @@
     private PacketListener f_129470_;
     private Component f_129471_;
     private boolean f_129472_;
-@@ -82,6 +_,64 @@
+@@ -82,6 +_,65 @@
     private float f_129477_;
     private int f_129478_;
     private boolean f_129479_;
@@ -34,6 +39,7 @@
 +   // Optimize network
 +   volatile boolean canFlush = true;
 +   public boolean preparing = true;
++   private static boolean enableExplicitFlush = Boolean.getBoolean("paper.explicit-flush");
 +   public boolean isPending = true;
 +   public boolean queueImmunity = false;
 +   public ConnectionProtocol protocol;
@@ -266,7 +272,7 @@
           channelfuture.addListener((p_243167_) -> {
              if (p_243167_.isSuccess()) {
                 p_243290_.m_243096_();
-@@ -221,26 +_,76 @@
+@@ -221,29 +_,101 @@
        }
  
        channelfuture.addListener(ChannelFutureListener.FIRE_EXCEPTION_ON_FAILURE);
@@ -348,18 +354,61 @@
 +      } // Paper end - add pending task queue
 +   }
 +   // Paper end
++
++   private static final int MAX_PER_TICK = GoldenForgeConfig.SERVER.maxJoinsPerTick.get(); // Paper
++   private static int joinAttemptsThisTick; // Paper
++   private static int currTick; // Paper
  
     public void m_129483_() {
 -      this.m_129544_();
 +      this.flushQueue();
++      // Paper start
++      if (Connection.currTick != net.minecraft.server.MinecraftServer.currentTick) {
++         Connection.currTick = net.minecraft.server.MinecraftServer.currentTick;
++         Connection.joinAttemptsThisTick = 0;
++      }
++      // Paper end
        PacketListener packetlistener = this.f_129470_;
        if (packetlistener instanceof TickablePacketListener tickablepacketlistener) {
-          tickablepacketlistener.m_9933_();
-@@ -272,6 +_,7 @@
+-         tickablepacketlistener.m_9933_();
++         // Paper start - limit the number of joins which can be processed each tick
++         if (!(this.f_129470_ instanceof net.minecraft.server.network.ServerLoginPacketListenerImpl loginPacketListener)
++                 || loginPacketListener.f_10019_ != net.minecraft.server.network.ServerLoginPacketListenerImpl.State.READY_TO_ACCEPT
++                 || Connection.joinAttemptsThisTick++ < MAX_PER_TICK) {
++            // Paper start - detailed watchdog information
++            net.minecraft.network.protocol.PacketUtils.packetProcessing.push(this.f_129470_);
++            try { // Paper end - detailed watchdog information
++               tickablepacketlistener.m_9933_();
++            } finally { // Paper start - detailed watchdog information
++               net.minecraft.network.protocol.PacketUtils.packetProcessing.pop();
++            } // Paper end - detailed watchdog information
++         }
++         // Paper end
+       }
+ 
+       if (!this.m_129536_() && !this.f_129473_) {
+@@ -251,7 +_,7 @@
+       }
+ 
+       if (this.f_129468_ != null) {
+-         this.f_129468_.flush();
++         if (enableExplicitFlush) this.f_129468_.eventLoop().execute(() -> this.f_129468_.flush()); // Paper - we don't need to explicit flush here, but allow opt in incase issues are found to a better version
+       }
+ 
+       if (this.f_129478_++ % 20 == 0) {
+@@ -270,8 +_,15 @@
+    public SocketAddress m_129523_() {
+       return this.f_129469_;
     }
++   // Paper start
++   public void clearPacketQueue() {
++      f_129467_.clear();
++   }
++   // Paper end
  
     public void m_129507_(Component p_129508_) {
 +      this.preparing = false;
++      clearPacketQueue(); // Paper
        if (this.f_129468_.isOpen()) {
           this.f_129468_.close().awaitUninterruptibly();
           this.f_129471_ = p_129508_;
@@ -381,6 +430,23 @@
        (new Bootstrap()).group(f_129464_.m_13971_()).handler(new ChannelInitializer<Channel>() {
           protected void initChannel(Channel p_129557_) {
              p_129557_.pipeline().addLast("packet_handler", connection);
+@@ -385,7 +_,7 @@
+    public void m_129541_() {
+       if (this.f_129468_ != null && !this.f_129468_.isOpen()) {
+          if (this.f_129473_) {
+-            f_129465_.warn("handleDisconnection() called twice");
++            //LOGGER.warn("handleDisconnection() called twice");
+          } else {
+             this.f_129473_ = true;
+             if (this.m_129539_() != null) {
+@@ -393,6 +_,7 @@
+             } else if (this.m_129538_() != null) {
+                this.m_129538_().m_7026_(Component.m_237115_("multiplayer.disconnect.generic"));
+             }
++            clearPacketQueue(); // Paper
+          }
+ 
+       }
 @@ -406,10 +_,30 @@
        return this.f_129477_;
     }
