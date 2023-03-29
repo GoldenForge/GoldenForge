@@ -1,6 +1,6 @@
 ---
 name: Issue report
-about: Visit the forum first for issues with crashes.
+about: Report issue with goldenforge here
 title: ''
 labels: ''
 assignees: ''
@@ -8,6 +8,7 @@ assignees: ''
 ---
 
 <!-- Thank you for reporting! -->
+Please test in singleplayer before reporting an issue
 **Minecraft Version:** {Minecraft version}
 
 **Goldenforge Version:** {Goldenforge version}
