@@ -794,7 +794,7 @@
 +   public synchronized void markWorldsDirty() {
 +      worldArrayMarker++;
 +   }
-+   private ServerLevel[] getWorldArray() {
++   public ServerLevel[] getWorldArray() {
 +      if (worldArrayMarker == worldArrayLast && worldArray != null)
 +         return worldArray;
 +      worldArray = this.f_129762_.values().stream().toArray(x -> new ServerLevel[x]);

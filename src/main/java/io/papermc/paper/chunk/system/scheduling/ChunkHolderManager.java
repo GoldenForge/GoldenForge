@@ -2,7 +2,6 @@ package io.papermc.paper.chunk.system.scheduling;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
-import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
@@ -327,6 +326,9 @@ public final class ChunkHolderManager {
     // supposed to return true if the ticket was added and did not replace another
     // but, we always return false if the ticket cannot be added
     public <T> boolean addTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier) {
+        return addTicketAtLevel(type, chunk, level, identifier, null);
+    }
+    public <T> boolean addTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier, Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets) {
         final long removeDelay = Math.max(0, type.timeout);
         if (level > MAX_TICKET_LEVEL) {
             return false;
@@ -344,6 +346,11 @@ public final class ChunkHolderManager {
             final int levelBefore = getTicketLevelAt(ticketsAtChunk);
             final Ticket<T> current = (Ticket<T>)ticketsAtChunk.replace(ticket);
             final int levelAfter = getTicketLevelAt(ticketsAtChunk);
+
+            if (ticket.isForceTicks()) {
+                SortedArraySet<Ticket<?>> tickets = forcedTickets.computeIfAbsent(chunk, e -> SortedArraySet.create(4));
+                tickets.addOrGet(current);
+            }
 
             if (current != ticket) {
                 final long oldRemovalTick = current.createdTick;
@@ -392,6 +399,9 @@ public final class ChunkHolderManager {
     }
 
     public <T> boolean removeTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier) {
+        return removeTicketAtLevel(type, chunk, level, identifier, null);
+    }
+    public <T> boolean removeTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier, Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets) {
         if (level > MAX_TICKET_LEVEL) {
             return false;
         }
@@ -412,6 +422,13 @@ public final class ChunkHolderManager {
 
             if (ticketsAtChunk.isEmpty()) {
                 this.tickets.remove(chunk);
+            }
+
+            if (ticket.isForceTicks()) {
+                SortedArraySet<Ticket<?>> tickets = forcedTickets.get(chunk);
+                if (tickets != null) {
+                    tickets.remove(ticket);
+                }
             }
 
             final int newLevel = getTicketLevelAt(ticketsAtChunk);

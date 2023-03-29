@@ -37,7 +37,7 @@
     static final Logger f_140758_ = LogUtils.getLogger();
     private static final int f_143205_ = 2;
     static final int f_140759_ = 33 + ChunkStatus.m_62370_(ChunkStatus.f_62326_) - 2;
-@@ -44,56 +_,72 @@
+@@ -44,56 +_,32 @@
     private static final int f_183899_ = 32;
     private static final int f_183900_ = 33;
     final Long2ObjectMap<ObjectSet<ServerPlayer>> f_140760_ = new Long2ObjectOpenHashMap<>();
@@ -71,46 +71,6 @@
 +//   private long ticketTickCounter;
 +//   private int simulationDistance = 10;
 +
-+   public final java.util.Queue<ChunkHolder> pendingChunkUpdates = new java.util.ArrayDeque<ChunkHolder>() {
-+      @Override
-+      public boolean add(ChunkHolder o) {
-+         if (o.isUpdateQueued) return true;
-+         o.isUpdateQueued = true;
-+         return super.add(o);
-+      }
-+   };
-+
-+   public static int convertBetweenTicketLevels(final int level) {
-+      return ChunkMap.f_140127_ - level + 1;
-+   }
-+
-+   protected final Long2IntLinkedOpenHashMap ticketLevelUpdates = new Long2IntLinkedOpenHashMap() {
-+      @Override
-+      protected void rehash(int newN) {
-+         // no downsizing allowed
-+         if (newN < this.n) {
-+            return;
-+         }
-+         super.rehash(newN);
-+      }
-+   };
-+   protected final io.papermc.paper.util.misc.Delayed8WayDistancePropagator2D ticketLevelPropagator = new io.papermc.paper.util.misc.Delayed8WayDistancePropagator2D(
-+           (long coordinate, byte oldLevel, byte newLevel) -> {
-+              DistanceManager.this.ticketLevelUpdates.putAndMoveToLast(coordinate, convertBetweenTicketLevels(newLevel));
-+           }
-+   );
-+   protected final int getPropagatedTicketLevel(final long coordinate) {
-+      return convertBetweenTicketLevels(this.ticketLevelPropagator.getLevel(coordinate));
-+   }
-+
-+   protected final void updateTicketLevel(final long coordinate, final int ticketLevel) {
-+      if (ticketLevel > ChunkMap.f_140127_) {
-+         this.ticketLevelPropagator.removeSource(coordinate);
-+      } else {
-+         this.ticketLevelPropagator.setSource(coordinate, convertBetweenTicketLevels(ticketLevel));
-+      }
-+   }
-+   // Paper end - replace ticket level propagator
 +
 +   private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets = new Long2ObjectOpenHashMap<>();
 +   private final ChunkMap chunkMap; // Paper
@@ -234,12 +194,12 @@
 +
 +   boolean addTicket(long i, Ticket<?> ticket) {
 +      org.spigotmc.AsyncCatcher.catchOp("ChunkMapDistance::addTicket"); // Paper
-+      return this.getChunkHolderManager().addTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_); // Paper - rewrite chunk system
++      return this.getChunkHolderManager().addTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_, this.forcedTickets); // Paper - rewrite chunk system
 +   }
 +
 +   boolean removeTicket(long i, Ticket<?> ticket) {
 +      org.spigotmc.AsyncCatcher.catchOp("ChunkMapDistance::removeTicket"); // Paper
-+      return this.getChunkHolderManager().removeTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_); // Paper - rewrite chunk system
++      return this.getChunkHolderManager().removeTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_, this.forcedTickets); // Paper - rewrite chunk system
     }
  
     public <T> void m_140792_(TicketType<T> p_140793_, ChunkPos p_140794_, int p_140795_, T p_140796_) {
