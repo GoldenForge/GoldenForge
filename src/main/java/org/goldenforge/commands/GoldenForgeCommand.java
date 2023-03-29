@@ -25,8 +25,8 @@ public class GoldenForgeCommand {
 
     private static int toggleTPSMonitor(CommandContext<CommandSourceStack> ctx) {
 
-        if (ctx.getSource().getEntity() instanceof ServerPlayer) {
-            TpsMonitorManager.get().togglePlayer((ServerPlayer) ctx.getSource().getEntity());
+        if (ctx.getSource().getEntity() instanceof ServerPlayer serverPlayer) {
+            TpsMonitorManager.get().togglePlayer(serverPlayer);
         }
         return 0;
     }
