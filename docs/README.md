@@ -1,9 +1,11 @@
 <img width="200" src="assets/logo.gif" alt="GoldenForge" align="right">
 <div align="left">
 
-<h1>GoldenForge</h1>
+<h1>GoldenForge | Folia Experiment</h1>
 <h3>The most powerful forge server software which aims for high capacity and performance.</h3>
 </div>
+
+# Based on https://github.com/PaperMC/Folia
 
 # How goldenforge is working ?
 We integrate paper optimizations in forge keeping in mind mod compatibility. Goldenforge achieves a great performance improvement (benchmark coming soon) while ensuring  compatibility and stability.
@@ -70,4 +72,4 @@ Please ensure you have a valid email address associated with your GitHub account
 [Download]: https://files.minecraftforge.net/
 [Forum]: https://www.minecraftforge.net/forum/
 [Discord]: https://discord.gg/UvedJ9m
-[Documentation]: https://mcforge.readthedocs.io
+[Documentation]: https://mcforge.readthedocs.io**
