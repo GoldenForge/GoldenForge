@@ -42,6 +42,7 @@ public class GoldenForgeConfig {
 
         public static ConfigValue<Integer> maxJoinsPerTick;
         public static ConfigValue<Boolean> preventMovingIntoUnloadedChunks;
+        public static ConfigValue<Boolean> enableAsyncMobSpawning;
 
         public static ConfigValue<Integer> autoSaveInterval;
         public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
@@ -142,6 +143,11 @@ public class GoldenForgeConfig {
                     .comment("Enable this to stop players from entering unloaded chunks.")
                     .worldRestart()
                     .define("preventMovingIntoUnloadedChunks", false);
+
+            enableAsyncMobSpawning = builder
+                    .comment("On servers with many entities, this can improve performance by up to 15%. paper's per-player-mob-spawns setting set to true for this to work.")
+                    .worldRestart()
+                    .define("enableAsyncMobSpawning", true);
 
             builder.pop();
 

@@ -31,11 +31,12 @@
  import net.minecraft.server.level.progress.ChunkProgressListener;
  import net.minecraft.util.VisibleForDebug;
  import net.minecraft.util.profiling.ProfilerFiller;
-@@ -45,14 +_,15 @@
+@@ -45,14 +_,16 @@
  import net.minecraft.world.level.storage.DimensionDataStorage;
  import net.minecraft.world.level.storage.LevelData;
  import net.minecraft.world.level.storage.LevelStorageSource;
 +import org.goldenforge.GoldenConfig;
++import org.goldenforge.config.GoldenForgeConfig;
  
  public class ServerChunkCache extends ChunkSource {
     private static final List<ChunkStatus> f_8326_ = ChunkStatus.m_62349_();
@@ -59,7 +60,7 @@
     public ServerChunkCache(ServerLevel p_214982_, LevelStorageSource.LevelStorageAccess p_214983_, DataFixer p_214984_, StructureTemplateManager p_214985_, Executor p_214986_, ChunkGenerator p_214987_, int p_214988_, int p_214989_, boolean p_214990_, ChunkProgressListener p_214991_, ChunkStatusUpdateListener p_214992_, Supplier<DimensionDataStorage> p_214993_) {
        this.f_8329_ = p_214982_;
        this.f_8332_ = new ServerChunkCache.MainThreadExecutor(p_214982_);
-@@ -80,6 +_,258 @@
+@@ -80,6 +_,261 @@
        this.m_8488_();
     }
  
@@ -67,6 +68,9 @@
 +   final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LevelChunk> loadedChunkMap = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>(8192, 0.5f);
 +
 +   private final LevelChunk[] lastLoadedChunks = new LevelChunk[4 * 4];
++
++   public boolean firstRunSpawnCounts = true; // Pufferfish
++   public final java.util.concurrent.atomic.AtomicBoolean _pufferfish_spawnCountsReady = new java.util.concurrent.atomic.AtomicBoolean(false); // Pufferfish - optimize countmobs
 +
 +   private static int getChunkCacheKey(int x, int z) {
 +      return x & 3 | ((z & 3) << 2);
@@ -624,26 +628,31 @@
           LevelData leveldata = this.f_8329_.m_6106_();
           ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
           profilerfiller.m_6180_("pollingChunks");
-@@ -330,36 +_,77 @@
+@@ -330,36 +_,82 @@
           boolean flag1 = leveldata.m_6793_() % 400L == 0L;
           profilerfiller.m_6180_("naturalSpawnCount");
           int l = this.f_8327_.m_140816_();
 -         NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.m_186524_(l, this.f_8329_.m_8583_(), this::m_8370_, new LocalMobCapCalculator(this.f_8325_));
 -         this.f_8340_ = naturalspawner$spawnstate;
-+         //NaturalSpawner.SpawnState naturalspawner$spawnstate = NaturalSpawner.createState(l, this.level.getAllEntities(), this::getFullChunk, new LocalMobCapCalculator(this.chunkMap));
 +         // Paper start - per player mob spawning
 +         NaturalSpawner.SpawnState spawnercreature_d; // moved down
 +         if ((this.f_8336_ || this.f_8335_) && this.f_8325_.playerMobDistanceMap != null) { // don't count mobs when animals and monsters are disabled
-+            // re-set mob counts
-+            for (ServerPlayer player : this.f_8329_.f_8546_) {
-+               Arrays.fill(player.mobCounts, 0);
++            // Pufferfish start - moved down when async processing
++            if (!GoldenForgeConfig.Server.enableAsyncMobSpawning.get()) {
++               // re-set mob counts
++               for (ServerPlayer player : this.f_8329_.f_8546_) {
++                  Arrays.fill(player.mobCounts, 0);
++               }
++               f_8340_ = NaturalSpawner.createState(l, this.f_8329_.m_8583_(), this::m_8370_, null, true);
 +            }
-+            spawnercreature_d = NaturalSpawner.createState(l, this.f_8329_.m_8583_(), this::m_8370_, null, true);
++            // Pufferfish end
 +         } else {
-+            spawnercreature_d = NaturalSpawner.createState(l, this.f_8329_.m_8583_(), this::m_8370_, this.f_8325_.playerMobDistanceMap == null ? new LocalMobCapCalculator(this.f_8325_) : null, false);
-+         }
++            // Pufferfish start - this is only implemented for per-player mob spawning so this makes everything work if this setting is disabled.
++            f_8340_ = NaturalSpawner.createState(l, this.f_8329_.m_8583_(), this::m_8370_, this.f_8325_.playerMobDistanceMap == null ? new LocalMobCapCalculator(this.f_8325_) : null, false);
++            _pufferfish_spawnCountsReady.set(true);
++            // Pufferfish end
++            }
 +         // Paper end
-+         this.f_8340_ = spawnercreature_d;
           profilerfiller.m_6182_("filteringLoadedChunks");
 -         List<ServerChunkCache.ChunkAndHolder> list = Lists.newArrayListWithCapacity(l);
 -
@@ -707,8 +716,8 @@
 +                  ChunkPos chunkpos = levelchunk1.m_7697_();
 +                  if ((this.f_8329_.m_201916_(chunkpos) && this.f_8325_.m_183879_(chunkpos)) || this.f_8327_.shouldForceTicks(chunkpos.m_45588_())) {
 +                     levelchunk1.m_187632_(j);
-+                     if (flag2 && (this.f_8335_ || this.f_8336_) && this.f_8329_.m_6857_().m_61927_(chunkpos) && this.f_8325_.anyPlayerCloseEnoughForSpawning(holder, chunkpos, true)) { // Spigot // Paper - optimise anyPlayerCloseEnoughForSpawning & optimise chunk tick iteration
-+                        NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, spawnercreature_d, this.f_8336_, this.f_8335_, flag1);
++                     if (flag2 && (!GoldenForgeConfig.Server.enableAsyncMobSpawning.get() || _pufferfish_spawnCountsReady.get()) && (this.f_8335_ || this.f_8336_) && this.f_8329_.m_6857_().m_61927_(chunkpos) && this.f_8325_.anyPlayerCloseEnoughForSpawning(holder, chunkpos, true)) { // Spigot // Paper - optimise anyPlayerCloseEnoughForSpawning & optimise chunk tick iteration
++                        NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, f_8340_, this.f_8336_, this.f_8335_, flag1); // Pufferfish
 +                     }
 +
 +                     if (true && this.f_8329_.m_183438_(chunkpos.m_45588_())) { // Paper - replace player chunk loader system
@@ -728,7 +737,7 @@
  
           profilerfiller.m_6182_("customSpawners");
           if (flag2) {
-@@ -367,19 +_,50 @@
+@@ -367,19 +_,73 @@
           }
  
           profilerfiller.m_6182_("broadcast");
@@ -749,7 +758,6 @@
 +            }
 +         }
 +         profilerfiller.m_7238_();
-+         profilerfiller.m_7238_();
 +         // Paper start - controlled flush for entity tracker packets
 +         List<net.minecraft.network.Connection> disabledFlushes = new java.util.ArrayList<>(this.f_8329_.f_8546_.size());
 +         for (ServerPlayer player : this.f_8329_.f_8546_) {
@@ -761,6 +769,7 @@
 +         }
 +         try { // Paper end - controlled flush for entity tracker packets
           this.f_8325_.m_140421_();
+-      }
 +            // Paper start - controlled flush for entity tracker packets
 +         } finally {
 +            for (net.minecraft.network.Connection networkManager : disabledFlushes) {
@@ -768,7 +777,31 @@
 +            }
 +         }
 +         // Paper end - controlled flush for entity tracker packets
-       }
++      }
++
++      // Pufferfish start - optimize mob spawning
++      if (GoldenForgeConfig.Server.enableAsyncMobSpawning.get()) {
++         for (ServerPlayer player : this.f_8329_.f_8546_) {
++            Arrays.fill(player.mobCounts, 0);
++         }
++         if (firstRunSpawnCounts) {
++            firstRunSpawnCounts = false;
++            _pufferfish_spawnCountsReady.set(true);
++         }
++         if (f_8325_.playerMobDistanceMap != null && _pufferfish_spawnCountsReady.getAndSet(false)) {
++            net.minecraft.server.MinecraftServer.getServer().mobSpawnExecutor.submit(() -> {
++               int mapped = f_8327_.m_140816_();
++               io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.Iterator<Entity> objectiterator =
++                       f_8329_.f_143243_.entities.iterator(io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.ITERATOR_FLAG_SEE_ADDITIONS);
++               gg.pufferfish.pufferfish.util.IterableWrapper<Entity> wrappedIterator =
++                       new gg.pufferfish.pufferfish.util.IterableWrapper<>(objectiterator);
++               f_8340_ = NaturalSpawner.createState(mapped, wrappedIterator, this::m_8370_, null, true);
++               objectiterator.finishedIterating();
++               _pufferfish_spawnCountsReady.set(true);
++            });
++         }
++      }
++      // Pufferfish end
     }
  
     private void m_8370_(long p_8371_, Consumer<LevelChunk> p_8372_) {

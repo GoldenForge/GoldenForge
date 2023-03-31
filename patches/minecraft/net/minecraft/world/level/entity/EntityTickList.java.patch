@@ -8,7 +8,7 @@
 -   private Int2ObjectMap<Entity> f_156904_ = new Int2ObjectLinkedOpenHashMap<>();
 -   @Nullable
 -   private Int2ObjectMap<Entity> f_156905_;
-+   private final io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Entity> entities = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>(true); // Paper - rewrite this, always keep this updated - why would we EVER tick an entity that's not ticking?
++   public final io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Entity> entities = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>(true); // Paper - rewrite this, always keep this updated - why would we EVER tick an entity that's not ticking?
  
     private void m_156907_() {
 -      if (this.f_156905_ == this.f_156903_) {

@@ -280,7 +280,7 @@
     public BlockState m_8055_(BlockPos p_46732_) {
        if (this.m_151570_(p_46732_)) {
           return Blocks.f_50626_.m_49966_();
-@@ -377,38 +_,98 @@
+@@ -377,38 +_,69 @@
        (this.f_151504_ ? this.f_151503_ : this.f_151512_).add(p_151526_);
     }
  
@@ -338,35 +338,6 @@
        this.f_151504_ = false;
 -      profilerfiller.m_7238_();
 +      gameprofilerfiller.m_7238_();
-+//      ProfilerFiller profilerfiller = this.getProfiler();
-+//      profilerfiller.push("blockEntities");
-+//      if (!this.pendingFreshBlockEntities.isEmpty()) {
-+//         this.freshBlockEntities.addAll(this.pendingFreshBlockEntities);
-+//         this.pendingFreshBlockEntities.clear();
-+//      }
-+//      this.tickingBlockEntities = true;
-+//      if (!this.freshBlockEntities.isEmpty()) {
-+//         this.freshBlockEntities.forEach(BlockEntity::onLoad);
-+//         this.freshBlockEntities.clear();
-+//      }
-+//      if (!this.pendingBlockEntityTickers.isEmpty()) {
-+//         this.blockEntityTickers.addAll(this.pendingBlockEntityTickers);
-+//         this.pendingBlockEntityTickers.clear();
-+//      }
-+//
-+//      Iterator<TickingBlockEntity> iterator = this.blockEntityTickers.iterator();
-+//
-+//      while(iterator.hasNext()) {
-+//         TickingBlockEntity tickingblockentity = iterator.next();
-+//         if (tickingblockentity.isRemoved()) {
-+//            iterator.remove();
-+//         } else if (this.shouldTickBlocksAt(tickingblockentity.getPos())) {
-+//            tickingblockentity.tick();
-+//         }
-+//      }
-+//
-+//      this.tickingBlockEntities = false;
-+//      profilerfiller.pop();
     }
  
     public <T extends Entity> void m_46653_(Consumer<T> p_46654_, T p_46655_) {

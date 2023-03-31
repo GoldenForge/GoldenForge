@@ -9,7 +9,14 @@
  import net.minecraft.DefaultUncaughtExceptionHandler;
  import net.minecraft.DefaultUncaughtExceptionHandlerWithName;
  import net.minecraft.SharedConstants;
-@@ -60,7 +_,8 @@
+@@ -54,13 +_,15 @@
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.entity.SkullBlockEntity;
+ import net.minecraft.world.level.storage.LevelStorageSource;
++import org.goldenforge.config.GoldenForgeConfig;
+ import org.slf4j.Logger;
+ 
+ public class DedicatedServer extends MinecraftServer implements ServerInterface {
     static final Logger f_139598_ = LogUtils.getLogger();
     private static final int f_142864_ = 5000;
     private static final int f_142865_ = 2;
@@ -50,7 +57,7 @@
           if (dedicatedserverproperties.f_139744_ != null) {
              this.m_129900_().m_46170_(GameRules.f_46153_).m_46246_(dedicatedserverproperties.f_139744_, this);
           }
-@@ -187,12 +_,13 @@
+@@ -187,12 +_,14 @@
           }
  
           Items.f_41852_.m_6787_(CreativeModeTab.f_40754_, NonNullList.m_122779_());
@@ -61,6 +68,7 @@
           }
  
 -         return true;
++         if (GoldenForgeConfig.Server.enableAsyncMobSpawning.get()) mobSpawnExecutor.start(); // Pufferfish
 +         return net.minecraftforge.server.ServerLifecycleHooks.handleServerStarting(this);
        }
     }
