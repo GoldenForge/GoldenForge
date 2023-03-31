@@ -1,7 +1,23 @@
 --- a/net/minecraft/world/level/material/FlowingFluid.java
 +++ b/net/minecraft/world/level/material/FlowingFluid.java
-@@ -158,7 +_,7 @@
-          BlockState blockstate = p_76036_.m_8055_(blockpos);
+@@ -140,7 +_,9 @@
+             Direction direction = entry.getKey();
+             FluidState fluidstate = entry.getValue();
+             BlockPos blockpos = p_76016_.m_121945_(direction);
+-            BlockState blockstate = p_76015_.m_8055_(blockpos);
++            BlockState blockstate = p_76015_.getBlockStateIfLoaded(blockpos); // Paper
++            if (blockstate == null) continue; // Paper
++
+             if (this.m_75977_(p_76015_, p_76016_, p_76018_, direction, blockpos, blockstate, p_76015_.m_6425_(blockpos), fluidstate.m_76152_())) {
+                this.m_6364_(p_76015_, blockpos, blockstate, direction, fluidstate);
+             }
+@@ -155,10 +_,11 @@
+ 
+       for(Direction direction : Direction.Plane.HORIZONTAL) {
+          BlockPos blockpos = p_76037_.m_121945_(direction);
+-         BlockState blockstate = p_76036_.m_8055_(blockpos);
++         BlockState blockstate = p_76036_.getBlockStateIfLoaded(blockpos); // Paper
++         if (blockstate == null) continue; // Paper
           FluidState fluidstate = blockstate.m_60819_();
           if (fluidstate.m_76152_().m_6212_(this) && this.m_76061_(direction, p_76036_, p_76037_, p_76038_, blockpos, blockstate)) {
 -            if (fluidstate.m_76170_()) {
@@ -31,3 +47,51 @@
     protected abstract boolean m_6760_();
  
     protected void m_6364_(LevelAccessor p_76005_, BlockPos p_76006_, BlockState p_76007_, Direction p_76008_, FluidState p_76009_) {
+@@ -260,10 +_,18 @@
+          if (direction != p_76030_) {
+             BlockPos blockpos = p_76028_.m_121945_(direction);
+             short short1 = m_76058_(p_76032_, blockpos);
+-            Pair<BlockState, FluidState> pair = p_76033_.computeIfAbsent(short1, (p_192916_) -> {
+-               BlockState blockstate1 = p_76027_.m_8055_(blockpos);
+-               return Pair.of(blockstate1, blockstate1.m_60819_());
+-            });
++            // Paper start - avoid loading chunks
++            Pair<BlockState, FluidState> pair = p_76033_.get(short1);
++            if (pair == null) {
++               BlockState iblockdatax = p_76027_.getBlockStateIfLoaded(blockpos);
++               if (iblockdatax == null) {
++                  continue;
++               }
++
++               pair = Pair.of(iblockdatax, iblockdatax.m_60819_());
++               p_76033_.put(short1, pair);
++            }
++            // Paper end
+             BlockState blockstate = pair.getFirst();
+             FluidState fluidstate = pair.getSecond();
+             if (this.m_75963_(p_76027_, this.m_5615_(), p_76028_, p_76031_, direction, blockpos, blockstate, fluidstate)) {
+@@ -330,12 +_,18 @@
+       for(Direction direction : Direction.Plane.HORIZONTAL) {
+          BlockPos blockpos = p_76081_.m_121945_(direction);
+          short short1 = m_76058_(p_76081_, blockpos);
+-         Pair<BlockState, FluidState> pair = short2objectmap.computeIfAbsent(short1, (p_192907_) -> {
+-            BlockState blockstate1 = p_76080_.m_8055_(blockpos);
+-            return Pair.of(blockstate1, blockstate1.m_60819_());
+-         });
+-         BlockState blockstate = pair.getFirst();
+-         FluidState fluidstate = pair.getSecond();
++         // Paper start
++         Pair pair = (Pair) short2objectmap.get(short1);
++         if (pair == null) {
++            BlockState iblockdatax = p_76080_.getBlockStateIfLoaded(blockpos);
++            if (iblockdatax == null) continue;
++
++            pair = Pair.of(short1, iblockdatax.m_60819_());
++            short2objectmap.put(short1, pair);
++         }
++         // Paper end
++         BlockState blockstate = (BlockState) pair.getFirst();
++         FluidState fluidstate = (FluidState) pair.getSecond();
+          FluidState fluidstate1 = this.m_76035_(p_76080_, blockpos, blockstate);
+          if (this.m_75963_(p_76080_, fluidstate1.m_76152_(), p_76081_, p_76082_, direction, blockpos, blockstate, fluidstate)) {
+             BlockPos blockpos1 = blockpos.m_7495_();
