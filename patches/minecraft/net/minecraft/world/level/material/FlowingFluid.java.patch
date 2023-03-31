@@ -86,7 +86,7 @@
 +            BlockState iblockdatax = p_76080_.getBlockStateIfLoaded(blockpos);
 +            if (iblockdatax == null) continue;
 +
-+            pair = Pair.of(short1, iblockdatax.m_60819_());
++            pair = Pair.of(iblockdatax, iblockdatax.m_60819_());
 +            short2objectmap.put(short1, pair);
 +         }
 +         // Paper end
