@@ -20,13 +20,24 @@
     public static final double f_215198_ = Mth.m_144952_(6.0D);
     private static final int f_215199_ = -1;
     private static final int f_241635_ = 4096;
-@@ -226,6 +_,9 @@
+@@ -191,7 +_,7 @@
+    public ServerPlayer f_9743_;
+    private int f_9746_;
+    private int f_215200_ = -1;
+-   private long f_9747_;
++   private long f_9747_ = Util.m_137550_();
+    private boolean f_9748_;
+    private long f_9749_;
+    private int f_9750_;
+@@ -226,6 +_,11 @@
     private final SignedMessageChain.Decoder f_240889_;
     private final LastSeenMessagesValidator f_241654_ = new LastSeenMessagesValidator();
     private final FutureChain f_241681_;
 +   public Runnable playerJoinReady; // Paper
 +   private int allowedPlayerTicks = 1;
 +   private int lastTick = MinecraftServer.currentTick;
++   public boolean processedDisconnect;
++   private static final long KEEPALIVE_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000; // Paper - provide property to set keepalive limit
  
     public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_) {
        this.f_9745_ = p_9770_;
@@ -43,6 +54,56 @@
        if (this.f_215200_ > -1) {
           this.m_9829_(new ClientboundBlockChangedAckPacket(this.f_215200_));
           this.f_215200_ = -1;
+@@ -295,18 +_,25 @@
+       }
+ 
+       this.f_9745_.m_129905_().m_6180_("keepAlive");
+-      long i = Util.m_137550_();
+-      if (i - this.f_9747_ >= 15000L) {
+-         if (this.f_9748_) {
+-            this.m_9942_(Component.m_237115_("disconnect.timeout"));
+-         } else {
++      // Paper Start - give clients a longer time to respond to pings as per pre 1.12.2 timings
++      // This should effectively place the keepalive handling back to "as it was" before 1.12.2
++      long currentTime = Util.m_137550_();
++      long elapsedTime = currentTime - this.f_9747_;
++
++      if (this.f_9748_) {
++         if (!this.processedDisconnect && elapsedTime >= KEEPALIVE_LIMIT) { // check keepalive limit, don't fire if already disconnected
++            ServerGamePacketListenerImpl.f_9744_.warn("{} was kicked due to keepalive timeout!", this.f_9743_.m_6302_()); // more info
++            this.m_9942_(Component.m_237115_("disconnect.timeout")); // Paper - kick event cause
++         }
++      } else {
++         if (elapsedTime >= 15000L) { // 15 seconds
+             this.f_9748_ = true;
+-            this.f_9747_ = i;
+-            this.f_9749_ = i;
++            this.f_9747_ = currentTime;
++            this.f_9749_ = currentTime;
+             this.m_9829_(new ClientboundKeepAlivePacket(this.f_9749_));
+          }
+       }
+-
++      // Paper end
+       this.f_9745_.m_129905_().m_7238_();
+       if (this.f_9750_ > 0) {
+          --this.f_9750_;
+@@ -341,11 +_,14 @@
+    }
+ 
+    public void m_9942_(Component p_9943_) {
++      if (this.processedDisconnect) {
++         return;
++      }
+       this.f_9742_.m_243124_(new ClientboundDisconnectPacket(p_9943_), PacketSendListener.m_243092_(() -> {
+          this.f_9742_.m_129507_(p_9943_);
+       }));
+       this.f_9742_.m_129540_();
+-      this.f_9745_.m_18709_(this.f_9742_::m_129541_);
++      this.f_9745_.scheduleOnMain(this.f_9742_::m_129541_); // Paper
+    }
+ 
+    private <T, R> CompletableFuture<R> m_243080_(T p_243240_, BiFunction<TextFilter, T, CompletableFuture<R>> p_243271_) {
 @@ -392,19 +_,43 @@
           Entity entity = this.f_9743_.m_20201_();
           if (entity != this.f_9743_ && entity.m_6688_() == this.f_9743_ && entity == this.f_9759_) {
@@ -106,12 +167,37 @@
                 this.f_9742_.m_129512_(new ClientboundMoveVehiclePacket(entity));
                 return;
              }
-@@ -451,7 +_,7 @@
+@@ -451,7 +_,32 @@
     }
  
     private boolean m_9793_(Entity p_9794_) {
 -      return p_9794_.f_19853_.m_45556_(p_9794_.m_20191_().m_82400_(0.0625D).m_82363_(0.0D, -0.55D, 0.0D)).allMatch(BlockBehaviour.BlockStateBase::m_60795_);
-+      return BlockPos.m_121921_(p_9794_.m_20191_().m_82400_(0.0625D).m_82363_(0.0D, -0.55D, 0.0D)).allMatch(b -> p_9794_.f_19853_.m_8055_(b).m_60795_());
++      // Paper start - stop using streams, this is already a known fixed problem in Entity#move
++      AABB box = p_9794_.m_20191_().m_82400_(0.0625D).m_82363_(0.0D, -0.55D, 0.0D);
++      int minX = Mth.m_14107_(box.f_82288_);
++      int minY = Mth.m_14107_(box.f_82289_);
++      int minZ = Mth.m_14107_(box.f_82290_);
++      int maxX = Mth.m_14107_(box.f_82291_);
++      int maxY = Mth.m_14107_(box.f_82292_);
++      int maxZ = Mth.m_14107_(box.f_82293_);
++
++      Level world = p_9794_.f_19853_;
++      BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
++
++      for (int y = minY; y <= maxY; ++y) {
++         for (int z = minZ; z <= maxZ; ++z) {
++            for (int x = minX; x <= maxX; ++x) {
++               pos.m_122178_(x, y, z);
++               BlockState type = world.getBlockStateIfLoaded(pos);
++               if (type != null && !type.m_60795_()) {
++                  return false;
++               }
++            }
++         }
++      }
++
++      return true;
++      // Paper end - stop using streams, this is already a known fixed problem in Entity#move
     }
  
     public void m_7376_(ServerboundAcceptTeleportationPacket p_9835_) {
