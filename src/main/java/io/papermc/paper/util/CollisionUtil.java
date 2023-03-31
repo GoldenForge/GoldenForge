@@ -476,7 +476,12 @@ public final class CollisionUtil {
                 if (chunkProvider == null) {
                     chunk = (ChunkAccess)getter.getChunkForCollisions(currChunkX, currChunkZ);
                 } else {
-                    chunk = loadChunks ? chunkProvider.getChunk(currChunkX, currChunkZ, true) : chunkProvider.getChunkAtIfLoadedImmediately(currChunkX, currChunkZ);
+                    // Folia start - ignore chunk if we do not own the region
+                    if (!io.papermc.paper.util.TickThread.isTickThreadFor(chunkProvider.chunkMap.level, currChunkX, currChunkZ)) {
+                        chunk = null;
+                    } else { // Folia end - ignore chunk if we do not own the region
+                        chunk = loadChunks ? chunkProvider.getChunk(currChunkX, currChunkZ, true) : chunkProvider.getChunkAtIfLoadedImmediately(currChunkX, currChunkZ);
+                    } // Folia - ignore chunk if we do not own the region
                 }
 
                 if (chunk == null) {

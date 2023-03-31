@@ -2,17 +2,28 @@ package io.papermc.paper.chunk.system.scheduling;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import com.mojang.logging.LogUtils;
+import io.papermc.paper.chunk.system.poi.PoiChunk;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.chunk.*;
-
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.ImposterProtoChunk;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.ProtoChunk;
+import org.slf4j.Logger;
 import java.lang.invoke.VarHandle;
 
 public final class ChunkFullTask extends ChunkProgressionTask implements Runnable {
 
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     protected final NewChunkHolder chunkHolder;
     protected final ChunkAccess fromChunk;
     protected final PrioritisedExecutor.PrioritisedTask convertToFullTask;
+
+    public static final io.papermc.paper.util.IntervalledCounter chunkLoads = new io.papermc.paper.util.IntervalledCounter(java.util.concurrent.TimeUnit.SECONDS.toNanos(15L));
+    public static final io.papermc.paper.util.IntervalledCounter chunkGenerates = new io.papermc.paper.util.IntervalledCounter(java.util.concurrent.TimeUnit.SECONDS.toNanos(15L));
 
     public ChunkFullTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX, final int chunkZ,
                          final NewChunkHolder chunkHolder, final ChunkAccess fromChunk, final PrioritisedExecutor.Priority priority) {
@@ -27,11 +38,45 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
         return ChunkStatus.FULL;
     }
 
+    public static double genRate(final long time) {
+        synchronized (chunkGenerates) {
+            chunkGenerates.updateCurrentTime(time);
+            return chunkGenerates.getRate();
+        }
+    }
+
+    public static double loadRate(final long time) {
+        synchronized (chunkLoads) {
+            chunkLoads.updateCurrentTime(time);
+            return chunkLoads.getRate();
+        }
+    }
+
     @Override
     public void run() {
         // See Vanilla protoChunkToFullChunk for what this function should be doing
         final LevelChunk chunk;
         try {
+            // moved from the load from nbt stage into here
+            final PoiChunk poiChunk = this.chunkHolder.getPoiChunk();
+            if (poiChunk == null) {
+                LOGGER.error("Expected poi chunk to be loaded with chunk for task " + this.toString());
+            } else {
+                poiChunk.load();
+                this.world.getPoiManager().checkConsistency(this.fromChunk);
+            }
+
+            final long time = System.nanoTime();
+            if (this.fromChunk instanceof ImposterProtoChunk wrappedFull) {
+                synchronized (chunkLoads) {
+                    chunkLoads.updateAndAdd(1L, time);
+                }
+            } else {
+                synchronized (chunkGenerates) {
+                    chunkGenerates.updateAndAdd(1L, time);
+                }
+            }
+
             if (this.fromChunk instanceof ImposterProtoChunk wrappedFull) {
                 chunk = wrappedFull.getWrapped();
             } else {

@@ -183,7 +183,12 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
 
     @Override
     public Iterable<Entity> getAll() {
-        return new ArrayIterable<>(this.accessibleEntities.getRawData(), 0, this.accessibleEntities.size());
+        // Folia start - region threading
+        synchronized (this.accessibleEntities) {
+            Entity[] iterate = java.util.Arrays.copyOf(this.accessibleEntities.getRawData(), this.accessibleEntities.size());
+            return new ArrayIterable<>(iterate, 0, iterate.length);
+        }
+        // Folia end - region threading
     }
 
     @Override
@@ -260,7 +265,9 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
                     if (newVisibility.ordinal() > oldVisibility.ordinal()) {
                         // status upgrade
                         if (!oldVisibility.isAccessible() && newVisibility.isAccessible()) {
-                            this.accessibleEntities.add(entity);
+                            synchronized (this.accessibleEntities) { // Folia - region threading
+                                this.accessibleEntities.add(entity);
+                            } // Folia - region threading
                             EntityLookup.this.worldCallback.onTrackingStart(entity);
                         }
 
@@ -274,7 +281,9 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
                         }
 
                         if (oldVisibility.isAccessible() && !newVisibility.isAccessible()) {
-                            this.accessibleEntities.remove(entity);
+                            synchronized (this.accessibleEntities) { // Folia - region threading
+                                this.accessibleEntities.remove(entity);
+                            } // Folia - region threading
                             EntityLookup.this.worldCallback.onTrackingEnd(entity);
                         }
                     }
@@ -385,10 +394,25 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
 
         entity.setLevelCallback(new EntityCallback(entity));
 
+        this.world.getCurrentWorldData().addEntity(entity); // Folia - region threading
+
         this.entityStatusChange(entity, slices, Visibility.HIDDEN, getEntityStatus(entity), false, !fromDisk, false);
 
         return true;
     }
+
+    // Folia start - region threading
+    // only appropriate to use when in shutdown, as this performs no logic hooks to properly add to world
+    public boolean addEntityForShutdownTeleportComplete(final Entity entity) {
+        final BlockPos pos = entity.blockPosition();
+        final int sectionX = pos.getX() >> 4;
+        final int sectionY = Mth.clamp(pos.getY() >> 4, this.minSection, this.maxSection);
+        final int sectionZ = pos.getZ() >> 4;
+        final ChunkEntitySlices slices = this.getOrCreateChunk(sectionX, sectionZ);
+
+        return slices.addEntity(entity, sectionY);
+    }
+    // Folia end - region threading
 
     private void removeEntity(final Entity entity) {
         final int sectionX = entity.sectionX;
@@ -823,6 +847,9 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             EntityLookup.this.entityStatusChange(entity, null, tickingState, Visibility.HIDDEN, false, false, reason.shouldDestroy());
 
             this.entity.setLevelCallback(NoOpCallback.INSTANCE);
+
+            // only AFTER full removal callbacks, so that thread checking will work. // Folia - region threading
+            EntityLookup.this.world.getCurrentWorldData().removeEntity(entity); // Folia - region threading
         }
     }
 

@@ -2,6 +2,8 @@ package io.papermc.paper.util;
 
 public final class IntervalledCounter {
 
+    private static final int INITIAL_SIZE = 8;
+
     protected long[] times;
     protected long[] counts;
     protected final long interval;
@@ -11,8 +13,8 @@ public final class IntervalledCounter {
     protected int tail; // exclusive
 
     public IntervalledCounter(final long interval) {
-        this.times = new long[8];
-        this.counts = new long[8];
+        this.times = new long[INITIAL_SIZE];
+        this.counts = new long[INITIAL_SIZE];
         this.interval = interval;
     }
 
@@ -67,13 +69,13 @@ public final class IntervalledCounter {
         this.tail = nextTail;
     }
 
-    public void updateAndAdd(final int count) {
+    public void updateAndAdd(final long count) {
         final long currTime = System.nanoTime();
         this.updateCurrentTime(currTime);
         this.addTime(currTime, count);
     }
 
-    public void updateAndAdd(final int count, final long currTime) {
+    public void updateAndAdd(final long count, final long currTime) {
         this.updateCurrentTime(currTime);
         this.addTime(currTime, count);
     }
@@ -93,9 +95,13 @@ public final class IntervalledCounter {
         this.tail = size;
 
         if (tail >= head) {
+            // sequentially ordered from [head, tail)
             System.arraycopy(oldElements, head, newElements, 0, size);
             System.arraycopy(oldCounts, head, newCounts, 0, size);
         } else {
+            // ordered from [head, length)
+            // then followed by [0, tail)
+
             System.arraycopy(oldElements, head, newElements, 0, oldElements.length - head);
             System.arraycopy(oldElements, 0, newElements, oldElements.length - head, tail);
 
@@ -106,10 +112,18 @@ public final class IntervalledCounter {
 
     // returns in units per second
     public double getRate() {
-        return this.size() / (this.interval * 1.0e-9);
+        return (double)this.sum / ((double)this.interval * 1.0E-9);
     }
 
-    public long size() {
+    public long getInterval() {
+        return this.interval;
+    }
+
+    public long getSum() {
         return this.sum;
+    }
+
+    public int totalDataPoints() {
+        return this.tail >= this.head ? (this.tail - this.head) : (this.tail + (this.counts.length - this.head));
     }
 }

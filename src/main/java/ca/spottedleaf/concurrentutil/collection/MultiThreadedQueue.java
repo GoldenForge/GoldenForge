@@ -2,9 +2,15 @@ package ca.spottedleaf.concurrentutil.collection;
 
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import ca.spottedleaf.concurrentutil.util.Validate;
-
 import java.lang.invoke.VarHandle;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Queue;
+import java.util.Spliterator;
+import java.util.Spliterators;
 import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
@@ -387,6 +393,24 @@ public class MultiThreadedQueue<E> implements Queue<E> {
     }
 
     /**
+     * Returns whether this queue is currently add-blocked. That is, whether {@link #add(Object)} and friends will return {@code false}.
+     */
+    public boolean isAddBlocked() {
+        for (LinkedNode<E> tail = this.getTailOpaque();;) {
+            LinkedNode<E> next = tail.getNextVolatile();
+            if (next == null) {
+                return false;
+            }
+
+            if (next == tail) {
+                return true;
+            }
+
+            tail = next;
+        }
+    }
+
+    /**
      * Atomically removes the head from this queue if it exists, otherwise prevents additions to this queue if no
      * head is removed.
      * <p>
@@ -679,8 +703,8 @@ public class MultiThreadedQueue<E> implements Queue<E> {
         }
 
         builder.append("}, total_entries: \"").append(totalEntries).append("\", alive_entries: \"").append(aliveEntries)
-            .append("\", dead_entries:").append(deadEntries).append("\", add_locked: \"").append(addLocked)
-            .append("\"}");
+                .append("\", dead_entries:").append(deadEntries).append("\", add_locked: \"").append(addLocked)
+                .append("\"}");
 
         return builder.toString();
     }
@@ -1218,7 +1242,7 @@ public class MultiThreadedQueue<E> implements Queue<E> {
     @Override
     public Spliterator<E> spliterator() { // TODO implement
         return Spliterators.spliterator(this, Spliterator.CONCURRENT |
-            Spliterator.NONNULL | Spliterator.ORDERED);
+                Spliterator.NONNULL | Spliterator.ORDERED);
     }
 
     protected static final class LinkedNode<E> {

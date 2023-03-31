@@ -82,6 +82,9 @@ public final class ChunkSystem {
         for (int index = 0, len = chunkMap.regionManagers.size(); index < len; ++index) {
             chunkMap.regionManagers.get(index).addChunk(holder.pos.x, holder.pos.z);
         }
+        // Folia start - threaded regions
+        level.regioniser.addChunk(holder.pos.x, holder.pos.z);
+        // Folia end - threaded regions
     }
 
     public static void onChunkHolderDelete(final ServerLevel level, final ChunkHolder holder) {
@@ -89,6 +92,9 @@ public final class ChunkSystem {
         for (int index = 0, len = chunkMap.regionManagers.size(); index < len; ++index) {
             chunkMap.regionManagers.get(index).removeChunk(holder.pos.x, holder.pos.z);
         }
+        // Folia start - threaded regions
+        level.regioniser.removeChunk(holder.pos.x, holder.pos.z);
+        // Folia end - threaded regions
     }
 
     public static void onChunkBorder(final LevelChunk chunk, final ChunkHolder holder) {
@@ -100,32 +106,32 @@ public final class ChunkSystem {
     }
 
     public static void onChunkTicking(final LevelChunk chunk, final ChunkHolder holder) {
-        ((ServerChunkCache) chunk.level.getChunkSource()).tickingChunks.add(chunk);
+        // Folia - region threading
     }
 
     public static void onChunkNotTicking(final LevelChunk chunk, final ChunkHolder holder) {
-        ((ServerChunkCache) chunk.level.getChunkSource()).tickingChunks.remove(chunk);
+        // Folia - region threading
     }
 
     public static void onChunkEntityTicking(final LevelChunk chunk, final ChunkHolder holder) {
-        ((ServerChunkCache) chunk.level.getChunkSource()).entityTickingChunks.add(chunk);
+        chunk.level.getCurrentWorldData().addEntityTickingChunks(chunk); // Folia - region threading
     }
 
     public static void onChunkNotEntityTicking(final LevelChunk chunk, final ChunkHolder holder) {
-        ((ServerChunkCache) chunk.level.getChunkSource()).entityTickingChunks.remove(chunk);
+        chunk.level.getCurrentWorldData().removeEntityTickingChunk(chunk); // Folia - region threading
     }
 
 
     public static int getSendViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getSendViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPISendViewDistance(player);
     }
 
     public static int getLoadViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getLoadViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getLoadViewDistance(player);
     }
 
     public static int getTickViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getTickViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPITickViewDistance(player);
     }
 
     private ChunkSystem() {

@@ -5,6 +5,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.phys.Vec3;
 
 public final class CoordinateUtils {
 
@@ -43,6 +44,30 @@ public final class CoordinateUtils {
     public static int getChunkZ(final long chunkKey) {
         return (int)(chunkKey >>> 32);
     }
+    public static int getBlockX(final Vec3 pos) {
+        return Mth.floor(pos.x);
+    }
+
+    public static int getBlockY(final Vec3 pos) {
+        return Mth.floor(pos.y);
+    }
+
+    public static int getBlockZ(final Vec3 pos) {
+        return Mth.floor(pos.z);
+    }
+
+    public static int getChunkX(final Vec3 pos) {
+        return Mth.floor(pos.x) >> 4;
+    }
+
+    public static int getChunkY(final Vec3 pos) {
+        return Mth.floor(pos.y) >> 4;
+    }
+
+    public static int getChunkZ(final Vec3 pos) {
+        return Mth.floor(pos.z) >> 4;
+    }
+
 
     public static int getChunkCoordinate(final double blockCoordinate) {
         return Mth.floor(blockCoordinate) >> 4;

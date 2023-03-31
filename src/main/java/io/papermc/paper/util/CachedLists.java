@@ -4,55 +4,62 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import org.bukkit.Bukkit;
 import org.bukkit.craftbukkit.util.UnsafeList;
-
 import java.util.List;
 
 public final class CachedLists {
 
     // Paper start - optimise collisions
-    static final UnsafeList<AABB> TEMP_COLLISION_LIST = new UnsafeList<>(1024);
-    static boolean tempCollisionListInUse;
+    // Folia - region threading
 
     public static UnsafeList<AABB> getTempCollisionList() {
-        if (!Bukkit.isPrimaryThread() || tempCollisionListInUse) {
+        // Folia start - region threading
+        io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
+        if (worldData == null) {
             return new UnsafeList<>(16);
         }
-        tempCollisionListInUse = true;
-        return TEMP_COLLISION_LIST;
+        return worldData.tempCollisionList.get();
+        // Folia end - region threading
     }
 
     public static void returnTempCollisionList(List<AABB> list) {
-        if (list != TEMP_COLLISION_LIST) {
+        // Folia start - region threading
+        io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
+        if (worldData == null) {
             return;
         }
-        ((UnsafeList)list).setSize(0);
-        tempCollisionListInUse = false;
+        worldData.tempCollisionList.ret(list);
+        // Folia end - region threading
     }
 
-    static final UnsafeList<Entity> TEMP_GET_ENTITIES_LIST = new UnsafeList<>(1024);
-    static boolean tempGetEntitiesListInUse;
+    // Folia - region threading
 
     public static UnsafeList<Entity> getTempGetEntitiesList() {
-        if (!Bukkit.isPrimaryThread() || tempGetEntitiesListInUse) {
+        // Folia start - region threading
+        io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
+        if (worldData == null) {
             return new UnsafeList<>(16);
         }
-        tempGetEntitiesListInUse = true;
-        return TEMP_GET_ENTITIES_LIST;
+        return worldData.tempEntitiesList.get();
+        // Folia end - region threading
     }
 
     public static void returnTempGetEntitiesList(List<Entity> list) {
-        if (list != TEMP_GET_ENTITIES_LIST) {
+        // Folia start - region threading
+        io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
+        if (worldData == null) {
             return;
         }
-        ((UnsafeList)list).setSize(0);
-        tempGetEntitiesListInUse = false;
+        worldData.tempEntitiesList.ret(list);
+        // Folia end - region threading
     }
     // Paper end - optimise collisions
 
     public static void reset() {
-        // Paper start - optimise collisions
-        TEMP_COLLISION_LIST.completeReset();
-        TEMP_GET_ENTITIES_LIST.completeReset();
-        // Paper end - optimise collisions
+        // Folia start - region threading
+        io.papermc.paper.threadedregions.RegionizedWorldData worldData = io.papermc.paper.threadedregions.TickRegionScheduler.getCurrentRegionizedWorldData();
+        if (worldData != null) {
+            worldData.resetCollisionLists();
+        }
+        // Folia end - region threading
     }
 }

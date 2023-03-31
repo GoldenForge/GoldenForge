@@ -1,37 +1,63 @@
 package io.papermc.paper.chunk.system.scheduling;
 
+import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
+import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
-import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.TickThread;
 import io.papermc.paper.util.misc.Delayed8WayDistancePropagator2D;
 import io.papermc.paper.world.ChunkEntitySlices;
-import it.unimi.dsi.fastutil.longs.*;
+import it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.minecraft.nbt.CompoundTag;
+import io.papermc.paper.chunk.system.ChunkSystem;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.*;
+import net.minecraft.server.level.ChunkHolder;
+import net.minecraft.server.level.ChunkMap;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.Ticket;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.ChunkPos;
 import org.slf4j.Logger;
-
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
+
+// Folia start - region threading
+import io.papermc.paper.threadedregions.RegionizedServer;
+import io.papermc.paper.threadedregions.ThreadedRegionizer;
+import io.papermc.paper.threadedregions.TickRegionScheduler;
+import io.papermc.paper.threadedregions.TickRegions;
+// Folia end - region threading
 
 public final class ChunkHolderManager {
 
@@ -42,40 +68,198 @@ public final class ChunkHolderManager {
     public static final int ENTITY_TICKING_TICKET_LEVEL = 31;
     public static final int MAX_TICKET_LEVEL = ChunkMap.MAX_CHUNK_DISTANCE; // inclusive
 
-    private static final long NO_TIMEOUT_MARKER = -1L;
+    // Folia start - region threading
+    private static final long NO_TIMEOUT_MARKER = Long.MIN_VALUE;
+    private static final long PROBE_MARKER = Long.MIN_VALUE + 1;
+    // special region threading fields
+    // this field contains chunk holders that were created in addTicketAtLevel
+    // because the chunk holders were created without a reliable unload hook (i.e creation for entity/poi loading,
+    // which always check for unload after their tasks finish) we need to do that ourselves later
+    private final ReferenceOpenHashSet<NewChunkHolder> specialCaseUnload = new ReferenceOpenHashSet<>();
+    // Folia end - region threading
 
-    final ReentrantLock ticketLock = new ReentrantLock();
+    public final ReentrantLock ticketLock = new ReentrantLock(); // Folia - region threading
 
     private final SWMRLong2ObjectHashTable<NewChunkHolder> chunkHolders = new SWMRLong2ObjectHashTable<>(16384, 0.25f);
-    private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>(8192, 0.25f);
-    // what a disaster of a name
-    // this is a map of removal tick to a map of chunks and the number of tickets a chunk has that are to expire that tick
-    private final Long2ObjectOpenHashMap<Long2IntOpenHashMap> removeTickToChunkExpireTicketCount = new Long2ObjectOpenHashMap<>();
+    // Folia - region threading
     private final ServerLevel world;
     private final ChunkTaskScheduler taskScheduler;
-    private long currentTick;
 
-    private final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = new ArrayDeque<>();
-    private final ObjectRBTreeSet<NewChunkHolder> autoSaveQueue = new ObjectRBTreeSet<>((final NewChunkHolder c1, final NewChunkHolder c2) -> {
-        if (c1 == c2) {
-            return 0;
+    // Folia start - region threading
+    public static final class HolderManagerRegionData {
+        /*
+         * This region data is a bit of a mess, because it is part global state and part region state.
+         * Typically for region state we do not need to worry about threading concerns because it is only
+         * accessed by the current region when ticking. But since this contains state (
+         * tickets, and removeTickToChunkExpireTicketCount) that can be written to by any thread holding the
+         * ticket lock, the merge logic is complicated as merging only holds the region lock. So, Folia has modified
+         * the add and remove ticket functions to acquire the region lock if the current region does not own the target
+         * position.
+         */
+        private final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = new ArrayDeque<>();
+        private final ObjectRBTreeSet<NewChunkHolder> autoSaveQueue = new ObjectRBTreeSet<>((final NewChunkHolder c1, final NewChunkHolder c2) -> {
+            if (c1 == c2) {
+                return 0;
+            }
+
+            final int saveTickCompare = Long.compare(c1.lastAutoSave, c2.lastAutoSave);
+
+            if (saveTickCompare != 0) {
+                return saveTickCompare;
+            }
+
+            final long coord1 = CoordinateUtils.getChunkKey(c1.chunkX, c1.chunkZ);
+            final long coord2 = CoordinateUtils.getChunkKey(c2.chunkX, c2.chunkZ);
+
+            if (coord1 == coord2) {
+                throw new IllegalStateException("Duplicate chunkholder in auto save queue");
+            }
+
+            return Long.compare(coord1, coord2);
+        });
+        private long currentTick;
+        private final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>(8192, 0.25f);
+        // what a disaster of a name
+        // this is a map of removal tick to a map of chunks and the number of tickets a chunk has that are to expire that tick
+        private final Long2ObjectOpenHashMap<Long2IntOpenHashMap> removeTickToChunkExpireTicketCount = new Long2ObjectOpenHashMap<>();
+
+        public void merge(final HolderManagerRegionData into, final long tickOffset) {
+            // Order doesn't really matter for the pending full update...
+            into.pendingFullLoadUpdate.addAll(this.pendingFullLoadUpdate);
+
+            // We need to copy the set to iterate over, because modifying the field used in compareTo while iterating
+            // will destroy the result from compareTo (However, the set is not destroyed _after_ iteration because a constant
+            // addition to every entry will not affect compareTo).
+            for (final NewChunkHolder holder : new ArrayList<>(this.autoSaveQueue)) {
+                holder.lastAutoSave += tickOffset;
+                into.autoSaveQueue.add(holder);
+            }
+
+            final long chunkManagerTickOffset = into.currentTick - this.currentTick;
+            for (final Iterator<Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator();
+                 iterator.hasNext();) {
+                final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry = iterator.next();
+                final SortedArraySet<Ticket<?>> oldTickets = entry.getValue();
+                final SortedArraySet<Ticket<?>> newTickets = SortedArraySet.create(Math.max(4, oldTickets.size() + 1));
+                for (final Ticket<?> ticket : oldTickets) {
+                    newTickets.add(
+                            new Ticket(ticket.getType(), ticket.getTicketLevel(), ticket.key,
+                                    ticket.createdTick == NO_TIMEOUT_MARKER ? NO_TIMEOUT_MARKER : ticket.createdTick + chunkManagerTickOffset)
+                    );
+                }
+                into.tickets.put(entry.getLongKey(), newTickets);
+            }
+            for (final Iterator<Long2ObjectMap.Entry<Long2IntOpenHashMap>> iterator = this.removeTickToChunkExpireTicketCount.long2ObjectEntrySet().fastIterator();
+                 iterator.hasNext();) {
+                final Long2ObjectMap.Entry<Long2IntOpenHashMap> entry = iterator.next();
+                into.removeTickToChunkExpireTicketCount.merge(
+                        (long)(entry.getLongKey() + chunkManagerTickOffset), entry.getValue(),
+                        (final Long2IntOpenHashMap t, final Long2IntOpenHashMap f) -> {
+                            for (final Iterator<Long2IntMap.Entry> itr = f.long2IntEntrySet().fastIterator(); itr.hasNext();) {
+                                final Long2IntMap.Entry e = itr.next();
+                                t.addTo(e.getLongKey(), e.getIntValue());
+                            }
+                            return t;
+                        }
+                );
+            }
         }
 
-        final int saveTickCompare = Long.compare(c1.lastAutoSave, c2.lastAutoSave);
+        public void split(final int chunkToRegionShift, final Long2ReferenceOpenHashMap<HolderManagerRegionData> regionToData,
+                          final ReferenceOpenHashSet<HolderManagerRegionData> dataSet) {
+            for (final NewChunkHolder fullLoadUpdate : this.pendingFullLoadUpdate) {
+                final int regionCoordinateX = fullLoadUpdate.chunkX >> chunkToRegionShift;
+                final int regionCoordinateZ = fullLoadUpdate.chunkZ >> chunkToRegionShift;
 
-        if (saveTickCompare != 0) {
-            return saveTickCompare;
+                final HolderManagerRegionData data = regionToData.get(CoordinateUtils.getChunkKey(regionCoordinateX, regionCoordinateZ));
+                if (data != null) {
+                    data.pendingFullLoadUpdate.add(fullLoadUpdate);
+                } // else: fullLoadUpdate is an unloaded chunk holder
+            }
+
+            for (final NewChunkHolder autoSave : this.autoSaveQueue) {
+                final int regionCoordinateX = autoSave.chunkX >> chunkToRegionShift;
+                final int regionCoordinateZ = autoSave.chunkZ >> chunkToRegionShift;
+
+                final HolderManagerRegionData data = regionToData.get(CoordinateUtils.getChunkKey(regionCoordinateX, regionCoordinateZ));
+                if (data != null) {
+                    data.autoSaveQueue.add(autoSave);
+                } // else: autoSave is an unloaded chunk holder
+            }
+            for (final HolderManagerRegionData data : dataSet) {
+                data.currentTick = this.currentTick;
+            }
+            for (final Iterator<Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>>> iterator = this.tickets.long2ObjectEntrySet().fastIterator();
+                 iterator.hasNext();) {
+                final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> entry = iterator.next();
+                final long chunkKey = entry.getLongKey();
+                final int regionCoordinateX = CoordinateUtils.getChunkX(chunkKey) >> chunkToRegionShift;
+                final int regionCoordinateZ = CoordinateUtils.getChunkZ(chunkKey) >> chunkToRegionShift;
+
+                // can never be null, since a chunk holder exists if the ticket set is not empty
+                regionToData.get(CoordinateUtils.getChunkKey(regionCoordinateX, regionCoordinateZ)).tickets.put(chunkKey, entry.getValue());
+            }
+            for (final Iterator<Long2ObjectMap.Entry<Long2IntOpenHashMap>> iterator = this.removeTickToChunkExpireTicketCount.long2ObjectEntrySet().fastIterator();
+                 iterator.hasNext();) {
+                final Long2ObjectMap.Entry<Long2IntOpenHashMap> entry = iterator.next();
+                final long tick = entry.getLongKey();
+                final Long2IntOpenHashMap chunkToCount = entry.getValue();
+
+                for (final Iterator<Long2IntMap.Entry> itr = chunkToCount.long2IntEntrySet().fastIterator(); itr.hasNext();) {
+                    final Long2IntMap.Entry e = itr.next();
+                    final long chunkKey = e.getLongKey();
+                    final int regionCoordinateX = CoordinateUtils.getChunkX(chunkKey) >> chunkToRegionShift;
+                    final int regionCoordinateZ = CoordinateUtils.getChunkZ(chunkKey) >> chunkToRegionShift;
+                    final int count = e.getIntValue();
+
+                    // can never be null, since a chunk holder exists if the ticket set is not empty
+                    final HolderManagerRegionData data = regionToData.get(CoordinateUtils.getChunkKey(regionCoordinateX, regionCoordinateZ));
+
+                    data.removeTickToChunkExpireTicketCount.computeIfAbsent(tick, (final long keyInMap) -> {
+                        return new Long2IntOpenHashMap();
+                    }).put(chunkKey, count);
+                }
+            }
+        }
+    }
+
+    private ChunkHolderManager.HolderManagerRegionData getCurrentRegionData() {
+        final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> region =
+                TickRegionScheduler.getCurrentRegion();
+
+        if (region == null) {
+            return null;
         }
 
-        final long coord1 = CoordinateUtils.getChunkKey(c1.chunkX, c1.chunkZ);
-        final long coord2 = CoordinateUtils.getChunkKey(c2.chunkX, c2.chunkZ);
-
-        if (coord1 == coord2) {
-            throw new IllegalStateException("Duplicate chunkholder in auto save queue");
+        if (this.world != null && this.world != region.getData().world) {
+            throw new IllegalStateException("World check failed: expected world: " + this.world.getWorld().getName() + ", region world: " + region.getData().world.getWorld().getName());
         }
 
-        return Long.compare(coord1, coord2);
-    });
+        return region.getData().getHolderManagerRegionData();
+    }
+
+    // MUST hold ticket lock
+    private ChunkHolderManager.HolderManagerRegionData getDataFor(final long key) {
+        return this.getDataFor(CoordinateUtils.getChunkX(key), CoordinateUtils.getChunkZ(key));
+    }
+
+    // MUST hold ticket lock
+    private ChunkHolderManager.HolderManagerRegionData getDataFor(final int chunkX, final int chunkZ) {
+        if (!this.ticketLock.isHeldByCurrentThread()) {
+            throw new IllegalStateException("Must hold ticket level lock");
+        }
+
+        final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> region
+                = this.world.regioniser.getRegionAtUnsynchronised(chunkX, chunkZ);
+
+        if (region == null) {
+            return null;
+        }
+
+        return region.getData().getHolderManagerRegionData();
+    }
+    // Folia end - region threading
+
 
     public ChunkHolderManager(final ServerLevel world, final ChunkTaskScheduler taskScheduler) {
         this.world = world;
@@ -108,8 +292,13 @@ public final class ChunkHolderManager {
     }
 
     public void close(final boolean save, final boolean halt) {
+        // Folia start - region threading
+        this.close(save, halt, true, true, true);
+    }
+    public void close(final boolean save, final boolean halt, final boolean first, final boolean last, final boolean checkRegions) {
+        // Folia end - region threading
         TickThread.ensureTickThread("Closing world off-main");
-        if (halt) {
+        if (first && halt) { // Folia - region threading
             LOGGER.info("Waiting 60s for chunk system to halt for world '" + this.world.getWorld().getName() + "'");
             if (!this.taskScheduler.halt(true, TimeUnit.SECONDS.toNanos(60L))) {
                 LOGGER.warn("Failed to halt world generation/loading tasks for world '" + this.world.getWorld().getName() + "'");
@@ -119,50 +308,58 @@ public final class ChunkHolderManager {
         }
 
         if (save) {
-            this.saveAllChunks(true, true, true);
+            this.saveAllChunksRegionised(true, true, true, first, last, checkRegions); // Folia - region threading
         }
 
-        if (this.world.chunkDataControllerNew.hasTasks() || this.world.entityDataControllerNew.hasTasks() || this.world.poiDataControllerNew.hasTasks()) {
-            RegionFileIOThread.flush();
-        }
+        if (last) { // Folia - region threading
+            if (this.world.chunkDataControllerNew.hasTasks() || this.world.entityDataControllerNew.hasTasks() || this.world.poiDataControllerNew.hasTasks()) {
+                RegionFileIOThread.flush();
+            }
 
-        // kill regionfile cache
-        try {
-            this.world.chunkDataControllerNew.getCache().close();
-        } catch (final IOException ex) {
-            LOGGER.error("Failed to close chunk regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
-        }
-        try {
-            this.world.entityDataControllerNew.getCache().close();
-        } catch (final IOException ex) {
-            LOGGER.error("Failed to close entity regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
-        }
-        try {
-            this.world.poiDataControllerNew.getCache().close();
-        } catch (final IOException ex) {
-            LOGGER.error("Failed to close poi regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
-        }
+            // kill regionfile cache
+            try {
+                this.world.chunkDataControllerNew.getCache().close();
+            } catch (final IOException ex) {
+                LOGGER.error("Failed to close chunk regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
+            }
+            try {
+                this.world.entityDataControllerNew.getCache().close();
+            } catch (final IOException ex) {
+                LOGGER.error("Failed to close entity regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
+            }
+            try {
+                this.world.poiDataControllerNew.getCache().close();
+            } catch (final IOException ex) {
+                LOGGER.error("Failed to close poi regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
+            }
+        } // Folia - region threading
     }
 
     void ensureInAutosave(final NewChunkHolder holder) {
-        if (!this.autoSaveQueue.contains(holder)) {
-            holder.lastAutoSave = MinecraftServer.currentTick;
-            this.autoSaveQueue.add(holder);
+        // Folia start - region threading
+        final HolderManagerRegionData regionData = this.getCurrentRegionData();
+        if (!regionData.autoSaveQueue.contains(holder)) {
+            holder.lastAutoSave = RegionizedServer.getCurrentTick();
+            // Folia end - region threading
+            regionData.autoSaveQueue.add(holder);
         }
     }
 
     public void autoSave() {
         final List<NewChunkHolder> reschedule = new ArrayList<>();
-        final long currentTick = MinecraftServer.currentTickLong;
+        final long currentTick = RegionizedServer.getCurrentTick();
         final long maxSaveTime = currentTick - 6000;
-        for (int autoSaved = 0; autoSaved < 24 && !this.autoSaveQueue.isEmpty();) {
-            final NewChunkHolder holder = this.autoSaveQueue.first();
+        // Folia start - region threading
+        final HolderManagerRegionData regionData = this.getCurrentRegionData();
+        for (int autoSaved = 0; autoSaved < 24 && !regionData.autoSaveQueue.isEmpty();) {
+            // Folia end - region threading
+            final NewChunkHolder holder = regionData.autoSaveQueue.first();
 
             if (holder.lastAutoSave > maxSaveTime) {
                 break;
             }
 
-            this.autoSaveQueue.remove(holder);
+            regionData.autoSaveQueue.remove(holder);
 
             holder.lastAutoSave = currentTick;
             if (holder.save(false, false) != null) {
@@ -176,15 +373,20 @@ public final class ChunkHolderManager {
 
         for (final NewChunkHolder holder : reschedule) {
             if (holder.getChunkStatus().isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
-                this.autoSaveQueue.add(holder);
+                regionData.autoSaveQueue.add(holder);
             }
         }
     }
 
     public void saveAllChunks(final boolean flush, final boolean shutdown, final boolean logProgress) {
+        // Folia start - region threading
+        this.saveAllChunksRegionised(flush, shutdown, logProgress, true, true, true);
+    }
+    public void saveAllChunksRegionised(final boolean flush, final boolean shutdown, final boolean logProgress, final boolean first, final boolean last, final boolean checkRegion) {
+        // Folia end - region threading
         final List<NewChunkHolder> holders = this.getChunkHolders();
 
-        if (logProgress) {
+        if (first && logProgress) { // Folia - region threading
             LOGGER.info("Saving all chunkholders for world '" + this.world.getWorld().getName() + "'");
         }
 
@@ -192,7 +394,7 @@ public final class ChunkHolderManager {
 
         int saved = 0;
 
-        long start = System.nanoTime();
+        final long start = System.nanoTime();
         long lastLog = start;
         boolean needsFlush = false;
         final int flushInterval = 50;
@@ -203,6 +405,12 @@ public final class ChunkHolderManager {
 
         for (int i = 0, len = holders.size(); i < len; ++i) {
             final NewChunkHolder holder = holders.get(i);
+            // Folia start - region threading
+            if (!checkRegion && !TickThread.isTickThreadFor(this.world, holder.chunkX, holder.chunkZ)) {
+                // skip holders that would fail the thread check
+                continue;
+            }
+            // Folia end - region threading
             try {
                 final NewChunkHolder.SaveStat saveStat = holder.save(shutdown, false);
                 if (saveStat != null) {
@@ -235,7 +443,7 @@ public final class ChunkHolderManager {
                 }
             }
         }
-        if (flush) {
+        if (last && flush) { // Folia - region threading
             RegionFileIOThread.flush();
         }
         if (logProgress) {
@@ -269,18 +477,16 @@ public final class ChunkHolderManager {
     }
 
     public boolean hasTickets() {
-        this.ticketLock.lock();
-        try {
-            return !this.tickets.isEmpty();
-        } finally {
-            this.ticketLock.unlock();
-        }
+        return !this.getTicketsCopy().isEmpty(); // Folia - region threading
     }
 
     public String getTicketDebugString(final long coordinate) {
         this.ticketLock.lock();
         try {
-            final SortedArraySet<Ticket<?>> tickets = this.tickets.get(coordinate);
+            // Folia start - region threading
+            final ChunkHolderManager.HolderManagerRegionData holderManagerRegionData = this.getDataFor(coordinate);
+            final SortedArraySet<Ticket<?>> tickets = holderManagerRegionData == null ? null : holderManagerRegionData.tickets.get(coordinate);
+            // Folia end - region threading
 
             return tickets != null ? tickets.first().toString() : "no_ticket";
         } finally {
@@ -291,7 +497,17 @@ public final class ChunkHolderManager {
     public Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> getTicketsCopy() {
         this.ticketLock.lock();
         try {
-            return this.tickets.clone();
+            // Folia start - region threading
+            Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> ret = new Long2ObjectOpenHashMap<>();
+            this.world.regioniser.computeForAllRegions((region) -> {
+                for (final LongIterator iterator = region.getData().getHolderManagerRegionData().tickets.keySet().longIterator(); iterator.hasNext();) {
+                    final long chunk = iterator.nextLong();
+
+                    ret.put(chunk, region.getData().getHolderManagerRegionData().tickets.get(chunk));
+                }
+            });
+            return ret;
+            // Folia end - region threading
         } finally {
             this.ticketLock.unlock();
         }
@@ -326,65 +542,87 @@ public final class ChunkHolderManager {
     // supposed to return true if the ticket was added and did not replace another
     // but, we always return false if the ticket cannot be added
     public <T> boolean addTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier) {
-        return addTicketAtLevel(type, chunk, level, identifier, null);
-    }
-    public <T> boolean addTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier, Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets) {
         final long removeDelay = Math.max(0, type.timeout);
         if (level > MAX_TICKET_LEVEL) {
             return false;
         }
 
+        // Folia start - region threading
+        final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> currRegion = TickRegionScheduler.getCurrentRegion();
+        final boolean lock = currRegion == null || this.world.regioniser.getRegionAtUnsynchronised(
+                CoordinateUtils.getChunkX(chunk), CoordinateUtils.getChunkZ(chunk)
+        ) != currRegion;
+        // Folia end - region threading
+
         this.ticketLock.lock();
         try {
-            final long removeTick = removeDelay == 0 ? NO_TIMEOUT_MARKER : this.currentTick + removeDelay;
-            final Ticket<T> ticket = new Ticket<>(type, level, identifier, removeTick);
-
-            final SortedArraySet<Ticket<?>> ticketsAtChunk = this.tickets.computeIfAbsent(chunk, (final long keyInMap) -> {
-                return SortedArraySet.create(4);
-            });
-
-            final int levelBefore = getTicketLevelAt(ticketsAtChunk);
-            final Ticket<T> current = (Ticket<T>)ticketsAtChunk.replace(ticket);
-            final int levelAfter = getTicketLevelAt(ticketsAtChunk);
-
-            if (ticket.isForceTicks()) {
-                SortedArraySet<Ticket<?>> tickets = forcedTickets.computeIfAbsent(chunk, e -> SortedArraySet.create(4));
-                tickets.addOrGet(current);
+            // Folia start - region threading
+            NewChunkHolder holder = this.chunkHolders.get(chunk);
+            if (holder == null) {
+                // we need to guarantee that a chunk holder exists for each ticket
+                // this must be executed before retrieving the holder manager data for a target chunk, to ensure the
+                // region will exist
+                this.chunkHolders.put(chunk, holder = this.createChunkHolder(chunk));
+                this.specialCaseUnload.add(holder);
             }
 
-            if (current != ticket) {
-                final long oldRemovalTick = current.createdTick;
-                if (removeTick != oldRemovalTick) {
-                    if (oldRemovalTick != NO_TIMEOUT_MARKER) {
-                        final Long2IntOpenHashMap removeCounts = this.removeTickToChunkExpireTicketCount.get(oldRemovalTick);
-                        final int prevCount = removeCounts.addTo(chunk, -1);
+            if (lock) {
+                // we just need to prevent merging, so we only need the read lock
+                // additionally, this will prevent deadlock in the remove all tickets function by using the read lock
+                this.world.regioniser.acquireReadLock();
+            }
+            try {
+                final ChunkHolderManager.HolderManagerRegionData targetData = lock ? this.getDataFor(chunk) : currRegion.getData().getHolderManagerRegionData();
+                // Folia end - region threading
+                final long removeTick = removeDelay == 0 ? NO_TIMEOUT_MARKER : targetData.currentTick + removeDelay; // Folia - region threading
+                final Ticket<T> ticket = new Ticket<>(type, level, identifier, removeTick);
 
-                        if (prevCount == 1) {
-                            removeCounts.remove(chunk);
-                            if (removeCounts.isEmpty()) {
-                                this.removeTickToChunkExpireTicketCount.remove(oldRemovalTick);
+                final SortedArraySet<Ticket<?>> ticketsAtChunk = targetData.tickets.computeIfAbsent(chunk, (final long keyInMap) -> { // Folia - region threading
+                    return SortedArraySet.create(4);
+                });
+
+                final int levelBefore = getTicketLevelAt(ticketsAtChunk);
+                final Ticket<T> current = (Ticket<T>)ticketsAtChunk.replace(ticket);
+                final int levelAfter = getTicketLevelAt(ticketsAtChunk);
+
+                if (current != ticket) {
+                    final long oldRemovalTick = current.createdTick;
+                    if (removeTick != oldRemovalTick) {
+                        if (oldRemovalTick != NO_TIMEOUT_MARKER) {
+                            final Long2IntOpenHashMap removeCounts = targetData.removeTickToChunkExpireTicketCount.get(oldRemovalTick); // Folia - region threading
+                            final int prevCount = removeCounts.addTo(chunk, -1);
+
+                            if (prevCount == 1) {
+                                removeCounts.remove(chunk);
+                                if (removeCounts.isEmpty()) {
+                                    targetData.removeTickToChunkExpireTicketCount.remove(oldRemovalTick); // Folia - region threading
+                                }
                             }
                         }
+                        if (removeTick != NO_TIMEOUT_MARKER) {
+                            targetData.removeTickToChunkExpireTicketCount.computeIfAbsent(removeTick, (final long keyInMap) -> { // Folia - region threading
+                                return new Long2IntOpenHashMap();
+                            }).addTo(chunk, 1);
+                        }
                     }
+                } else {
                     if (removeTick != NO_TIMEOUT_MARKER) {
-                        this.removeTickToChunkExpireTicketCount.computeIfAbsent(removeTick, (final long keyInMap) -> {
+                        targetData.removeTickToChunkExpireTicketCount.computeIfAbsent(removeTick, (final long keyInMap) -> { // Folia - region threading
                             return new Long2IntOpenHashMap();
                         }).addTo(chunk, 1);
                     }
                 }
-            } else {
-                if (removeTick != NO_TIMEOUT_MARKER) {
-                    this.removeTickToChunkExpireTicketCount.computeIfAbsent(removeTick, (final long keyInMap) -> {
-                        return new Long2IntOpenHashMap();
-                    }).addTo(chunk, 1);
+
+                if (levelBefore != levelAfter) {
+                    this.updateTicketLevel(chunk, levelAfter);
                 }
-            }
 
-            if (levelBefore != levelAfter) {
-                this.updateTicketLevel(chunk, levelAfter);
-            }
-
-            return current == ticket;
+                return current == ticket;
+            } finally { // Folia start - region threading
+                if (lock) {
+                    this.world.regioniser.releaseReadLock();
+                }
+            } // Folia end - region threading
         } finally {
             this.ticketLock.unlock();
         }
@@ -399,58 +637,88 @@ public final class ChunkHolderManager {
     }
 
     public <T> boolean removeTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier) {
-        return removeTicketAtLevel(type, chunk, level, identifier, null);
-    }
-    public <T> boolean removeTicketAtLevel(final TicketType<T> type, final long chunk, final int level, final T identifier, Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> forcedTickets) {
         if (level > MAX_TICKET_LEVEL) {
             return false;
         }
 
+        // Folia start - region threading
+        final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> currRegion = TickRegionScheduler.getCurrentRegion();
+        final boolean lock = currRegion == null || this.world.regioniser.getRegionAtUnsynchronised(
+                CoordinateUtils.getChunkX(chunk), CoordinateUtils.getChunkZ(chunk)
+        ) != currRegion;
+        // Folia end - region threading
+
         this.ticketLock.lock();
         try {
-            final SortedArraySet<Ticket<?>> ticketsAtChunk = this.tickets.get(chunk);
-            if (ticketsAtChunk == null) {
-                return false;
+            // Folia start - region threading
+            if (lock) {
+                // we just need to prevent merging, so we only need the read lock
+                // additionally, this will prevent deadlock in the remove all tickets function by using the read lock
+                this.world.regioniser.acquireReadLock();
             }
+            try {
+                final ChunkHolderManager.HolderManagerRegionData targetData = lock ? this.getDataFor(chunk) : currRegion.getData().getHolderManagerRegionData();
+                // Folia end - region threading
 
-            final int oldLevel = getTicketLevelAt(ticketsAtChunk);
-            final Ticket<T> ticket = (Ticket<T>)ticketsAtChunk.removeAndGet(new Ticket<>(type, level, identifier, -2L));
-
-            if (ticket == null) {
-                return false;
-            }
-
-            if (ticketsAtChunk.isEmpty()) {
-                this.tickets.remove(chunk);
-            }
-
-            if (ticket.isForceTicks()) {
-                SortedArraySet<Ticket<?>> tickets = forcedTickets.get(chunk);
-                if (tickets != null) {
-                    tickets.remove(ticket);
+                final SortedArraySet<Ticket<?>> ticketsAtChunk = targetData == null ? null : targetData.tickets.get(chunk);
+                // Folia end - region threading
+                if (ticketsAtChunk == null) {
+                    return false;
                 }
-            }
 
-            final int newLevel = getTicketLevelAt(ticketsAtChunk);
+                final int oldLevel = getTicketLevelAt(ticketsAtChunk);
+                final Ticket<T> ticket = (Ticket<T>)ticketsAtChunk.removeAndGet(new Ticket<>(type, level, identifier, PROBE_MARKER)); // Folia - region threading
 
-            final long removeTick = ticket.createdTick;
-            if (removeTick != NO_TIMEOUT_MARKER) {
-                final Long2IntOpenHashMap removeCounts = this.removeTickToChunkExpireTicketCount.get(removeTick);
-                final int currCount = removeCounts.addTo(chunk, -1);
+                if (ticket == null) {
+                    return false;
+                }
 
-                if (currCount == 1) {
-                    removeCounts.remove(chunk);
-                    if (removeCounts.isEmpty()) {
-                        this.removeTickToChunkExpireTicketCount.remove(removeTick);
+                int newLevel = getTicketLevelAt(ticketsAtChunk); // Folia - region threading - moved up from below
+                // Folia start - region threading
+                // we should not change the ticket levels while the target region may be ticking
+                if (newLevel > level) {
+                    final long unknownRemoveTick = targetData.currentTick + Math.max(0, TicketType.UNKNOWN.timeout);
+                    final Ticket<ChunkPos> unknownTicket = new Ticket<>(TicketType.UNKNOWN, level, new ChunkPos(chunk), unknownRemoveTick);
+                    if (ticketsAtChunk.add(unknownTicket)) {
+                        targetData.removeTickToChunkExpireTicketCount.computeIfAbsent(unknownRemoveTick, (final long keyInMap) -> {
+                            return new Long2IntOpenHashMap();
+                        }).addTo(chunk, 1);
+                    } else {
+                        throw new IllegalStateException("Should have been able to add " + unknownTicket + " to " + ticketsAtChunk);
+                    }
+                    newLevel = level;
+                }
+                // Folia end - region threading
+
+                if (ticketsAtChunk.isEmpty()) {
+                    targetData.tickets.remove(chunk); // Folia - region threading
+                }
+
+                // Folia - region threading - move up
+
+                final long removeTick = ticket.createdTick;
+                if (removeTick != NO_TIMEOUT_MARKER) {
+                    final Long2IntOpenHashMap removeCounts = targetData.removeTickToChunkExpireTicketCount.get(removeTick); // Folia - region threading
+                    final int currCount = removeCounts.addTo(chunk, -1);
+
+                    if (currCount == 1) {
+                        removeCounts.remove(chunk);
+                        if (removeCounts.isEmpty()) {
+                            targetData.removeTickToChunkExpireTicketCount.remove(removeTick); // Folia - region threading
+                        }
                     }
                 }
-            }
 
-            if (oldLevel != newLevel) {
-                this.updateTicketLevel(chunk, newLevel);
-            }
+                if (oldLevel != newLevel) {
+                    this.updateTicketLevel(chunk, newLevel);
+                }
 
-            return true;
+                return true;
+            } finally { // Folia start - region threading
+                if (lock) {
+                    this.world.regioniser.releaseReadLock();
+                }
+            } // Folia end - region threading
         } finally {
             this.ticketLock.unlock();
         }
@@ -468,6 +736,21 @@ public final class ChunkHolderManager {
         }
     }
 
+    // atomic with respect to all add/remove/addandremove ticket calls for the given chunk
+    public <T, V> boolean addIfRemovedTicket(final long chunk, final TicketType<T> addType, final int addLevel, final T addIdentifier,
+                                             final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
+        this.ticketLock.lock();
+        try {
+            if (this.removeTicketAtLevel(removeType, chunk, removeLevel, removeIdentifier)) {
+                this.addTicketAtLevel(addType, chunk, addLevel, addIdentifier);
+                return true;
+            }
+            return false;
+        } finally {
+            this.ticketLock.unlock();
+        }
+    }
+
     public <T> void removeAllTicketsFor(final TicketType<T> ticketType, final int ticketLevel, final T ticketIdentifier) {
         if (ticketLevel > MAX_TICKET_LEVEL) {
             return;
@@ -475,24 +758,33 @@ public final class ChunkHolderManager {
 
         this.ticketLock.lock();
         try {
-            for (final LongIterator iterator = new LongArrayList(this.tickets.keySet()).longIterator(); iterator.hasNext();) {
-                final long chunk = iterator.nextLong();
+            // Folia start - region threading
+            this.world.regioniser.computeForAllRegions((region) -> {
+                for (final LongIterator iterator = new LongArrayList(region.getData().getHolderManagerRegionData().tickets.keySet()).longIterator(); iterator.hasNext();) {
+                    final long chunk = iterator.nextLong();
 
-                this.removeTicketAtLevel(ticketType, chunk, ticketLevel, ticketIdentifier);
-            }
+                    this.removeTicketAtLevel(ticketType, chunk, ticketLevel, ticketIdentifier);
+                }
+            });
+            // Folia end - region threading
         } finally {
             this.ticketLock.unlock();
         }
     }
 
     public void tick() {
-        TickThread.ensureTickThread("Cannot tick ticket manager off-main");
+        // Folia start - region threading
+        final ChunkHolderManager.HolderManagerRegionData data = this.getCurrentRegionData();
+        if (data == null) {
+            throw new IllegalStateException("Not running tick() while on a region");
+        }
+        // Folia end - region threading
 
         this.ticketLock.lock();
         try {
-            final long tick = ++this.currentTick;
+            final long tick = ++data.currentTick; // Folia - region threading
 
-            final Long2IntOpenHashMap toRemove = this.removeTickToChunkExpireTicketCount.remove(tick);
+            final Long2IntOpenHashMap toRemove = data.removeTickToChunkExpireTicketCount.remove(tick); // Folia - region threading
 
             if (toRemove == null) {
                 return;
@@ -505,10 +797,10 @@ public final class ChunkHolderManager {
             for (final LongIterator iterator = toRemove.keySet().longIterator(); iterator.hasNext();) {
                 final long chunk = iterator.nextLong();
 
-                final SortedArraySet<Ticket<?>> tickets = this.tickets.get(chunk);
+                final SortedArraySet<Ticket<?>> tickets = data.tickets.get(chunk); // Folia - region threading
                 tickets.removeIf(expireNow);
                 if (tickets.isEmpty()) {
-                    this.tickets.remove(chunk);
+                    data.tickets.remove(chunk); // Folia - region threading
                     this.ticketLevelPropagator.removeSource(chunk);
                 } else {
                     this.ticketLevelPropagator.setSource(chunk, convertBetweenTicketLevels(tickets.first().getTicketLevel()));
@@ -660,8 +952,8 @@ public final class ChunkHolderManager {
 
         final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
         this.addAndRemoveTickets(chunkKey,
-            TicketType.UNKNOWN, MAX_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
-            TicketType.ENTITY_LOAD, MAX_TICKET_LEVEL, entityLoadId
+                TicketType.UNKNOWN, MAX_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
+                TicketType.ENTITY_LOAD, MAX_TICKET_LEVEL, entityLoadId
         );
 
         return ret;
@@ -746,8 +1038,8 @@ public final class ChunkHolderManager {
 
         final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
         this.addAndRemoveTickets(chunkKey,
-            TicketType.UNKNOWN, MAX_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
-            TicketType.POI_LOAD, MAX_TICKET_LEVEL, poiLoadId
+                TicketType.UNKNOWN, MAX_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
+                TicketType.POI_LOAD, MAX_TICKET_LEVEL, poiLoadId
         );
 
         return ret;
@@ -757,30 +1049,62 @@ public final class ChunkHolderManager {
         if (changedFullStatus.isEmpty()) {
             return;
         }
-        if (!TickThread.isTickThread()) {
-            this.taskScheduler.scheduleChunkTask(() -> {
-                final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = ChunkHolderManager.this.pendingFullLoadUpdate;
-                for (int i = 0, len = changedFullStatus.size(); i < len; ++i) {
-                    pendingFullLoadUpdate.add(changedFullStatus.get(i));
-                }
 
-                ChunkHolderManager.this.processPendingFullUpdate();
-            }, PrioritisedExecutor.Priority.HIGHEST);
-        } else {
-            final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = this.pendingFullLoadUpdate;
-            for (int i = 0, len = changedFullStatus.size(); i < len; ++i) {
-                pendingFullLoadUpdate.add(changedFullStatus.get(i));
+        final Long2ObjectOpenHashMap<List<NewChunkHolder>> sectionToUpdates = new Long2ObjectOpenHashMap<>();
+        final List<NewChunkHolder> thisRegionHolders = new ArrayList<>();
+
+        final int regionShift = this.world.regioniser.sectionChunkShift;
+        final ThreadedRegionizer.ThreadedRegion<TickRegions.TickRegionData, TickRegions.TickRegionSectionData> thisRegion
+                = TickRegionScheduler.getCurrentRegion();
+
+        for (final NewChunkHolder holder : changedFullStatus) {
+            final int regionX = holder.chunkX >> regionShift;
+            final int regionZ = holder.chunkZ >> regionShift;
+            final long holderSectionKey = CoordinateUtils.getChunkKey(regionX, regionZ);
+
+            // region may be null
+            if (thisRegion != null && this.world.regioniser.getRegionAtUnsynchronised(holder.chunkX, holder.chunkZ) == thisRegion) {
+                thisRegionHolders.add(holder);
+            } else {
+                sectionToUpdates.computeIfAbsent(holderSectionKey, (final long keyInMap) -> {
+                    return new ArrayList<>();
+                }).add(holder);
+            }
+        }
+
+        if (!thisRegionHolders.isEmpty()) {
+            thisRegion.getData().getHolderManagerRegionData().pendingFullLoadUpdate.addAll(thisRegionHolders);
+        }
+
+        if (!sectionToUpdates.isEmpty()) {
+            for (final Iterator<Long2ObjectMap.Entry<List<NewChunkHolder>>> iterator = sectionToUpdates.long2ObjectEntrySet().fastIterator();
+                 iterator.hasNext();) {
+                final Long2ObjectMap.Entry<List<NewChunkHolder>> entry = iterator.next();
+                final long sectionKey = entry.getLongKey();
+
+                final int chunkX = CoordinateUtils.getChunkX(sectionKey) << regionShift;
+                final int chunkZ = CoordinateUtils.getChunkZ(sectionKey) << regionShift;
+
+                final List<NewChunkHolder> regionHolders = entry.getValue();
+                this.taskScheduler.scheduleChunkTaskEventually(chunkX, chunkZ, () -> { // Folia - region threading
+                    ChunkHolderManager.this.getCurrentRegionData().pendingFullLoadUpdate.addAll(regionHolders);
+                    ChunkHolderManager.this.processPendingFullUpdate();
+                }, PrioritisedExecutor.Priority.HIGHEST);
             }
         }
     }
 
     final ReferenceLinkedOpenHashSet<NewChunkHolder> unloadQueue = new ReferenceLinkedOpenHashSet<>();
 
+    /*
+     * Note: Only called on chunk holders that the current ticking region owns
+     */
     private void removeChunkHolder(final NewChunkHolder holder) {
         holder.killed = true;
         holder.vanillaChunkHolder.onChunkRemove();
-        this.autoSaveQueue.remove(holder);
+        // Folia - region threading
         ChunkSystem.onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
+        this.getCurrentRegionData().autoSaveQueue.remove(holder); // Folia - region threading
         this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
     }
 
@@ -798,6 +1122,8 @@ public final class ChunkHolderManager {
             throw new IllegalStateException("Cannot hold scheduling lock while calling processUnloads");
         }
 
+        final ChunkHolderManager.HolderManagerRegionData currentData = this.getCurrentRegionData(); // Folia - region threading
+
         final List<NewChunkHolder.UnloadState> unloadQueue;
         final List<ChunkProgressionTask> scheduleList = new ArrayList<>();
         this.ticketLock.lock();
@@ -810,11 +1136,22 @@ public final class ChunkHolderManager {
                 // in order to ensure all chunks in the unload queue do not have a pending ticket level update,
                 // process them now
                 this.processTicketUpdates(false, false, scheduleList);
-                unloadQueue = new ArrayList<>((int)(this.unloadQueue.size() * 0.05) + 1);
 
-                final int unloadCount = Math.max(50, (int)(this.unloadQueue.size() * 0.05));
-                for (int i = 0; i < unloadCount && !this.unloadQueue.isEmpty(); ++i) {
-                    final NewChunkHolder chunkHolder = this.unloadQueue.removeFirst();
+                // Folia start - region threading
+                final ArrayDeque<NewChunkHolder> toUnload = new ArrayDeque<>();
+                // The unload queue is globally maintained, but we can only unload chunks in our region
+                for (final NewChunkHolder holder : this.unloadQueue) {
+                    if (TickThread.isTickThreadFor(this.world, holder.chunkX, holder.chunkZ)) {
+                        toUnload.add(holder);
+                    }
+                }
+                // Folia end - region threading
+
+                final int unloadCount = Math.max(50, (int)(toUnload.size() * 0.05)); // Folia - region threading
+                unloadQueue = new ArrayList<>(unloadCount + 1); // Folia - region threading
+                for (int i = 0; i < unloadCount && !toUnload.isEmpty(); ++i) { // Folia - region threading
+                    final NewChunkHolder chunkHolder = toUnload.removeFirst(); // Folia - region threading
+                    this.unloadQueue.remove(chunkHolder); // Folia - region threading
                     if (chunkHolder.isSafeToUnload() != null) {
                         LOGGER.error("Chunkholder " + chunkHolder + " is not safe to unload but is inside the unload queue?");
                         continue;
@@ -875,6 +1212,148 @@ public final class ChunkHolderManager {
         }
     }
 
+    public enum TicketOperationType {
+        ADD, REMOVE, ADD_IF_REMOVED, ADD_AND_REMOVE
+    }
+
+    public static record TicketOperation<T, V> (
+            TicketOperationType op, long chunkCoord,
+            TicketType<T> ticketType, int ticketLevel, T identifier,
+            TicketType<V> ticketType2, int ticketLevel2, V identifier2
+    ) {
+
+        private TicketOperation(TicketOperationType op, long chunkCoord,
+                                TicketType<T> ticketType, int ticketLevel, T identifier) {
+            this(op, chunkCoord, ticketType, ticketLevel, identifier, null, 0, null);
+        }
+
+        public static <T> TicketOperation<T, T> addOp(final ChunkPos chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return addOp(CoordinateUtils.getChunkKey(chunk), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> addOp(final int chunkX, final int chunkZ, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return addOp(CoordinateUtils.getChunkKey(chunkX, chunkZ), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> addOp(final long chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return new TicketOperation<>(TicketOperationType.ADD, chunk, type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> removeOp(final ChunkPos chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return removeOp(CoordinateUtils.getChunkKey(chunk), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> removeOp(final int chunkX, final int chunkZ, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return removeOp(CoordinateUtils.getChunkKey(chunkX, chunkZ), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> removeOp(final long chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return new TicketOperation<>(TicketOperationType.REMOVE, chunk, type, ticketLevel, identifier);
+        }
+
+        public static <T, V> TicketOperation<T, V> addIfRemovedOp(final long chunk,
+                                                                  final TicketType<T> addType, final int addLevel, final T addIdentifier,
+                                                                  final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
+            return new TicketOperation<>(
+                    TicketOperationType.ADD_IF_REMOVED, chunk, addType, addLevel, addIdentifier,
+                    removeType, removeLevel, removeIdentifier
+            );
+        }
+
+        public static <T, V> TicketOperation<T, V> addAndRemove(final long chunk,
+                                                                final TicketType<T> addType, final int addLevel, final T addIdentifier,
+                                                                final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
+            return new TicketOperation<>(
+                    TicketOperationType.ADD_AND_REMOVE, chunk, addType, addLevel, addIdentifier,
+                    removeType, removeLevel, removeIdentifier
+            );
+        }
+    }
+
+    private final MultiThreadedQueue<TicketOperation<?, ?>> delayedTicketUpdates = new MultiThreadedQueue<>();
+
+    // note: MUST hold ticket lock, otherwise operation ordering is lost
+    private boolean drainTicketUpdates() {
+        boolean ret = false;
+
+        TicketOperation operation;
+        while ((operation = this.delayedTicketUpdates.poll()) != null) {
+            switch (operation.op) {
+                case ADD: {
+                    ret |= this.addTicketAtLevel(operation.ticketType, operation.chunkCoord, operation.ticketLevel, operation.identifier);
+                    break;
+                }
+                case REMOVE: {
+                    ret |= this.removeTicketAtLevel(operation.ticketType, operation.chunkCoord, operation.ticketLevel, operation.identifier);
+                    break;
+                }
+                case ADD_IF_REMOVED: {
+                    ret |= this.addIfRemovedTicket(
+                            operation.chunkCoord,
+                            operation.ticketType, operation.ticketLevel, operation.identifier,
+                            operation.ticketType2, operation.ticketLevel2, operation.identifier2
+                    );
+                    break;
+                }
+                case ADD_AND_REMOVE: {
+                    ret = true;
+                    this.addAndRemoveTickets(
+                            operation.chunkCoord,
+                            operation.ticketType, operation.ticketLevel, operation.identifier,
+                            operation.ticketType2, operation.ticketLevel2, operation.identifier2
+                    );
+                    break;
+                }
+            }
+        }
+
+        return ret;
+    }
+
+    public Boolean tryDrainTicketUpdates() {
+        boolean ret = false;
+        for (;;) {
+            final boolean acquired = this.ticketLock.tryLock();
+            try {
+                if (!acquired) {
+                    return ret ? Boolean.TRUE : null;
+                }
+
+                ret |= this.drainTicketUpdates();
+            } finally {
+                if (acquired) {
+                    this.ticketLock.unlock();
+                }
+            }
+            if (this.delayedTicketUpdates.isEmpty()) {
+                return Boolean.valueOf(ret);
+            } // else: try to re-acquire
+        }
+    }
+
+    public void pushDelayedTicketUpdate(final TicketOperation<?, ?> operation) {
+        this.delayedTicketUpdates.add(operation);
+    }
+
+    public void pushDelayedTicketUpdates(final Collection<TicketOperation<?, ?>> operations) {
+        this.delayedTicketUpdates.addAll(operations);
+    }
+
+    public Boolean tryProcessTicketUpdates() {
+        final boolean acquired = this.ticketLock.tryLock();
+        try {
+            if (!acquired) {
+                return null;
+            }
+
+            return Boolean.valueOf(this.processTicketUpdates(false, true, null));
+        } finally {
+            if (acquired) {
+                this.ticketLock.unlock();
+            }
+        }
+    }
+
     private final ThreadLocal<Boolean> BLOCK_TICKET_UPDATES = ThreadLocal.withInitial(() -> {
         return Boolean.FALSE;
     });
@@ -921,6 +1400,8 @@ public final class ChunkHolderManager {
 
         this.ticketLock.lock();
         try {
+            this.drainTicketUpdates();
+
             final boolean levelsUpdated = this.ticketLevelPropagator.propagateUpdates();
             if (levelsUpdated) {
                 // Unlike CB, ticket level updates cannot happen recursively. Thank god.
@@ -987,6 +1468,17 @@ public final class ChunkHolderManager {
                     }
 
                     this.ticketLevelUpdates.clear();
+
+                    // Folia start - region threading
+                    // it is possible that a special case new chunk holder had its ticket removed before it was propagated,
+                    // which means checkUnload was never invoked. By checking unload here, we ensure that either the
+                    // ticket level was propagated (in which case, a later depropagation would check again) or that
+                    // we called checkUnload for it.
+                    for (final NewChunkHolder special : this.specialCaseUnload) {
+                        special.checkUnload();
+                    }
+                    this.specialCaseUnload.clear();
+                    // Folia end - region threading
                 }
             }
         } finally {
@@ -1012,7 +1504,12 @@ public final class ChunkHolderManager {
 
     // only call on tick thread
     protected final boolean processPendingFullUpdate() {
-        final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = this.pendingFullLoadUpdate;
+        final HolderManagerRegionData data = this.getCurrentRegionData();
+        if (data == null) {
+            return false;
+        }
+
+        final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = data.pendingFullLoadUpdate;
 
         boolean ret = false;
 
@@ -1023,9 +1520,7 @@ public final class ChunkHolderManager {
             ret |= holder.handleFullStatusChange(changedFullStatus);
 
             if (!changedFullStatus.isEmpty()) {
-                for (int i = 0, len = changedFullStatus.size(); i < len; ++i) {
-                    pendingFullLoadUpdate.add(changedFullStatus.get(i));
-                }
+                this.addChangedStatuses(changedFullStatus);
                 changedFullStatus.clear();
             }
         }
@@ -1075,7 +1570,7 @@ public final class ChunkHolderManager {
 
     private JsonObject getDebugJsonNoLock() {
         final JsonObject ret = new JsonObject();
-        ret.addProperty("current_tick", Long.valueOf(this.currentTick));
+        // Folia - region threading - move down
 
         final JsonArray unloadQueue = new JsonArray();
         ret.add("unload_queue", unloadQueue);
@@ -1094,60 +1589,73 @@ public final class ChunkHolderManager {
             holders.add(holder.getDebugJson());
         }
 
-        final JsonArray removeTickToChunkExpireTicketCount = new JsonArray();
-        ret.add("remove_tick_to_chunk_expire_ticket_count", removeTickToChunkExpireTicketCount);
+        // Folia start - region threading
+        final JsonArray regions = new JsonArray();
+        ret.add("regions", regions);
+        this.world.regioniser.computeForAllRegionsUnsynchronised((region) -> {
+            final JsonObject regionJson = new JsonObject();
+            regions.add(regionJson);
 
-        for (final Long2ObjectMap.Entry<Long2IntOpenHashMap> tickEntry : this.removeTickToChunkExpireTicketCount.long2ObjectEntrySet()) {
-            final long tick = tickEntry.getLongKey();
-            final Long2IntOpenHashMap coordinateToCount = tickEntry.getValue();
+            final TickRegions.TickRegionData regionData = region.getData();
 
-            final JsonObject tickJson = new JsonObject();
-            removeTickToChunkExpireTicketCount.add(tickJson);
+            regionJson.addProperty("current_tick", Long.valueOf(regionData.getCurrentTick()));
 
-            tickJson.addProperty("tick", Long.valueOf(tick));
+            final JsonArray removeTickToChunkExpireTicketCount = new JsonArray();
+            regionJson.add("remove_tick_to_chunk_expire_ticket_count", removeTickToChunkExpireTicketCount);
 
-            final JsonArray tickEntries = new JsonArray();
-            tickJson.add("entries", tickEntries);
+            for (final Long2ObjectMap.Entry<Long2IntOpenHashMap> tickEntry : regionData.getHolderManagerRegionData().removeTickToChunkExpireTicketCount.long2ObjectEntrySet()) {
+                final long tick = tickEntry.getLongKey();
+                final Long2IntOpenHashMap coordinateToCount = tickEntry.getValue();
 
-            for (final Long2IntMap.Entry entry : coordinateToCount.long2IntEntrySet()) {
-                final long coordinate = entry.getLongKey();
-                final int count = entry.getIntValue();
+                final JsonObject tickJson = new JsonObject();
+                removeTickToChunkExpireTicketCount.add(tickJson);
 
-                final JsonObject entryJson = new JsonObject();
-                tickEntries.add(entryJson);
+                tickJson.addProperty("tick", Long.valueOf(tick));
 
-                entryJson.addProperty("chunkX", Long.valueOf(CoordinateUtils.getChunkX(coordinate)));
-                entryJson.addProperty("chunkZ", Long.valueOf(CoordinateUtils.getChunkZ(coordinate)));
-                entryJson.addProperty("count", Integer.valueOf(count));
+                final JsonArray tickEntries = new JsonArray();
+                tickJson.add("entries", tickEntries);
+
+                for (final Long2IntMap.Entry entry : coordinateToCount.long2IntEntrySet()) {
+                    final long coordinate = entry.getLongKey();
+                    final int count = entry.getIntValue();
+
+                    final JsonObject entryJson = new JsonObject();
+                    tickEntries.add(entryJson);
+
+                    entryJson.addProperty("chunkX", Long.valueOf(CoordinateUtils.getChunkX(coordinate)));
+                    entryJson.addProperty("chunkZ", Long.valueOf(CoordinateUtils.getChunkZ(coordinate)));
+                    entryJson.addProperty("count", Integer.valueOf(count));
+                }
             }
-        }
 
-        final JsonArray allTicketsJson = new JsonArray();
-        ret.add("tickets", allTicketsJson);
+            final JsonArray allTicketsJson = new JsonArray();
+            regionJson.add("tickets", allTicketsJson);
 
-        for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> coordinateTickets : this.tickets.long2ObjectEntrySet()) {
-            final long coordinate = coordinateTickets.getLongKey();
-            final SortedArraySet<Ticket<?>> tickets = coordinateTickets.getValue();
+            for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> coordinateTickets : regionData.getHolderManagerRegionData().tickets.long2ObjectEntrySet()) {
+                final long coordinate = coordinateTickets.getLongKey();
+                final SortedArraySet<Ticket<?>> tickets = coordinateTickets.getValue();
 
-            final JsonObject coordinateJson = new JsonObject();
-            allTicketsJson.add(coordinateJson);
+                final JsonObject coordinateJson = new JsonObject();
+                allTicketsJson.add(coordinateJson);
 
-            coordinateJson.addProperty("chunkX", Long.valueOf(CoordinateUtils.getChunkX(coordinate)));
-            coordinateJson.addProperty("chunkZ", Long.valueOf(CoordinateUtils.getChunkZ(coordinate)));
+                coordinateJson.addProperty("chunkX", Long.valueOf(CoordinateUtils.getChunkX(coordinate)));
+                coordinateJson.addProperty("chunkZ", Long.valueOf(CoordinateUtils.getChunkZ(coordinate)));
 
-            final JsonArray ticketsSerialized = new JsonArray();
-            coordinateJson.add("tickets", ticketsSerialized);
+                final JsonArray ticketsSerialized = new JsonArray();
+                coordinateJson.add("tickets", ticketsSerialized);
 
-            for (final Ticket<?> ticket : tickets) {
-                final JsonObject ticketSerialized = new JsonObject();
-                ticketsSerialized.add(ticketSerialized);
+                for (final Ticket<?> ticket : tickets) {
+                    final JsonObject ticketSerialized = new JsonObject();
+                    ticketsSerialized.add(ticketSerialized);
 
-                ticketSerialized.addProperty("type", ticket.getType().toString());
-                ticketSerialized.addProperty("level", Integer.valueOf(ticket.getTicketLevel()));
-                ticketSerialized.addProperty("identifier", Objects.toString(ticket.key));
-                ticketSerialized.addProperty("remove_tick", Long.valueOf(ticket.createdTick));
+                    ticketSerialized.addProperty("type", ticket.getType().toString());
+                    ticketSerialized.addProperty("level", Integer.valueOf(ticket.getTicketLevel()));
+                    ticketSerialized.addProperty("identifier", Objects.toString(ticket.key));
+                    ticketSerialized.addProperty("remove_tick", Long.valueOf(ticket.createdTick));
+                }
             }
-        }
+        });
+        // Folia end - region threading
 
         return ret;
     }

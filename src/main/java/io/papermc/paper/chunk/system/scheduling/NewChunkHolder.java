@@ -705,7 +705,7 @@ public final class NewChunkHolder {
     boolean killed;
 
     // must hold scheduling lock
-    private void checkUnload() {
+    public void checkUnload() {
         if (this.killed) {
             return;
         }
@@ -1409,7 +1409,7 @@ public final class NewChunkHolder {
         }
 
         // must be scheduled to main, we do not trust the callback to not do anything stupid
-        this.scheduler.scheduleChunkTask(this.chunkX, this.chunkZ, () -> {
+        this.scheduler.scheduleChunkTaskEventually(this.chunkX, this.chunkZ, () -> { // Folia - region threading
             for (final Consumer<ChunkAccess> consumer : consumers) {
                 try {
                     consumer.accept(chunk);
@@ -1452,7 +1452,7 @@ public final class NewChunkHolder {
         }
 
         // must be scheduled to main, we do not trust the callback to not do anything stupid
-        this.scheduler.scheduleChunkTask(this.chunkX, this.chunkZ, () -> {
+        this.scheduler.scheduleChunkTaskEventually(this.chunkX, this.chunkZ, () -> {  // Folia - region threading
             for (final Consumer<LevelChunk> consumer : consumers) {
                 try {
                     consumer.accept(chunk);
