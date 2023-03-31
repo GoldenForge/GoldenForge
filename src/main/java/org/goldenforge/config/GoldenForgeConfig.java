@@ -42,6 +42,8 @@ public class GoldenForgeConfig {
 
         public static ConfigValue<Integer> maxJoinsPerTick;
 
+        public static ConfigValue<Integer> autoSaveInterval;
+        public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -134,6 +136,19 @@ public class GoldenForgeConfig {
                     .comment("Adjusts how many players are able to join in a single server tick.")
                     .worldRestart()
                     .define("maxJoinsPerTick", 5);
+
+            builder.pop();
+
+            builder.push("Auto save");
+            autoSaveInterval = builder
+                    .comment("Configures the world saving interval in ticks.")
+                    .worldRestart()
+                    .define("autoSaveInterval", 6000);
+
+            maxAutoSaveChunksPerTick = builder
+                    .comment("The maximum number of chunks the auto-save system will save in a single tick.")
+                    .worldRestart()
+                    .define("maxAutoSaveChunksPerTick", 24);
 
             builder.pop();
         }

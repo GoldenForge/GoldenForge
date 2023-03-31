@@ -21,6 +21,7 @@ import net.minecraft.server.level.*;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.ChunkPos;
+import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -154,8 +155,8 @@ public final class ChunkHolderManager {
     public void autoSave() {
         final List<NewChunkHolder> reschedule = new ArrayList<>();
         final long currentTick = MinecraftServer.currentTickLong;
-        final long maxSaveTime = currentTick - 6000;
-        for (int autoSaved = 0; autoSaved < 24 && !this.autoSaveQueue.isEmpty();) {
+        final long maxSaveTime = currentTick - GoldenForgeConfig.Server.autoSaveInterval.get();
+        for (int autoSaved = 0; autoSaved < GoldenForgeConfig.Server.maxAutoSaveChunksPerTick.get() && !this.autoSaveQueue.isEmpty();) {
             final NewChunkHolder holder = this.autoSaveQueue.first();
 
             if (holder.lastAutoSave > maxSaveTime) {
