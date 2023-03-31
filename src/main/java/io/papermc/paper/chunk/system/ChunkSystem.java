@@ -64,17 +64,17 @@ public final class ChunkSystem {
     }
 
     public static void onEntityPreAdd(final ServerLevel level, final Entity entity) {
-//        // Paper start - duplicate uuid resolving
-//        if (ChunkMap.checkDupeUUID(level, entity)) {
-//            return;
-//        }
+        // Paper start - duplicate uuid resolving
+        if (ChunkMap.checkDupeUUID(level, entity)) {
+            return;
+        }
 //        if (net.minecraft.world.level.Level.DEBUG_ENTITIES && ((Entity) entity).level.paperConfig().entities.spawning.duplicateUuid.mode != io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode.NOTHING) {
 //            if (((Entity) entity).addedToWorldStack != null) {
 //                ((Entity) entity).addedToWorldStack.printStackTrace();
 //            }
 //            ServerLevel.getAddToWorldStackTrace((Entity) entity).printStackTrace();
 //        }
-//        // Paper end - duplicate uuid resolving
+        // Paper end - duplicate uuid resolving
     }
 
     public static void onChunkHolderCreate(final ServerLevel level, final ChunkHolder holder) {

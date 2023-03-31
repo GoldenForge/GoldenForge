@@ -35,7 +35,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,112 @@
+@@ -104,8 +_,113 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -48,6 +48,7 @@
 +      return worldPaper;
 +   }
 +
++   public static final boolean DEBUG_ENTITIES = Boolean.getBoolean("debug.entities"); // Paper
 +   WorldPaper worldPaper = new WorldPaper();
 +   public class WorldPaper {
 +

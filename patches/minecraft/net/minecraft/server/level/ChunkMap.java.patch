@@ -885,7 +885,7 @@
        if (!p_143066_.isEmpty()) {
           p_143065_.m_143327_(EntityType.m_147045_(p_143066_, p_143065_));
        }
-@@ -667,78 +_,15 @@
+@@ -667,78 +_,59 @@
     }
  
     private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_140383_(ChunkHolder p_140384_) {
@@ -920,8 +920,53 @@
 -      }, (p_214951_) -> {
 -         this.f_140143_.m_6937_(ChunkTaskPriorityQueueSorter.m_140624_(p_214951_, p_140384_.m_140092_().m_45588_(), p_140384_::m_140093_));
 -      });
+-   }
 +      throw new UnsupportedOperationException(); // Paper - rewrite chunk system
-    }
++   }
++
++   // Paper start
++   // rets true if to prevent the entity from being added
++   public static boolean checkDupeUUID(ServerLevel level, Entity entity) {
++//      io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode mode = level.paperConfig().entities.spawning.duplicateUuid.mode;
++//      if (mode != io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode.WARN
++//              && mode != io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode.DELETE
++//              && mode != io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode.SAFE_REGEN) {
++//         return false;
++//      }
++      Entity other = level.m_8791_(entity.m_20148_());
++
++      if (other == null || other == entity) {
++         return false;
++      }
++
++      if (other != null && !other.m_213877_()
++              && Objects.equals(other.m_20078_(), entity.m_20078_())
++              && entity.f_19826_.m_123331_(other.f_19826_) < /*level.paperConfig().entities.spawning.duplicateUuid.safeRegenDeleteRange*/ 32
++      ) {
++         if (ServerLevel.DEBUG_ENTITIES) f_140128_.warn("[DUPE-UUID] Duplicate UUID found used by " + other + ", deleted entity " + entity + " because it was near the duplicate and likely an actual duplicate. See https://github.com/PaperMC/Paper/issues/1223 for discussion on what this is about.");
++         entity.m_146870_();
++         return true;
++      }
++      if (other != null && !other.m_213877_()) {
++//         switch (mode) {
++//            case SAFE_REGEN: {
++               entity.m_20084_(java.util.UUID.randomUUID());
++               if (ServerLevel.DEBUG_ENTITIES) f_140128_.warn("[DUPE-UUID] Duplicate UUID found used by " + other + ", regenerated UUID for " + entity + ". See https://github.com/PaperMC/Paper/issues/1223 for discussion on what this is about.");
++//               break;
++//            }
++//            case DELETE: {
++//               if (ServerLevel.DEBUG_ENTITIES) LOGGER.warn("[DUPE-UUID] Duplicate UUID found used by " + other + ", deleted entity " + entity + ". See https://github.com/PaperMC/Paper/issues/1223 for discussion on what this is about.");
++//               entity.discard();
++//               return true;
++//            }
++//            default:
++//               if (ServerLevel.DEBUG_ENTITIES) LOGGER.warn("[DUPE-UUID] Duplicate UUID found used by " + other + ", doing nothing to " + entity + ". See https://github.com/PaperMC/Paper/issues/1223 for discussion on what this is about.");
++//               break;
++//         }
++      }
++      return false;
++   }
++   // Paper end
  
     public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> m_143053_(ChunkHolder p_143054_) {
 -      ChunkPos chunkpos = p_143054_.m_140092_();
@@ -1146,10 +1191,17 @@
  
     }
  
-@@ -917,30 +_,176 @@
+@@ -917,30 +_,138 @@
           return "cancelled";
        }
     }
+-
+-   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) {
+-      return this.m_223454_(p_214964_).thenApplyAsync((p_214907_) -> {
+-         return p_214907_.map(this::m_214947_);
+-      }, Util.m_183991_());
+-   }
+-
 +   // Paper start - Asynchronous chunk io
 +   @Nullable
 +   @Override
@@ -1164,11 +1216,7 @@
 +      // Paper end - rewrite chunk system
 +      return super.readSync(chunkcoordintpair);
 +   }
- 
--   private CompletableFuture<Optional<CompoundTag>> m_214963_(ChunkPos p_214964_) {
--      return this.m_223454_(p_214964_).thenApplyAsync((p_214907_) -> {
--         return p_214907_.map(this::m_214947_);
--      }, Util.m_183991_());
++
 +   @Override
 +   public void m_63502_(ChunkPos chunkcoordintpair, CompoundTag nbttagcompound) throws IOException {
 +      // Paper start - rewrite chunk system
@@ -1180,46 +1228,8 @@
 +      }
 +      // Paper end - rewrite chunk system
 +      super.m_63502_(chunkcoordintpair, nbttagcompound);
-    }
++   }
 +   // Paper end
-+//
-+//   //GOldenforge: compatibility with chunky
-+//   private CompletableFuture<Optional<CompoundTag>> readChunk(ChunkPos p_214964_) throws IOException {
-+//      return CompletableFuture.completedFuture(this.read(p_214964_)).thenApplyAsync((p_214907_) -> {
-+//         return Optional.of(this.upgradeChunkTag(p_214907_));
-+//         //return p_214907_.map(this::upgradeChunkTag);
-+//      }, Util.backgroundExecutor());
-+//   }
-+//   public CompletableFuture<Optional<CompoundTag>> readChunk0(ChunkPos p_214964_) throws IOException {
-+//      return CompletableFuture.completedFuture(null).thenApply((a) -> {
-+//         try {
-+//            return read(p_214964_);
-+//         } catch (IOException e) {
-+//            throw new RuntimeException(e);
-+//         }
-+//      }).thenApplyAsync((optional) -> {
-+//         return Optional.of(this.upgradeChunkTag(this.level.dimension(), this.overworldDataStorage, optional, this.generator.getTypeNameForDataFixer()));
-+//      }, mainThreadExecutor);
-+//   }
-+//
-+//   private CompoundTag readChunkInternal(ChunkPos p_214964_) throws IOException {
-+//      CompoundTag nbttagcompound = this.read(p_214964_);
-+//      // Paper start - Cache chunk status on disk
-+//      if (nbttagcompound == null) {
-+//         return null;
-+//      }
-+//
-+//      nbttagcompound = this.upgradeChunkTag(this.level.dimension(), this.overworldDataStorage, nbttagcompound, this.generator.getTypeNameForDataFixer());
-+//      if (nbttagcompound == null) {
-+//         return null;
-+//      }
-+//
-+//      //this.updateChunkStatusOnDisk(pos, nbttagcompound);
-+//
-+//      return nbttagcompound;
-+//      // Paper end
-+//   }
- 
     private CompoundTag m_214947_(CompoundTag p_214948_) {
        return this.m_188288_(this.f_140133_.m_46472_(), this.f_140137_, p_214948_, this.f_140136_.m_187743_());
     }
