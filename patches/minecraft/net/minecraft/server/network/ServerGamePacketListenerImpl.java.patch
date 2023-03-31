@@ -1,10 +1,11 @@
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -178,11 +_,18 @@
+@@ -178,11 +_,19 @@
  import net.minecraft.world.phys.shapes.Shapes;
  import net.minecraft.world.phys.shapes.VoxelShape;
  import org.apache.commons.lang3.StringUtils;
 +import org.goldenforge.GoldenConfig;
++import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
  public class ServerGamePacketListenerImpl implements ServerPlayerConnection, TickablePacketListener, ServerGamePacketListener {
@@ -42,6 +43,57 @@
        if (this.f_215200_ > -1) {
           this.m_9829_(new ClientboundBlockChangedAckPacket(this.f_215200_));
           this.f_215200_ = -1;
+@@ -392,19 +_,43 @@
+          Entity entity = this.f_9743_.m_20201_();
+          if (entity != this.f_9743_ && entity.m_6688_() == this.f_9743_ && entity == this.f_9759_) {
+             ServerLevel serverlevel = this.f_9743_.m_9236_();
+-            double d0 = entity.m_20185_();
+-            double d1 = entity.m_20186_();
+-            double d2 = entity.m_20189_();
+-            double d3 = m_143609_(p_9876_.m_134199_());
+-            double d4 = m_143653_(p_9876_.m_134202_());
+-            double d5 = m_143609_(p_9876_.m_134203_());
++            double d0 = entity.m_20185_();final double fromX = d0; // Paper - OBFHELPER
++            double d1 = entity.m_20186_();final double fromY = d1; // Paper - OBFHELPER
++            double d2 = entity.m_20189_();final double fromZ = d2; // Paper - OBFHELPER
++            double d3 = m_143609_(p_9876_.m_134199_());  final double toX = d3; // Paper - OBFHELPER
++            double d4 = m_143653_(p_9876_.m_134202_()); final double toY = d4; // Paper - OBFHELPER
++            double d5 = m_143609_(p_9876_.m_134203_());final double toZ = d5; // Paper - OBFHELPER
+             float f = Mth.m_14177_(p_9876_.m_134204_());
+             float f1 = Mth.m_14177_(p_9876_.m_134205_());
+             double d6 = d3 - this.f_9760_;
+             double d7 = d4 - this.f_9761_;
+             double d8 = d5 - this.f_9762_;
+             double d9 = entity.m_20184_().m_82556_();
+-            double d10 = d6 * d6 + d7 * d7 + d8 * d8;
++            // Paper start - fix large move vectors killing the server
++            double currDeltaX = toX - fromX;
++            double currDeltaY = toY - fromY;
++            double currDeltaZ = toZ - fromZ;
++            double d10 = Math.max(d6 * d6 + d7 * d7 + d8 * d8, (currDeltaX * currDeltaX + currDeltaY * currDeltaY + currDeltaZ * currDeltaZ) - 1);
++            // Paper end - fix large move vectors killing the server
++
++            // Paper start - fix large move vectors killing the server
++            double otherFieldX = d3 - this.f_9763_;
++            double otherFieldY = d4 - this.f_9764_ - 1.0E-6D;
++            double otherFieldZ = d5 - this.f_9765_;
++            d10 = Math.max(d10, (otherFieldX * otherFieldX + otherFieldY * otherFieldY + otherFieldZ * otherFieldZ) - 1);
++            // Paper end - fix large move vectors killing the server
++
++
++            // Paper start - Prevent moving into unloaded chunks
++            if (GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get() && (
++                    !serverlevel.areChunksLoadedForMove(this.f_9743_.m_20191_().m_82369_(new Vec3(toX, toY, toZ).m_82546_(this.f_9743_.m_20182_()))) ||
++                            !serverlevel.areChunksLoadedForMove(entity.m_20191_().m_82369_(new Vec3(toX, toY, toZ).m_82546_(entity.m_20182_())))
++            )) {
++               this.f_9742_.m_129512_(new ClientboundMoveVehiclePacket(entity));
++               return;
++            }
++            // Paper end
++
+             if (d10 - d9 > 100.0D && !this.m_9956_()) {
+                f_9744_.warn("{} (vehicle of {}) moved too quickly! {},{},{}", entity.m_7755_().getString(), this.f_9743_.m_7755_().getString(), d6, d7, d8);
+                this.f_9742_.m_129512_(new ClientboundMoveVehiclePacket(entity));
 @@ -432,9 +_,11 @@
              }
  
@@ -63,7 +115,63 @@
     }
  
     public void m_7376_(ServerboundAcceptTeleportationPacket p_9835_) {
-@@ -876,14 +_,32 @@
+@@ -462,7 +_,7 @@
+             return;
+          }
+ 
+-         this.f_9743_.m_19890_(this.f_9766_.f_82479_, this.f_9766_.f_82480_, this.f_9766_.f_82481_, this.f_9743_.m_146908_(), this.f_9743_.m_146909_());
++         this.f_9743_.m_7678_(this.f_9766_.f_82479_, this.f_9766_.f_82480_, this.f_9766_.f_82481_, this.f_9743_.m_146908_(), this.f_9743_.m_146909_()); // Paper - use proper moveTo for teleportation
+          this.f_9756_ = this.f_9766_.f_82479_;
+          this.f_9757_ = this.f_9766_.f_82480_;
+          this.f_9758_ = this.f_9766_.f_82481_;
+@@ -850,15 +_,22 @@
+ 
+             } else {
+                this.f_9735_ = this.f_9746_;
+-               double d0 = m_143609_(p_9874_.m_134129_(this.f_9743_.m_20185_()));
+-               double d1 = m_143653_(p_9874_.m_134140_(this.f_9743_.m_20186_()));
+-               double d2 = m_143609_(p_9874_.m_134146_(this.f_9743_.m_20189_()));
++               double d0 = m_143609_(p_9874_.m_134129_(this.f_9743_.m_20185_())); final double toX = d0; // Paper - OBFHELPER
++               double d1 = m_143653_(p_9874_.m_134140_(this.f_9743_.m_20186_())); final double toY = d1;
++               double d2 = m_143609_(p_9874_.m_134146_(this.f_9743_.m_20189_())); final double toZ = d2; // Paper - OBFHELPER
+                float f = Mth.m_14177_(p_9874_.m_134131_(this.f_9743_.m_146908_()));
+                float f1 = Mth.m_14177_(p_9874_.m_134142_(this.f_9743_.m_146909_()));
+                if (this.f_9743_.m_20159_()) {
+                   this.f_9743_.m_19890_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), f, f1);
+                   this.f_9743_.m_9236_().m_7726_().m_8385_(this.f_9743_);
+                } else {
++                  // CraftBukkit - Make sure the move is valid but then reset it for plugins to modify
++                  double prevX = this.f_9743_.m_20185_();
++                  double prevY = this.f_9743_.m_20186_();
++                  double prevZ = this.f_9743_.m_20189_();
++                  float prevYaw = this.f_9743_.m_146908_();
++                  float prevPitch = this.f_9743_.m_146909_();
++                  // CraftBukkit end
+                   double d3 = this.f_9743_.m_20185_();
+                   double d4 = this.f_9743_.m_20186_();
+                   double d5 = this.f_9743_.m_20189_();
+@@ -867,7 +_,19 @@
+                   double d8 = d1 - this.f_9754_;
+                   double d9 = d2 - this.f_9755_;
+                   double d10 = this.f_9743_.m_20184_().m_82556_();
+-                  double d11 = d7 * d7 + d8 * d8 + d9 * d9;
++                  // Paper start - fix large move vectors killing the server
++                  double currDeltaX = toX - prevX;
++                  double currDeltaY = toY - prevY;
++                  double currDeltaZ = toZ - prevZ;
++                  double d11 = Math.max(d7 * d7 + d8 * d8 + d9 * d9, (currDeltaX * currDeltaX + currDeltaY * currDeltaY + currDeltaZ * currDeltaZ) - 1);
++                  // Paper end - fix large move vectors killing the server
++                  // Paper start - fix large move vectors killing the server
++                  double otherFieldX = d0 - this.f_9756_;
++                  double otherFieldY = d1 - this.f_9757_;
++                  double otherFieldZ = d2 - this.f_9758_;
++                  d11 = Math.max(d11, (otherFieldX * otherFieldX + otherFieldY * otherFieldY + otherFieldZ * otherFieldZ) - 1);
++                  // Paper end - fix large move vectors killing the server
++
+                   if (this.f_9743_.m_5803_()) {
+                      if (d11 > 1.0D) {
+                         this.m_9774_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), f, f1);
+@@ -876,14 +_,39 @@
                    } else {
                       ++this.f_9740_;
                       int i = this.f_9740_ - this.f_9741_;
@@ -91,6 +199,13 @@
 +                        speed = this.f_9743_.m_150110_().f_35940_ * 10f;
 +                     }
 +
++                     // Paper start - Prevent moving into unloaded chunks
++                     if (GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get() && (this.f_9743_.m_20185_() != toX || this.f_9743_.m_20189_() != toZ) && !serverlevel.areChunksLoadedForMove(this.f_9743_.m_20191_().m_82369_(new Vec3(toX, toY, toZ).m_82546_(this.f_9743_.m_20182_())))) {
++                        this.m_9780_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), this.f_9743_.m_146908_(), this.f_9743_.m_146909_(), Collections.emptySet());
++                        return;
++                     }
++                     // Paper end
++
                       if (!this.f_9743_.m_8958_() && (!this.f_9743_.m_9236_().m_46469_().m_46207_(GameRules.f_46148_) || !this.f_9743_.m_21255_())) {
                          float f2 = this.f_9743_.m_21255_() ? 300.0F : 100.0F;
 -                        if (d11 - d10 > (double)(f2 * (float)i) && !this.m_9956_()) {
@@ -99,6 +214,28 @@
                             f_9744_.warn("{} moved too quickly! {},{},{}", this.f_9743_.m_7755_().getString(), d7, d8, d9);
                             this.m_9774_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), this.f_9743_.m_146908_(), this.f_9743_.m_146909_());
                             return;
+@@ -965,6 +_,12 @@
+    }
+ 
+    public void m_143617_(double p_143618_, double p_143619_, double p_143620_, float p_143621_, float p_143622_, Set<ClientboundPlayerPositionPacket.RelativeArgument> p_143623_, boolean p_143624_) {
++      // Paper start
++      if (f_9743_.m_213877_()) {
++         f_9744_.info("Attempt to teleport removed player {} restricted", f_9743_.m_6302_());
++         return;
++      }
++      // Paper end
+       double d0 = p_143623_.contains(ClientboundPlayerPositionPacket.RelativeArgument.X) ? this.f_9743_.m_20185_() : 0.0D;
+       double d1 = p_143623_.contains(ClientboundPlayerPositionPacket.RelativeArgument.Y) ? this.f_9743_.m_20186_() : 0.0D;
+       double d2 = p_143623_.contains(ClientboundPlayerPositionPacket.RelativeArgument.Z) ? this.f_9743_.m_20189_() : 0.0D;
+@@ -976,7 +_,7 @@
+       }
+ 
+       this.f_9735_ = this.f_9746_;
+-      this.f_9743_.m_19890_(p_143618_, p_143619_, p_143620_, p_143621_, p_143622_);
++      this.f_9743_.m_7678_(p_143618_, p_143619_, p_143620_, p_143621_, p_143622_); // Paper - use proper moveTo for teleportation
+       this.f_9743_.f_8906_.m_9829_(new ClientboundPlayerPositionPacket(p_143618_ - d0, p_143619_ - d1, p_143620_ - d2, p_143621_ - f, p_143622_ - f1, p_143623_, this.f_9767_, p_143624_));
+    }
+ 
 @@ -1040,7 +_,7 @@
        Vec3 vec3 = blockhitresult.m_82450_();
        BlockPos blockpos = blockhitresult.m_82425_();

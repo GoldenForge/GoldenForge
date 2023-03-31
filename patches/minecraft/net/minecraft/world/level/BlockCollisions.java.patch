@@ -1,10 +1,11 @@
 --- a/net/minecraft/world/level/BlockCollisions.java
 +++ b/net/minecraft/world/level/BlockCollisions.java
-@@ -14,6 +_,7 @@
+@@ -14,6 +_,8 @@
  import net.minecraft.world.phys.shapes.CollisionContext;
  import net.minecraft.world.phys.shapes.Shapes;
  import net.minecraft.world.phys.shapes.VoxelShape;
 +import org.goldenforge.GoldenConfig;
++import org.goldenforge.config.GoldenForgeConfig;
  
  public class BlockCollisions extends AbstractIterator<VoxelShape> {
     private final AABB f_186392_;
@@ -68,7 +69,7 @@
 +            }
 +
 +            if (blockState == null) {
-+               if (!(source instanceof net.minecraft.server.level.ServerPlayer) || GoldenConfig.preventMovingIntoUnloadedChunks) {
++               if (!(source instanceof net.minecraft.server.level.ServerPlayer) || GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get()) {
 +                  return Shapes.m_83064_(far ? source.m_20191_() : new AABB(new BlockPos(x, y, z)));
 +               }
 +               // Paper end

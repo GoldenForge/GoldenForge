@@ -41,6 +41,7 @@ public class GoldenForgeConfig {
         public static ConfigValue<String> velocityForwardingToken;
 
         public static ConfigValue<Integer> maxJoinsPerTick;
+        public static ConfigValue<Boolean> preventMovingIntoUnloadedChunks;
 
         public static ConfigValue<Integer> autoSaveInterval;
         public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
@@ -136,6 +137,11 @@ public class GoldenForgeConfig {
                     .comment("Adjusts how many players are able to join in a single server tick.")
                     .worldRestart()
                     .define("maxJoinsPerTick", 5);
+
+            preventMovingIntoUnloadedChunks = builder
+                    .comment("Enable this to stop players from entering unloaded chunks.")
+                    .worldRestart()
+                    .define("preventMovingIntoUnloadedChunks", false);
 
             builder.pop();
 

@@ -3,7 +3,6 @@ package org.goldenforge;
 public class GoldenConfig {
 
     // Misc
-    public static boolean preventMovingIntoUnloadedChunks = false;
     public static double movedTooQuicklyMultiplier = 10.0D;
     public static byte mobSpawnRange = 8;
     public static boolean perPlayerMobSpawns = true;

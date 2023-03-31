@@ -16,11 +16,12 @@
  import net.minecraft.world.level.block.HoneyBlock;
  import net.minecraft.world.level.block.Mirror;
  import net.minecraft.world.level.block.RenderShape;
-@@ -116,9 +_,10 @@
+@@ -116,9 +_,11 @@
  import net.minecraft.world.phys.shapes.VoxelShape;
  import net.minecraft.world.scores.PlayerTeam;
  import net.minecraft.world.scores.Team;
 +import org.goldenforge.GoldenConfig;
++import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
 -public abstract class Entity implements Nameable, EntityAccess, CommandSource {
@@ -153,7 +154,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,75 @@
+@@ -230,13 +_,76 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -210,6 +211,7 @@
 +   // Paper end - optimise entity tracking
 +   public boolean collidingWithWorldBorder; // Paper
 +   public boolean collisionLoadChunks = false; // Paper
++   public boolean preserveMotion = true; // Paper - keep initial motion on first setPositionRotation
 +
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
@@ -436,7 +438,7 @@
 +            }
 +         }
 +
-+         io.papermc.paper.util.CollisionUtil.getCollisions(world, this, collisionBox, potentialCollisions, false, GoldenConfig.preventMovingIntoUnloadedChunks,
++         io.papermc.paper.util.CollisionUtil.getCollisions(world, this, collisionBox, potentialCollisions, false, GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get(),
 +                 false, false, null, null);
 +
 +         if (collidingWithWorldBorder = io.papermc.paper.util.CollisionUtil.isCollidingWithBorderEdge(world.m_6857_(), collisionBox)) { // Paper - this line *is* correct, ignore the IDE warning about assignments being used as a condition
@@ -563,6 +565,26 @@
     }
  
     public void m_19920_(float p_19921_, Vec3 p_19922_) {
+@@ -1231,11 +_,19 @@
+    }
+ 
+    public void m_7678_(double p_20108_, double p_20109_, double p_20110_, float p_20111_, float p_20112_) {
++      // Paper - cancel entity velocity if teleported
++      if (!preserveMotion) {
++         this.f_19827_ = Vec3.f_82478_;
++      } else {
++         this.preserveMotion = false;
++      }
++      // Paper end
+       this.m_20343_(p_20108_, p_20109_, p_20110_);
+       this.m_146922_(p_20111_);
+       this.m_146926_(p_20112_);
+       this.m_146867_();
+       this.m_20090_();
++      this.m_5616_(p_20111_); // Paper - Update head rotation
+    }
+ 
+    public final void m_146867_() {
 @@ -1489,6 +_,8 @@
              p_20241_.m_128379_("HasVisualFire", this.f_146813_);
           }
