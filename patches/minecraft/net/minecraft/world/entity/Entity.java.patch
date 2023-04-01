@@ -252,6 +252,17 @@
     }
  
     public void m_142036_() {
+@@ -376,8 +_,8 @@
+    }
+ 
+    public void m_6034_(double p_20210_, double p_20211_, double p_20212_) {
+-      this.m_20343_(p_20210_, p_20211_, p_20212_);
+-      this.m_20011_(this.m_142242_());
++      this.setPosRaw(p_20210_, p_20211_, p_20212_, true); // Paper - force bounding box update
++     // this.setBoundingBox(this.makeBoundingBox());  // Paper - move into setPositionRaw
+    }
+ 
+    protected AABB m_142242_() {
 @@ -455,7 +_,7 @@
  
        if (this.m_20077_()) {
@@ -899,14 +910,33 @@
        return this.f_19799_.getDouble(p_204037_);
     }
  
-@@ -2970,6 +_,7 @@
- 
-          this.f_146801_.m_142044_();
-       }
-+      if (this.isAddedToWorld() && !this.f_19853_.f_46443_ && !this.m_213877_()) this.f_19853_.m_6325_((int) Math.floor(p_20344_) >> 4, (int) Math.floor(p_20346_) >> 4); // Forge - ensure target chunk is loaded.
- 
+@@ -2955,6 +_,10 @@
     }
  
+    public final void m_20343_(double p_20344_, double p_20345_, double p_20346_) {
++      // Paper start
++      this.setPosRaw(p_20344_, p_20345_, p_20346_, false);
++   }
++   public final void setPosRaw(double p_20344_, double p_20345_, double p_20346_, boolean forceBoundingBoxUpdate) {
+       if (this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_) {
+          this.f_19825_ = new Vec3(p_20344_, p_20345_, p_20346_);
+          int i = Mth.m_14107_(p_20344_);
+@@ -2971,6 +_,15 @@
+          this.f_146801_.m_142044_();
+       }
+ 
++      // Paper start - never allow AABB to become desynced from position
++      // hanging has its own special logic
++      if (!(this instanceof net.minecraft.world.entity.decoration.HangingEntity) && (forceBoundingBoxUpdate || this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_)) {
++         this.m_20011_(this.m_142242_());
++      }
++      // Paper end
++
++      if (this.isAddedToWorld() && !this.f_19853_.f_46443_ && !this.m_213877_()) this.f_19853_.m_6325_((int) Math.floor(p_20344_) >> 4, (int) Math.floor(p_20346_) >> 4); // Forge - ensure target chunk is loaded.
++
+    }
+ 
+    public void m_6043_() {
 @@ -3085,6 +_,103 @@
     public boolean m_142265_(Level p_146843_, BlockPos p_146844_) {
        return true;
