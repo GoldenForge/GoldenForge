@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/biome/MobSpawnSettings.java
 +++ b/net/minecraft/world/level/biome/MobSpawnSettings.java
-@@ -38,20 +_,34 @@
+@@ -38,31 +_,77 @@
     private final float f_48328_;
     private final Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> f_48329_;
     private final Map<EntityType<?>, MobSpawnSettings.MobSpawnCost> f_48330_;
@@ -29,10 +29,54 @@
     @Nullable
     public MobSpawnSettings.MobSpawnCost m_48345_(EntityType<?> p_48346_) {
        return this.f_48330_.get(p_48346_);
-+   }
-+
-+   public java.util.Set<EntityType<?>> getEntityTypes() {
-+       return this.costView;
     }
  
++   public java.util.Set<EntityType<?>> getEntityTypes() {
++       return this.costView;
++   }
++
     public float m_48344_() {
+       return this.f_48328_;
+    }
+ 
+    public static class Builder {
++      // Paper start - keep track of data in a pair set to give O(1) contains calls - we have to hook removals incase plugins mess with it
++      public static class MobList extends java.util.ArrayList<MobSpawnSettings.SpawnerData> {
++         java.util.Set<MobSpawnSettings.SpawnerData> biomes = new java.util.HashSet<>();
++
++         @Override
++         public boolean contains(Object o) {
++            return biomes.contains(o);
++         }
++
++         @Override
++         public boolean add(MobSpawnSettings.SpawnerData BiomeSettingsMobs) {
++            biomes.add(BiomeSettingsMobs);
++            return super.add(BiomeSettingsMobs);
++         }
++
++         @Override
++         public MobSpawnSettings.SpawnerData remove(int index) {
++            MobSpawnSettings.SpawnerData removed = super.remove(index);
++            if (removed != null) {
++               biomes.remove(removed);
++            }
++            return removed;
++         }
++
++         @Override
++         public void clear() {
++            biomes.clear();
++            super.clear();
++         }
++      }
++      // use toImmutableEnumMap collector
++      // Paper end
+       protected final Map<MobCategory, List<MobSpawnSettings.SpawnerData>> f_48362_ = Stream.of(MobCategory.values()).collect(ImmutableMap.toImmutableMap((p_48383_) -> {
+          return p_48383_;
+       }, (p_48375_) -> {
+-         return Lists.newArrayList();
++         return new MobList(); // Paper
+       }));
+       protected final Map<EntityType<?>, MobSpawnSettings.MobSpawnCost> f_48363_ = Maps.newLinkedHashMap();
+       protected float f_48364_ = 0.1F;
