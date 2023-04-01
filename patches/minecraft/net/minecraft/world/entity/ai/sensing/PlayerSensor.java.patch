@@ -1,0 +1,45 @@
+--- a/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
+@@ -19,18 +_,30 @@
+    }
+ 
+    protected void m_5578_(ServerLevel p_26740_, LivingEntity p_26741_) {
+-      List<Player> list = p_26740_.m_6907_().stream().filter(EntitySelector.f_20408_).filter((p_26744_) -> {
+-         return p_26741_.m_19950_(p_26744_, 16.0D);
+-      }).sorted(Comparator.comparingDouble(p_26741_::m_20280_)).collect(Collectors.toList());
++      // Paper start - remove streams
++      List<Player> players = (List)p_26740_.getNearbyPlayers(p_26741_, p_26741_.m_20185_(), p_26741_.m_20186_(), p_26741_.m_20189_(), 16.0D, EntitySelector.f_20408_);
++      players.sort((e1, e2) -> Double.compare(p_26741_.m_20280_(e1), p_26741_.m_20280_(e2)));
+       Brain<?> brain = p_26741_.m_6274_();
+-      brain.m_21879_(MemoryModuleType.f_26367_, list);
+-      List<Player> list1 = list.stream().filter((p_26747_) -> {
+-         return m_26803_(p_26741_, p_26747_);
+-      }).collect(Collectors.toList());
+-      brain.m_21879_(MemoryModuleType.f_26368_, list1.isEmpty() ? null : list1.get(0));
+-      Optional<Player> optional = list1.stream().filter((p_148304_) -> {
+-         return m_148312_(p_26741_, p_148304_);
+-      }).findFirst();
+-      brain.m_21886_(MemoryModuleType.f_148206_, optional);
++
++      brain.m_21879_(MemoryModuleType.f_26367_, players);
++
++      Player firstTargetable = null;
++      Player firstAttackable = null;
++      for (int index = 0, len = players.size(); index < len; ++index) {
++         Player player = players.get(index);
++         if (firstTargetable == null && m_26803_(p_26741_, player)) {
++            firstTargetable = player;
++         }
++         if (firstAttackable == null && m_148312_(p_26741_, player)) {
++            firstAttackable = player;
++         }
++
++         if (firstAttackable != null && firstTargetable != null) {
++            break;
++         }
++      }
++      brain.m_21879_(MemoryModuleType.f_26368_, firstTargetable);
++      brain.m_21886_(MemoryModuleType.f_148206_, Optional.ofNullable(firstAttackable));
++      // Paper end - remove streams
+    }
+ }
