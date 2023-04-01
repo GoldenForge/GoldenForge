@@ -1,12 +1,40 @@
 --- a/net/minecraft/world/level/lighting/BlockLightEngine.java
 +++ b/net/minecraft/world/level/lighting/BlockLightEngine.java
-@@ -117,4 +_,9 @@
+@@ -16,6 +_,7 @@
+    private static final Direction[] f_75488_ = Direction.values();
+    private final BlockPos.MutableBlockPos f_75489_ = new BlockPos.MutableBlockPos();
+ 
++   private final MutableInt mutableInt = new MutableInt(); // Paper
+    public BlockLightEngine(LightChunkGetter p_75492_) {
+       super(p_75492_, LightLayer.BLOCK, new BlockLightSectionStorage(p_75492_));
+    }
+@@ -43,15 +_,14 @@
+          if (direction == null) {
+             return 15;
+          } else {
+-            MutableInt mutableint = new MutableInt();
+-            BlockState blockstate = this.m_75664_(p_75506_, mutableint);
+-            if (mutableint.getValue() >= 15) {
++            BlockState blockstate = this.m_75664_(p_75506_, mutableInt);
++            if (mutableInt.getValue() >= 15) {
+                return 15;
+             } else {
+                BlockState blockstate1 = this.m_75664_(p_75505_, (MutableInt)null);
+                VoxelShape voxelshape = this.m_75678_(blockstate1, p_75505_, direction);
+                VoxelShape voxelshape1 = this.m_75678_(blockstate, p_75506_, direction.m_122424_());
+-               return Shapes.m_83145_(voxelshape, voxelshape1) ? 15 : p_75507_ + Math.max(1, mutableint.getValue());
++               return Shapes.m_83145_(voxelshape, voxelshape1) ? 15 : p_75507_ + Math.max(1, mutableInt.getValue());
+             }
+          }
+       }
+@@ -116,5 +_,10 @@
+    public void m_8116_(BlockPos p_75502_, int p_75503_) {
        this.f_75632_.m_75785_();
        this.m_75576_(Long.MAX_VALUE, p_75502_.m_121878_(), 15 - p_75503_, true);
-    }
++   }
 +
 +   @Override
 +   public int queuedUpdateSize() {
 +      return f_75632_.queuedUpdateSize();
-+   }
+    }
  }

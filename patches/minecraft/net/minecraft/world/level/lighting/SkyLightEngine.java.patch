@@ -1,12 +1,43 @@
 --- a/net/minecraft/world/level/lighting/SkyLightEngine.java
 +++ b/net/minecraft/world/level/lighting/SkyLightEngine.java
-@@ -175,4 +_,9 @@
+@@ -15,7 +_,7 @@
+ public final class SkyLightEngine extends LayerLightEngine<SkyLightSectionStorage.SkyDataLayerStorageMap, SkyLightSectionStorage> {
+    private static final Direction[] f_75839_ = Direction.values();
+    private static final Direction[] f_75840_ = new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST};
+-
++   private final MutableInt mutableInt = new MutableInt(); // Paper
+    public SkyLightEngine(LightChunkGetter p_75843_) {
+       super(p_75843_, LightLayer.SKY, new SkyLightSectionStorage(p_75843_));
+    }
+@@ -25,9 +_,8 @@
+          if (p_75857_ >= 15) {
+             return p_75857_;
+          } else {
+-            MutableInt mutableint = new MutableInt();
+-            BlockState blockstate = this.m_75664_(p_75856_, mutableint);
+-            if (mutableint.getValue() >= 15) {
++            BlockState blockstate = this.m_75664_(p_75856_, mutableInt);
++            if (mutableInt.getValue() >= 15) {
+                return 15;
+             } else {
+                int i = BlockPos.m_121983_(p_75855_);
+@@ -51,7 +_,7 @@
+                   } else {
+                      boolean flag = i == l && k == j1;
+                      boolean flag1 = flag && j > i1;
+-                     return flag1 && p_75857_ == 0 && mutableint.getValue() == 0 ? 0 : p_75857_ + Math.max(1, mutableint.getValue());
++                     return flag1 && p_75857_ == 0 && mutableInt.getValue() == 0 ? 0 : p_75857_ + Math.max(1, mutableInt.getValue());
+                   }
+                }
+             }
+@@ -174,5 +_,10 @@
+ 
     public String m_6647_(long p_75853_) {
        return super.m_6647_(p_75853_) + (this.f_75632_.m_75890_(p_75853_) ? "*" : "");
-    }
++   }
 +
 +   @Override
 +   public int queuedUpdateSize() {
 +      return 0;
-+   }
+    }
  }
