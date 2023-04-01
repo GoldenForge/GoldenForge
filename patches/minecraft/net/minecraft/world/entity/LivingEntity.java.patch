@@ -560,6 +560,15 @@
           if (itemstack.m_150930_(Items.f_42741_) && ElytraItem.m_41140_(itemstack)) {
              flag = true;
              int i = this.f_20937_ + 1;
+@@ -2670,7 +_,7 @@
+    public void m_8127_() {
+       Entity entity = this.m_20202_();
+       super.m_8127_();
+-      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_) {
++      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_ && entity.isValid) { // Paper - don't process on world gen
+          this.m_21028_(entity);
+       }
+ 
 @@ -2806,11 +_,22 @@
     public InteractionHand m_7655_() {
        return (this.f_19804_.m_135370_(f_20909_) & 2) > 0 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;

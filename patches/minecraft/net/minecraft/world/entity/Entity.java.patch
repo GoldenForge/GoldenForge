@@ -154,11 +154,12 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,76 @@
+@@ -230,13 +_,77 @@
     @Nullable
     private BlockState f_185934_ = null;
  
 +   public net.minecraft.server.level.ChunkHolder.FullChunkStatus chunkStatus;
++   public boolean isValid;
 +
 +   public int sectionX = Integer.MIN_VALUE;
 +   public int sectionY = Integer.MIN_VALUE;
