@@ -202,20 +202,20 @@ public final class V704 {
                 possibleId = null;
             }
 
-            final String itemName = ForgeRegistries.ITEMS.getKey(item).toString();
-            final String mappedTo = ITEM_ID_TO_TILE_ENTITY_ID.get(itemName);
-            if (mappedTo == null) {
-                LOGGER.error("Item id " + itemName + " does not contain tile mapping! (V704)");
-            } else if (possibleId != null && !mappedTo.equals(possibleId)) {
-                final boolean chestCase = mappedTo.equals("minecraft:chest") && possibleId.equals("minecraft:trapped_chest");
-                final boolean signCase = mappedTo.equals("minecraft:sign") && possibleId.equals("minecraft:hanging_sign");
-                // save data is identical for the chest and sign case, so we don't care
-                // it's also important to note that there is no versioning for this map, so it is possible
-                // that mapping them correctly could cause issues converting old data
-                if (!chestCase && !signCase) {
-                    LOGGER.error("Item id " + itemName + " is mapped to the wrong tile entity! Mapped to: " + mappedTo + ", expected: " + possibleId);
-                }
-            }
+//            final String itemName = ForgeRegistries.ITEMS.getKey(item).toString();
+//            final String mappedTo = ITEM_ID_TO_TILE_ENTITY_ID.get(itemName);
+//            if (mappedTo == null) {
+//                LOGGER.error("Item id " + itemName + " does not contain tile mapping! (V704)");
+//            } else if (possibleId != null && !mappedTo.equals(possibleId)) {
+//                final boolean chestCase = mappedTo.equals("minecraft:chest") && possibleId.equals("minecraft:trapped_chest");
+//                final boolean signCase = mappedTo.equals("minecraft:sign") && possibleId.equals("minecraft:hanging_sign");
+//                // save data is identical for the chest and sign case, so we don't care
+//                // it's also important to note that there is no versioning for this map, so it is possible
+//                // that mapping them correctly could cause issues converting old data
+//                if (!chestCase && !signCase) {
+//                    LOGGER.error("Item id " + itemName + " is mapped to the wrong tile entity! Mapped to: " + mappedTo + ", expected: " + possibleId);
+//                }
+//            }
         }
     }
 

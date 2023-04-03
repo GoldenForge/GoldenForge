@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/ChunkStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/ChunkStorage.java
-@@ -12,97 +_,198 @@
+@@ -12,97 +_,197 @@
  import net.minecraft.nbt.CompoundTag;
  import net.minecraft.nbt.NbtUtils;
  import net.minecraft.resources.ResourceKey;
@@ -79,13 +79,13 @@
  
     public CompoundTag m_188288_(ResourceKey<Level> p_188289_, Supplier<DimensionDataStorage> p_188290_, CompoundTag p_188291_, Optional<ResourceKey<Codec<? extends ChunkGenerator>>> p_188292_) {
 -      int i = m_63505_(p_188291_);
+-      if (i < 1493) {
+-         p_188291_ = NbtUtils.m_129218_(this.f_63496_, DataFixTypes.CHUNK, p_188291_, i, 1493);
 +      // CraftBukkit end
 +      p_188291_ = p_188291_.m_6426_(); // Paper - defensive copy, another thread might modify this
 +      int i = ChunkStorage.m_63505_(p_188291_);
 +
-       if (i < 1493) {
--         p_188291_ = NbtUtils.m_129218_(this.f_63496_, DataFixTypes.CHUNK, p_188291_, i, 1493);
-+         ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.CHUNK, p_188291_, i, 1493); // Paper - replace chunk converter
++      if (false && i < 1466) { // Paper - no longer needed, data converter system handles it now
           if (p_188291_.m_128469_("Level").m_128471_("hasLegacyStructureData")) {
 -            LegacyStructureDataHandler legacystructuredatahandler = this.m_223448_(p_188289_, p_188290_);
 -            p_188291_ = legacystructuredatahandler.m_71326_(p_188291_);

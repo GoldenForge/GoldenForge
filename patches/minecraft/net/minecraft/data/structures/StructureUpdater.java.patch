@@ -1,0 +1,11 @@
+--- a/net/minecraft/data/structures/StructureUpdater.java
++++ b/net/minecraft/data/structures/StructureUpdater.java
+@@ -35,7 +_,7 @@
+          f_126499_.warn("SNBT Too old, do not forget to update: {} < {}: {}", i, 3075, p_126508_);
+       }
+ 
+-      CompoundTag compoundtag = NbtUtils.m_129213_(DataFixers.m_14512_(), DataFixTypes.STRUCTURE, p_126509_, i);
++      CompoundTag compoundtag = ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.STRUCTURE, p_126509_, i, net.minecraft.SharedConstants.m_183709_().m_183476_().m_193006_()); // Paper
+       structuretemplate.m_74638_(compoundtag);
+       return structuretemplate.m_74618_(new CompoundTag());
+    }

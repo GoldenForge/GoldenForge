@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
++++ b/net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplateManager.java
+@@ -278,7 +_,7 @@
+       }
+ 
+       StructureTemplate structuretemplate = new StructureTemplate();
+-      structuretemplate.m_74638_(NbtUtils.m_129213_(this.f_230346_, DataFixTypes.STRUCTURE, p_230405_, p_230405_.m_128451_("DataVersion")));
++      structuretemplate.m_74638_(ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.STRUCTURE, p_230405_, p_230405_.m_128451_("DataVersion"), SharedConstants.m_183709_().m_183476_().m_193006_())); // Paper
+       return structuretemplate;
+    }
+ 

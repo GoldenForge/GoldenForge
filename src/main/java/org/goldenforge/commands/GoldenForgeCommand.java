@@ -3,13 +3,19 @@ package org.goldenforge.commands;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.DimensionArgument;
+import net.minecraft.commands.arguments.ResourceOrTagLocationArgument;
+import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.versions.forge.ForgeVersion;
 import org.bukkit.Bukkit;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -24,14 +30,14 @@ public class GoldenForgeCommand {
 
         dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("goldenforge")
                 .executes(GoldenForgeCommand::main)
-                .then(Commands.literal("chunkinfo").executes(GoldenForgeCommand::chunkInfos)));
+                .then(Commands.literal("chunkinfo").then(Commands.argument("world", DimensionArgument.dimension()).executes(GoldenForgeCommand::chunkInfos))));
 
         dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("tpsmonitor")
                 .executes(GoldenForgeCommand::toggleTPSMonitor));
 
     }
 
-    private static int chunkInfos(CommandContext<CommandSourceStack> ctx) {
+private static int chunkInfos(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
 
         CommandSourceStack sender = ctx.getSource();
         int accumulatedTotal = 0;
@@ -40,7 +46,7 @@ public class GoldenForgeCommand {
         int accumulatedTicking = 0;
         int accumulatedEntityTicking = 0;
 
-        for (final ServerLevel world : ctx.getSource().getServer().getWorldArray()) {
+        final ServerLevel world = DimensionArgument.getDimension(ctx, "world");
 
             int total = 0;
             int inactive = 0;
@@ -74,11 +80,10 @@ public class GoldenForgeCommand {
             sender.sendSystemMessage(Component.empty().append(Component.literal("Chunks in ").withStyle(ChatFormatting.BLUE)).append(Component.literal(world.dimension().location().toString()).withStyle(ChatFormatting.GREEN)).append(":"));
 
             sender.sendSystemMessage(Component.literal("Total: " + total).withStyle(ChatFormatting.BLUE));
-            sender.sendSystemMessage(Component.literal("Inactive: " + total).withStyle(ChatFormatting.BLUE));
-            sender.sendSystemMessage(Component.literal("Border: " + total).withStyle(ChatFormatting.BLUE));
-            sender.sendSystemMessage(Component.literal("Ticking: " + total).withStyle(ChatFormatting.BLUE));
-            sender.sendSystemMessage(Component.literal("Entity: " + total).withStyle(ChatFormatting.BLUE));
-//        }
+            sender.sendSystemMessage(Component.literal("Inactive: " + inactive).withStyle(ChatFormatting.BLUE));
+            sender.sendSystemMessage(Component.literal("Border: " + border).withStyle(ChatFormatting.BLUE));
+            sender.sendSystemMessage(Component.literal("Ticking: " + ticking).withStyle(ChatFormatting.BLUE));
+            sender.sendSystemMessage(Component.literal("Entity: " + entityTicking).withStyle(ChatFormatting.BLUE));
 //        if (/*worlds.size() > 1*/ true) {
 //            sender.sendSystemMessage(text().append(text("Chunks in ", BLUE), text("all listed worlds", GREEN), text(":", DARK_AQUA)));
 //            sender.sendSystemMessage(text().color(DARK_AQUA).append(
@@ -89,7 +94,6 @@ public class GoldenForgeCommand {
 //                    text(" Entity: ", BLUE), text(accumulatedEntityTicking)
 //            ));
 //        }
-        }
         return 0;
     }
 

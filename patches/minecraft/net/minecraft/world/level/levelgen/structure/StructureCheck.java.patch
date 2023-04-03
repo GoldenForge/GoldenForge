@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/levelgen/structure/StructureCheck.java
++++ b/net/minecraft/world/level/levelgen/structure/StructureCheck.java
+@@ -115,7 +_,7 @@
+ 
+             CompoundTag compoundtag1;
+             try {
+-               compoundtag1 = NbtUtils.m_129213_(this.f_197246_, DataFixTypes.CHUNK, compoundtag, i);
++               compoundtag1 = ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.CHUNK, compoundtag, i, net.minecraft.SharedConstants.m_183709_().m_183476_().m_193006_()); // Paper - replace chunk converter
+             } catch (Exception exception) {
+                f_197235_.warn("Failed to partially datafix chunk {}", p_226734_, exception);
+                return StructureCheckResult.CHUNK_LOAD_NEEDED;
