@@ -660,7 +660,7 @@
        Entity entity = this.m_142646_().m_142694_(p_8854_.m_20148_());
        if (entity != null) {
           f_8566_.warn("Force-added player with duplicate UUID {}", (Object)p_8854_.m_20148_().toString());
-@@ -781,7 +_,8 @@
+@@ -781,20 +_,60 @@
           this.m_143261_((ServerPlayer)entity, Entity.RemovalReason.DISCARDED);
        }
  
@@ -669,19 +669,59 @@
 +      p_8854_.onAddedToWorld();
     }
  
-    private boolean m_8872_(Entity p_8873_) {
-@@ -789,12 +_,17 @@
-          f_8566_.warn("Tried to add entity {} but it was marked as removed already", (Object)EntityType.m_20613_(p_8873_.m_6095_()));
-          return false;
-       } else {
+-   private boolean m_8872_(Entity p_8873_) {
+-      if (p_8873_.m_213877_()) {
+-         f_8566_.warn("Tried to add entity {} but it was marked as removed already", (Object)EntityType.m_20613_(p_8873_.m_6095_()));
+-         return false;
+-      } else {
 -         return this.f_143244_.m_157533_(p_8873_);
-+         if (this.entityLookup.addNewEntity(p_8873_)) {
-+            p_8873_.onAddedToWorld();
+-      }
++//   private boolean addEntity(Entity p_8873_) {
++//      if (p_8873_.isRemoved()) {
++//         LOGGER.warn("Tried to add entity {} but it was marked as removed already", (Object)EntityType.getKey(p_8873_.getType()));
++//         return false;
++//      } else {
++//         if (this.entityLookup.addNewEntity(p_8873_)) {
++//            p_8873_.onAddedToWorld();
++//            return true;
++//         } else {
++//            return false;
++//         }
++//      }
++//   }
++
++
++      private boolean m_8872_(Entity p_8873_) {
++         org.spigotmc.AsyncCatcher.catchOp("entity add"); // Spigot
++         // Paper start
++         if (p_8873_.isValid) {
++            MinecraftServer.f_129750_.error("Attempted Double World add on " + p_8873_, new Throwable());
++
++//            if (DEBUG_ENTITIES) {
++//               Throwable thr = entity.addedToWorldStack;
++//               if (thr == null) {
++//                  MinecraftServer.LOGGER.error("Double add entity has no add stacktrace");
++//               } else {
++//                  MinecraftServer.LOGGER.error("Double add stacktrace: ", thr);
++//               }
++//            }
 +            return true;
-+         } else {
-+            return false;
 +         }
-       }
++         // Paper end
++         if (p_8873_.m_213877_()) {
++//            // Paper start
++//            if (DEBUG_ENTITIES) {
++//               io.papermc.paper.util.TraceUtil.dumpTraceForThread("Tried to add entity " + entity + " but it was marked as removed already"); // CraftBukkit
++//               getAddToWorldStackTrace(entity).printStackTrace();
++//            }
++//            // Paper end
++            // WorldServer.LOGGER.warn("Tried to add entity {} but it was marked as removed already", EntityTypes.getKey(entity.getType())); // CraftBukkit
++            return false;
++         } else {
++            if (p_8873_ instanceof net.minecraft.world.entity.item.ItemEntity itemEntity && itemEntity.m_32055_().m_41619_()) return false; // Paper - Prevent empty items from being added
++
++            return this.entityLookup.addNewEntity(p_8873_); // Paper - rewrite chunk system
++         }
     }
  
     public boolean m_8860_(Entity p_8861_) {

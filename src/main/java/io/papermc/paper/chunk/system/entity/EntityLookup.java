@@ -196,7 +196,6 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             final U casted = filter.tryCast(entity);
             if (casted != null) {
                 action.accept(casted);
-                break;
             }
         }
     }
@@ -219,7 +218,6 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             final U casted = filter.tryCast(entities.get(i));
             if (casted != null) {
                 action.accept(casted);
-                break;
             }
         }
     }
