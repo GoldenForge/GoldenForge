@@ -105,7 +105,7 @@
     }
  
     private <T, R> CompletableFuture<R> m_243080_(T p_243240_, BiFunction<TextFilter, T, CompletableFuture<R>> p_243271_) {
-@@ -392,19 +_,43 @@
+@@ -392,31 +_,57 @@
           Entity entity = this.f_9743_.m_20201_();
           if (entity != this.f_9743_ && entity.m_6688_() == this.f_9743_ && entity == this.f_9759_) {
              ServerLevel serverlevel = this.f_9743_.m_9236_();
@@ -156,21 +156,70 @@
              if (d10 - d9 > 100.0D && !this.m_9956_()) {
                 f_9744_.warn("{} (vehicle of {}) moved too quickly! {},{},{}", entity.m_7755_().getString(), this.f_9743_.m_7755_().getString(), d6, d7, d8);
                 this.f_9742_.m_129512_(new ClientboundMoveVehiclePacket(entity));
-@@ -432,9 +_,11 @@
+                return;
+             }
+-
+-            boolean flag = serverlevel.m_45756_(entity, entity.m_20191_().m_82406_(0.0625D));
++            AABB oldBox = entity.m_20191_(); // Paper - copy from player movement packet
++            //boolean flag = serverlevel.noCollision(entity, entity.getBoundingBox().deflate(0.0625D));
+             d6 = d3 - this.f_9763_;
+             d7 = d4 - this.f_9764_ - 1.0E-6D;
+             d8 = d5 - this.f_9765_;
+             boolean flag1 = entity.f_201939_;
+             entity.m_6478_(MoverType.PLAYER, new Vec3(d6, d7, d8));
++            boolean didCollide = toX != entity.m_20185_() || toY != entity.m_20186_() || toZ != entity.m_20189_(); // Paper - needed here as the difference in Y can be reset - also note: this is only a guess at whether collisions took place, floating point errors can make this true when it shouldn't be...
++
+             d6 = d3 - entity.m_20185_();
+             d7 = d4 - entity.m_20186_();
+             if (d7 > -0.5D || d7 < 0.5D) {
+@@ -432,9 +_,20 @@
              }
  
              entity.m_19890_(d3, d4, d5, f, f1);
+-            boolean flag3 = serverlevel.m_45756_(entity, entity.m_20191_().m_82406_(0.0625D));
+-            if (flag && (flag2 || !flag3)) {
 +            this.f_9743_.m_19890_(d3, d4, d5, this.f_9743_.m_146908_(), this.f_9743_.m_146909_()); // Forge - Resync player position on vehicle moving
-             boolean flag3 = serverlevel.m_45756_(entity, entity.m_20191_().m_82406_(0.0625D));
-             if (flag && (flag2 || !flag3)) {
++            //boolean flag3 = serverlevel.noCollision(entity, entity.getBoundingBox().deflate(0.0625D));
++            // Paper start - optimise out extra getCubes
++            boolean teleportBack = flag2; // violating this is always a fail
++            if (!teleportBack) {
++               // note: only call after setLocation, or else getBoundingBox is wrong
++               AABB newBox = entity.m_20191_();
++               if (didCollide || !oldBox.equals(newBox)) {
++                  teleportBack = this.hasNewCollision(serverlevel, entity, oldBox, newBox);
++               } // else: no collision at all detected, why do we care?
++            }
++            if (teleportBack) { // Paper end - optimise out extra getCubes
                 entity.m_19890_(d0, d1, d2, f, f1);
 +               this.f_9743_.m_19890_(d3, d4, d5, this.f_9743_.m_146908_(), this.f_9743_.m_146909_()); // Forge - Resync player position on vehicle moving
                 this.f_9742_.m_129512_(new ClientboundMoveVehiclePacket(entity));
                 return;
              }
-@@ -451,7 +_,32 @@
+@@ -450,8 +_,54 @@
+       }
     }
  
++   // Paper start - optimise out extra getCubes
++   private boolean hasNewCollision(final ServerLevel world, final Entity entity, final AABB oldBox, final AABB newBox) {
++      final List<AABB> collisions = io.papermc.paper.util.CachedLists.getTempCollisionList();
++      try {
++         io.papermc.paper.util.CollisionUtil.getCollisions(world, entity, newBox, collisions, false, true,
++                 true, false, null, null);
++
++         for (int i = 0, len = collisions.size(); i < len; ++i) {
++            final AABB box = collisions.get(i);
++            if (!io.papermc.paper.util.CollisionUtil.voxelShapeIntersect(box, oldBox)) {
++               return true;
++            }
++         }
++
++         return false;
++      } finally {
++         io.papermc.paper.util.CachedLists.returnTempCollisionList(collisions);
++      }
++   }
++   // Paper end - optimise out extra getCubes
++
     private boolean m_9793_(Entity p_9794_) {
 -      return p_9794_.f_19853_.m_45556_(p_9794_.m_20191_().m_82400_(0.0625D).m_82363_(0.0D, -0.55D, 0.0D)).allMatch(BlockBehaviour.BlockStateBase::m_60795_);
 +      // Paper start - stop using streams, this is already a known fixed problem in Entity#move
@@ -257,21 +306,50 @@
        int i = p_9862_.m_134013_();
        if (Inventory.m_36045_(i) || i == 40) {
           List<String> list = Lists.newArrayList();
-@@ -850,15 +_,22 @@
+@@ -831,34 +_,45 @@
+       }
+    }
  
++   @Override
+    public void m_7185_(ServerboundMovePlayerPacket p_9874_) {
+       PacketUtils.m_131359_(p_9874_, this, this.f_9743_.m_9236_());
+-      if (m_143663_(p_9874_.m_134129_(0.0D), p_9874_.m_134140_(0.0D), p_9874_.m_134146_(0.0D), p_9874_.m_134131_(0.0F), p_9874_.m_134142_(0.0F))) {
+-         this.m_9942_(Component.m_237115_("multiplayer.disconnect.invalid_player_movement"));
++      if (ServerGamePacketListenerImpl.m_143663_(p_9874_.m_134129_(0.0D), p_9874_.m_134140_(0.0D), p_9874_.m_134146_(0.0D), p_9874_.m_134131_(0.0F), p_9874_.m_134142_(0.0F))) {
++         this.m_9942_(Component.m_237115_("multiplayer.disconnect.invalid_player_movement")); // Paper - kick event cause
+       } else {
+-         ServerLevel serverlevel = this.f_9743_.m_9236_();
+-         if (!this.f_9743_.f_8944_) {
++         ServerLevel worldserver = this.f_9743_.m_9236_();
++
++         if (!this.f_9743_.f_8944_ && !this.f_9743_.m_6107_()) { // CraftBukkit
+             if (this.f_9746_ == 0) {
+                this.m_9953_();
+             }
+ 
+             if (this.f_9766_ != null) {
+-               if (this.f_9746_ - this.f_9735_ > 20) {
++               if (false && this.f_9746_ - this.f_9735_ > 20) { // Paper - this will greatly screw with clients with > 1000ms RTT
+                   this.f_9735_ = this.f_9746_;
+                   this.m_9774_(this.f_9766_.f_82479_, this.f_9766_.f_82480_, this.f_9766_.f_82481_, this.f_9743_.m_146908_(), this.f_9743_.m_146909_());
+                }
+-
++               this.allowedPlayerTicks = 20; // CraftBukkit
              } else {
                 this.f_9735_ = this.f_9746_;
 -               double d0 = m_143609_(p_9874_.m_134129_(this.f_9743_.m_20185_()));
 -               double d1 = m_143653_(p_9874_.m_134140_(this.f_9743_.m_20186_()));
 -               double d2 = m_143609_(p_9874_.m_134146_(this.f_9743_.m_20189_()));
-+               double d0 = m_143609_(p_9874_.m_134129_(this.f_9743_.m_20185_())); final double toX = d0; // Paper - OBFHELPER
-+               double d1 = m_143653_(p_9874_.m_134140_(this.f_9743_.m_20186_())); final double toY = d1;
-+               double d2 = m_143609_(p_9874_.m_134146_(this.f_9743_.m_20189_())); final double toZ = d2; // Paper - OBFHELPER
++               double d0 = ServerGamePacketListenerImpl.m_143609_(p_9874_.m_134129_(this.f_9743_.m_20185_())); final double toX = d0; // Paper - OBFHELPER
++               double d1 = ServerGamePacketListenerImpl.m_143653_(p_9874_.m_134140_(this.f_9743_.m_20186_())); final double toY = d1;
++               double d2 = ServerGamePacketListenerImpl.m_143609_(p_9874_.m_134146_(this.f_9743_.m_20189_())); final double toZ = d2; // Paper - OBFHELPER
                 float f = Mth.m_14177_(p_9874_.m_134131_(this.f_9743_.m_146908_()));
                 float f1 = Mth.m_14177_(p_9874_.m_134142_(this.f_9743_.m_146909_()));
++
                 if (this.f_9743_.m_20159_()) {
                    this.f_9743_.m_19890_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), f, f1);
                    this.f_9743_.m_9236_().m_7726_().m_8385_(this.f_9743_);
++                  this.allowedPlayerTicks = 20; // CraftBukkit
                 } else {
 +                  // CraftBukkit - Make sure the move is valid but then reset it for plugins to modify
 +                  double prevX = this.f_9743_.m_20185_();
@@ -304,12 +382,13 @@
                    if (this.f_9743_.m_5803_()) {
                       if (d11 > 1.0D) {
                          this.m_9774_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), f, f1);
-@@ -876,14 +_,39 @@
+@@ -876,31 +_,66 @@
                    } else {
                       ++this.f_9740_;
                       int i = this.f_9740_ - this.f_9741_;
 -                     if (i > 5) {
 -                        f_9744_.debug("{} is sending move packets too frequently ({} packets since last tick)", this.f_9743_.m_7755_().getString(), i);
++
 +                     // CraftBukkit start - handle custom speeds and skipped ticks
 +                     this.allowedPlayerTicks += (System.currentTimeMillis() / 50) - this.lastTick;
 +                     this.allowedPlayerTicks = Math.max(this.allowedPlayerTicks, 1);
@@ -331,9 +410,8 @@
 +                     } else {
 +                        speed = this.f_9743_.m_150110_().f_35940_ * 10f;
 +                     }
-+
 +                     // Paper start - Prevent moving into unloaded chunks
-+                     if (GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get() && (this.f_9743_.m_20185_() != toX || this.f_9743_.m_20189_() != toZ) && !serverlevel.areChunksLoadedForMove(this.f_9743_.m_20191_().m_82369_(new Vec3(toX, toY, toZ).m_82546_(this.f_9743_.m_20182_())))) {
++                     if (GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get() && (this.f_9743_.m_20185_() != toX || this.f_9743_.m_20189_() != toZ) && !worldserver.areChunksLoadedForMove(this.f_9743_.m_20191_().m_82369_(new Vec3(toX, toY, toZ).m_82546_(this.f_9743_.m_20182_())))) {
 +                        this.m_9780_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), this.f_9743_.m_146908_(), this.f_9743_.m_146909_(), Collections.emptySet());
 +                        return;
 +                     }
@@ -342,11 +420,267 @@
                       if (!this.f_9743_.m_8958_() && (!this.f_9743_.m_9236_().m_46469_().m_46207_(GameRules.f_46148_) || !this.f_9743_.m_21255_())) {
                          float f2 = this.f_9743_.m_21255_() ? 300.0F : 100.0F;
 -                        if (d11 - d10 > (double)(f2 * (float)i) && !this.m_9956_()) {
+-                           f_9744_.warn("{} moved too quickly! {},{},{}", this.f_9743_.m_7755_().getString(), d7, d8, d9);
++
 +                        if (d11 - d10 > Math.max(f2, Math.pow((double) (GoldenConfig.movedTooQuicklyMultiplier * (float) i * speed), 2)) && !this.m_9956_()) {
 +                           // CraftBukkit end
-                            f_9744_.warn("{} moved too quickly! {},{},{}", this.f_9743_.m_7755_().getString(), d7, d8, d9);
++                           ServerGamePacketListenerImpl.f_9744_.warn("{} moved too quickly! {},{},{}", new Object[]{this.f_9743_.m_7755_().getString(), d7, d8, d9});
                             this.m_9774_(this.f_9743_.m_20185_(), this.f_9743_.m_20186_(), this.f_9743_.m_20189_(), this.f_9743_.m_146908_(), this.f_9743_.m_146909_());
                             return;
+                         }
+                      }
+ 
+-                     AABB aabb = this.f_9743_.m_20191_();
+-                     d7 = d0 - this.f_9756_;
+-                     d8 = d1 - this.f_9757_;
+-                     d9 = d2 - this.f_9758_;
++                     AABB axisalignedbb = this.f_9743_.m_20191_(); // Paper - diff on change, should be old AABB
++
++                     d7 = d0 - this.f_9756_; // Paper - diff on change, used for checking large move vectors above
++                     d8 = d1 - this.f_9757_; // Paper - diff on change, used for checking large move vectors above
++                     d9 = d2 - this.f_9758_; // Paper - diff on change, used for checking large move vectors above
+                      boolean flag = d8 > 0.0D;
+-                     if (this.f_9743_.m_20096_() && !p_9874_.m_134139_() && flag) {
+-                        this.f_9743_.m_6135_();
+-                     }
++
+ 
+                      boolean flag1 = this.f_9743_.f_201939_;
++
+                      this.f_9743_.m_6478_(MoverType.PLAYER, new Vec3(d7, d8, d9));
++                     boolean didCollide = toX != this.f_9743_.m_20185_() || toY != this.f_9743_.m_20186_() || toZ != this.f_9743_.m_20189_(); // Paper - needed here as the difference in Y can be reset - also note: this is only a guess at whether collisions took place, floating point errors can make this true when it shouldn't be...
++                     this.f_9743_.f_19861_ = p_9874_.m_134139_(); // CraftBukkit - SPIGOT-5810, SPIGOT-5835, SPIGOT-6828: reset by this.player.move
++                     // Paper start - prevent position desync
++                     if (this.f_9766_ != null) {
++                        return; // ... thanks Mojang for letting move calls teleport across dimensions.
++                     }
++                     // Paper end - prevent position desync
++                     double d12 = d8;
++
+                      d7 = d0 - this.f_9743_.m_20185_();
+                      d8 = d1 - this.f_9743_.m_20186_();
+                      if (d8 > -0.5D || d8 < 0.5D) {
+@@ -910,14 +_,35 @@
+                      d9 = d2 - this.f_9743_.m_20189_();
+                      d11 = d7 * d7 + d8 * d8 + d9 * d9;
+                      boolean flag2 = false;
+-                     if (!this.f_9743_.m_8958_() && d11 > 0.0625D && !this.f_9743_.m_5803_() && !this.f_9743_.f_8941_.m_9295_() && this.f_9743_.f_8941_.m_9290_() != GameType.SPECTATOR) {
+-                        flag2 = true;
+-                        f_9744_.warn("{} moved wrongly!", (Object)this.f_9743_.m_7755_().getString());
++
++                     if (!this.f_9743_.m_8958_() && d11 > GoldenConfig.movedWronglyThreshold && !this.f_9743_.m_5803_() && !this.f_9743_.f_8941_.m_9295_() && this.f_9743_.f_8941_.m_9290_() != GameType.SPECTATOR) { // Spigot
++                        flag2 = true; // Paper - diff on change, this should be moved wrongly
++                        ServerGamePacketListenerImpl.f_9744_.warn("{} moved wrongly!", this.f_9743_.m_7755_().getString());
+                      }
+ 
+                      this.f_9743_.m_19890_(d0, d1, d2, f, f1);
+-                     if (this.f_9743_.f_19794_ || this.f_9743_.m_5803_() || (!flag2 || !serverlevel.m_45756_(this.f_9743_, aabb)) && !this.m_9795_(serverlevel, aabb)) {
+-                        this.f_9736_ = d8 >= -0.03125D && !flag1 && this.f_9743_.f_8941_.m_9290_() != GameType.SPECTATOR && !this.f_9745_.m_129915_() && !this.f_9743_.m_150110_().f_35936_ && !this.f_9743_.m_21023_(MobEffects.f_19620_) && !this.f_9743_.m_21255_() && !this.f_9743_.m_21209_() && this.m_9793_(this.f_9743_);
++                     // Paper start - optimise out extra getCubes
++                     // Original for reference:
++                     // boolean teleportBack = flag2 && worldserver.getCubes(this.player, axisalignedbb) || (didCollide && this.a((IWorldReader) worldserver, axisalignedbb));
++                     boolean teleportBack = flag2; // violating this is always a fail
++                     if (!this.f_9743_.f_19794_ && !this.f_9743_.m_5803_() && !teleportBack) {
++                        AABB newBox = this.f_9743_.m_20191_();
++                        if (didCollide || !axisalignedbb.equals(newBox)) {
++                           // note: only call after setLocation, or else getBoundingBox is wrong
++                           teleportBack = this.hasNewCollision(worldserver, this.f_9743_, axisalignedbb, newBox);
++                        } // else: no collision at all detected, why do we care?
++                     }
++                     if (!this.f_9743_.f_19794_ && !this.f_9743_.m_5803_() && teleportBack) { // Paper end - optimise out extra getCubes
++                        this.m_9780_(d3, d4, d5, f, f1, Collections.emptySet()); // CraftBukkit - SPIGOT-1807: Don't call teleport event, when the client thinks the player is falling, because the chunks are not loaded on the client yet.
++                        this.f_9743_.m_8972_(this.f_9743_.m_20186_() - d6, p_9874_.m_134139_());
++                     } else {
++                        // CraftBukkit start - fire PlayerMoveEvent
++                        // Rest to old location first
++                        //this.player.absMoveTo(prevX, prevY, prevZ, prevYaw, prevPitch);
++
++                        this.f_9743_.m_19890_(d0, d1, d2, f, f1); // Copied from above
++
++                        this.f_9736_ = d12 >= -0.03125D && !flag1 && this.f_9743_.f_8941_.m_9290_() != GameType.SPECTATOR && !this.f_9745_.m_129915_() && !this.f_9743_.m_150110_().f_35936_ && !this.f_9743_.m_21023_(MobEffects.f_19620_) && !this.f_9743_.m_21255_() && !this.f_9743_.m_21209_() && this.m_9793_(this.f_9743_);
+                         this.f_9743_.m_9236_().m_7726_().m_8385_(this.f_9743_);
+                         this.f_9743_.m_8972_(this.f_9743_.m_20186_() - d6, p_9874_.m_134139_());
+                         this.f_9743_.m_6853_(p_9874_.m_134139_());
+@@ -929,8 +_,6 @@
+                         this.f_9756_ = this.f_9743_.m_20185_();
+                         this.f_9757_ = this.f_9743_.m_20186_();
+                         this.f_9758_ = this.f_9743_.m_20189_();
+-                     } else {
+-                        this.m_9774_(d3, d4, d5, f, f1);
+                      }
+                   }
+                }
+@@ -938,6 +_,170 @@
+          }
+       }
+    }
++
++//   public void handleMovePlayer(ServerboundMovePlayerPacket p_9874_) {
++//      PacketUtils.ensureRunningOnSameThread(p_9874_, this, this.player.getLevel());
++//      if (containsInvalidValues(p_9874_.getX(0.0D), p_9874_.getY(0.0D), p_9874_.getZ(0.0D), p_9874_.getYRot(0.0F), p_9874_.getXRot(0.0F))) {
++//         this.disconnect(Component.translatable("multiplayer.disconnect.invalid_player_movement"));
++//      } else {
++//         ServerLevel serverlevel = this.player.getLevel();
++//         if (!this.player.wonGame) {
++//            if (this.tickCount == 0) {
++//               this.resetPosition();
++//            }
++//
++//            if (this.awaitingPositionFromClient != null) {
++//               if (false && this.tickCount - this.awaitingTeleportTime > 20) { // Paper - this will greatly screw with clients with > 1000ms RTT
++//                  this.awaitingTeleportTime = this.tickCount;
++//                  this.teleport(this.awaitingPositionFromClient.x, this.awaitingPositionFromClient.y, this.awaitingPositionFromClient.z, this.player.getYRot(), this.player.getXRot());
++//               }
++//
++//            } else {
++//               this.awaitingTeleportTime = this.tickCount;
++//               double d0 = clampHorizontal(p_9874_.getX(this.player.getX())); final double toX = d0; // Paper - OBFHELPER
++//               double d1 = clampVertical(p_9874_.getY(this.player.getY())); final double toY = d1;
++//               double d2 = clampHorizontal(p_9874_.getZ(this.player.getZ())); final double toZ = d2; // Paper - OBFHELPER
++//               float f = Mth.wrapDegrees(p_9874_.getYRot(this.player.getYRot()));
++//               float f1 = Mth.wrapDegrees(p_9874_.getXRot(this.player.getXRot()));
++//               if (this.player.isPassenger()) {
++//                  this.player.absMoveTo(this.player.getX(), this.player.getY(), this.player.getZ(), f, f1);
++//                  this.player.getLevel().getChunkSource().move(this.player);
++//               } else {
++//                  // CraftBukkit - Make sure the move is valid but then reset it for plugins to modify
++//                  double prevX = this.player.getX();
++//                  double prevY = this.player.getY();
++//                  double prevZ = this.player.getZ();
++//                  float prevYaw = this.player.getYRot();
++//                  float prevPitch = this.player.getXRot();
++//                  // CraftBukkit end
++//                  double d3 = this.player.getX();
++//                  double d4 = this.player.getY();
++//                  double d5 = this.player.getZ();
++//                  double d6 = this.player.getY();
++//                  double d7 = d0 - this.firstGoodX;
++//                  double d8 = d1 - this.firstGoodY;
++//                  double d9 = d2 - this.firstGoodZ;
++//                  double d10 = this.player.getDeltaMovement().lengthSqr();
++//                  // Paper start - fix large move vectors killing the server
++//                  double currDeltaX = toX - prevX;
++//                  double currDeltaY = toY - prevY;
++//                  double currDeltaZ = toZ - prevZ;
++//                  double d11 = Math.max(d7 * d7 + d8 * d8 + d9 * d9, (currDeltaX * currDeltaX + currDeltaY * currDeltaY + currDeltaZ * currDeltaZ) - 1);
++//                  // Paper end - fix large move vectors killing the server
++//                  // Paper start - fix large move vectors killing the server
++//                  double otherFieldX = d0 - this.lastGoodX;
++//                  double otherFieldY = d1 - this.lastGoodY;
++//                  double otherFieldZ = d2 - this.lastGoodZ;
++//                  d11 = Math.max(d11, (otherFieldX * otherFieldX + otherFieldY * otherFieldY + otherFieldZ * otherFieldZ) - 1);
++//                  // Paper end - fix large move vectors killing the server
++//
++//                  if (this.player.isSleeping()) {
++//                     if (d11 > 1.0D) {
++//                        this.teleport(this.player.getX(), this.player.getY(), this.player.getZ(), f, f1);
++//                     }
++//
++//                  } else {
++//                     ++this.receivedMovePacketCount;
++//                     int i = this.receivedMovePacketCount - this.knownMovePacketCount;
++//                     // CraftBukkit start - handle custom speeds and skipped ticks
++//                     this.allowedPlayerTicks += (System.currentTimeMillis() / 50) - this.lastTick;
++//                     this.allowedPlayerTicks = Math.max(this.allowedPlayerTicks, 1);
++//                     this.lastTick = (int) (System.currentTimeMillis() / 50);
++//
++//                     if (i > Math.max(this.allowedPlayerTicks, 5)) {
++//                        ServerGamePacketListenerImpl.LOGGER.debug("{} is sending move packets too frequently ({} packets since last tick)", this.player.getName().getString(), i);
++//                        i = 1;
++//                     }
++//
++//                     if (p_9874_.hasRot || d11 > 0) {
++//                        this.allowedPlayerTicks -= 1;
++//                     } else {
++//                        this.allowedPlayerTicks = 20;
++//                     }
++//                     double speed;
++//                     if (this.player.getAbilities().flying) {
++//                        speed = this.player.getAbilities().flyingSpeed * 20f;
++//                     } else {
++//                        speed = this.player.getAbilities().walkingSpeed * 10f;
++//                     }
++//
++//                     // Paper start - Prevent moving into unloaded chunks
++//                     if (GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get() && (this.player.getX() != toX || this.player.getZ() != toZ) && !serverlevel.areChunksLoadedForMove(this.player.getBoundingBox().expandTowards(new Vec3(toX, toY, toZ).subtract(this.player.position())))) {
++//                        this.teleport(this.player.getX(), this.player.getY(), this.player.getZ(), this.player.getYRot(), this.player.getXRot(), Collections.emptySet());
++//                        return;
++//                     }
++//                     // Paper end
++//
++//                     if (!this.player.isChangingDimension() && (!this.player.getLevel().getGameRules().getBoolean(GameRules.RULE_DISABLE_ELYTRA_MOVEMENT_CHECK) || !this.player.isFallFlying())) {
++//                        float f2 = this.player.isFallFlying() ? 300.0F : 100.0F;
++//                        if (d11 - d10 > Math.max(f2, Math.pow((double) (GoldenConfig.movedTooQuicklyMultiplier * (float) i * speed), 2)) && !this.isSingleplayerOwner()) {
++//                           // CraftBukkit end
++//                           LOGGER.warn("{} moved too quickly! {},{},{}", this.player.getName().getString(), d7, d8, d9);
++//                           this.teleport(this.player.getX(), this.player.getY(), this.player.getZ(), this.player.getYRot(), this.player.getXRot());
++//                           return;
++//                        }
++//                     }
++//
++//                     AABB aabb = this.player.getBoundingBox();
++//                     d7 = d0 - this.lastGoodX;
++//                     d8 = d1 - this.lastGoodY;
++//                     d9 = d2 - this.lastGoodZ;
++//                     boolean flag = d8 > 0.0D;
++//                     if (this.player.isOnGround() && !p_9874_.isOnGround() && flag) {
++//                        this.player.jumpFromGround();
++//                     }
++//
++//                     boolean flag1 = this.player.verticalCollisionBelow;
++//                     this.player.move(MoverType.PLAYER, new Vec3(d7, d8, d9));
++//                     boolean didCollide = toX != this.player.getX() || toY != this.player.getY() || toZ != this.player.getZ(); // Paper - needed here as the difference in Y can be reset - also note: this is only a guess at whether collisions took place, floating point errors can make this true when it shouldn't be...
++//                     d7 = d0 - this.player.getX();
++//                     d8 = d1 - this.player.getY();
++//                     if (d8 > -0.5D || d8 < 0.5D) {
++//                        d8 = 0.0D;
++//                     }
++//
++//                     d9 = d2 - this.player.getZ();
++//                     d11 = d7 * d7 + d8 * d8 + d9 * d9;
++//                     boolean flag2 = false;
++//                     if (!this.player.isChangingDimension() && d11 > 0.0625D && !this.player.isSleeping() && !this.player.gameMode.isCreative() && this.player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
++//                        flag2 = true;
++//                        LOGGER.warn("{} moved wrongly!", (Object)this.player.getName().getString());
++//                     }
++//
++//                     this.player.absMoveTo(d0, d1, d2, f, f1);
++//                     // Paper start - optimise out extra getCubes
++//                     // Original for reference:
++//                     // boolean teleportBack = flag2 && worldserver.getCubes(this.player, axisalignedbb) || (didCollide && this.a((IWorldReader) worldserver, axisalignedbb));
++//                     boolean teleportBack = flag2; // violating this is always a fail
++//                     if (!this.player.noPhysics && !this.player.isSleeping() && !teleportBack) {
++//                        AABB newBox = this.player.getBoundingBox();
++//                        if (didCollide || !aabb.equals(newBox)) {
++//                           // note: only call after setLocation, or else getBoundingBox is wrong
++//                           teleportBack = this.hasNewCollision(serverlevel, this.player, aabb, newBox);
++//                        } // else: no collision at all detected, why do we care?
++//                     }
++//                     if (!this.player.noPhysics && !this.player.isSleeping() && teleportBack) { // Paper end - optimise out extra getCubes
++//                        this.clientIsFloating = d8 >= -0.03125D && !flag1 && this.player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR && !this.server.isFlightAllowed() && !this.player.getAbilities().mayfly && !this.player.hasEffect(MobEffects.LEVITATION) && !this.player.isFallFlying() && !this.player.isAutoSpinAttack() && this.noBlocksAround(this.player);
++//                        this.player.getLevel().getChunkSource().move(this.player);
++//                        this.player.doCheckFallDamage(this.player.getY() - d6, p_9874_.isOnGround());
++//                        this.player.setOnGround(p_9874_.isOnGround());
++//                        if (flag) {
++//                           this.player.resetFallDistance();
++//                        }
++//
++//                        this.player.checkMovementStatistics(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
++//                        this.lastGoodX = this.player.getX();
++//                        this.lastGoodY = this.player.getY();
++//                        this.lastGoodZ = this.player.getZ();
++//                     } else {
++//                        this.teleport(d3, d4, d5, f, f1);
++//                     }
++//                  }
++//               }
++//            }
++//         }
++//      }
++//   }
+ 
+    private boolean m_9795_(LevelReader p_9796_, AABB p_9797_) {
+       Iterable<VoxelShape> iterable = p_9796_.m_186431_(this.f_9743_, this.f_9743_.m_20191_().m_82406_((double)1.0E-5F));
 @@ -965,6 +_,12 @@
     }
  

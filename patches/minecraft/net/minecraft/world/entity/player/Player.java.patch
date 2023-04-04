@@ -195,6 +195,15 @@
                       this.m_21008_(p_36159_, ItemStack.f_41583_);
                    }
  
+@@ -1006,7 +_,7 @@
+       this.f_19851_ = 0;
+    }
+ 
+-   protected boolean m_6107_() {
++   public boolean m_6107_() {
+       return super.m_6107_() || this.m_5803_();
+    }
+ 
 @@ -1014,6 +_,7 @@
        return !this.f_36077_.f_35935_;
     }

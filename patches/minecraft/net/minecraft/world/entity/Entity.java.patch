@@ -37,7 +37,7 @@
     private final EntityType<?> f_19847_;
     private int f_19848_ = f_19843_.incrementAndGet();
     public boolean f_19850_;
-@@ -149,10 +_,10 @@
+@@ -149,15 +_,15 @@
     public double f_19855_;
     public double f_19856_;
     private Vec3 f_19825_;
@@ -50,6 +50,12 @@
     private float f_19858_;
     public float f_19859_;
     public float f_19860_;
+    private AABB f_19828_ = f_19845_;
+-   protected boolean f_19861_;
++   public boolean f_19861_;
+    public boolean f_19862_;
+    public boolean f_19863_;
+    public boolean f_201939_;
 @@ -177,14 +_,89 @@
     public double f_19790_;
     public double f_19791_;
