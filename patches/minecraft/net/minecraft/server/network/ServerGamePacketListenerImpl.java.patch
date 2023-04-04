@@ -1,9 +1,10 @@
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
-@@ -178,11 +_,19 @@
+@@ -178,11 +_,20 @@
  import net.minecraft.world.phys.shapes.Shapes;
  import net.minecraft.world.phys.shapes.VoxelShape;
  import org.apache.commons.lang3.StringUtils;
++import org.bukkit.Bukkit;
 +import org.goldenforge.GoldenConfig;
 +import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
@@ -210,6 +211,52 @@
           this.f_9756_ = this.f_9766_.f_82479_;
           this.f_9757_ = this.f_9766_.f_82480_;
           this.f_9758_ = this.f_9766_.f_82481_;
+@@ -737,6 +_,45 @@
+    }
+ 
+    public void m_6829_(ServerboundEditBookPacket p_9862_) {
++      // Paper start
++      if (!Bukkit.isPrimaryThread()) {
++         List<String> pageList = p_9862_.m_182755_();
++         long byteTotal = 0;
++         int maxBookPageSize = GoldenConfig.pageMax;
++         double multiplier = Math.max(0.3D, Math.min(1D, GoldenConfig.totalMultiplier));
++         long byteAllowed = maxBookPageSize;
++         for (String testString : pageList) {
++            int byteLength = testString.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
++            if (byteLength > 256 * 4) {
++               ServerGamePacketListenerImpl.f_9744_.warn(this.f_9743_.m_6302_() + " tried to send a book with with a page too large!");
++               f_9745_.scheduleOnMain(() -> this.m_9942_(Component.m_237113_("Book too large!"))); // Paper - kick event cause
++               return;
++            }
++            byteTotal += byteLength;
++            int length = testString.length();
++            int multibytes = 0;
++            if (byteLength != length) {
++               for (char c : testString.toCharArray()) {
++                  if (c > 127) {
++                     multibytes++;
++                  }
++               }
++            }
++            byteAllowed += (maxBookPageSize * Math.min(1, Math.max(0.1D, (double) length / 255D))) * multiplier;
++
++            if (multibytes > 1) {
++               // penalize MB
++               byteAllowed -= multibytes;
++            }
++         }
++
++         if (byteTotal > byteAllowed) {
++            ServerGamePacketListenerImpl.f_9744_.warn(this.f_9743_.m_6302_() + " tried to send too large of a book. Book Size: " + byteTotal + " - Allowed:  "+ byteAllowed + " - Pages: " + pageList.size());
++            f_9745_.scheduleOnMain(() -> this.m_9942_(Component.m_237113_("Book too large!"))); // Paper - kick event cause
++            return;
++         }
++      }
++      // Paper end
+       int i = p_9862_.m_134013_();
+       if (Inventory.m_36045_(i) || i == 40) {
+          List<String> list = Lists.newArrayList();
 @@ -850,15 +_,22 @@
  
              } else {
