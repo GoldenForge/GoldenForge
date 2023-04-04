@@ -384,7 +384,7 @@
     }
  
     public boolean m_46749_(BlockPos p_46750_) {
-@@ -526,41 +_,29 @@
+@@ -526,42 +_,40 @@
     public List<Entity> m_6249_(@Nullable Entity p_46536_, AABB p_46537_, Predicate<? super Entity> p_46538_) {
        this.m_46473_().m_6174_("getEntities");
        List<Entity> list = Lists.newArrayList();
@@ -407,7 +407,7 @@
     }
  
     public <T extends Entity> List<T> m_142425_(EntityTypeTest<Entity, T> p_151528_, AABB p_151529_, Predicate<? super T> p_151530_) {
-       this.m_46473_().m_6174_("getEntities");
+-      this.m_46473_().m_6174_("getEntities");
        List<T> list = Lists.newArrayList();
 -      this.m_142646_().m_142137_(p_151528_, p_151529_, (p_151539_) -> {
 -         if (p_151530_.test(p_151539_)) {
@@ -424,25 +424,37 @@
 -         }
 -
 -      });
++
++      this.getEntities(p_151528_, p_151529_, p_151530_, list);
+       return list;
++   }
++
++   public <T extends Entity> void getEntities(EntityTypeTest<Entity, T> filter, AABB box, Predicate<? super T> predicate, List<? super T> result) {
++      this.getEntities(filter, box, predicate, result, Integer.MAX_VALUE);
++   }
++
++   public <T extends Entity> void getEntities(EntityTypeTest<Entity, T> filter, AABB box, Predicate<? super T> predicate, List<? super T> result, int limit) {
++      this.m_46473_().m_6174_("getEntities");
 +      // Paper start - optimise this call
-+      if (p_151528_ instanceof net.minecraft.world.entity.EntityType) {
-+         ((ServerLevel) this).getEntityLookup().getEntities((net.minecraft.world.entity.EntityType)p_151528_, p_151529_, list, p_151530_);
++      //TODO use limit
++      if (filter instanceof net.minecraft.world.entity.EntityType entityTypeTest) {
++         ((ServerLevel) this).getEntityLookup().getEntities(entityTypeTest, box, result, predicate);
 +      } else {
 +         Predicate<? super T> test = (obj) -> {
-+            return p_151528_.m_141992_(obj) != null;
++            return filter.m_141992_(obj) != null;
 +         };
-+         p_151530_ = p_151530_ == null ? test : test.and((Predicate)p_151530_);
++         predicate = predicate == null ? test : test.and((Predicate) predicate);
 +         Class base;
-+         if (p_151528_ == null || (base = p_151528_.m_142225_()) == null || base == Entity.class) {
-+            ((ServerLevel) this).getEntityLookup().getEntities((Entity) null, p_151529_, (List)list, (Predicate)p_151530_);
++         if (filter == null || (base = filter.m_142225_()) == null || base == Entity.class) {
++            ((ServerLevel) this).getEntityLookup().getEntities((Entity) null, box, (List) result, (Predicate)predicate);
 +         } else {
-+            ((ServerLevel) this).getEntityLookup().getEntities(base, null, p_151529_, (List)list, (Predicate)p_151530_); // Paper - optimise this call
++            ((ServerLevel) this).getEntityLookup().getEntities(base, null, box, (List) result, (Predicate)predicate); // Paper - optimise this call
 +         }
 +      }
 +      // Paper end - optimise this call
-       return list;
     }
  
+    @Nullable
 @@ -572,6 +_,7 @@
           this.m_46745_(p_151544_).m_8092_(true);
        }
