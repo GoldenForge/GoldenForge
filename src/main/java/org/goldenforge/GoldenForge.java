@@ -10,6 +10,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.goldenforge.config.GoldenForgeConfig;
+import org.goldenforgelauncher.GoldenForgeEntryPoint;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -17,10 +18,8 @@ import java.nio.file.Path;
 public class GoldenForge {
     public static Logger LOGGER = LogManager.getLogger("GoldenForge");
 
-    public static String VERSION = "ALPHA-0.0.3";
-
     public static String getBranding() {
-        return "Goldenforge " + VERSION;
+        return "Goldenforge " + GoldenForgeEntryPoint.getVersion();
     }
 
     public static void init() {
