@@ -158,10 +158,11 @@
     }
  
     public static boolean m_46741_(BlockPos p_46742_) {
-@@ -165,6 +_,15 @@
+@@ -165,11 +_,20 @@
     }
  
     public LevelChunk m_6325_(int p_46727_, int p_46728_) {
+-      return (LevelChunk)this.m_46819_(p_46727_, p_46728_, ChunkStatus.f_62326_);
 +      // Paper start - make sure loaded chunks get the inlined variant of this function
 +      net.minecraft.server.level.ServerChunkCache cps = ((ServerLevel)this).m_7726_();
 +      if (cps.f_8330_ == Thread.currentThread()) {
@@ -171,7 +172,22 @@
 +         }
 +      }
 +      // Paper end - make sure loaded chunks get the inlined variant of this function
-       return (LevelChunk)this.m_46819_(p_46727_, p_46728_, ChunkStatus.f_62326_);
++      return (LevelChunk)this.m_6522_(p_46727_, p_46728_, ChunkStatus.f_62326_, true); // Paper - avoid a method jump
+    }
+ 
+    @Nullable
+-   public ChunkAccess m_6522_(int p_46502_, int p_46503_, ChunkStatus p_46504_, boolean p_46505_) {
++   public final ChunkAccess m_6522_(int p_46502_, int p_46503_, ChunkStatus p_46504_, boolean p_46505_) { // Paper - final for inline
+       ChunkAccess chunkaccess = this.m_7726_().m_7587_(p_46502_, p_46503_, p_46504_, p_46505_);
+       if (chunkaccess == null && p_46505_) {
+          throw new IllegalStateException("Should always be able to create a chunk!");
+@@ -178,7 +_,7 @@
+       }
+    }
+ 
+-   public boolean m_7731_(BlockPos p_46601_, BlockState p_46602_, int p_46603_) {
++   public final boolean m_7731_(BlockPos p_46601_, BlockState p_46602_, int p_46603_) { // Paper - final for inline
+       return this.m_6933_(p_46601_, p_46602_, p_46603_, 512);
     }
  
 @@ -190,17 +_,45 @@

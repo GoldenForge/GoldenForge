@@ -1,15 +1,28 @@
 --- a/net/minecraft/core/Vec3i.java
 +++ b/net/minecraft/core/Vec3i.java
-@@ -33,6 +_,12 @@
+@@ -19,9 +_,9 @@
+       return IntStream.of(p_123313_.m_123341_(), p_123313_.m_123342_(), p_123313_.m_123343_());
+    });
+    public static final Vec3i f_123288_ = new Vec3i(0, 0, 0);
+-   private int f_123285_;
+-   private int f_123286_;
+-   private int f_123289_;
++   protected int f_123285_; // Paper - protected
++   protected int f_123286_; // Paper - protected
++   protected int f_123289_; // Paper - protected
+ 
+    private static Function<Vec3i, DataResult<Vec3i>> m_194645_(int p_194646_) {
+       return (p_194649_) -> {
+@@ -32,6 +_,12 @@
+    public static Codec<Vec3i> m_194650_(int p_194651_) {
        return f_123287_.flatXmap(m_194645_(p_194651_), m_194645_(p_194651_));
     }
- 
++
 +   // Paper start
 +   public final boolean isInsideBuildHeightAndWorldBoundsHorizontal(net.minecraft.world.level.LevelHeightAccessor levelHeightAccessor) {
 +      return m_123341_() >= -30000000 && m_123343_() >= -30000000 && m_123341_() < 30000000 && m_123343_() < 30000000 && !levelHeightAccessor.m_151562_(m_123342_());
 +   }
 +   // Paper end
-+
+ 
     public Vec3i(int p_123296_, int p_123297_, int p_123298_) {
        this.f_123285_ = p_123296_;
-       this.f_123286_ = p_123297_;

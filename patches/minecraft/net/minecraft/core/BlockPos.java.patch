@@ -99,3 +99,37 @@
     }
  
     public BlockPos m_5484_(Direction p_121948_, int p_121949_) {
+@@ -435,9 +_,9 @@
+       }
+ 
+       public BlockPos.MutableBlockPos m_122178_(int p_122179_, int p_122180_, int p_122181_) {
+-         this.m_142451_(p_122179_);
+-         this.m_142448_(p_122180_);
+-         this.m_142443_(p_122181_);
++         this.f_123285_ = p_122179_; // Paper - force inline
++         this.f_123286_ = p_122180_; // Paper - force inline
++         this.f_123289_ = p_122181_; // Paper - force inline
+          return this;
+       }
+ 
+@@ -499,17 +_,17 @@
+       }
+ 
+       public BlockPos.MutableBlockPos m_142451_(int p_175341_) {
+-         super.m_142451_(p_175341_);
++         this.f_123285_ = p_175341_; // Paper
+          return this;
+       }
+ 
+       public BlockPos.MutableBlockPos m_142448_(int p_175343_) {
+-         super.m_142448_(p_175343_);
++         this.f_123286_ = p_175343_; // Paper
+          return this;
+       }
+ 
+       public BlockPos.MutableBlockPos m_142443_(int p_175345_) {
+-         super.m_142443_(p_175345_);
++         this.f_123289_ = p_175345_; // Paper
+          return this;
+       }
+ 
