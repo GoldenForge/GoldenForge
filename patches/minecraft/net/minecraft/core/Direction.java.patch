@@ -1,0 +1,47 @@
+--- a/net/minecraft/core/Direction.java
++++ b/net/minecraft/core/Direction.java
+@@ -61,6 +_,11 @@
+    }, (p_235670_, p_235671_) -> {
+       throw new IllegalArgumentException("Duplicate keys");
+    }, Long2ObjectOpenHashMap::new));
++   // Paper start
++   private final int adjX;
++   private final int adjY;
++   private final int adjZ;
++   // Paper end
+ 
+    private Direction(int p_122356_, int p_122357_, int p_122358_, String p_122359_, Direction.AxisDirection p_122360_, Direction.Axis p_122361_, Vec3i p_122362_) {
+       this.f_122339_ = p_122356_;
+@@ -70,6 +_,11 @@
+       this.f_122343_ = p_122361_;
+       this.f_122344_ = p_122360_;
+       this.f_122345_ = p_122362_;
++      // Paper start
++      this.adjX = p_122362_.m_123341_();
++      this.adjY = p_122362_.m_123342_();
++      this.adjZ = p_122362_.m_123343_();
++      // Paper end
+    }
+ 
+    public static Direction[] m_122382_(Entity p_122383_) {
+@@ -362,16 +_,17 @@
+    }
+ 
+    public int m_122429_() {
+-      return this.f_122345_.m_123341_();
++      return this.adjX; // Paper
+    }
+ 
+    public int m_122430_() {
+-      return this.f_122345_.m_123342_();
++      return this.adjY; // Paper
+    }
+ 
+    public int m_122431_() {
+-      return this.f_122345_.m_123343_();
++      return this.adjZ; // Paper
+    }
++
+ 
+    public Vector3f m_122432_() {
+       return new Vector3f((float)this.m_122429_(), (float)this.m_122430_(), (float)this.m_122431_());
