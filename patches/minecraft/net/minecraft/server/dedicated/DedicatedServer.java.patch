@@ -1,7 +1,10 @@
 --- a/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/net/minecraft/server/dedicated/DedicatedServer.java
-@@ -19,6 +_,8 @@
+@@ -17,8 +_,11 @@
+ import java.util.List;
+ import java.util.Locale;
  import java.util.Optional;
++import java.util.concurrent.atomic.AtomicBoolean;
  import java.util.function.BooleanSupplier;
  import javax.annotation.Nullable;
 +
@@ -102,11 +105,11 @@
     }
  
     public DedicatedPlayerList m_6846_() {
-@@ -517,6 +_,7 @@
+@@ -515,7 +_,6 @@
+ 
+    public void m_7041_() {
        super.m_7041_();
-       Util.m_137580_();
+-      Util.m_137580_();
        SkullBlockEntity.m_196704_();
-+      System.exit(0);
     }
  
-    public boolean m_7779_(GameProfile p_139642_) {

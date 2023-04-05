@@ -268,16 +268,57 @@
     }
  
     public boolean m_195514_(boolean p_195515_, boolean p_195516_, boolean p_195517_) {
-@@ -527,6 +_,8 @@
+@@ -526,7 +_,41 @@
+       this.m_7041_();
     }
  
++
++   // CraftBukkit start
++   private boolean hasStopped = false;
++   public volatile boolean hasFullyShutdown = false; // Paper
++   private boolean hasLoggedStop = false; // Paper
++   private final Object stopLock = new Object();
++   public final boolean hasStopped() {
++      synchronized (this.stopLock) {
++         return this.hasStopped;
++      }
++   }
++   public volatile Thread shutdownThread; // Paper
++   // CraftBukkit end
++
     public void m_7041_() {
++      // CraftBukkit start - prevent double stopping on multiple threads
++      synchronized(this.stopLock) {
++         if (this.hasStopped) return;
++         this.hasStopped = true;
++      }
++      // Paper start - kill main thread, and kill it hard
++      shutdownThread = Thread.currentThread();
++      if (!m_18695_()) {
++         MinecraftServer.f_129750_.info("Stopping main thread (Ignore any thread death message you see! - DO NOT REPORT THREAD DEATH TO PAPER)");
++         while (this.m_6304_().isAlive()) {
++            this.m_6304_().stop();
++            try {
++               Thread.sleep(1);
++            } catch (InterruptedException e) {}
++         }
++      }
++      // Paper end
++      // CraftBukkit end
 +      if (m_130010_() && m_6982_()) net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.GameShuttingDownEvent());
 +
        if (this.f_177872_.m_142763_()) {
           this.m_236737_();
        }
-@@ -550,27 +_,29 @@
+@@ -541,6 +_,7 @@
+          f_129750_.info("Saving players");
+          this.f_129763_.m_11302_();
+          this.f_129763_.m_11313_();
++         try { Thread.sleep(100); } catch (InterruptedException ex) {} // CraftBukkit - SPIGOT-625 - give server at least a chance to send packets
+       }
+ 
+       f_129750_.info("Saving worlds");
+@@ -550,27 +_,38 @@
              serverlevel.f_8564_ = false;
           }
        }
@@ -315,6 +356,15 @@
  
        this.m_129885_(false, true, false);
  
++      this.f_195494_ = false;
++      this.f_129740_.close();
++
++      try {
++         this.f_129744_.close();
++      } catch (IOException ioexception1) {
++         MinecraftServer.f_129750_.error("Failed to unlock level {}", this.f_129744_.m_78277_(), ioexception1);
++      }
++
        for(ServerLevel serverlevel2 : this.m_129785_()) {
           if (serverlevel2 != null) {
              try {
@@ -322,20 +372,49 @@
                 serverlevel2.close();
              } catch (IOException ioexception1) {
                 f_129750_.error("Exception closing the level", (Throwable)ioexception1);
-@@ -587,6 +_,9 @@
+@@ -587,6 +_,14 @@
           f_129750_.error("Failed to unlock level {}", this.f_129744_.m_78277_(), ioexception);
        }
  
 +      f_129750_.info("Flushing Chunk IO");
 +      io.papermc.paper.chunk.system.io.RegionFileIOThread.close(true); // Paper // Paper - rewrite chunk system
 +
++      f_129750_.info("Closing Thread Pool");
++      Util.m_137580_(); // Paper
++
++      org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
++      System.exit(0);
     }
  
     public String m_130009_() {
-@@ -613,12 +_,76 @@
- 
+@@ -602,23 +_,93 @@
     }
  
+    public void m_7570_(boolean p_129884_) {
++      // Paper start - allow passing of the intent to restart
++      this.safeShutdown(p_129884_);
++   }
++   public void safeShutdown(boolean waitForShutdown) {
++      this.hasLoggedStop = true; // Paper
++      // Paper end
+       this.f_129764_ = false;
+-      if (p_129884_) {
++      if (waitForShutdown) {
+          try {
+             this.f_129725_.join();
+          } catch (InterruptedException interruptedexception) {
+-            f_129750_.error("Error while shutting down", (Throwable)interruptedexception);
+-         }
+-      }
+-
+-   }
+-
++            MinecraftServer.f_129750_.error("Error while shutting down", interruptedexception);
++         }
++      }
++
++   }
++
 +   // Paper start - Further improve server tick loop
 +   public static final int TICK_TIME = 1000000000 / MinecraftServer.TPS;
 +   public static final int TPS = 20;
