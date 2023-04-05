@@ -1,5 +1,31 @@
 --- a/net/minecraft/world/level/material/FlowingFluid.java
 +++ b/net/minecraft/world/level/material/FlowingFluid.java
+@@ -32,13 +_,18 @@
+    public static final BooleanProperty f_75947_ = BlockStateProperties.f_61434_;
+    public static final IntegerProperty f_75948_ = BlockStateProperties.f_61420_;
+    private static final int f_164507_ = 200;
+-   private static final ThreadLocal<Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey>> f_75949_ = ThreadLocal.withInitial(() -> {
+-      Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey> object2bytelinkedopenhashmap = new Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey>(200) {
+-         protected void rehash(int p_76102_) {
+-         }
+-      };
+-      object2bytelinkedopenhashmap.defaultReturnValue((byte)127);
+-      return object2bytelinkedopenhashmap;
++//   private static final ThreadLocal<Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey>> OCCLUSION_CACHE = ThreadLocal.withInitial(() -> {
++//      Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey> object2bytelinkedopenhashmap = new Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey>(200) {
++//         protected void rehash(int p_76102_) {
++//         }
++//      };
++//      object2bytelinkedopenhashmap.defaultReturnValue((byte)127);
++//      return object2bytelinkedopenhashmap;
++//   });
++   private static final ThreadLocal<gg.airplane.structs.FluidDirectionCache<Block.BlockStatePairKey>> localFluidDirectionCache = ThreadLocal.withInitial(() -> {
++      // Pufferfish todo - mess with this number for performance
++      //  with 2048 it seems very infrequent on a small world that it has to remove old entries
++      return new gg.airplane.structs.FluidDirectionCache<>(2048);
+    });
+    private final Map<FluidState, VoxelShape> f_75950_ = Maps.newIdentityHashMap();
+ 
 @@ -140,7 +_,9 @@
              Direction direction = entry.getKey();
              FluidState fluidstate = entry.getValue();
@@ -34,6 +60,97 @@
           BlockState blockstate1 = p_76036_.m_8055_(p_76037_.m_7495_());
           FluidState fluidstate1 = blockstate1.m_60819_();
           if (blockstate1.m_60767_().m_76333_() || this.m_76096_(fluidstate1)) {
+@@ -186,34 +_,63 @@
+    }
+ 
+    private boolean m_76061_(Direction p_76062_, BlockGetter p_76063_, BlockPos p_76064_, BlockState p_76065_, BlockPos p_76066_, BlockState p_76067_) {
+-      Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey> object2bytelinkedopenhashmap;
++      // Pufferfish start - modify to use our cache
++        /*
++        Object2ByteLinkedOpenHashMap object2bytelinkedopenhashmap;
++
++        if (!state.getBlock().hasDynamicShape() && !fromState.getBlock().hasDynamicShape()) {
++            object2bytelinkedopenhashmap = (Object2ByteLinkedOpenHashMap) FlowingFluid.OCCLUSION_CACHE.get();
++        } else {
++            object2bytelinkedopenhashmap = null;
++        }
++         */
++      gg.airplane.structs.FluidDirectionCache<Block.BlockStatePairKey> cache = null;
++
+       if (!p_76065_.m_60734_().m_49967_() && !p_76067_.m_60734_().m_49967_()) {
+-         object2bytelinkedopenhashmap = f_75949_.get();
+-      } else {
+-         object2bytelinkedopenhashmap = null;
+-      }
+-
+-      Block.BlockStatePairKey block$blockstatepairkey;
+-      if (object2bytelinkedopenhashmap != null) {
+-         block$blockstatepairkey = new Block.BlockStatePairKey(p_76065_, p_76067_, p_76062_);
+-         byte b0 = object2bytelinkedopenhashmap.getAndMoveToFirst(block$blockstatepairkey);
+-         if (b0 != 127) {
+-            return b0 != 0;
+-         }
+-      } else {
+-         block$blockstatepairkey = null;
+-      }
+-
+-      VoxelShape voxelshape1 = p_76065_.m_60812_(p_76063_, p_76064_);
+-      VoxelShape voxelshape = p_76067_.m_60812_(p_76063_, p_76066_);
+-      boolean flag = !Shapes.m_83152_(voxelshape1, voxelshape, p_76062_);
+-      if (object2bytelinkedopenhashmap != null) {
+-         if (object2bytelinkedopenhashmap.size() == 200) {
+-            object2bytelinkedopenhashmap.removeLastByte();
+-         }
+-
+-         object2bytelinkedopenhashmap.putAndMoveToFirst(block$blockstatepairkey, (byte)(flag ? 1 : 0));
+-      }
++         cache = localFluidDirectionCache.get();
++      }
++
++      Block.BlockStatePairKey block_a;
++
++        /*
++        if (object2bytelinkedopenhashmap != null) {
++            block_a = new Block.BlockStatePairKey(state, fromState, face);
++            byte b0 = object2bytelinkedopenhashmap.getAndMoveToFirst(block_a);
++
++            if (b0 != 127) {
++                return b0 != 0;
++            }
++        } else {
++            block_a = null;
++        }
++         */
++      if (cache != null) {
++         block_a = new Block.BlockStatePairKey(p_76065_, p_76067_, p_76062_);
++         Boolean flag = cache.getValue(block_a);
++         if (flag != null) {
++            return flag;
++         }
++      } else {
++         block_a = null;
++      }
++
++      VoxelShape voxelshape = p_76065_.m_60812_(p_76063_, p_76064_);
++      VoxelShape voxelshape1 = p_76067_.m_60812_(p_76063_, p_76066_);
++      boolean flag = !Shapes.m_83152_(voxelshape, voxelshape1, p_76062_);
++
++        /*
++        if (object2bytelinkedopenhashmap != null) {
++            if (object2bytelinkedopenhashmap.size() == 200) {
++                object2bytelinkedopenhashmap.removeLastByte();
++            }
++
++            object2bytelinkedopenhashmap.putAndMoveToFirst(block_a, (byte) (flag ? 1 : 0));
++        }
++         */
++      if (cache != null) {
++         cache.putValue(block_a, flag);
++      }
++      // Pufferfish end
+ 
+       return flag;
+    }
 @@ -230,6 +_,12 @@
        return this.m_5613_().m_76145_().m_61124_(f_75947_, Boolean.valueOf(p_76069_));
     }

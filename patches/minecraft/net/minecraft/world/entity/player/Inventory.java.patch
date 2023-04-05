@@ -37,3 +37,30 @@
              crashreportcategory.m_128159_("Item ID", Item.m_41393_(p_36042_.m_41720_()));
              crashreportcategory.m_128159_("Item data", p_36042_.m_41773_());
              crashreportcategory.m_128165_("Item name", () -> {
+@@ -535,13 +_,23 @@
+    }
+ 
+    public boolean m_36063_(ItemStack p_36064_) {
+-      for(List<ItemStack> list : this.f_35979_) {
+-         for(ItemStack itemstack : list) {
+-            if (!itemstack.m_41619_() && itemstack.m_41656_(p_36064_)) {
++      for (int i = 0; i < this.f_35979_.size(); i++) {
++         List<ItemStack> list = this.f_35979_.get(i);
++         for (int j = 0; j < list.size(); j++) {
++            ItemStack itemstack1 = list.get(j);
++
++            if (!itemstack1.m_41619_() && itemstack1.m_41656_(p_36064_)) {
+                return true;
+             }
+          }
+       }
++//      for(List<ItemStack> list : this.compartments) {
++//         for(ItemStack itemstack : list) {
++//            if (!itemstack.isEmpty() && itemstack.sameItem(p_36064_)) {
++//               return true;
++//            }
++//         }
++//      }
+ 
+       return false;
+    }

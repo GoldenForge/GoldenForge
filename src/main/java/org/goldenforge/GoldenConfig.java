@@ -4,6 +4,7 @@ public class GoldenConfig {
 
     public static int pageMax = 2560; // TODO this appears to be a duplicate setting with one above
     public static double totalMultiplier = 0.98D; // TODO this should probably be merged into the above inner class
+    public static boolean throttleInactiveGoalSelectorTick = true;
 
     // Misc
     public static double movedTooQuicklyMultiplier = 10.0D;

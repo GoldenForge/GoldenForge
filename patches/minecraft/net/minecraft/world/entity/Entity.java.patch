@@ -160,7 +160,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,77 @@
+@@ -230,13 +_,98 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -193,25 +193,46 @@
 +   public boolean isTemporarilyActive = false; // Paper
 +   // Paper start - optimise entity tracking
 +   final org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = org.spigotmc.TrackingRange.getTrackingRangeType(this);
-+   public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> getPlayersInTrackRange() {
-+      // determine highest range of passengers
-+      if (this.f_19823_.isEmpty()) {
-+         return ((ServerLevel)this.f_19853_).m_7726_().f_8325_.playerEntityTrackerTrackMaps[this.trackingRangeType.ordinal()]
-+                 .getObjectsInRange(MCUtil.getCoordinateKey(this));
-+      }
-+      Iterable<Entity> passengers = this.m_146897_();
-+      net.minecraft.server.level.ChunkMap chunkMap = ((ServerLevel)this.f_19853_).m_7726_().f_8325_;
-+      org.spigotmc.TrackingRange.TrackingRangeType type = this.trackingRangeType;
-+      int range = chunkMap.getEntityTrackerRange(type.ordinal());
 +
-+      for (Entity passenger : passengers) {
++   private org.spigotmc.TrackingRange.TrackingRangeType getFurthestEntity(Entity entity, net.minecraft.server.level.ChunkMap chunkMap, org.spigotmc.TrackingRange.TrackingRangeType type, int range) {
++      List<Entity> passengers = entity.m_20197_();
++      for (int i = 0, size = passengers.size(); i < size; i++) {
++         Entity passenger = passengers.get(i);
 +         org.spigotmc.TrackingRange.TrackingRangeType passengerType = passenger.trackingRangeType;
 +         int passengerRange = chunkMap.getEntityTrackerRange(passengerType.ordinal());
 +         if (passengerRange > range) {
 +            type = passengerType;
 +            range = passengerRange;
 +         }
++
++         type = this.getFurthestEntity(passenger, chunkMap, type, range);
 +      }
++
++      return type;
++   }
++
++   public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> getPlayersInTrackRange() {
++      // determine highest range of passengers
++      if (this.f_19823_.isEmpty()) {
++         return ((ServerLevel)this.f_19853_).m_7726_().f_8325_.playerEntityTrackerTrackMaps[this.trackingRangeType.ordinal()]
++                 .getObjectsInRange(MCUtil.getCoordinateKey(this));
++      }
++     // Iterable<Entity> passengers = this.getIndirectPassengers();
++      net.minecraft.server.level.ChunkMap chunkMap = ((ServerLevel)this.f_19853_).m_7726_().f_8325_;
++      org.spigotmc.TrackingRange.TrackingRangeType type = this.trackingRangeType;
++      int range = chunkMap.getEntityTrackerRange(type.ordinal());
++
++      // Pufferfish start - use getFurthestEntity to skip getIndirectPassengers
++//      for (Entity passenger : passengers) {
++//         org.spigotmc.TrackingRange.TrackingRangeType passengerType = passenger.trackingRangeType;
++//         int passengerRange = chunkMap.getEntityTrackerRange(passengerType.ordinal());
++//         if (passengerRange > range) {
++//            type = passengerType;
++//            range = passengerRange;
++//         }
++//      }
++      type = this.getFurthestEntity(this, chunkMap, type, range);
++      // Pufferfish end
 +
 +      return chunkMap.playerEntityTrackerTrackMaps[type.ordinal()].getObjectsInRange(MCUtil.getCoordinateKey(this));
 +   }

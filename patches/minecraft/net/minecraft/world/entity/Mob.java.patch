@@ -7,15 +7,25 @@
  import com.google.common.collect.ImmutableSet;
  import com.google.common.collect.Maps;
  import java.util.Arrays;
-@@ -178,6 +_,19 @@
+@@ -71,6 +_,7 @@
+ import net.minecraft.world.level.material.Fluid;
+ import net.minecraft.world.level.pathfinder.BlockPathTypes;
+ import net.minecraft.world.level.storage.loot.LootContext;
++import org.goldenforge.GoldenConfig;
+ 
+ public abstract class Mob extends LivingEntity {
+    private static final EntityDataAccessor<Byte> f_21340_ = SynchedEntityData.m_135353_(Mob.class, EntityDataSerializers.f_135027_);
+@@ -178,6 +_,21 @@
        return this.f_21365_;
     }
  
++   int _pufferfish_inactiveTickDisableCounter = 0; // Pufferfish - throttle inactive goal selector ticking
 +   // Paper start
 +   @Override
 +   public void inactiveTick() {
 +      super.inactiveTick();
-+      if (this.f_21345_.inactiveTick()) {
++      boolean isThrottled = GoldenConfig.throttleInactiveGoalSelectorTick && _pufferfish_inactiveTickDisableCounter++ % 20 != 0; // Pufferfish - throttle inactive goal selector ticking
++      if (this.f_21345_.inactiveTick() && !isThrottled) { // Pufferfish - throttle inactive goal selector ticking
 +         this.f_21345_.m_25373_();
 +      }
 +      if (this.f_21346_.inactiveTick()) {
