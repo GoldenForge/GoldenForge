@@ -46,6 +46,9 @@ public class GoldenForgeConfig {
 
         public static ConfigValue<Integer> autoSaveInterval;
         public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
+
+        public static ConfigValue<Integer> chatExecutorCoreSize;
+        public static ConfigValue<Integer> chatExecutorMaxSize;
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -161,6 +164,31 @@ public class GoldenForgeConfig {
                     .comment("The maximum number of chunks the auto-save system will save in a single tick.")
                     .worldRestart()
                     .define("maxAutoSaveChunksPerTick", 24);
+
+            builder.pop();
+
+            builder.push("Chat");
+            chatExecutorCoreSize = builder
+                    .comment("Configures the world saving interval in ticks.")
+                    .worldRestart()
+                    .define("chatExecutorCoreSize", -1);
+
+            chatExecutorMaxSize = builder
+                    .comment("The maximum number of chunks the auto-save system will save in a single tick.")
+                    .worldRestart()
+                    .define("chatExecutorMaxSize", -1);
+
+            if (net.minecraft.server.MinecraftServer.getServer() == null) return; // In testing env, this will be null here
+            int _chatExecutorMaxSize = (chatExecutorMaxSize.get() <= 0) ? Integer.MAX_VALUE : chatExecutorMaxSize.get(); // This is somewhat dumb, but, this is the default, do we cap this?;
+            int _chatExecutorCoreSize = Math.max(chatExecutorCoreSize.get(), 0);
+
+            if (_chatExecutorMaxSize < _chatExecutorCoreSize) {
+                _chatExecutorMaxSize = _chatExecutorCoreSize;
+            }
+
+            java.util.concurrent.ThreadPoolExecutor executor = (java.util.concurrent.ThreadPoolExecutor) net.minecraft.server.MinecraftServer.getServer().chatExecutor;
+            executor.setCorePoolSize(_chatExecutorCoreSize);
+            executor.setMaximumPoolSize(_chatExecutorMaxSize);
 
             builder.pop();
         }

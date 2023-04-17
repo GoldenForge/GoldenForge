@@ -42,7 +42,13 @@
  
     public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_) {
        this.f_9745_ = p_9770_;
-@@ -246,6 +_,12 @@
+       this.f_9742_ = p_9771_;
+@@ -242,7 +_,7 @@
+          this.f_240889_ = SignedMessageChain.Decoder.f_243004_;
+       }
+ 
+-      this.f_241681_ = new FutureChain(p_9770_);
++      this.f_241681_ = new FutureChain(p_9770_.chatExecutor); // CraftBukkit - async chat
     }
  
     public void m_9933_() {
@@ -721,7 +727,25 @@
                    InteractionResult interactionresult = this.f_9743_.f_8941_.m_7179_(this.f_9743_, serverlevel, itemstack, interactionhand, blockhitresult);
                    if (direction == Direction.UP && !interactionresult.m_19077_() && blockpos.m_123342_() >= i - 1 && m_9790_(this.f_9743_, itemstack)) {
                       Component component = Component.m_237110_("build.tooHigh", i - 1).m_130940_(ChatFormatting.RED);
-@@ -1184,10 +_,12 @@
+@@ -1122,6 +_,11 @@
+    }
+ 
+    public void m_7026_(Component p_9825_) {
++      if (this.processedDisconnect) {
++         return;
++      } else {
++         this.processedDisconnect = true;
++      }
+       f_9744_.info("{} lost connection: {}", this.f_9743_.m_7755_().getString(), p_9825_.getString());
+       this.f_9745_.m_129929_();
+       this.f_9745_.m_6846_().m_240416_(Component.m_237110_("multiplayer.player.left", this.f_9743_.m_5446_()).m_130940_(ChatFormatting.YELLOW), false);
+@@ -1179,20 +_,22 @@
+          this.m_9942_(Component.m_237115_("multiplayer.disconnect.illegal_characters"));
+       } else {
+          if (this.m_241937_(p_9841_.f_133827_(), p_9841_.f_237950_(), p_9841_.f_241662_())) {
+-            this.f_9745_.m_18707_(() -> {
++            //this.server.submit(() -> {
+                PlayerChatMessage playerchatmessage = this.m_242585_(p_9841_);
                 if (this.m_242598_(playerchatmessage)) {
                    this.f_241681_.m_241849_(() -> {
                       CompletableFuture<FilteredText> completablefuture = this.m_243132_(playerchatmessage.m_241775_().f_241656_());
@@ -734,8 +758,15 @@
 +                        if (playerchatmessage1 == null) return; // Forge: ServerChatEvent was canceled if this is null.
 +                        playerchatmessage1 = playerchatmessage1.m_243072_(filtermask);
                          this.m_243086_(playerchatmessage1);
-                      }, this.f_9745_);
+-                     }, this.f_9745_);
++                     }, this.f_9745_.chatExecutor); // CraftBukkit - async chat
                    });
+                }
+-            });
++            //});
+          }
+ 
+       }
 @@ -1383,7 +_,7 @@
  
     private CompletableFuture<Component> m_215246_(String p_215247_) {
