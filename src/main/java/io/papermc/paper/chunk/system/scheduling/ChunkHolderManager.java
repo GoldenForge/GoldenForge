@@ -4,7 +4,6 @@ import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.mojang.logging.LogUtils;
 import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
@@ -21,8 +20,9 @@ import net.minecraft.server.level.*;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.ChunkPos;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.goldenforge.config.GoldenForgeConfig;
-import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.text.DecimalFormat;
@@ -36,7 +36,7 @@ import java.util.function.Predicate;
 
 public final class ChunkHolderManager {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger("ChunkHolderManager");
 
     public static final int FULL_LOADED_TICKET_LEVEL    = 33;
     public static final int BLOCK_TICKING_TICKET_LEVEL  = 32;
