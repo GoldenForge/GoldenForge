@@ -206,7 +206,7 @@
     }
  
     public void m_27047_(ChunkPos p_27048_, LevelChunkSection p_27049_) {
-@@ -238,19 +_,83 @@
+@@ -238,19 +_,98 @@
        });
     }
  
@@ -223,6 +223,21 @@
 -         p_27057_.m_46819_(p_217889_.f_45578_, p_217889_.f_45579_, ChunkStatus.f_62314_);
 -      });
 -   }
++    public void m_27056_(LevelReader p_27057_, BlockPos p_27058_, int p_27059_) {
++        SectionPos.m_175557_(new ChunkPos(p_27058_), Math.floorDiv(p_27059_, 16), this.f_156618_.m_151560_(), this.f_156618_.m_151561_()).map((sectionPos) -> {
++            return Pair.of(sectionPos, this.m_63823_(sectionPos.m_123252_()));
++        }).filter((pair) -> {
++            return !pair.getSecond().map(PoiSection::m_27272_).orElse(false);
++        }).map((pair) -> {
++            return pair.getFirst().m_123251_();
++        }).filter((chunkPos) -> {
++            return true; // Paper - rewrite chunk system
++        }).forEach((chunkPos) -> {
++            p_27057_.m_46819_(chunkPos.f_45578_, chunkPos.f_45579_, ChunkStatus.f_62314_);
++        });
++    }
++
++
 +    @Override
 +    public Optional<PoiSection> m_63818_(long pos) {
 +        int chunkX = io.papermc.paper.util.CoordinateUtils.getChunkSectionX(pos);
