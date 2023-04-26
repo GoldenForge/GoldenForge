@@ -217,15 +217,44 @@
           chunkaccess = protochunk;
           protochunk.m_6141_(j1);
           if (p_188234_.m_128425_("below_zero_retrogen", 10)) {
-@@ -180,7 +_,7 @@
+@@ -178,12 +_,33 @@
+ 
+          BelowZeroRetrogen belowzeroretrogen = protochunk.m_183376_();
           boolean flag3 = chunkstatus.m_62427_(ChunkStatus.f_62323_) || belowzeroretrogen != null && belowzeroretrogen.m_188466_().m_62427_(ChunkStatus.f_62323_);
-          if (!flag && flag3) {
-             for(BlockPos blockpos : BlockPos.m_121976_(p_188233_.m_45604_(), p_188231_.m_141937_(), p_188233_.m_45605_(), p_188233_.m_45608_(), p_188231_.m_151558_() - 1, p_188233_.m_45609_())) {
+-         if (!flag && flag3) {
+-            for(BlockPos blockpos : BlockPos.m_121976_(p_188233_.m_45604_(), p_188231_.m_141937_(), p_188233_.m_45605_(), p_188233_.m_45608_(), p_188231_.m_151558_() - 1, p_188233_.m_45609_())) {
 -               if (chunkaccess.m_8055_(blockpos).m_60791_() != 0) {
-+               if (chunkaccess.m_8055_(blockpos).getLightEmission(chunkaccess, blockpos) != 0) {
-                   protochunk.m_63277_(blockpos);
+-                  protochunk.m_63277_(blockpos);
++         if (!flag) { // Paper - fix incorrect parsing of blocks that emit light - it should always parse it, unless the chunk is marked as lit
++            // Paper start - let's make sure the implementation isn't as slow as possible
++            int offX = p_188233_.f_45578_ << 4;
++            int offZ = p_188233_.f_45579_ << 4;
++
++            int minChunkSection = io.papermc.paper.util.WorldUtil.getMinSection(p_188231_);
++            int maxChunkSection = io.papermc.paper.util.WorldUtil.getMaxSection(p_188231_);
++
++            LevelChunkSection[] sections = alevelchunksection;
++            for (int sectionY = minChunkSection; sectionY <= maxChunkSection; ++sectionY) {
++               LevelChunkSection section = sections[sectionY - minChunkSection];
++               if (section == null || section.m_188008_()) {
++                  // no sources in empty sections
++                  continue;
++               }
++               int offY = sectionY << 4;
++
++               for (int index = 0; index < (16 * 16 * 16); ++index) {
++                  if (section.f_62972_.m_63085_(index).m_60791_() <= 0) {
++                     continue;
++                  }
++
++                  // index = x | (z << 4) | (y << 8)
++                  protochunk.m_63277_(new BlockPos(offX | (index & 15), offY | (index >>> 8), offZ | ((index >>> 4) & 15)));
                 }
              }
++            // Paper end
+          }
+       }
+ 
 @@ -219,7 +_,10 @@
        }
  
