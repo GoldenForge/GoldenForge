@@ -280,14 +280,21 @@
     }
  
     public void m_142036_() {
-@@ -376,8 +_,8 @@
+@@ -376,8 +_,15 @@
     }
  
     public void m_6034_(double p_20210_, double p_20211_, double p_20212_) {
 -      this.m_20343_(p_20210_, p_20211_, p_20212_);
 -      this.m_20011_(this.m_142242_());
-+      this.setPosRaw(p_20210_, p_20211_, p_20212_, true); // Paper - force bounding box update
-+     // this.setBoundingBox(this.makeBoundingBox());  // Paper - move into setPositionRaw
++      this.m_20343_(p_20210_, p_20211_, p_20212_); // Paper - force bounding box update
++
++      // Goldenforge, move this here, to keep compat with immersive portal
++      // Paper start - never allow AABB to become desynced from position
++      // hanging has its own special logic
++      if (!(this instanceof net.minecraft.world.entity.decoration.HangingEntity)) {
++         this.m_20011_(this.m_142242_());
++      }
++      // Paper end
     }
  
     protected AABB m_142242_() {
@@ -604,6 +611,14 @@
     }
  
     public void m_19920_(float p_19921_, Vec3 p_19922_) {
+@@ -1207,6 +_,7 @@
+       this.m_146926_(Mth.m_14036_(p_19895_, -90.0F, 90.0F) % 360.0F);
+       this.f_19859_ = this.m_146908_();
+       this.f_19860_ = this.m_146909_();
++      this.m_5616_(p_19894_); // Paper - Update head rotation
+    }
+ 
+    public void m_20248_(double p_20249_, double p_20250_, double p_20251_) {
 @@ -1231,11 +_,19 @@
     }
  
@@ -938,14 +953,42 @@
        return this.f_19799_.getDouble(p_204037_);
     }
  
-@@ -2955,6 +_,10 @@
+@@ -2954,7 +_,38 @@
+       return this.m_20246_((2.0D * this.f_19796_.m_188500_() - 1.0D) * p_20263_);
     }
  
-    public final void m_20343_(double p_20344_, double p_20345_, double p_20346_) {
-+      // Paper start
-+      this.setPosRaw(p_20344_, p_20345_, p_20346_, false);
++   // Paper start - block invalid positions
++   public static boolean checkPosition(Entity entity, double newX, double newY, double newZ) {
++      if (Double.isFinite(newX) && Double.isFinite(newY) && Double.isFinite(newZ)) {
++         return true;
++      }
++
++      String entityInfo = null;
++      try {
++         entityInfo = entity.toString();
++      } catch (Exception ex) {
++         entityInfo = "[Entity info unavailable] ";
++      }
++      f_19849_.error("New entity position is invalid! Tried to set invalid position (" + newX + "," + newY + "," + newZ + ") for entity " + entity.getClass().getName() + " located at " + entity.f_19825_ + ", entity info: " + entityInfo, new Throwable());
++      return false;
 +   }
-+   public final void setPosRaw(double p_20344_, double p_20345_, double p_20346_, boolean forceBoundingBoxUpdate) {
++   // Paper end - block invalid positions
++
++
+    public final void m_20343_(double p_20344_, double p_20345_, double p_20346_) {
++      // Paper start - block invalid positions
++      if (!checkPosition(this, p_20344_, p_20345_, p_20346_)) {
++         return;
++      }
++      // Paper end - block invalid positions
++      // Paper end
++      // Paper start - rewrite chunk system
++      if (this.updatingSectionStatus) {
++         f_19849_.error("Refusing to update position for entity " + this + " to position " + new Vec3( p_20344_, p_20345_, p_20346_) + " since it is processing a section status update", new Throwable());
++         return;
++      }
++      // Paper end - rewrite chunk system
++
        if (this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_) {
           this.f_19825_ = new Vec3(p_20344_, p_20345_, p_20346_);
           int i = Mth.m_14107_(p_20344_);
@@ -955,7 +998,7 @@
  
 +      // Paper start - never allow AABB to become desynced from position
 +      // hanging has its own special logic
-+      if (!(this instanceof net.minecraft.world.entity.decoration.HangingEntity) && (forceBoundingBoxUpdate || this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_)) {
++      if (!(this instanceof net.minecraft.world.entity.decoration.HangingEntity) && (this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_)) {
 +         this.m_20011_(this.m_142242_());
 +      }
 +      // Paper end
