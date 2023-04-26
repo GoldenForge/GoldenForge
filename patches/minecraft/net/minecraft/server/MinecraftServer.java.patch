@@ -40,7 +40,7 @@
     protected long f_129726_ = Util.m_137550_();
     private long f_129727_;
     private boolean f_129728_;
-@@ -235,29 +_,38 @@
+@@ -235,29 +_,43 @@
     private String f_129739_;
     private MinecraftServer.ReloadableResources f_129740_;
     private final StructureTemplateManager f_236720_;
@@ -54,6 +54,11 @@
 +   public static int currentTick = 0; // Paper - Further improve tick loop
 +
 +   public gg.pufferfish.pufferfish.util.AsyncExecutor mobSpawnExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("MobSpawning"); // Pufferfish - optimize mob spawning
++
++   public final java.util.concurrent.ExecutorService chatExecutor = java.util.concurrent.Executors.newCachedThreadPool(
++           new com.google.common.util.concurrent.ThreadFactoryBuilder().setDaemon(true).setNameFormat("Async Chat Thread - #%d").setUncaughtExceptionHandler(new net.minecraft.DefaultUncaughtExceptionHandlerWithName(net.minecraft.server.MinecraftServer.f_129750_)).build()); // Paper
++
++
 +
     public static <S extends MinecraftServer> S m_129872_(Function<Thread, S> p_129873_) {
        AtomicReference<S> atomicreference = new AtomicReference<>();
