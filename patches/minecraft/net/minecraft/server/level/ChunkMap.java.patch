@@ -43,16 +43,19 @@
  import net.minecraft.server.level.progress.ChunkProgressListener;
  import net.minecraft.server.network.ServerPlayerConnection;
  import net.minecraft.util.CsvOutput;
-@@ -96,6 +_,8 @@
+@@ -96,7 +_,11 @@
  import net.minecraft.world.phys.Vec3;
  import org.apache.commons.lang3.mutable.MutableBoolean;
  import org.apache.commons.lang3.mutable.MutableObject;
 +import org.goldenforge.GoldenConfig;
 +import org.goldenforge.GoldenForge;
  import org.slf4j.Logger;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
-@@ -110,35 +_,237 @@
+    private static final byte f_143034_ = -1;
+@@ -110,35 +_,245 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -63,7 +66,15 @@
 -   final ServerLevel f_140133_;
 +   //public final com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<ChunkHolder> updatingChunks = new com.destroystokyo.paper.util.map.QueuedChangesMapLong2Object<>();
 +
-+   //private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap = this.updatingChunkMap.clone();
++   private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> f_140130_ = new Long2ObjectLinkedOpenHashMap<ChunkHolder>() {
++
++      // minecolonies compatibility
++      @Override
++      public ChunkHolder get(long k) {
++         return ChunkMap.this.m_140327_(k);
++      }
++   };
++
 +   //private final Long2ObjectLinkedOpenHashMap<ChunkHolder> pendingUnloads = new Long2ObjectLinkedOpenHashMap<>();
 +   //private final LongSet entitiesInLevel = new LongOpenHashSet();
 +   public final ServerLevel f_140133_;
@@ -688,7 +699,7 @@
     }
  
     protected void m_140280_(BooleanSupplier p_140281_) {
-@@ -444,129 +_,28 @@
+@@ -444,129 +_,27 @@
     }
  
     public boolean m_201907_() {
@@ -726,8 +737,8 @@
 -            ++l;
 -         }
 -      }
+-
 +      this.f_140133_.chunkTaskScheduler.chunkHolderManager.processUnloads(); // Paper - rewrite chunk system
- 
     }
  
     private void m_140181_(long p_140182_, ChunkHolder p_140183_) {

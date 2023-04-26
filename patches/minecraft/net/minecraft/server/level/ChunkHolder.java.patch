@@ -45,7 +45,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,194 @@
+@@ -65,97 +_,198 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -219,7 +219,11 @@
 -      CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> completablefuture = this.m_140082_();
 -      Either<LevelChunk, ChunkHolder.ChunkLoadingFailure> either = completablefuture.getNow((Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>)null);
 -      return either == null ? null : either.left().orElse((LevelChunk)null);
-+      throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++      CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> future = new CompletableFuture<>().thenApply(value -> {
++         return Either.left(this.newChunkHolder.vanillaChunkHolder.m_212234_());
++      });
++      return future;
++      //throw new UnsupportedOperationException(); // Paper - rewrite chunk system
 +   }
 +
 +   @Nullable
