@@ -60,6 +60,15 @@
              this.m_6034_(this.m_20185_(), this.m_20186_() + 1.0D, this.m_20189_());
           }
        }
+@@ -443,7 +_,7 @@
+ 
+    public void m_9240_() {
+       try {
+-         if (!this.m_5833_() || !this.m_146899_()) {
++         if (isValid && !this.m_5833_() || !this.m_146899_()) { // Paper - don't tick dead players that are not in the world currently (pending respawn)
+             super.m_8119_();
+          }
+ 
 @@ -550,6 +_,7 @@
  
     public void m_6667_(DamageSource p_9035_) {
