@@ -195,16 +195,17 @@
                       this.m_21008_(p_36159_, ItemStack.f_41583_);
                    }
  
-@@ -1006,7 +_,7 @@
+@@ -1006,14 +_,15 @@
        this.f_19851_ = 0;
     }
  
 -   protected boolean m_6107_() {
+-      return super.m_6107_() || this.m_5803_();
 +   public boolean m_6107_() {
-       return super.m_6107_() || this.m_5803_();
++      return super.m_6107_() || this.m_5803_() || this.m_213877_() || !isValid; // Paper - player's who are dead or not in a world shouldn't move...
     }
  
-@@ -1014,6 +_,7 @@
+    public boolean m_6129_() {
        return !this.f_36077_.f_35935_;
     }
  
