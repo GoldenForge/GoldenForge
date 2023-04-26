@@ -1,5 +1,63 @@
 --- a/net/minecraft/server/players/GameProfileCache.java
 +++ b/net/minecraft/server/players/GameProfileCache.java
+@@ -58,6 +_,11 @@
+    @Nullable
+    private Executor f_143958_;
+ 
++   // Paper start
++   protected final java.util.concurrent.locks.ReentrantLock stateLock = new java.util.concurrent.locks.ReentrantLock();
++   protected final java.util.concurrent.locks.ReentrantLock lookupLock = new java.util.concurrent.locks.ReentrantLock();
++   // Paper end
++
+    public GameProfileCache(GameProfileRepository p_10974_, File p_10975_) {
+       this.f_10968_ = p_10974_;
+       this.f_10970_ = p_10975_;
+@@ -65,6 +_,7 @@
+    }
+ 
+    private void m_10979_(GameProfileCache.GameProfileInfo p_10980_) {
++      try { this.stateLock.lock(); // Paper - allow better concurrency
+       GameProfile gameprofile = p_10980_.m_11028_();
+       p_10980_.m_11029_(this.m_11008_());
+       String s = gameprofile.getName();
+@@ -76,7 +_,7 @@
+       if (uuid != null) {
+          this.f_10967_.put(uuid, p_10980_);
+       }
+-
++      } finally { this.stateLock.unlock(); } // Paper - allow better concurrency
+    }
+ 
+    private static Optional<GameProfile> m_10993_(GameProfileRepository p_10994_, String p_10995_) {
+@@ -124,6 +_,7 @@
+ 
+    public Optional<GameProfile> m_10996_(String p_10997_) {
+       String s = p_10997_.toLowerCase(Locale.ROOT);
++      boolean stateLocked = true; try { this.stateLock.lock(); // Paper - allow better concurrency
+       GameProfileCache.GameProfileInfo gameprofilecache$gameprofileinfo = this.f_10966_.get(s);
+       boolean flag = false;
+       if (gameprofilecache$gameprofileinfo != null && (new Date()).getTime() >= gameprofilecache$gameprofileinfo.f_11019_.getTime()) {
+@@ -137,8 +_,12 @@
+       if (gameprofilecache$gameprofileinfo != null) {
+          gameprofilecache$gameprofileinfo.m_11029_(this.m_11008_());
+          optional = Optional.of(gameprofilecache$gameprofileinfo.m_11028_());
++         stateLocked = false; this.stateLock.unlock(); // Paper - allow better concurrency
+       } else {
++         stateLocked = false; this.stateLock.unlock(); // Paper - allow better concurrency
++         try { this.lookupLock.lock(); // Paper - allow better concurrency
+          optional = m_10993_(this.f_10968_, s);
++         } finally { this.lookupLock.unlock(); } // Paper - allow better concurrency
+          if (optional.isPresent()) {
+             this.m_10991_(optional.get());
+             flag = false;
+@@ -150,6 +_,7 @@
+       }
+ 
+       return optional;
++      } finally { if (stateLocked) {  this.stateLock.unlock(); } } // Paper - allow better concurrency
+    }
+ 
+    public void m_143967_(String p_143968_, Consumer<Optional<GameProfile>> p_143969_) {
 @@ -164,7 +_,7 @@
           } else {
              this.f_143957_.put(p_143968_, CompletableFuture.supplyAsync(() -> {
@@ -9,3 +67,19 @@
                 this.f_143957_.remove(p_143968_);
              }, this.f_143958_).whenCompleteAsync((p_143978_, p_143979_) -> {
                 p_143969_.accept(p_143978_);
+@@ -175,6 +_,7 @@
+    }
+ 
+    public Optional<GameProfile> m_11002_(UUID p_11003_) {
++      try { this.stateLock.lock(); // Paper - allow better concurrency
+       GameProfileCache.GameProfileInfo gameprofilecache$gameprofileinfo = this.f_10967_.get(p_11003_);
+       if (gameprofilecache$gameprofileinfo == null) {
+          return Optional.empty();
+@@ -182,6 +_,7 @@
+          gameprofilecache$gameprofileinfo.m_11029_(this.m_11008_());
+          return Optional.of(gameprofilecache$gameprofileinfo.m_11028_());
+       }
++      } finally { this.stateLock.unlock(); } // Paper - allow better concurrency
+    }
+ 
+    public void m_143974_(Executor p_143975_) {
