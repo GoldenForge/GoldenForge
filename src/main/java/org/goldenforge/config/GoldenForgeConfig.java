@@ -49,6 +49,7 @@ public class GoldenForgeConfig {
 
         public static ConfigValue<Integer> chatExecutorCoreSize;
         public static ConfigValue<Integer> chatExecutorMaxSize;
+        public static ConfigValue<Integer> loginTicks;
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -151,6 +152,11 @@ public class GoldenForgeConfig {
                     .comment("On servers with many entities, this can improve performance by up to 15%. paper's per-player-mob-spawns setting set to true for this to work.")
                     .worldRestart()
                     .define("enableAsyncMobSpawning", true);
+
+            loginTicks = builder
+                    .comment("Login timeout in ticks")
+                    .worldRestart()
+                    .define("loginTicks", 12000);
 
             builder.pop();
 

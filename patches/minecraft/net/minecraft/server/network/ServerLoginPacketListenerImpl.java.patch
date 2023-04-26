@@ -53,7 +53,7 @@
        }
  
 -      if (this.f_10020_++ == 600) {
-+      if (this.f_10020_++ == 1200) {
++      if (this.f_10020_++ == GoldenForgeConfig.Server.loginTicks.get()) {
           this.m_10053_(Component.m_237115_("multiplayer.disconnect.slow_login"));
        }
  

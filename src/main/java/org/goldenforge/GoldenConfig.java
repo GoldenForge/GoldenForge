@@ -2,6 +2,9 @@ package org.goldenforge;
 
 public class GoldenConfig {
 
+    public static int earlyWarningEvery = 5000;
+    public static int earlyWarningDelay = 10000;
+
     public static int pageMax = 2560; // TODO this appears to be a duplicate setting with one above
     public static double totalMultiplier = 0.98D; // TODO this should probably be merged into the above inner class
     public static boolean throttleInactiveGoalSelectorTick = true;
