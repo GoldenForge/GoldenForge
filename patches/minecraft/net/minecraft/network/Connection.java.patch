@@ -115,6 +115,25 @@
        this.f_129468_.attr(f_129461_).set(p_129499_);
        this.f_129468_.config().setAutoRead(true);
        f_129465_.debug("Enabled auto read");
+@@ -111,6 +_,18 @@
+    }
+ 
+    public void exceptionCaught(ChannelHandlerContext p_129533_, Throwable p_129534_) {
++      // Paper start
++      if (p_129534_ instanceof io.netty.handler.codec.EncoderException && p_129534_.getCause() instanceof PacketEncoder.PacketTooLargeException packetTooLargeException) {
++         if (packetTooLargeException.getPacket().packetTooLarge(this)) {
++            return;
++         } else if (packetTooLargeException.getPacket().m_6588_()) {
++            Connection.f_129465_.debug("Skipping packet due to errors", p_129534_.getCause());
++            return;
++         } else {
++            p_129534_ = p_129534_.getCause();
++         }
++      }
++      // Paper end
+       if (p_129534_ instanceof SkipPacketException) {
+          f_129465_.debug("Skipping packet due to errors", p_129534_.getCause());
+       } else {
 @@ -166,46 +_,144 @@
        this.f_129470_ = p_129506_;
     }

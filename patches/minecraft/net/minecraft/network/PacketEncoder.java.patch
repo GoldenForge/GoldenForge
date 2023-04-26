@@ -1,0 +1,46 @@
+--- a/net/minecraft/network/PacketEncoder.java
++++ b/net/minecraft/network/PacketEncoder.java
+@@ -38,8 +_,9 @@
+                int i = friendlybytebuf.writerIndex();
+                p_130546_.m_5779_(friendlybytebuf);
+                int j = friendlybytebuf.writerIndex() - i;
+-               if (j > 8388608) {
+-                  throw new IllegalArgumentException("Packet too big (is " + j + ", should be less than 8388608): " + p_130546_);
++               if (false && j > MAX_PACKET_SIZE) { // Paper - disable
++                  //throw new IllegalArgumentException("Packet too big (is " + j + ", should be less than 8388608): " + p_130546_);
++                  throw new PacketTooLargeException(p_130546_, j); // Paper - handle large packets correctly
+                } else {
+                   int k = p_130545_.channel().attr(Connection.f_129461_).get().m_129582_();
+                   JvmProfiler.f_185340_.m_183508_(k, integer, p_130545_.channel().remoteAddress(), j);
+@@ -52,7 +_,31 @@
+                   throw throwable;
+                }
+             }
++
++            // Paper start
++            int packetLength = friendlybytebuf.readableBytes();
++            if (packetLength > MAX_PACKET_SIZE) {
++               throw new PacketTooLargeException(p_130546_, packetLength);
++            }
++            // Paper end
+          }
+       }
+    }
++
++   // Paper start
++   private static int MAX_PACKET_SIZE = 8388608;
++
++   public static class PacketTooLargeException extends RuntimeException {
++      private final Packet<?> packet;
++
++      PacketTooLargeException(Packet<?> packet, int packetLength) {
++         super("PacketTooLarge - " + packet.getClass().getSimpleName() + " is " + packetLength + ". Max is " + MAX_PACKET_SIZE);
++         this.packet = packet;
++      }
++
++      public Packet<?> getPacket() {
++         return packet;
++      }
++   }
++   // Paper end
+ }

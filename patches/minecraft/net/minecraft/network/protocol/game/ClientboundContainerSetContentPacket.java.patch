@@ -1,0 +1,19 @@
+--- a/net/minecraft/network/protocol/game/ClientboundContainerSetContentPacket.java
++++ b/net/minecraft/network/protocol/game/ClientboundContainerSetContentPacket.java
+@@ -31,6 +_,16 @@
+       this.f_182702_ = p_178823_.m_130267_();
+    }
+ 
++   // Paper start
++   @Override
++   public boolean packetTooLarge(net.minecraft.network.Connection manager) {
++      for (int i = 0 ; i < this.f_131943_.size() ; i++) {
++         manager.m_129512_(new ClientboundContainerSetSlotPacket(this.f_131942_, this.f_182701_, i, this.f_131943_.get(i)));
++      }
++      return true;
++   }
++   // Paper end
++
+    public void m_5779_(FriendlyByteBuf p_131956_) {
+       p_131956_.writeByte(this.f_131942_);
+       p_131956_.m_130130_(this.f_182701_);
