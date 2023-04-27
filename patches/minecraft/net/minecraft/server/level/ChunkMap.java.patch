@@ -55,7 +55,7 @@
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
     private static final byte f_143034_ = -1;
-@@ -110,35 +_,245 @@
+@@ -110,35 +_,250 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -72,6 +72,11 @@
 +      @Override
 +      public ChunkHolder get(long k) {
 +         return ChunkMap.this.m_140327_(k);
++      }
++
++      @Override
++      public int size() {
++         return ChunkMap.this.m_140394_();
 +      }
 +   };
 +
