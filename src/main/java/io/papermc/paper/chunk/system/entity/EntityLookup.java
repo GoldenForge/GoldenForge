@@ -497,6 +497,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     }
 
     public void getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
+        if (box == null) return; // Goldenforge: fix crash from pneumaticraft
         final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
         final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
         final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
