@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/Explosion.java
 +++ b/net/minecraft/world/level/Explosion.java
+@@ -38,6 +_,7 @@
+ import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
++import org.goldenforge.config.GoldenForgeConfig;
+ 
+ public class Explosion {
+    private static final ExplosionDamageCalculator f_46008_ = new ExplosionDamageCalculator();
 @@ -56,6 +_,7 @@
     private final ExplosionDamageCalculator f_46019_;
     private final ObjectArrayList<BlockPos> f_46020_ = new ObjectArrayList<>();
@@ -16,6 +24,15 @@
     }
  
     private ExplosionDamageCalculator m_46062_(@Nullable Entity p_46063_) {
+@@ -148,7 +_,7 @@
+                   for(float f1 = 0.3F; f > 0.0F; f -= 0.22500001F) {
+                      BlockPos blockpos = new BlockPos(d4, d6, d8);
+                      BlockState blockstate = this.f_46012_.m_8055_(blockpos);
+-                     FluidState fluidstate = this.f_46012_.m_6425_(blockpos);
++                     FluidState fluidstate = blockstate.m_60819_(); // Paper
+                      if (!this.f_46012_.m_46739_(blockpos)) {
+                         break;
+                      }
 @@ -179,7 +_,8 @@
        int i1 = Mth.m_14107_(this.f_46014_ + (double)f2 + 1.0D);
        int j2 = Mth.m_14107_(this.f_46015_ - (double)f2 - 1.0D);
@@ -26,6 +43,15 @@
        Vec3 vec3 = new Vec3(this.f_46013_, this.f_46014_, this.f_46015_);
  
        for(int k2 = 0; k2 < list.size(); ++k2) {
+@@ -195,7 +_,7 @@
+                   d5 /= d13;
+                   d7 /= d13;
+                   d9 /= d13;
+-                  double d14 = (double)m_46064_(vec3, entity);
++                  double d14 = (double)getBlockDensity(vec3, entity); // Paper - Optimize explosions
+                   double d10 = (1.0D - d12) * d14;
+                   entity.m_6469_(this.m_46077_(), (float)((int)((d10 * d10 + d10) / 2.0D * 7.0D * (double)f2 + 1.0D)));
+                   double d11 = d10;
 @@ -242,7 +_,7 @@
              if (!blockstate.m_60795_()) {
                 BlockPos blockpos1 = blockpos.m_7949_();
@@ -45,12 +71,10 @@
                 this.f_46012_.m_46473_().m_7238_();
              }
           }
-@@ -332,6 +_,15 @@
- 
-    public List<BlockPos> m_46081_() {
+@@ -334,9 +_,99 @@
        return this.f_46020_;
-+   }
-+
+    }
+ 
 +   public Vec3 getPosition() {
 +      return this.position;
 +   }
@@ -58,6 +82,92 @@
 +   @Nullable
 +   public Entity getExploder() {
 +      return this.f_46016_;
-    }
- 
++   }
++
     public static enum BlockInteraction {
+       NONE,
+       BREAK,
+       DESTROY;
+    }
++
++   // Paper start - Optimize explosions
++   private float getBlockDensity(Vec3 vec3d, Entity entity) {
++      if (!GoldenForgeConfig.Server.optimizeExplosions.get()) {
++         return m_46064_(vec3d, entity);
++      }
++      CacheKey key = new CacheKey(this, entity.m_20191_());
++      Float blockDensity = this.f_46012_.explosionDensityCache.get(key);
++      if (blockDensity == null) {
++         blockDensity = m_46064_(vec3d, entity);
++         this.f_46012_.explosionDensityCache.put(key, blockDensity);
++      }
++
++      return blockDensity;
++   }
++
++   static class CacheKey {
++      private final Level world;
++      private final double posX, posY, posZ;
++      private final double minX, minY, minZ;
++      private final double maxX, maxY, maxZ;
++
++      public CacheKey(Explosion explosion, AABB aabb) {
++         this.world = explosion.f_46012_;
++         this.posX = explosion.f_46013_;
++         this.posY = explosion.f_46014_;
++         this.posZ = explosion.f_46015_;
++         this.minX = aabb.f_82288_;
++         this.minY = aabb.f_82289_;
++         this.minZ = aabb.f_82290_;
++         this.maxX = aabb.f_82291_;
++         this.maxY = aabb.f_82292_;
++         this.maxZ = aabb.f_82293_;
++      }
++
++      @Override
++      public boolean equals(Object o) {
++         if (this == o) return true;
++         if (o == null || getClass() != o.getClass()) return false;
++
++         CacheKey cacheKey = (CacheKey) o;
++
++         if (Double.compare(cacheKey.posX, posX) != 0) return false;
++         if (Double.compare(cacheKey.posY, posY) != 0) return false;
++         if (Double.compare(cacheKey.posZ, posZ) != 0) return false;
++         if (Double.compare(cacheKey.minX, minX) != 0) return false;
++         if (Double.compare(cacheKey.minY, minY) != 0) return false;
++         if (Double.compare(cacheKey.minZ, minZ) != 0) return false;
++         if (Double.compare(cacheKey.maxX, maxX) != 0) return false;
++         if (Double.compare(cacheKey.maxY, maxY) != 0) return false;
++         if (Double.compare(cacheKey.maxZ, maxZ) != 0) return false;
++         return world.equals(cacheKey.world);
++      }
++
++      @Override
++      public int hashCode() {
++         int result;
++         long temp;
++         result = world.hashCode();
++         temp = Double.doubleToLongBits(posX);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(posY);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(posZ);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(minX);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(minY);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(minZ);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(maxX);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(maxY);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         temp = Double.doubleToLongBits(maxZ);
++         result = 31 * result + (int) (temp ^ (temp >>> 32));
++         return result;
++      }
++   }
++   // Paper end
+ }

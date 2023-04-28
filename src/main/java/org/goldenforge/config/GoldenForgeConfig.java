@@ -50,6 +50,7 @@ public class GoldenForgeConfig {
         public static ConfigValue<Integer> chatExecutorCoreSize;
         public static ConfigValue<Integer> chatExecutorMaxSize;
         public static ConfigValue<Integer> loginTicks;
+        public static ConfigValue<Boolean> optimizeExplosions;
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -117,7 +118,7 @@ public class GoldenForgeConfig {
                     .define("globalMaxConcurrentLoads",500.0);
 
             playerMaxChunkLoadRate = builder
-                    .comment(": The maximum number of chunks loaded per second per player.")
+                    .comment("The maximum number of chunks loaded per second per player.")
                     .worldRestart()
                     .define("playerMaxChunkLoadRate",(double)-1);
 
@@ -157,6 +158,10 @@ public class GoldenForgeConfig {
                     .comment("Login timeout in ticks")
                     .worldRestart()
                     .define("loginTicks", 12000);
+
+            optimizeExplosions = builder
+                    .worldRestart()
+                    .define("optimizeExplosions", true);
 
             builder.pop();
 

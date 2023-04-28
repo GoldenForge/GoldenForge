@@ -412,7 +412,7 @@
              lightningbolt.m_20874_(flag1);
              this.m_7967_(lightningbolt);
           }
-@@ -405,25 +_,34 @@
+@@ -405,52 +_,93 @@
  
        profilerfiller.m_6182_("iceandsnow");
        if (this.f_46441_.m_188503_(16) == 0) {
@@ -457,6 +457,83 @@
           }
        }
  
+       profilerfiller.m_6182_("tickBlocks");
+       if (p_8716_ > 0) {
+-         for(LevelChunkSection levelchunksection : p_8715_.m_7103_()) {
+-            if (levelchunksection.m_63014_()) {
+-               int l = levelchunksection.m_63017_();
+-
+-               for(int k = 0; k < p_8716_; ++k) {
+-                  BlockPos blockpos1 = this.m_46496_(i, l, j, 15);
+-                  profilerfiller.m_6180_("randomTick");
+-                  BlockState blockstate = levelchunksection.m_62982_(blockpos1.m_123341_() - i, blockpos1.m_123342_() - l, blockpos1.m_123343_() - j);
+-                  if (blockstate.m_60823_()) {
+-                     blockstate.m_222972_(this, blockpos1, this.f_46441_);
+-                  }
+-
+-                  FluidState fluidstate = blockstate.m_60819_();
+-                  if (fluidstate.m_76187_()) {
+-                     fluidstate.m_230562_(this, blockpos1, this.f_46441_);
+-                  }
+-
+-                  profilerfiller.m_7238_();
++         LevelChunkSection[] sections = p_8715_.m_7103_();
++         int minSection = io.papermc.paper.util.WorldUtil.getMinSection(this);
++         for (int sectionIndex = 0; sectionIndex < sections.length; ++sectionIndex) {
++            LevelChunkSection section = sections[sectionIndex];
++            if (section == null || section.tickingList.size() == 0) {
++               continue;
++            }
++
++            int yPos = (sectionIndex + minSection) << 4;
++            for (int a = 0; a < p_8716_; ++a) {
++               int tickingBlocks = section.tickingList.size();
++               int index = this.randomTickRandom.m_188503_(16 * 16 * 16);
++               if (index >= tickingBlocks) {
++                  continue;
+                }
++
++               long raw = section.tickingList.getRaw(index);
++               int location = com.destroystokyo.paper.util.maplist.IBlockDataList.getLocationFromRaw(raw);
++               int randomX = location & 15;
++               int randomY = ((location >>> (4 + 4)) & 255) | yPos;
++               int randomZ = (location >>> 4) & 15;
++
++               BlockPos blockposition2 = blockposition.m_122178_(i + randomX, randomY, j + randomZ);
++               BlockState iblockdata = com.destroystokyo.paper.util.maplist.IBlockDataList.getBlockDataFromRaw(raw);
++
++               iblockdata.m_222972_(this, blockposition2, this.randomTickRandom);
++               // We drop the fluid tick since LAVA is ALREADY TICKED by the above method (See LiquidBlock).
++               // TODO CHECK ON UPDATE (ping the Canadian)
+             }
+          }
+       }
++//      if (p_8716_ > 0) {
++//         for(LevelChunkSection levelchunksection : p_8715_.getSections()) {
++//            if (levelchunksection.isRandomlyTicking()) {
++//               int l = levelchunksection.bottomBlockY();
++//
++//               for(int k = 0; k < p_8716_; ++k) {
++//                  BlockPos blockpos1 = this.getBlockRandomPos(i, l, j, 15);
++//                  profilerfiller.push("randomTick");
++//                  BlockState blockstate = levelchunksection.getBlockState(blockpos1.getX() - i, blockpos1.getY() - l, blockpos1.getZ() - j);
++//                  if (blockstate.isRandomlyTicking()) {
++//                     blockstate.randomTick(this, blockpos1, this.random);
++//                  }
++//
++//                  FluidState fluidstate = blockstate.getFluidState();
++//                  if (fluidstate.isRandomlyTicking()) {
++//                     fluidstate.randomTick(this, blockpos1, this.random);
++//                  }
++//
++//                  profilerfiller.pop();
++//               }
++//            }
++//         }
++//      }
+ 
+       profilerfiller.m_7238_();
+    }
 @@ -598,15 +_,19 @@
           this.f_8548_.m_6846_().m_11270_(new ClientboundGameEventPacket(ClientboundGameEventPacket.f_132161_, this.f_46440_), this.m_46472_());
        }

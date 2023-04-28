@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/LevelChunkSection.java
 +++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
-@@ -20,10 +_,10 @@
+@@ -20,12 +_,14 @@
     public static final int f_156457_ = 4096;
     public static final int f_187994_ = 2;
     private final int f_62968_;
@@ -12,7 +12,11 @@
 +   public final PalettedContainer<BlockState> f_62972_;
     private PalettedContainerRO<Holder<Biome>> f_187995_;
  
++   public final com.destroystokyo.paper.util.maplist.IBlockDataList tickingList = new com.destroystokyo.paper.util.maplist.IBlockDataList(); // Paper
++
     public LevelChunkSection(int p_238255_, PalettedContainer<BlockState> p_238256_, PalettedContainerRO<Holder<Biome>> p_238257_) {
+       this.f_62968_ = m_156458_(p_238255_);
+       this.f_62972_ = p_238256_;
 @@ -39,6 +_,110 @@
        this.f_187995_ = new PalettedContainer<>(p_188002_.m_206115_(), p_188002_.m_206081_(Biomes.f_48202_), PalettedContainer.Strategy.f_188138_);
     }
@@ -124,6 +128,26 @@
     public static int m_156458_(int p_156459_) {
        return p_156459_ << 4;
     }
+@@ -77,6 +_,9 @@
+          --this.f_62969_;
+          if (blockstate.m_60823_()) {
+             --this.f_62970_;
++            // Paper start
++            this.tickingList.remove(p_62992_, p_62993_, p_62994_);
++            // Paper end
+          }
+       }
+ 
+@@ -88,6 +_,9 @@
+          ++this.f_62969_;
+          if (p_62995_.m_60823_()) {
+             ++this.f_62970_;
++            // Paper start
++            this.tickingList.add(p_62992_, p_62993_, p_62994_, p_62995_);
++            // Paper end
+          }
+       }
+ 
 @@ -95,6 +_,7 @@
           ++this.f_62971_;
        }
@@ -132,11 +156,64 @@
        return blockstate;
     }
  
-@@ -148,6 +_,8 @@
-       this.f_62969_ = (short)levelchunksection$1blockcounter.f_204437_;
-       this.f_62970_ = (short)levelchunksection$1blockcounter.f_204438_;
-       this.f_62971_ = (short)levelchunksection$1blockcounter.f_204439_;
+@@ -119,35 +_,32 @@
+    }
+ 
+    public void m_63018_() {
+-      class BlockCounter implements PalettedContainer.CountConsumer<BlockState> {
+-         public int f_204437_;
+-         public int f_204438_;
+-         public int f_204439_;
+-
+-         public void m_63144_(BlockState p_204444_, int p_204445_) {
+-            FluidState fluidstate = p_204444_.m_60819_();
+-            if (!p_204444_.m_60795_()) {
+-               this.f_204437_ += p_204445_;
+-               if (p_204444_.m_60823_()) {
+-                  this.f_204438_ += p_204445_;
+-               }
+-            }
+-
+-            if (!fluidstate.m_76178_()) {
+-               this.f_204437_ += p_204445_;
+-               if (fluidstate.m_76187_()) {
+-                  this.f_204439_ += p_204445_;
+-               }
+-            }
+-
+-         }
+-      }
+-
+-      BlockCounter levelchunksection$1blockcounter = new BlockCounter();
+-      this.f_62972_.m_63099_(levelchunksection$1blockcounter);
+-      this.f_62969_ = (short)levelchunksection$1blockcounter.f_204437_;
+-      this.f_62970_ = (short)levelchunksection$1blockcounter.f_204438_;
+-      this.f_62971_ = (short)levelchunksection$1blockcounter.f_204439_;
++      // Paper start - unfuck this
++      this.tickingList.clear();
++      this.f_62969_ = 0;
++      this.f_62970_ = 0;
++      this.f_62971_ = 0;
++      this.f_62972_.forEachLocation((BlockState iblockdata, int i) -> {
++         FluidState fluid = iblockdata.m_60819_();
 +
++         if (!iblockdata.m_60795_()) {
++            this.f_62969_ = (short) (this.f_62969_ + 1);
++            if (iblockdata.m_60823_()) {
++               this.f_62970_ = (short)(this.f_62970_ + 1);
++               this.tickingList.add(i, iblockdata);
++            }
++         }
++
++         if (!fluid.m_76178_()) {
++            this.f_62969_ = (short) (this.f_62969_ + 1);
++            if (fluid.m_76187_()) {
++               this.f_62971_ = (short) (this.f_62971_ + 1);
++            }
++         }
++
++      });
++      // Paper end
 +      this.initBlockCollisionData(); // Paper
     }
  
