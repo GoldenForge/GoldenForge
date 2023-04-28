@@ -704,7 +704,7 @@
     }
  
     protected void m_140280_(BooleanSupplier p_140281_) {
-@@ -444,129 +_,27 @@
+@@ -444,129 +_,30 @@
     }
  
     public boolean m_201907_() {
@@ -744,6 +744,9 @@
 -      }
 -
 +      this.f_140133_.chunkTaskScheduler.chunkHolderManager.processUnloads(); // Paper - rewrite chunk system
++
++      //Goldenforge: mixin hack for phosphophyllite
++      if (this.m_198874_(null)) {}
     }
  
     private void m_140181_(long p_140182_, ChunkHolder p_140183_) {
@@ -1050,12 +1053,13 @@
 -               if (flag) {
 -                  this.f_202981_.put(i, k + 10000L);
 -               }
-+      throw new UnsupportedOperationException(); // Paper - rewrite chunk system
- 
+-
 -               return flag;
 -            }
 -         }
 -      }
++      //throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++      return false;
     }
  
     private boolean m_140258_(ChunkAccess p_140259_) {
