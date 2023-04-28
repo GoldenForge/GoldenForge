@@ -134,7 +134,7 @@
        if (p_129534_ instanceof SkipPacketException) {
           f_129465_.debug("Skipping packet due to errors", p_129534_.getCause());
        } else {
-@@ -166,46 +_,144 @@
+@@ -166,46 +_,138 @@
        this.f_129470_ = p_129506_;
     }
  
@@ -193,12 +193,6 @@
 -         this.m_129544_();
 -         this.m_129520_(p_243248_, p_243316_);
 -      } else {
-+//      if (this.isConnected()) {
-+//         this.flushQueue();
-+//         this.sendPacket(p_243248_, p_243316_);
-+//      } else {
-+//         this.queue.add(new Connection.PacketHolder(p_243248_, p_243316_));
-+//      }
 +      // Paper start - handle oversized packets better
 +      boolean connected = this.m_129536_();
 +      if (!connected && !preparing) {
