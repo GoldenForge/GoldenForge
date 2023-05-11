@@ -40,7 +40,7 @@
     protected long f_129726_ = Util.m_137550_();
     private long f_129727_;
     private boolean f_129728_;
-@@ -235,29 +_,43 @@
+@@ -235,29 +_,44 @@
     private String f_129739_;
     private MinecraftServer.ReloadableResources f_129740_;
     private final StructureTemplateManager f_236720_;
@@ -52,6 +52,7 @@
 +   public int autosavePeriod;
 +   public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
 +   public static int currentTick = 0; // Paper - Further improve tick loop
++   public volatile boolean abnormalExit = false; // Paper
 +
 +   public gg.pufferfish.pufferfish.util.AsyncExecutor mobSpawnExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("MobSpawning"); // Pufferfish - optimize mob spawning
 +
@@ -152,7 +153,8 @@
 -      this.m_130012_();
 +      this.executeModerately();
        p_129941_.m_7646_();
-       serverchunkcache.m_7827_().m_9310_(5);
+-      serverchunkcache.m_7827_().m_9310_(5);
++      serverchunkcache.m_7827_().m_9310_(20); // Paper - increase light queue size
        this.m_129962_();
 -   }
 +      this.forceTicks = false;
@@ -273,7 +275,7 @@
     }
  
     public boolean m_195514_(boolean p_195515_, boolean p_195516_, boolean p_195517_) {
-@@ -526,7 +_,41 @@
+@@ -526,7 +_,42 @@
        this.m_7041_();
     }
  
@@ -299,6 +301,7 @@
 +      }
 +      // Paper start - kill main thread, and kill it hard
 +      shutdownThread = Thread.currentThread();
++      org.spigotmc.WatchdogThread.doStop(); // Paper
 +      if (!m_18695_()) {
 +         MinecraftServer.f_129750_.info("Stopping main thread (Ignore any thread death message you see! - DO NOT REPORT THREAD DEATH TO PAPER)");
 +         while (this.m_6304_().isAlive()) {
@@ -323,11 +326,10 @@
        }
  
        f_129750_.info("Saving worlds");
-@@ -550,27 +_,38 @@
-             serverlevel.f_8564_ = false;
+@@ -551,42 +_,46 @@
           }
        }
--
+ 
 -      while(this.f_129762_.values().stream().anyMatch((p_202480_) -> {
 -         return p_202480_.m_7726_().f_8325_.m_201907_();
 -      })) {
@@ -342,53 +344,60 @@
 -
 -         this.m_130012_();
 -      }
-+//
-+//      while(this.levels.values().stream().anyMatch((p_202480_) -> {
-+//         return p_202480_.getChunkSource().chunkMap.hasWork();
-+//      })) {
-+//         this.nextTickTime = Util.getMillis() + 1L;
-+//
-+//         for(ServerLevel serverlevel1 : this.getAllLevels()) {
-+//            serverlevel1.getChunkSource().removeTicketsOnClosing();
-+//            serverlevel1.getChunkSource().tick(() -> {
-+//               return true;
-+//            }, false);
-+//            while (serverlevel1.getChunkSource().pollTask()); // Paper - drain tasks
-+//         }
-+//
-+//         this.waitUntilNextTick();
-+//      }
+-
+-      this.m_129885_(false, true, false);
+-
+-      for(ServerLevel serverlevel2 : this.m_129785_()) {
+-         if (serverlevel2 != null) {
+-            try {
+-               serverlevel2.close();
+-            } catch (IOException ioexception1) {
+-               f_129750_.error("Exception closing the level", (Throwable)ioexception1);
+-            }
+-         }
+-      }
++      this.saveAllChunks(false, true, false, true); // Paper - rewrite chunk system - move closing into here
  
-       this.m_129885_(false, true, false);
+       this.f_195494_ = false;
+       this.f_129740_.close();
  
-+      this.f_195494_ = false;
-+      this.f_129740_.close();
-+
-+      try {
-+         this.f_129744_.close();
+       try {
+          this.f_129744_.close();
+-      } catch (IOException ioexception) {
+-         f_129750_.error("Failed to unlock level {}", this.f_129744_.m_78277_(), ioexception);
 +      } catch (IOException ioexception1) {
 +         MinecraftServer.f_129750_.error("Failed to unlock level {}", this.f_129744_.m_78277_(), ioexception1);
-+      }
-+
-       for(ServerLevel serverlevel2 : this.m_129785_()) {
-          if (serverlevel2 != null) {
-             try {
-+               net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.LevelEvent.Unload(serverlevel2));
-                serverlevel2.close();
-             } catch (IOException ioexception1) {
-                f_129750_.error("Exception closing the level", (Throwable)ioexception1);
-@@ -587,6 +_,14 @@
-          f_129750_.error("Failed to unlock level {}", this.f_129744_.m_78277_(), ioexception);
        }
  
++//      for(ServerLevel serverlevel2 : this.getAllLevels()) {
++//         if (serverlevel2 != null) {
++//            try {
++//               net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.LevelEvent.Unload(serverlevel2));
++//               serverlevel2.close();
++//            } catch (IOException ioexception1) {
++//               LOGGER.error("Exception closing the level", (Throwable)ioexception1);
++//            }
++//         }
++//      }
++//
++//      this.isSaving = false;
++//      this.resources.close();
++//
++//      try {
++//         this.storageSource.close();
++//      } catch (IOException ioexception) {
++//         LOGGER.error("Failed to unlock level {}", this.storageSource.getLevelId(), ioexception);
++//      }
++
 +      f_129750_.info("Flushing Chunk IO");
 +      io.papermc.paper.chunk.system.io.RegionFileIOThread.close(true); // Paper // Paper - rewrite chunk system
 +
 +      f_129750_.info("Closing Thread Pool");
 +      Util.m_137580_(); // Paper
-+
++      f_129750_.info("Closing Server");
 +      org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
-+      System.exit(0);
++      net.minecraftforge.server.ServerLifecycleHooks.handleServerStopped(this);
++      this.m_6988_();
     }
  
     public String m_130009_() {
@@ -493,11 +502,12 @@
           this.f_129726_ = Util.m_137550_();
           this.f_129757_.m_134908_(Component.m_237113_(this.f_129709_));
           this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
-@@ -626,20 +_,41 @@
+@@ -626,20 +_,42 @@
           this.f_129757_.m_242958_(this.m_214005_());
           this.m_129878_(this.f_129757_);
  
-+
++         org.spigotmc.WatchdogThread.tick(); // Paper
++         org.spigotmc.WatchdogThread.hasStarted = true; // Paper
 +         long start = System.nanoTime(), curTime, tickSection = start; // Paper - Further improve server tick loop
 +         lastTick = start - TICK_TIME; // Paper
           while(this.f_129764_) {
@@ -554,15 +564,15 @@
           this.m_7268_(crashreport);
        } finally {
           try {
-@@ -676,6 +_,7 @@
+@@ -676,7 +_,6 @@
                 this.f_236721_.f_214336_().m_196559_();
              }
  
-+            net.minecraftforge.server.ServerLifecycleHooks.handleServerStopped(this);
-             this.m_6988_();
+-            this.m_6988_();
           }
  
-@@ -704,15 +_,30 @@
+       }
+@@ -704,19 +_,40 @@
  
        return crashreport;
     }
@@ -594,6 +604,16 @@
 -         return !this.m_129960_();
 +         return !this.canSleepForTickNoOversleep(); // Paper - move oversleep into full server tick
        });
+    }
+ 
+    protected TickTask m_6681_(Runnable p_129852_) {
++      // Paper start - anything that does try to post to main during watchdog crash, run on watchdog
++      if (this.hasStopped && Thread.currentThread().equals(shutdownThread)) {
++         p_129852_.run();
++         p_129852_ = () -> {};
++      }
++      // Paper end
+       return new TickTask(this.f_129766_, p_129852_);
     }
  
 @@ -732,19 +_,85 @@
@@ -744,10 +764,11 @@
  
        this.f_129754_.m_6180_("tallying");
        long l = this.f_129748_[this.f_129766_ % 100] = Util.m_137569_() - i;
-@@ -826,42 +_,67 @@
+@@ -826,42 +_,68 @@
        long i1 = Util.m_137569_();
        this.f_129735_.m_13755_(i1 - i);
        this.f_129754_.m_7238_();
++      org.spigotmc.WatchdogThread.tick(); // Spigot
 +      net.minecraftforge.event.ForgeEventFactory.onPostServerTick(p_129871_, this);
     }
  
