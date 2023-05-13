@@ -11,6 +11,7 @@ import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -792,6 +793,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     private final class EntityCallback implements EntityInLevelCallback {
 
         public final Entity entity;
+        private long currentSectionKey;
 
         public EntityCallback(final Entity entity) {
             this.entity = entity;
@@ -809,6 +811,14 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             final Visibility newVisibility = getEntityStatus(entity);
 
             EntityLookup.this.entityStatusChange(entity, newSlices, oldVisibility, newVisibility, true, false, false);
+
+
+            // Goldenforge: forge event
+            BlockPos blockpos = this.entity.blockPosition();
+            long i = SectionPos.asLong(blockpos);
+            long oldSectionKey = currentSectionKey;
+            this.currentSectionKey = i;
+            net.minecraftforge.common.ForgeHooks.onEntityEnterSection(entity, oldSectionKey ,i);
         }
 
         @Override
