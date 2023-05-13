@@ -146,18 +146,25 @@
        }
  
        public Block m_60734_() {
-@@ -492,18 +_,22 @@
+@@ -488,22 +_,26 @@
+          return this.f_60593_ == null || this.f_60593_.f_60843_;
+       }
+ 
+-      public boolean m_60787_() {
++      public final boolean m_60787_() { // Paper
           return this.f_60595_;
        }
  
+-      public int m_60791_() {
 +      /** @deprecated use {@link BlockState#getLightEmission(BlockGetter, BlockPos)} */
 +      @Deprecated
-       public int m_60791_() {
++      public final int m_60791_() { // Paper
           return this.f_60594_;
        }
  
-       public boolean m_60795_() {
+-      public boolean m_60795_() {
 -         return this.f_60596_;
++      public final boolean m_60795_() { // Paper
 +         return this.m_60734_().isAir((BlockState)this);
        }
  
@@ -171,6 +178,29 @@
        public BlockState m_60717_(Rotation p_60718_) {
           return this.m_60734_().m_6843_(this.m_7160_(), p_60718_);
        }
+@@ -569,7 +_,7 @@
+          }
+       }
+ 
+-      public boolean m_60815_() {
++      public final boolean m_60815_() { // Paper
+          return this.f_60601_;
+       }
+ 
+@@ -762,11 +_,11 @@
+          return this.m_60734_() == p_60714_;
+       }
+ 
+-      public FluidState m_60819_() {
++      public FluidState m_60819_() {  // Paper
+          return this.m_60734_().m_5888_(this.m_7160_());
+       }
+ 
+-      public boolean m_60823_() {
++      public final boolean m_60823_() { // Paper
+          return this.m_60734_().m_6724_(this.m_7160_());
+       }
+ 
 @@ -886,8 +_,9 @@
        ResourceLocation f_60894_;
        boolean f_60895_ = true;
