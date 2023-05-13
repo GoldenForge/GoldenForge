@@ -566,21 +566,40 @@
     }
  
     private void m_184112_(BlockPos p_184113_, Block p_184114_) {
-@@ -635,10 +_,12 @@
+@@ -635,10 +_,30 @@
        if (blockstate.m_60713_(p_184114_)) {
           blockstate.m_222963_(this, p_184113_, this.f_46441_);
        }
 -
+-   }
 +      MinecraftServer.getServer().executeMidTickTasks(); // Paper - exec chunk tasks during world tick
-    }
++   }
++
++   // Paper start - log detailed entity tick information
++   // TODO replace with varhandle
++   static final java.util.concurrent.atomic.AtomicReference<Entity> currentlyTickingEntity = new java.util.concurrent.atomic.AtomicReference<>();
++
++   public static List<Entity> getCurrentlyTickingEntities() {
++      Entity ticking = currentlyTickingEntity.get();
++      List<Entity> ret = java.util.Arrays.asList(ticking == null ? new Entity[0] : new Entity[] { ticking });
++
++      return ret;
++   }
++   // Paper end - log detailed entity tick information
  
     public void m_8647_(Entity p_8648_) {
++      // Paper start - log detailed entity tick information
 +      io.papermc.paper.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
++      try {
++         if (currentlyTickingEntity.get() == null) {
++            currentlyTickingEntity.lazySet(p_8648_);
++         }
++         // Paper end - log detailed entity tick information
 +      final boolean isActive = org.spigotmc.ActivationRange.checkIfActive(p_8648_);
        p_8648_.m_146867_();
        ProfilerFiller profilerfiller = this.m_46473_();
        ++p_8648_.f_19797_;
-@@ -646,7 +_,11 @@
+@@ -646,18 +_,31 @@
           return Registry.f_122826_.m_7981_(p_8648_.m_6095_()).toString();
        });
        profilerfiller.m_6174_("tickNonPassenger");
@@ -593,7 +612,18 @@
        this.m_46473_().m_7238_();
  
        for(Entity entity : p_8648_.m_20197_()) {
-@@ -658,6 +_,9 @@
+          this.m_8662_(p_8648_, entity);
+       }
+-
++         // Paper start - log detailed entity tick information
++      } finally {
++         if (currentlyTickingEntity.get() == p_8648_) {
++            currentlyTickingEntity.lazySet(null);
++         }
++      }
++      // Paper end - log detailed entity tick information
+    }
+ 
     private void m_8662_(Entity p_8663_, Entity p_8664_) {
        if (!p_8664_.m_213877_() && p_8664_.m_20202_() == p_8663_) {
           if (p_8664_ instanceof Player || this.f_143243_.m_156914_(p_8664_)) {

@@ -46,6 +46,15 @@
        f_139598_.info("Loading properties");
        DedicatedServerProperties dedicatedserverproperties = this.f_139604_.m_139777_();
        if (this.m_129792_()) {
+@@ -113,6 +_,8 @@
+          this.m_129913_(dedicatedserverproperties.f_139730_);
+       }
+ 
++      org.spigotmc.WatchdogThread.doStart(60, false);
++
+       this.m_129997_(dedicatedserverproperties.f_139733_);
+       this.m_129999_(dedicatedserverproperties.f_139734_);
+       this.m_129989_(dedicatedserverproperties.f_139736_);
 @@ -159,11 +_,13 @@
           long i = Util.m_137569_();
           SkullBlockEntity.m_222885_(this.f_236721_, this);
@@ -60,8 +69,24 @@
           if (dedicatedserverproperties.f_139744_ != null) {
              this.m_129900_().m_46170_(GameRules.f_46153_).m_46246_(dedicatedserverproperties.f_139744_, this);
           }
-@@ -187,12 +_,14 @@
+@@ -178,21 +_,23 @@
+             this.f_139603_ = RconThread.m_11615_(this);
           }
+ 
+-         if (this.m_139669_() > 0L) {
+-            Thread thread1 = new Thread(new ServerWatchdog(this));
+-            thread1.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandlerWithName(f_139598_));
+-            thread1.setName("Server Watchdog");
+-            thread1.setDaemon(true);
+-            thread1.start();
+-         }
++//         if (this.getMaxTickLength() > 0L) {
++//            Thread thread1 = new Thread(new ServerWatchdog(this));
++//            thread1.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandlerWithName(LOGGER));
++//            thread1.setName("Server Watchdog");
++//            thread1.setDaemon(true);
++//            thread1.start();
++//         }
  
           Items.f_41852_.m_6787_(CreativeModeTab.f_40754_, NonNullList.m_122779_());
 +         // <3 you Grum for this, saves us ~30 patch files! --^
@@ -76,6 +101,15 @@
        }
     }
  
+@@ -281,7 +_,7 @@
+       if (this.f_139601_ != null) {
+          this.f_139601_.m_7530_();
+       }
+-
++      System.exit(this.abnormalExit ? 70 : 0); // CraftBukkit // Paper
+    }
+ 
+    public void m_5703_(BooleanSupplier p_139661_) {
 @@ -294,13 +_,15 @@
     }
  

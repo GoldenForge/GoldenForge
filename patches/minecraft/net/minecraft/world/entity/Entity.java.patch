@@ -160,7 +160,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,98 @@
+@@ -230,13 +_,97 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -240,7 +240,6 @@
 +   public boolean collidingWithWorldBorder; // Paper
 +   public boolean collisionLoadChunks = false; // Paper
 +   public boolean preserveMotion = true; // Paper - keep initial motion on first setPositionRotation
-+
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
        this.f_19847_ = p_19870_;
@@ -307,7 +306,48 @@
        }
  
        this.m_146871_();
-@@ -557,6 +_,8 @@
+@@ -551,12 +_,49 @@
+       return this.f_19861_;
+    }
+ 
++   // Paper start - detailed watchdog information
++   public final Object posLock = new Object(); // Paper - log detailed entity tick information
++
++   private Vec3 moveVector;
++   private double moveStartX;
++   private double moveStartY;
++   private double moveStartZ;
++
++   public final Vec3 getMoveVector() {
++      return this.moveVector;
++   }
++
++   public final double getMoveStartX() {
++      return this.moveStartX;
++   }
++
++   public final double getMoveStartY() {
++      return this.moveStartY;
++   }
++
++   public final double getMoveStartZ() {
++      return this.moveStartZ;
++   }
++   // Paper end - detailed watchdog information
++
+    public void m_6478_(MoverType p_19973_, Vec3 p_19974_) {
++      // Paper start - detailed watchdog information
++      io.papermc.paper.util.TickThread.ensureTickThread("Cannot move an entity off-main");
++      synchronized (this.posLock) {
++         this.moveStartX = this.m_20185_();
++         this.moveStartY = this.m_20186_();
++         this.moveStartZ = this.m_20189_();
++         this.moveVector = p_19974_;
++      }
++      try {
++         // Paper end - detailed watchdog information
+       if (this.f_19794_) {
+          this.m_6034_(this.m_20185_() + p_19974_.f_82479_, this.m_20186_() + p_19974_.f_82480_, this.m_20189_() + p_19974_.f_82481_);
        } else {
           this.f_146810_ = this.m_6060_();
           if (p_19973_ == MoverType.PISTON) {
@@ -407,6 +447,20 @@
                 if (this.f_19831_ <= 0) {
                    this.m_7311_(-this.m_6101_());
                 }
+@@ -682,6 +_,13 @@
+             this.f_19853_.m_46473_().m_7238_();
+          }
+       }
++         // Paper start - detailed watchdog information
++      } finally {
++         synchronized (this.posLock) { // Paper
++            this.moveVector = null;
++         } // Paper
++      }
++      // Paper end - detailed watchdog information
+    }
+ 
+    protected boolean m_196406_(Vec3 p_196625_) {
 @@ -728,10 +_,10 @@
        int j = Mth.m_14107_(this.f_19825_.f_82480_ - (double)p_216987_);
        int k = Mth.m_14107_(this.f_19825_.f_82481_);
@@ -953,7 +1007,18 @@
        return this.f_19799_.getDouble(p_204037_);
     }
  
-@@ -2954,7 +_,38 @@
+@@ -2895,7 +_,9 @@
+    }
+ 
+    public void m_20256_(Vec3 p_20257_) {
+-      this.f_19827_ = p_20257_;
++      synchronized (this.posLock) { // Paper
++         this.f_19827_ = p_20257_;
++      }
+    }
+ 
+    public void m_20334_(double p_20335_, double p_20336_, double p_20337_) {
+@@ -2954,9 +_,42 @@
        return this.m_20246_((2.0D * this.f_19796_.m_188500_() - 1.0D) * p_20263_);
     }
  
@@ -990,8 +1055,13 @@
 +      // Paper end - rewrite chunk system
 +
        if (this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_) {
-          this.f_19825_ = new Vec3(p_20344_, p_20345_, p_20346_);
+-         this.f_19825_ = new Vec3(p_20344_, p_20345_, p_20346_);
++         synchronized (this.posLock) { // Paper
++            this.f_19825_ = new Vec3(p_20344_, p_20345_, p_20346_);
++         }
           int i = Mth.m_14107_(p_20344_);
+          int j = Mth.m_14107_(p_20345_);
+          int k = Mth.m_14107_(p_20346_);
 @@ -2971,6 +_,15 @@
           this.f_146801_.m_142044_();
        }
