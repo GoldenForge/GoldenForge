@@ -467,6 +467,41 @@
        int i = p_62923_.m_123341_();
        int j = p_62923_.m_123342_();
        int k = p_62923_.m_123343_();
+@@ -189,24 +_,18 @@
+    }
+ 
+    public FluidState m_62814_(int p_62815_, int p_62816_, int p_62817_) {
+-      try {
+-         int i = this.m_151564_(p_62816_);
+-         if (i >= 0 && i < this.f_187612_.length) {
+-            LevelChunkSection levelchunksection = this.f_187612_[i];
+-            if (!levelchunksection.m_188008_()) {
+-               return levelchunksection.m_63007_(p_62815_ & 15, p_62816_ & 15, p_62817_ & 15);
+-            }
++      // Paper start - reduce the number of ops in this call
++      int index = this.m_151564_(p_62816_);
++      if (index >= 0 && index < this.f_187612_.length) {
++         LevelChunkSection chunksection = this.f_187612_[index];
++
++         if (!chunksection.m_188008_()) {
++            return chunksection.f_62972_.m_63085_((p_62816_ & 15) << 8 | (p_62817_ & 15) << 4 | p_62815_ & 15).m_60819_();
++            // Paper end
+          }
+-
+-         return Fluids.f_76191_.m_76145_();
+-      } catch (Throwable throwable) {
+-         CrashReport crashreport = CrashReport.m_127521_(throwable, "Getting fluid state");
+-         CrashReportCategory crashreportcategory = crashreport.m_127514_("Block being got");
+-         crashreportcategory.m_128165_("Location", () -> {
+-            return CrashReportCategory.m_178942_(this, p_62815_, p_62816_, p_62817_);
+-         });
+-         throw new ReportedException(crashreport);
+       }
++
++      return Fluids.f_76191_.m_76145_();
+    }
+ 
+    @Nullable
 @@ -237,14 +_,14 @@
              boolean flag2 = blockstate.m_155947_();
              if (!this.f_62776_.f_46443_) {

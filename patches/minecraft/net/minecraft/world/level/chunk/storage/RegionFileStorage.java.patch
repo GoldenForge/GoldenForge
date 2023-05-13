@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
-@@ -1,106 +_,282 @@
+@@ -1,106 +_,281 @@
  package net.minecraft.world.level.chunk.storage;
  
  import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
@@ -10,7 +10,7 @@
 +import java.io.DataOutput;
  import java.io.DataOutputStream;
  import java.io.IOException;
- import java.nio.file.Files;
+-import java.nio.file.Files;
  import java.nio.file.Path;
  import javax.annotation.Nullable;
 +import net.minecraft.FileUtil;
@@ -328,7 +328,7 @@
        }
  
        if (datainputstream != null) {
-@@ -110,51 +_,93 @@
+@@ -110,51 +_,94 @@
     }
  
     protected void m_63708_(ChunkPos p_63709_, @Nullable CompoundTag p_63710_) throws IOException {
@@ -398,6 +398,7 @@
 +         }
 +
 +         if (laste != null) {
++            //com.destroystokyo.paper.exception.ServerInternalException.reportInternalException(laste);
 +            net.minecraft.server.MinecraftServer.f_129750_.error("Failed to save chunk " + p_63709_, laste);
 +         }
 +         // Paper end

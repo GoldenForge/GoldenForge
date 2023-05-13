@@ -879,7 +879,7 @@
        if (k != 0) {
           this.f_63618_.m_63615_(k, l);
        }
-@@ -301,30 +_,38 @@
+@@ -301,30 +_,37 @@
     }
  
     private ByteBuffer m_63668_() {
@@ -911,7 +911,6 @@
 -      } catch (Throwable throwable1) {
 +      } catch (Throwable throwable) {
 +         throwable.printStackTrace();
-+         //com.destroystokyo.paper.exception.ServerInternalException.reportInternalException(throwable); // Paper
           if (filechannel != null) {
              try {
                 filechannel.close();
