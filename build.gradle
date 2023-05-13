@@ -51,7 +51,7 @@ ext {
     INSTALLER_VERSION = '2.1.+'
     MIXIN_VERSION = '0.8.5'
     TERMINALCONSOLEAPPENDER_VERSION = '1.2.0'
-    JLINE_VERSION = '3.12.+'
+    JLINE_VERSION = '3.12.1'
     NIGHTCONFIG_VERSION = '3.6.4'
     JETBRAINS_ANNOTATIONS_VERSION = '23.0.0'
     SLF4J_API_VERSION = '1.8.0-beta4'
@@ -152,6 +152,7 @@ subprojects {
             name = 'minecraft'
             url = 'https://libraries.minecraft.net/'
         }
+        maven { url='https://repo.papermc.io/repository/maven-public/'}
     }
 
     java.toolchain.languageVersion = JavaLanguageVersion.of(17)
@@ -291,6 +292,7 @@ def sharedDeps = {
     installer 'org.openjdk.nashorn:nashorn-core:15.3'
     installer "net.minecraftforge:JarJarSelector:${JARJAR_VERSION}"
     installer "net.minecraftforge:JarJarMetadata:${JARJAR_VERSION}"
+    installer "com.velocitypowered:velocity-native:3.1.2-SNAPSHOT"
 
     installer "net.objecthunter:exp4j:0.4.8"
     installer "com.ibm.async:asyncutil:0.1.0"
@@ -883,6 +885,7 @@ project(':forge') {
     apply plugin: 'java-library'
     apply plugin: 'net.minecraftforge.gradle.patcher'
     apply plugin: 'org.cadixdev.licenser'
+    //apply plugin: 'org.spongepowered.mixin'
 
     sourceSets {
         main {
@@ -1092,7 +1095,8 @@ project(':forge') {
                 'Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
                 'GitCommit': gradleutils.gitInfo.abbreviatedId,
                 'Git-Branch': gradleutils.gitInfo.branch,
-                'FML-System-Mods': 'forge'
+                'FML-System-Mods': 'forge',
+                'MixinConnector': 'org.goldenforge.mixins'
             ] as LinkedHashMap,
             'net/minecraftforge/versions/forge/': [
                 'Specification-Title':      'Forge',
