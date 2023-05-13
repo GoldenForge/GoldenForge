@@ -326,8 +326,9 @@
  
     @Nullable
     public ChunkAccess m_7587_(int p_8360_, int p_8361_, ChunkStatus p_8362_, boolean p_8363_) {
+-      if (Thread.currentThread() != this.f_8330_) {
 +      final int x1 = p_8360_; final int z1 = p_8361_; // Paper - conflict on variable change
-       if (Thread.currentThread() != this.f_8330_) {
++      if (!io.papermc.paper.util.TickThread.isTickThread()) { // Paper - rewrite chunk system
           return CompletableFuture.supplyAsync(() -> {
              return this.m_7587_(p_8360_, p_8361_, p_8362_, p_8363_);
           }, this.f_8332_).join();
