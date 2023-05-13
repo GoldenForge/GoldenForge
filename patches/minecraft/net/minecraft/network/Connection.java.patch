@@ -443,6 +443,56 @@
        (new Bootstrap()).group(f_129464_.m_13971_()).handler(new ChannelInitializer<Channel>() {
           protected void initChannel(Channel p_129557_) {
              p_129557_.pipeline().addLast("packet_handler", connection);
+@@ -326,10 +_,25 @@
+       return connection;
+    }
+ 
+-   public void m_129495_(Cipher p_129496_, Cipher p_129497_) {
+-      this.f_129472_ = true;
+-      this.f_129468_.pipeline().addBefore("splitter", "decrypt", new CipherDecoder(p_129496_));
+-      this.f_129468_.pipeline().addBefore("prepender", "encrypt", new CipherEncoder(p_129497_));
++//   public void setEncryptionKey(Cipher p_129496_, Cipher p_129497_) {
++//      this.encrypted = true;
++//      this.channel.pipeline().addBefore("splitter", "decrypt", new CipherDecoder(p_129496_));
++//      this.channel.pipeline().addBefore("prepender", "encrypt", new CipherEncoder(p_129497_));
++//   }
++
++   public void setupEncryption(javax.crypto.SecretKey key) throws net.minecraft.util.CryptException {
++      if (!this.f_129472_) {
++         try {
++            com.velocitypowered.natives.encryption.VelocityCipher decryption = com.velocitypowered.natives.util.Natives.cipher.get().forDecryption(key);
++            com.velocitypowered.natives.encryption.VelocityCipher encryption = com.velocitypowered.natives.util.Natives.cipher.get().forEncryption(key);
++
++            this.f_129472_ = true;
++            this.f_129468_.pipeline().addBefore("splitter", "decrypt", new CipherDecoder(decryption));
++            this.f_129468_.pipeline().addBefore("prepender", "encrypt", new CipherEncoder(encryption));
++         } catch (java.security.GeneralSecurityException e) {
++            throw new net.minecraft.util.CryptException(e);
++         }
++      }
+    }
+ 
+    public boolean m_129535_() {
+@@ -359,16 +_,17 @@
+ 
+    public void m_129484_(int p_129485_, boolean p_182682_) {
+       if (p_129485_ >= 0) {
++         com.velocitypowered.natives.compression.VelocityCompressor compressor = com.velocitypowered.natives.util.Natives.compress.get().create(-1); // Paper
+          if (this.f_129468_.pipeline().get("decompress") instanceof CompressionDecoder) {
+             ((CompressionDecoder)this.f_129468_.pipeline().get("decompress")).m_182677_(p_129485_, p_182682_);
+          } else {
+-            this.f_129468_.pipeline().addBefore("decoder", "decompress", new CompressionDecoder(p_129485_, p_182682_));
++            this.f_129468_.pipeline().addBefore("decoder", "decompress", new CompressionDecoder(compressor, p_129485_, p_182682_)); // Paper
+          }
+ 
+          if (this.f_129468_.pipeline().get("compress") instanceof CompressionEncoder) {
+             ((CompressionEncoder)this.f_129468_.pipeline().get("compress")).m_129449_(p_129485_);
+          } else {
+-            this.f_129468_.pipeline().addBefore("encoder", "compress", new CompressionEncoder(p_129485_));
++            this.f_129468_.pipeline().addBefore("encoder", "compress", new CompressionEncoder(compressor, p_129485_)); // Paper
+          }
+       } else {
+          if (this.f_129468_.pipeline().get("decompress") instanceof CompressionDecoder) {
 @@ -385,7 +_,7 @@
     public void m_129541_() {
        if (this.f_129468_ != null && !this.f_129468_.isOpen()) {

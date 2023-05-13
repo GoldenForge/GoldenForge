@@ -1,24 +1,120 @@
 --- a/net/minecraft/network/CompressionEncoder.java
 +++ b/net/minecraft/network/CompressionEncoder.java
-@@ -9,6 +_,8 @@
-    private final byte[] f_129444_ = new byte[8192];
+@@ -6,37 +_,98 @@
+ import java.util.zip.Deflater;
+ 
+ public class CompressionEncoder extends MessageToByteEncoder<ByteBuf> {
+-   private final byte[] f_129444_ = new byte[8192];
++   private final byte[] f_129444_; // Paper
     private final Deflater f_129445_;
++   private final com.velocitypowered.natives.compression.VelocityCompressor compressor; // Paper
     private int f_129446_;
 +   private static final boolean DISABLE_PACKET_DEBUG = Boolean.parseBoolean(System.getProperty("forge.disablePacketCompressionDebug", "false"));
 +   private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger();
  
++   // Paper start
     public CompressionEncoder(int p_129448_) {
-       this.f_129446_ = p_129448_;
-@@ -22,6 +_,12 @@
+-      this.f_129446_ = p_129448_;
+-      this.f_129445_ = new Deflater();
++      this(null, p_129448_);
++   }
++   public CompressionEncoder(com.velocitypowered.natives.compression.VelocityCompressor compressor, int compressionThreshold) {
++      this.f_129446_ = compressionThreshold;
++      if (compressor == null) {
++         this.f_129444_ = new byte[8192];
++         this.f_129445_ = new Deflater();
++      } else {
++         this.f_129444_ = null;
++         this.f_129445_ = null;
++      }
++      this.compressor = compressor;
++      // Paper end
+    }
+ 
+-   protected void encode(ChannelHandlerContext p_129452_, ByteBuf p_129453_, ByteBuf p_129454_) {
++   protected void encode(ChannelHandlerContext p_129452_, ByteBuf p_129453_, ByteBuf p_129454_) throws Exception { // Paper
+       int i = p_129453_.readableBytes();
+       FriendlyByteBuf friendlybytebuf = new FriendlyByteBuf(p_129454_);
+       if (i < this.f_129446_) {
           friendlybytebuf.m_130130_(0);
           friendlybytebuf.writeBytes(p_129453_);
        } else {
+-         byte[] abyte = new byte[i];
+-         p_129453_.readBytes(abyte);
+-         friendlybytebuf.m_130130_(abyte.length);
+-         this.f_129445_.setInput(abyte, 0, i);
+-         this.f_129445_.finish();
+-
+-         while(!this.f_129445_.finished()) {
+-            int j = this.f_129445_.deflate(this.f_129444_);
+-            friendlybytebuf.writeBytes(this.f_129444_, 0, j);
+-         }
+-
+-         this.f_129445_.reset();
+-      }
+-
+-   }
 +         if (!DISABLE_PACKET_DEBUG && i > 2097152) {
 +             p_129453_.markReaderIndex();
 +             LOGGER.error("Attempted to send packet over maximum protocol size: {} > 2097152\nData:\n{}", i,
 +                     net.minecraftforge.logging.PacketDump.getContentDump(p_129453_));
 +             p_129453_.resetReaderIndex();
 +         }
-          byte[] abyte = new byte[i];
-          p_129453_.readBytes(abyte);
-          friendlybytebuf.m_130130_(abyte.length);
++         // Paper start
++         if (this.f_129445_ != null) {
++            byte[] bs = new byte[i];
++            p_129453_.readBytes(bs);
++            friendlybytebuf.m_130130_(bs.length);
++            this.f_129445_.setInput(bs, 0, i);
++            this.f_129445_.finish();
++
++            while(!this.f_129445_.finished()) {
++               int j = this.f_129445_.deflate(this.f_129444_);
++               friendlybytebuf.writeBytes(this.f_129444_, 0, j);
++            }
++
++            this.f_129445_.reset();
++            return;
++         }
++
++         friendlybytebuf.m_130130_(i);
++         ByteBuf compatibleIn = com.velocitypowered.natives.util.MoreByteBufUtils.ensureCompatible(p_129452_.alloc(), this.compressor, p_129453_);
++         try {
++            this.compressor.deflate(compatibleIn, p_129454_);
++         } finally {
++            compatibleIn.release();
++         }
++         // Paper end
++      }
++
++   }
++
++   // Paper start
++   @Override
++   protected ByteBuf allocateBuffer(ChannelHandlerContext ctx, ByteBuf msg, boolean preferDirect) throws Exception{
++      if (this.compressor != null) {
++         // We allocate bytes to be compressed plus 1 byte. This covers two cases:
++         //
++         // - Compression
++         //    According to https://github.com/ebiggers/libdeflate/blob/master/libdeflate.h#L103,
++         //    if the data compresses well (and we do not have some pathological case) then the maximum
++         //    size the compressed size will ever be is the input size minus one.
++         // - Uncompressed
++         //    This is fairly obvious - we will then have one more than the uncompressed size.
++         int initialBufferSize = msg.readableBytes() + 1;
++         return com.velocitypowered.natives.util.MoreByteBufUtils.preferredBuffer(ctx.alloc(), this.compressor, initialBufferSize);
++      }
++
++      return super.allocateBuffer(ctx, msg, preferDirect);
++   }
++
++   @Override
++   public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
++      if (this.compressor != null) {
++         this.compressor.close();
++      }
++   }
++   // Paper end
+ 
+    public int m_178298_() {
+       return this.f_129446_;

@@ -40,6 +40,18 @@
        synchronized(this.f_9703_) {
           Class<? extends ServerSocketChannel> oclass;
           LazyLoadedValue<? extends EventLoopGroup> lazyloadedvalue;
+@@ -80,6 +_,11 @@
+             f_9701_.info("Using default channel type");
+          }
+ 
++         // Paper start - indicate Velocity natives in use
++         ServerConnectionListener.f_9701_.info("Paper: Using " + com.velocitypowered.natives.util.Natives.compress.getLoadedVariant() + " compression from Velocity.");
++         ServerConnectionListener.f_9701_.info("Paper: Using " + com.velocitypowered.natives.util.Natives.cipher.getLoadedVariant() + " cipher from Velocity.");
++         // Paper end
++
+          this.f_9703_.add((new ServerBootstrap()).channel(oclass).childHandler(new ChannelInitializer<Channel>() {
+             protected void initChannel(Channel p_9729_) {
+                try {
 @@ -87,10 +_,11 @@
                 } catch (ChannelException channelexception) {
                 }

@@ -48,7 +48,7 @@
 +         p_131366_.execute(() -> { // Paper - Fix preemptive player kick on a server shutdown.
 +            packetProcessing.push(p_131365_); // Paper - detailed watchdog information
 +            try { // Paper - detailed watchdog information
-+               if (p_131365_ instanceof ServerGamePacketListenerImpl && ((ServerGamePacketListenerImpl) p_131365_).processedDisconnect) return; // CraftBukkit, MC-142590
++               if (MinecraftServer.getServer().hasStopped() || (p_131365_ instanceof ServerGamePacketListenerImpl && ((ServerGamePacketListenerImpl) p_131365_).processedDisconnect)) return; // CraftBukkit, MC-142590
 +               if (p_131365_.m_6198_().m_129536_()) {
 +                  try  { // Paper - timings
 +                     p_131364_.m_5797_(p_131365_);
@@ -80,7 +80,7 @@
  
           });
           throw RunningOnDifferentThreadException.f_136017_;
-+      } else if (p_131365_ instanceof ServerGamePacketListenerImpl && ((ServerGamePacketListenerImpl) p_131365_).processedDisconnect) {
++      } else if (MinecraftServer.getServer().hasStopped() || (p_131365_ instanceof ServerGamePacketListenerImpl && ((ServerGamePacketListenerImpl) p_131365_).processedDisconnect)) {
 +         throw RunningOnDifferentThreadException.f_136017_;
 +         // CraftBukkit end
        }

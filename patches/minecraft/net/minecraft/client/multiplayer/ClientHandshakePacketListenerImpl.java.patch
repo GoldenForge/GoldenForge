@@ -1,5 +1,14 @@
 --- a/net/minecraft/client/multiplayer/ClientHandshakePacketListenerImpl.java
 +++ b/net/minecraft/client/multiplayer/ClientHandshakePacketListenerImpl.java
+@@ -99,7 +_,7 @@
+ 
+          this.f_104521_.accept(Component.m_237115_("connect.encrypting"));
+          this.f_104522_.m_243124_(serverboundkeypacket, PacketSendListener.m_243092_(() -> {
+-            this.f_104522_.m_129495_(cipher, cipher1);
++           // this.connection.setEncryptionKey(cipher, cipher1); // Goldenforge
+          }));
+       });
+    }
 @@ -130,6 +_,7 @@
        this.f_104521_.accept(Component.m_237115_("connect.joining"));
        this.f_104523_ = p_104547_.m_134774_();

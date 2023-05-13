@@ -1,0 +1,46 @@
+--- a/net/minecraft/network/CipherEncoder.java
++++ b/net/minecraft/network/CipherEncoder.java
+@@ -4,15 +_,32 @@
+ import io.netty.channel.ChannelHandlerContext;
+ import io.netty.handler.codec.MessageToByteEncoder;
+ import javax.crypto.Cipher;
+-
+-public class CipherEncoder extends MessageToByteEncoder<ByteBuf> {
+-   private final CipherBase f_129423_;
+-
+-   public CipherEncoder(Cipher p_129425_) {
+-      this.f_129423_ = new CipherBase(p_129425_);
+-   }
+-
+-   protected void encode(ChannelHandlerContext p_129427_, ByteBuf p_129428_, ByteBuf p_129429_) throws Exception {
+-      this.f_129423_.m_129406_(p_129428_, p_129429_);
+-   }
++import java.util.List;
++
++public class CipherEncoder extends io.netty.handler.codec.MessageToMessageEncoder<ByteBuf> { // Paper - change superclass
++   private final com.velocitypowered.natives.encryption.VelocityCipher f_129423_; // Paper
++
++   public CipherEncoder(com.velocitypowered.natives.encryption.VelocityCipher cipher) {  // Paper
++      this.f_129423_ = cipher;  // Paper
++   }
++
++   protected void encode(ChannelHandlerContext channelHandlerContext, ByteBuf byteBuf, List<Object> list) throws Exception {
++      // Paper start
++      ByteBuf compatible = com.velocitypowered.natives.util.MoreByteBufUtils.ensureCompatible(channelHandlerContext.alloc(), f_129423_, byteBuf);
++      try {
++         f_129423_.process(compatible);
++         list.add(compatible);
++      } catch (Exception e) {
++         compatible.release(); // compatible will never be used if we throw an exception
++         throw e;
++      }
++      // Paper end
++   }
++
++   // Paper start
++   @Override
++   public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {
++      f_129423_.close();
++   }
++   // Paper end
+ }
