@@ -73,6 +73,9 @@ public class Util {
 			def url = "https://libraries.minecraft.net/${path}"
 			if (!checkExists(url)) {
 				url = "https://maven.minecraftforge.net/${path}"
+				if (!checkExists(url)) {
+					url = "https://repo.papermc.io/repository/maven-public/${path}"
+				}
 			}
 			//TODO remove when Mojang launcher is updated
 			if (!classifiers && art.classifier != null) {

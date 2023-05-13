@@ -15,7 +15,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.RegionFile;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
-import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
 import java.io.IOException;
 import java.lang.invoke.VarHandle;
@@ -1203,7 +1202,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
 
         @Override
         public String toString() {
-            return "Task for world: '" + this.world.dimension() + "' at (" + this.chunkX + "," + this.chunkZ +
+            return "Task for world: '" + this.world.getWorld().getName() + "' at (" + this.chunkX + "," + this.chunkZ +
                     ") type: " + this.taskController.type.name() + ", hash: " + this.hashCode();
         }
 
@@ -1290,7 +1289,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                 } catch (final Throwable thr) {
                     if (thr instanceof RegionFileStorage.RegionFileSizeException) {
                         final int maxSize = RegionFile.MAX_CHUNK_SIZE / (1024 * 1024);
-                        LOGGER.error("Chunk at (" + this.chunkX + "," + this.chunkZ + ") in '" + this.world.dimension() + "' exceeds max size of " + maxSize + "MiB, it has been deleted from disk.");
+                        LOGGER.error("Chunk at (" + this.chunkX + "," + this.chunkZ + ") in '" + this.world.getWorld().getName() + "' exceeds max size of " + maxSize + "MiB, it has been deleted from disk.");
                     } else {
                         failedWrite = thr instanceof IOException;
                         LOGGER.error("Failed to write chunk data for task: " + this.toString(), thr);
