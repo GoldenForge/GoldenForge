@@ -6,6 +6,7 @@
 package net.minecraftforge.fml;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.fml.event.IModBusEvent;
 import net.minecraftforge.fml.loading.FMLEnvironment;
@@ -151,6 +152,19 @@ public class ModLoader
             loadingStateValid = false;
             throw new LoadingFailedException(loadingExceptions);
         }
+
+        List<String> incompatibleMods = Lists.newArrayList("canary", "smoothchunk", "chunksending", "starlight");
+        statusConsumer.ifPresent(c->c.accept("Checking goldenforge compatibility"));
+        List<ModInfo> incompatibleModList = Lists.newArrayList();
+        for (ModInfo mod : loadingModList.getMods()) {
+            if (incompatibleMods.contains(mod.getModId())) incompatibleModList.add(mod);
+        }
+        if (!incompatibleModList.isEmpty()) {
+            LOGGER.fatal(CORE, "Goldenforge found incompatible mods! please delete them to continue.");
+            LOGGER.fatal(CORE, "incompatible mod list: {}", incompatibleModList);
+            throw new RuntimeException("Goldenforge found incompatible mods! please delete them to continue.");
+        }
+
         statusConsumer.ifPresent(c->c.accept("Validating features"));
         List<? extends ForgeFeature.Bound> failedBounds = loadingModList.getMods().stream()
                 .map(ModInfo::getForgeFeatures)

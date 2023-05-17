@@ -7,6 +7,17 @@
 
 ---
 
+## Disclaimer
+This is not a drop-in replacement for forge. Don't expect everything to work without configuration.
+
+Before starting your server, remove these mods because their modifications are incompatible with Goldenforge. Goldenforge already includes their patches.
+- starlight
+- smoothchunk
+- chunksending
+- pluto (krypton)
+- canary
+- modernfix
+
 ## How goldenforge is working ?
 We integrate paper optimizations in forge keeping in mind mod compatibility. Goldenforge achieves a great performance improvement (benchmark coming soon) while ensuring  compatibility and stability.
 
