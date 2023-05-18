@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-@@ -38,6 +_,8 @@
+@@ -38,17 +_,19 @@
  import net.minecraft.util.SignatureValidator;
  import net.minecraft.world.entity.player.ProfilePublicKey;
  import org.apache.commons.lang3.Validate;
@@ -9,7 +9,11 @@
  import org.slf4j.Logger;
  
  public class ServerLoginPacketListenerImpl implements TickablePacketListener, ServerLoginPacketListener {
-@@ -48,7 +_,7 @@
+    private static final AtomicInteger f_10014_ = new AtomicInteger(0);
+    static final Logger f_10015_ = LogUtils.getLogger();
+    private static final int f_143698_ = 600;
+-   private static final RandomSource f_10016_ = RandomSource.m_216327_();
++   private static final RandomSource f_10016_ = new org.bukkit.craftbukkit.util.RandomSourceWrapper(new java.util.Random()); // Paper - This is called across threads, make safe
     private final byte[] f_10017_;
     final MinecraftServer f_10018_;
     public final Connection f_10013_;
