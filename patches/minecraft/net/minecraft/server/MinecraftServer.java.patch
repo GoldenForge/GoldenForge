@@ -8,10 +8,11 @@
  import it.unimi.dsi.fastutil.longs.LongIterator;
  import java.awt.image.BufferedImage;
  import java.io.ByteArrayOutputStream;
-@@ -152,10 +_,12 @@
+@@ -152,10 +_,13 @@
  import net.minecraft.world.phys.Vec2;
  import net.minecraft.world.phys.Vec3;
  import org.apache.commons.lang3.Validate;
++import org.goldenforge.config.GoldenForgeConfig;
 +import org.goldenforge.tpsmonitor.TpsMonitorManager;
  import org.slf4j.Logger;
  
@@ -40,7 +41,7 @@
     protected long f_129726_ = Util.m_137550_();
     private long f_129727_;
     private boolean f_129728_;
-@@ -235,29 +_,44 @@
+@@ -235,12 +_,29 @@
     private String f_129739_;
     private MinecraftServer.ReloadableResources f_129740_;
     private final StructureTemplateManager f_236720_;
@@ -60,20 +61,19 @@
 +           new com.google.common.util.concurrent.ThreadFactoryBuilder().setDaemon(true).setNameFormat("Async Chat Thread - #%d").setUncaughtExceptionHandler(new net.minecraft.DefaultUncaughtExceptionHandlerWithName(net.minecraft.server.MinecraftServer.f_129750_)).build()); // Paper
 +
 +
++   @Override
++   public boolean m_18695_() {
++      return io.papermc.paper.util.TickThread.isTickThread(); // Paper - rewrite chunk system
++   }
 +
     public static <S extends MinecraftServer> S m_129872_(Function<Thread, S> p_129873_) {
        AtomicReference<S> atomicreference = new AtomicReference<>();
 -      Thread thread = new Thread(() -> {
-+      Thread thread = new TickThread(() -> {
++      Thread thread = new TickThread(() -> { // Paper - rewrite chunk system
           atomicreference.get().m_130011_();
        }, "Server thread");
        thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> {
-          f_129750_.error("Uncaught exception in server thread", p_177910_);
-       });
--      if (Runtime.getRuntime().availableProcessors() > 4) {
-+      if (Util.VIRTUAL_PROCESSOR_AMOUNT > 4) {
-          thread.setPriority(8);
-       }
+@@ -252,12 +_,16 @@
  
        S s = p_129873_.apply(thread);
        atomicreference.set(s);
@@ -85,6 +85,8 @@
     public MinecraftServer(Thread p_236723_, LevelStorageSource.LevelStorageAccess p_236724_, PackRepository p_236725_, WorldStem p_236726_, Proxy p_236727_, DataFixer p_236728_, Services p_236729_, ChunkProgressListenerFactory p_236730_) {
        super("Server");
 +      SERVER = this;
++      GoldenForgeConfig.SERVER.postConfig();
++      autosavePeriod = GoldenForgeConfig.Server.autoSaveInterval.get();
        this.f_129746_ = p_236726_.f_206894_();
        this.f_129749_ = p_236726_.f_206895_();
        if (!this.f_129749_.m_5961_().m_204655_().m_142003_(LevelStem.f_63971_)) {
@@ -275,7 +277,7 @@
     }
  
     public boolean m_195514_(boolean p_195515_, boolean p_195516_, boolean p_195517_) {
-@@ -526,7 +_,42 @@
+@@ -526,7 +_,41 @@
        this.m_7041_();
     }
  
@@ -301,7 +303,6 @@
 +      }
 +      // Paper start - kill main thread, and kill it hard
 +      shutdownThread = Thread.currentThread();
-+      org.spigotmc.WatchdogThread.doStop(); // Paper
 +      if (!m_18695_()) {
 +         MinecraftServer.f_129750_.info("Stopping main thread (Ignore any thread death message you see! - DO NOT REPORT THREAD DEATH TO PAPER)");
 +         while (this.m_6304_().isAlive()) {
@@ -395,13 +396,13 @@
 +      f_129750_.info("Closing Thread Pool");
 +      Util.m_137580_(); // Paper
 +      f_129750_.info("Closing Server");
-+      org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
 +      net.minecraftforge.server.ServerLifecycleHooks.handleServerStopped(this);
++      org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
 +      this.m_6988_();
     }
  
     public String m_130009_() {
-@@ -602,23 +_,93 @@
+@@ -602,23 +_,94 @@
     }
  
     public void m_7570_(boolean p_129884_) {
@@ -493,6 +494,7 @@
 +   }
     protected void m_130011_() {
        try {
++         long serverStartTime = Util.m_137569_(); // Paper
           if (!this.m_7038_()) {
              throw new IllegalStateException("Failed to initialize server");
           }
@@ -502,10 +504,13 @@
           this.f_129726_ = Util.m_137550_();
           this.f_129757_.m_134908_(Component.m_237113_(this.f_129709_));
           this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
-@@ -626,20 +_,42 @@
+@@ -626,20 +_,45 @@
           this.f_129757_.m_242958_(this.m_214005_());
           this.m_129878_(this.f_129757_);
  
++         String doneTime = String.format(java.util.Locale.ROOT, "%.3fs", (double) (Util.m_137569_() - serverStartTime) / 1.0E9D);
++         f_129750_.info("Done ({})! For help, type \"help\"", doneTime);
++
 +         org.spigotmc.WatchdogThread.tick(); // Paper
 +         org.spigotmc.WatchdogThread.hasStarted = true; // Paper
 +         long start = System.nanoTime(), curTime, tickSection = start; // Paper - Further improve server tick loop
@@ -547,15 +552,30 @@
              this.f_129726_ += 50L;
              this.m_177945_();
              this.f_129754_.m_6180_("tick");
-@@ -653,6 +_,8 @@
+@@ -653,8 +_,23 @@
              this.f_129717_ = true;
              JvmProfiler.f_185340_.m_183597_(this.f_129737_);
           }
++         org.spigotmc.WatchdogThread.doStop(); // Paper
 +         net.minecraftforge.server.ServerLifecycleHooks.handleServerStopping(this);
 +         net.minecraftforge.server.ServerLifecycleHooks.expectServerStopped(); // Forge: Has to come before MinecraftServer#onServerCrash to avoid race conditions
        } catch (Throwable throwable1) {
++         // Paper start
++         if (throwable1 instanceof ThreadDeath) {
++            MinecraftServer.f_129750_.error("Main thread terminated by WatchDog due to hard crash", throwable1);
++            return;
++         }
++         // Paper end
           f_129750_.error("Encountered an unexpected exception", throwable1);
++         // Spigot Start
++         if ( throwable1.getCause() != null )
++         {
++            MinecraftServer.f_129750_.error( "\tCause of unexpected exception was", throwable1.getCause() );
++         }
++         // Spigot End
           CrashReport crashreport = m_206568_(throwable1);
+          this.m_177935_(crashreport.m_178626_());
+          File file1 = new File(new File(this.m_6237_(), "crash-reports"), "crash-" + Util.m_241986_() + "-server.txt");
 @@ -664,6 +_,7 @@
              f_129750_.error("We were unable to save this crash report to disk.");
           }
@@ -750,7 +770,7 @@
 +            this.f_129763_.saveAll(playerSaveInterval);
 +         }
 +         for (ServerLevel level : this.m_129785_()) {
-+            if (6000 > 0) {
++            if (autosavePeriod > 0) {
 +               level.saveIncrementally(fullSave);
 +            }
 +         }
