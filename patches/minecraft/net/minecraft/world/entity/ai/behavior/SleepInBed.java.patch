@@ -1,0 +1,12 @@
+--- a/net/minecraft/world/entity/ai/behavior/SleepInBed.java
++++ b/net/minecraft/world/entity/ai/behavior/SleepInBed.java
+@@ -40,7 +_,8 @@
+                }
+             }
+ 
+-            BlockState blockstate = p_24154_.m_8055_(globalpos.m_122646_());
++            BlockState blockstate = p_24154_.getBlockStateIfLoaded(globalpos.m_122646_()); // Paper
++            if (blockstate == null) { return false; } // Paper
+             return globalpos.m_122646_().m_203195_(p_24155_.m_20182_(), 2.0D) && blockstate.m_204336_(BlockTags.f_13038_) && !blockstate.m_61143_(BedBlock.f_49441_);
+          }
+       }

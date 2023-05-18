@@ -24,6 +24,37 @@
     public PathNavigation(Mob p_26515_, Level p_26516_) {
        this.f_26494_ = p_26515_;
        this.f_26495_ = p_26516_;
+@@ -157,9 +_,29 @@
+       return this.m_26536_(this.m_26524_(p_26520_, p_26521_, p_26522_, 1), p_26523_);
+    }
+ 
++   // Paper start - optimise pathfinding
++   private int lastFailure = 0;
++   private int pathfindFailures = 0;
++   // Paper end
++
+    public boolean m_5624_(Entity p_26532_, double p_26533_) {
++      // Paper start - Pathfinding optimizations
++      if (this.pathfindFailures > 10 && this.f_26496_ == null && net.minecraft.server.MinecraftServer.currentTick < this.lastFailure + 40) {
++         return false;
++      }
++      // Paper end
+       Path path = this.m_6570_(p_26532_, 1);
+-      return path != null && this.m_26536_(path, p_26533_);
++      // Paper start - Pathfinding optimizations
++      if (path != null && this.m_26536_(path, p_26533_)) {
++         this.lastFailure = 0;
++         this.pathfindFailures = 0;
++         return true;
++      } else {
++         this.pathfindFailures++;
++         this.lastFailure = net.minecraft.server.MinecraftServer.currentTick;
++         return false;
++      }
++      // Paper end
+    }
+ 
+    public boolean m_26536_(@Nullable Path p_26537_, double p_26538_) {
 @@ -227,10 +_,10 @@
        Vec3 vec3 = this.m_7475_();
        this.f_26505_ = this.f_26494_.m_20205_() > 0.75F ? this.f_26494_.m_20205_() / 2.0F : 0.75F - this.f_26494_.m_20205_() / 2.0F;

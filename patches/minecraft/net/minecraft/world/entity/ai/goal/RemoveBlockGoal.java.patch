@@ -9,6 +9,17 @@
           return false;
        } else if (this.f_25600_ > 0) {
           --this.f_25600_;
+@@ -113,7 +_,9 @@
+ 
+    @Nullable
+    private BlockPos m_25852_(BlockPos p_25853_, BlockGetter p_25854_) {
+-      if (p_25854_.m_8055_(p_25853_).m_60713_(this.f_25836_)) {
++      net.minecraft.world.level.block.state.BlockState block = p_25854_.getBlockStateIfLoaded(p_25853_); // Paper
++      if (block == null) return null; // Paper
++      if (block.m_60713_(this.f_25836_)) { // Paper
+          return p_25853_;
+       } else {
+          BlockPos[] ablockpos = new BlockPos[]{p_25853_.m_7495_(), p_25853_.m_122024_(), p_25853_.m_122029_(), p_25853_.m_122012_(), p_25853_.m_122019_(), p_25853_.m_7495_().m_7495_()};
 @@ -133,6 +_,7 @@
        if (chunkaccess == null) {
           return false;

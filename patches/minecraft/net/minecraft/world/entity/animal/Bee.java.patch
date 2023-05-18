@@ -1,15 +1,33 @@
 --- a/net/minecraft/world/entity/animal/Bee.java
 +++ b/net/minecraft/world/entity/animal/Bee.java
-@@ -472,7 +_,7 @@
+@@ -375,6 +_,7 @@
+       if (this.f_27698_ == null) {
           return false;
        } else {
++         if (!this.f_19853_.isLoadedAndInBounds(f_27698_)) return false; // Paper
+          BlockEntity blockentity = this.f_19853_.m_7702_(this.f_27698_);
+          return blockentity instanceof BeehiveBlockEntity && ((BeehiveBlockEntity)blockentity).m_58773_();
+       }
+@@ -402,6 +_,7 @@
+    }
+ 
+    private boolean m_27884_(BlockPos p_27885_) {
++      if (!this.f_19853_.isLoadedAndInBounds(p_27885_)) return false; // Paper
+       BlockEntity blockentity = this.f_19853_.m_7702_(p_27885_);
+       if (blockentity instanceof BeehiveBlockEntity) {
+          return !((BeehiveBlockEntity)blockentity).m_58775_();
+@@ -471,8 +_,9 @@
+       if (!this.m_27854_()) {
+          return false;
+       } else {
++         if (f_19853_.getChunkIfLoadedImmediately(f_27698_.m_123341_() >> 4, f_27698_.m_123343_() >> 4) == null) return true; // Paper - just assume the hive is still there, no need to load the chunk(s)
           BlockEntity blockentity = this.f_19853_.m_7702_(this.f_27698_);
 -         return blockentity != null && blockentity.m_58903_() == BlockEntityType.f_58912_;
 +         return blockentity instanceof BeehiveBlockEntity;
        }
     }
  
-@@ -614,8 +_,18 @@
+@@ -614,10 +_,20 @@
        return MobType.f_21642_;
     }
  
@@ -20,11 +38,29 @@
 +
 +   private void jumpInLiquidInternal() {
        this.m_20256_(this.m_20184_().m_82520_(0.0D, 0.01D, 0.0D));
-+   }
-+
+    }
+ 
 +   @Override
 +   public void jumpInFluid(net.minecraftforge.fluids.FluidType type) {
 +      this.jumpInLiquidInternal();
-    }
- 
++   }
++
     public Vec3 m_7939_() {
+       return new Vec3(0.0D, (double)(0.5F * this.m_20192_()), (double)(this.m_20205_() * 0.2F));
+    }
+@@ -682,6 +_,7 @@
+    class BeeEnterHiveGoal extends Bee.BaseBeeGoal {
+       public boolean m_7989_() {
+          if (Bee.this.m_27854_() && Bee.this.m_27866_() && Bee.this.f_27698_.m_203195_(Bee.this.m_20182_(), 2.0D)) {
++            if (!Bee.this.f_19853_.isLoadedAndInBounds(Bee.this.f_27698_)) return false; // Paper
+             BlockEntity blockentity = Bee.this.f_19853_.m_7702_(Bee.this.f_27698_);
+             if (blockentity instanceof BeehiveBlockEntity) {
+                BeehiveBlockEntity beehiveblockentity = (BeehiveBlockEntity)blockentity;
+@@ -701,6 +_,7 @@
+       }
+ 
+       public void m_8056_() {
++         if (!Bee.this.f_19853_.isLoadedAndInBounds(Bee.this.f_27698_)) return; // Paper
+          BlockEntity blockentity = Bee.this.f_19853_.m_7702_(Bee.this.f_27698_);
+          if (blockentity instanceof BeehiveBlockEntity beehiveblockentity) {
+             beehiveblockentity.m_58741_(Bee.this, Bee.this.m_27856_());
