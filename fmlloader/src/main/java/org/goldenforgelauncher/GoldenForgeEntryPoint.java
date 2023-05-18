@@ -99,6 +99,6 @@ public class GoldenForgeEntryPoint {
     }
 
     public static String getVersion() {
-        return "alpha-0.0.5";
+        return "alpha-0.0.6";
     }
 }
