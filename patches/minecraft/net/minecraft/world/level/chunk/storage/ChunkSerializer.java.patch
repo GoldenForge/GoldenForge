@@ -225,7 +225,7 @@
 -            for(BlockPos blockpos : BlockPos.m_121976_(p_188233_.m_45604_(), p_188231_.m_141937_(), p_188233_.m_45605_(), p_188233_.m_45608_(), p_188231_.m_151558_() - 1, p_188233_.m_45609_())) {
 -               if (chunkaccess.m_8055_(blockpos).m_60791_() != 0) {
 -                  protochunk.m_63277_(blockpos);
-+         if (!flag) { // Paper - fix incorrect parsing of blocks that emit light - it should always parse it, unless the chunk is marked as lit
++         if (true) { // Paper - fix incorrect parsing of blocks that emit light - it should always parse it, unless the chunk is marked as lit // Folia - always recalculate light data to eliminate duplicates
 +            // Paper start - let's make sure the implementation isn't as slow as possible
 +            int offX = p_188233_.f_45578_ << 4;
 +            int offZ = p_188233_.f_45579_ << 4;
@@ -236,7 +236,7 @@
 +            LevelChunkSection[] sections = alevelchunksection;
 +            for (int sectionY = minChunkSection; sectionY <= maxChunkSection; ++sectionY) {
 +               LevelChunkSection section = sections[sectionY - minChunkSection];
-+               if (section == null || section.m_188008_()) {
++               if (section == null || section.m_188008_() || !section.m_63002_((BlockState state) -> state.m_60791_() > 0)) { // Folia - always recalculate light data to eliminate duplicates - skip sections that definitely have no sources
 +                  // no sources in empty sections
 +                  continue;
 +               }
@@ -267,6 +267,32 @@
        } else {
           ProtoChunk protochunk1 = (ProtoChunk)chunkaccess;
           ListTag listtag4 = p_188234_.m_128437_("entities", 10);
+@@ -235,15 +_,16 @@
+             chunkaccess.m_5604_(compoundtag1);
+          }
+ 
+-         ListTag listtag6 = p_188234_.m_128437_("Lights", 9);
+-
+-         for(int k2 = 0; k2 < listtag6.size(); ++k2) {
+-            ListTag listtag1 = listtag6.m_128744_(k2);
+-
+-            for(int i1 = 0; i1 < listtag1.size(); ++i1) {
+-               protochunk1.m_63244_(listtag1.m_128757_(i1), k2);
+-            }
+-         }
++         // Folia - always recalculate light data to eliminate duplicates
++//         ListTag listtag6 = p_188234_.getList("Lights", 9);
++//
++//         for(int k2 = 0; k2 < listtag6.size(); ++k2) {
++//            ListTag listtag1 = listtag6.getList(k2);
++//
++//            for(int i1 = 0; i1 < listtag1.size(); ++i1) {
++//               protochunk1.addLight(listtag1.getShort(i1), k2);
++//            }
++//         }
+ 
+          CompoundTag compoundtag4 = p_188234_.m_128469_("CarvingMasks");
+ 
 @@ -252,10 +_,45 @@
              protochunk1.m_188186_(generationstep$carving, new CarvingMask(compoundtag4.m_128467_(s1), chunkaccess.m_141937_()));
           }
