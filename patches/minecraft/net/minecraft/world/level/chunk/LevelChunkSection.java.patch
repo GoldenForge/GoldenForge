@@ -156,7 +156,7 @@
        return blockstate;
     }
  
-@@ -119,35 +_,32 @@
+@@ -119,35 +_,34 @@
     }
  
     public void m_63018_() {
@@ -182,37 +182,38 @@
 -            }
 -
 -         }
--      }
++      // Paper start - unfuck this
++      this.tickingList.clear();
++      this.f_62969_ = 0;
++      this.f_62970_ = 0;
++      this.f_62971_ = 0;
++      if (this.m_63002_((BlockState state) -> !state.m_60795_() || !state.m_60819_().m_76178_())) { // Folia - do not run forEachLocation on clearly empty sections
++         this.f_62972_.forEachLocation((BlockState iblockdata, int i) -> {
++            FluidState fluid = iblockdata.m_60819_();
++
++            if (!iblockdata.m_60795_()) {
++               this.f_62969_ = (short) (this.f_62969_ + 1);
++               if (iblockdata.m_60823_()) {
++                  this.f_62970_ = (short) (this.f_62970_ + 1);
++                  this.tickingList.add(i, iblockdata);
++               }
++            }
++
++            if (!fluid.m_76178_()) {
++               this.f_62969_ = (short) (this.f_62969_ + 1);
++               if (fluid.m_76187_()) {
++                  this.f_62971_ = (short) (this.f_62971_ + 1);
++               }
++            }
++
++         });
+       }
 -
 -      BlockCounter levelchunksection$1blockcounter = new BlockCounter();
 -      this.f_62972_.m_63099_(levelchunksection$1blockcounter);
 -      this.f_62969_ = (short)levelchunksection$1blockcounter.f_204437_;
 -      this.f_62970_ = (short)levelchunksection$1blockcounter.f_204438_;
 -      this.f_62971_ = (short)levelchunksection$1blockcounter.f_204439_;
-+      // Paper start - unfuck this
-+      this.tickingList.clear();
-+      this.f_62969_ = 0;
-+      this.f_62970_ = 0;
-+      this.f_62971_ = 0;
-+      this.f_62972_.forEachLocation((BlockState iblockdata, int i) -> {
-+         FluidState fluid = iblockdata.m_60819_();
-+
-+         if (!iblockdata.m_60795_()) {
-+            this.f_62969_ = (short) (this.f_62969_ + 1);
-+            if (iblockdata.m_60823_()) {
-+               this.f_62970_ = (short)(this.f_62970_ + 1);
-+               this.tickingList.add(i, iblockdata);
-+            }
-+         }
-+
-+         if (!fluid.m_76178_()) {
-+            this.f_62969_ = (short) (this.f_62969_ + 1);
-+            if (fluid.m_76187_()) {
-+               this.f_62971_ = (short) (this.f_62971_ + 1);
-+            }
-+         }
-+
-+      });
 +      // Paper end
 +      this.initBlockCollisionData(); // Paper
     }
