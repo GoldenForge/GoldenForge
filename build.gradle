@@ -1096,7 +1096,6 @@ project(':forge') {
                 'GitCommit': gradleutils.gitInfo.abbreviatedId,
                 'Git-Branch': gradleutils.gitInfo.branch,
                 'FML-System-Mods': 'forge',
-                'MixinConnector': 'org.goldenforge.mixins'
             ] as LinkedHashMap,
             'net/minecraftforge/versions/forge/': [
                 'Specification-Title':      'Forge',
