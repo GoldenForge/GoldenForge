@@ -7,6 +7,7 @@ package org.goldenforge.config;
 
 import static net.minecraftforge.fml.Logging.FORGEMOD;
 
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
@@ -16,7 +17,10 @@ import org.apache.logging.log4j.LogManager;
 import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
 import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
 import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
+import org.bukkit.Bukkit;
 import org.goldenforge.GoldenForge;
+
+import java.util.logging.Level;
 
 
 public class GoldenForgeConfig {
@@ -43,6 +47,7 @@ public class GoldenForgeConfig {
         public static ConfigValue<Integer> maxJoinsPerTick;
         public static ConfigValue<Boolean> preventMovingIntoUnloadedChunks;
         public static ConfigValue<Boolean> enableAsyncMobSpawning;
+        public static ConfigValue<Boolean> perPlayerMobSpawns;
 
         public static ConfigValue<Integer> autoSaveInterval;
         public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
@@ -51,6 +56,7 @@ public class GoldenForgeConfig {
         public static ConfigValue<Integer> chatExecutorMaxSize;
         public static ConfigValue<Integer> loginTicks;
         public static ConfigValue<Boolean> optimizeExplosions;
+        public static ConfigValue<Integer> nettyThreads;
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -154,6 +160,11 @@ public class GoldenForgeConfig {
                     .worldRestart()
                     .define("enableAsyncMobSpawning", true);
 
+            perPlayerMobSpawns = builder
+                    .comment("Disable this on TNP limitless! Determines whether the mob limit is counted per player or for the entire server. Enabling this setting results in roughly the same number of mobs, but with a more even distribution that prevents one player from using the entire mob cap and provides a more single-player like experience.")
+                    .worldRestart()
+                    .define("perPlayerMobSpawns", true);
+
             loginTicks = builder
                     .comment("Login timeout in ticks")
                     .worldRestart()
@@ -162,6 +173,10 @@ public class GoldenForgeConfig {
             optimizeExplosions = builder
                     .worldRestart()
                     .define("optimizeExplosions", true);
+
+            nettyThreads = builder
+                    .worldRestart()
+                    .define("nettyThreads", 4);
 
             builder.pop();
 
@@ -189,7 +204,13 @@ public class GoldenForgeConfig {
                     .worldRestart()
                     .define("chatExecutorMaxSize", -1);
 
-            if (net.minecraft.server.MinecraftServer.getServer() == null) return; // In testing env, this will be null here
+            builder.pop();
+        }
+
+        public void postConfig() {
+            System.setProperty( "io.netty.eventLoopThreads", Integer.toString( nettyThreads.get() ) );
+            MinecraftServer.LOGGER.info(  "Using {} threads for Netty based IO", nettyThreads.get() );
+
             int _chatExecutorMaxSize = (chatExecutorMaxSize.get() <= 0) ? Integer.MAX_VALUE : chatExecutorMaxSize.get(); // This is somewhat dumb, but, this is the default, do we cap this?;
             int _chatExecutorCoreSize = Math.max(chatExecutorCoreSize.get(), 0);
 
@@ -201,14 +222,17 @@ public class GoldenForgeConfig {
             executor.setCorePoolSize(_chatExecutorCoreSize);
             executor.setMaximumPoolSize(_chatExecutorMaxSize);
 
-            builder.pop();
         }
+
     }
+
+
     public static ForgeConfigSpec serverSpec;
     public static Server SERVER;
     static {
         final Pair<Server, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Server::new);
         serverSpec = specPair.getRight();
+        SERVER = specPair.getLeft();
     }
 
     @SubscribeEvent

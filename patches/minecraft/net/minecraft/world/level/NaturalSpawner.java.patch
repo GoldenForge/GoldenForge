@@ -16,11 +16,12 @@
  import net.minecraft.server.level.ServerLevel;
  import net.minecraft.tags.BiomeTags;
  import net.minecraft.tags.BlockTags;
-@@ -46,8 +_,10 @@
+@@ -46,8 +_,11 @@
  import net.minecraft.world.level.material.FluidState;
  import net.minecraft.world.level.pathfinder.PathComputationType;
  import net.minecraft.world.phys.Vec3;
 +import org.goldenforge.GoldenConfig;
++import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
 +// TODO: ForgeHooks.canEntitySpawn
@@ -80,7 +81,7 @@
 +         int k1 = limit * p_47032_.m_47126_() / NaturalSpawner.f_46978_;
 +         int difference = k1 - currEntityCount;
 +
-+         if (GoldenConfig.perPlayerMobSpawns) {
++         if (GoldenForgeConfig.Server.perPlayerMobSpawns.get()) {
 +            int minDiff = Integer.MAX_VALUE;
 +            final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<net.minecraft.server.level.ServerPlayer> inRange = p_47030_.m_7726_().f_8325_.playerMobDistanceMap.getObjectsInRange(p_47031_.m_7697_());
 +            if (inRange != null) {
@@ -174,7 +175,7 @@
                             p_47044_.m_47100_(mob, p_47041_);
 -                           if (j >= mob.m_5792_()) {
 -                              return;
-+                           if (GoldenConfig.perPlayerMobSpawns) {
++                           if (GoldenForgeConfig.Server.perPlayerMobSpawns.get()) {
 +                              p_47040_.m_7726_().f_8325_.updatePlayerMobTypeMap(mob);
 +                           }
 +                           if (j >= net.minecraftforge.event.ForgeEventFactory.getMaxSpawnPackSize(mob)) { // Paper

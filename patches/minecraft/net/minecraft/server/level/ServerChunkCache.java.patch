@@ -695,7 +695,7 @@
 +         // Paper - only shuffle if per-player mob spawning is disabled
 +         // Paper start - optimise chunk tick iteration
 +         Iterator<LevelChunk> iterator1;
-+         if (GoldenConfig.perPlayerMobSpawns) {
++         if (GoldenForgeConfig.Server.perPlayerMobSpawns.get()) {
 +            iterator1 = this.entityTickingChunks.iterator();
 +         } else {
 +            iterator1 = this.entityTickingChunks.unsafeIterator();

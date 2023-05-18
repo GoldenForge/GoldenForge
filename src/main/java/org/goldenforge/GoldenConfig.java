@@ -13,7 +13,6 @@ public class GoldenConfig {
     public static double movedTooQuicklyMultiplier = 10.0D;
     public static double movedWronglyThreshold = 0.0625D;
     public static byte mobSpawnRange = 8;
-    public static boolean perPlayerMobSpawns = true;
     // Activation Range
 
     public static int animalActivationRange = 32;
