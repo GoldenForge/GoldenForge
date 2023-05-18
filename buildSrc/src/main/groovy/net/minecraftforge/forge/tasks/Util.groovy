@@ -76,6 +76,9 @@ public class Util {
 				if (!checkExists(url)) {
 					url = "https://repo.papermc.io/repository/maven-public/${path}"
 				}
+				if (!checkExists(url)) {
+					url = "https://raw.githubusercontent.com/GoldenForge/maven/master/${path}"
+				}
 			}
 			//TODO remove when Mojang launcher is updated
 			if (!classifiers && art.classifier != null) {
