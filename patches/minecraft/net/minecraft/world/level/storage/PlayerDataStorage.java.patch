@@ -1,13 +1,16 @@
 --- a/net/minecraft/world/level/storage/PlayerDataStorage.java
 +++ b/net/minecraft/world/level/storage/PlayerDataStorage.java
-@@ -31,6 +_,7 @@
+@@ -31,8 +_,9 @@
           File file2 = new File(this.f_78427_, p_78434_.m_20149_() + ".dat");
           File file3 = new File(this.f_78427_, p_78434_.m_20149_() + ".dat_old");
           Util.m_137462_(file2, file1, file3);
 +         net.minecraftforge.event.ForgeEventFactory.firePlayerSavingEvent(p_78434_, f_78427_, p_78434_.m_20149_());
        } catch (Exception exception) {
-          f_78426_.warn("Failed to save player data for {}", (Object)p_78434_.m_7755_().getString());
+-         f_78426_.warn("Failed to save player data for {}", (Object)p_78434_.m_7755_().getString());
++         f_78426_.warn("Failed to save player data for {}", (Object)p_78434_.m_7755_().getString(), exception); // Paper
        }
+ 
+    }
 @@ -52,8 +_,10 @@
  
        if (compoundtag != null) {
