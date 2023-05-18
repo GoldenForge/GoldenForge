@@ -43,7 +43,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,115 @@
+@@ -104,8 +_,119 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -69,6 +69,10 @@
 +
 +   protected final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom(java.util.concurrent.ThreadLocalRandom.current().nextLong()); public net.minecraft.util.RandomSource getThreadUnsafeRandom() { return this.randomTickRandom; } // Pufferfish - move thread unsafe random initialization // Pufferfish - getter
 +
++
++   public final boolean isLoadedAndInBounds(BlockPos blockposition) { // Paper - final for inline
++      return m_6857_().m_61937_(blockposition) && getChunkIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4) != null;
++   }
 +   public final ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
 +      return ((ServerLevel)this).f_8547_.getChunkAtIfLoadedImmediately(x, z);
 +   }
