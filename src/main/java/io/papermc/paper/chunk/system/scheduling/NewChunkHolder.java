@@ -1216,6 +1216,10 @@ public final class NewChunkHolder {
 
     // only call on main thread // Folia - update comment
     private void onFullChunkLoadChange(final boolean loaded, final List<NewChunkHolder> changedFullStatus) {
+        // Folia start - chunk system fix - acquire scheduling lock
+        this.scheduler.schedulingLock.lock();
+        try {
+        // Folia end - chunk system fix - acquire scheduling lock
         for (int dz = -NEIGHBOUR_RADIUS; dz <= NEIGHBOUR_RADIUS; ++dz) {
             for (int dx = -NEIGHBOUR_RADIUS; dx <= NEIGHBOUR_RADIUS; ++dx) {
                 final NewChunkHolder holder = (dx | dz) == 0 ? this : this.scheduler.chunkHolderManager.getChunkHolder(dx + this.chunkX, dz + this.chunkZ);
@@ -1230,6 +1234,11 @@ public final class NewChunkHolder {
                 }
             }
         }
+         // Folia start - chunk system fix - acquire scheduling lock
+        } finally {
+            this.scheduler.schedulingLock.unlock();
+        }
+        // Folia end - chunk system fix - acquire scheduling lock
     }
 
     private ChunkHolder.FullChunkStatus updateCurrentState(final ChunkHolder.FullChunkStatus to) {
