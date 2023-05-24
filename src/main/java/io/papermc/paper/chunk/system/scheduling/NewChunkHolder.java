@@ -153,6 +153,12 @@ public final class NewChunkHolder {
                     LOGGER.error("Unhandled entity data load exception, data data will be lost: ", result.right());
                 }
 
+                // Folia start - mark these tasks as completed before releasing the scheduling lock
+                for (final GenericDataLoadTaskCallback callback : waiters) {
+                    callback.markCompleted();
+                }
+                // Folia end - mark these tasks as completed before releasing the scheduling lock
+
                 completeWaiters = waiters;
             } else {
                 // cancelled
@@ -184,7 +190,7 @@ public final class NewChunkHolder {
         // avoid holding the scheduling lock while completing
         if (completeWaiters != null) {
             for (final GenericDataLoadTaskCallback callback : completeWaiters) {
-                callback.accept(result);
+                callback.acceptCompleted(result); // Folia - mark these tasks as completed before releasing the scheduling lock
             }
         }
 
@@ -270,6 +276,12 @@ public final class NewChunkHolder {
                     LOGGER.error("Unhandled poi load exception, poi data will be lost: ", result.right());
                 }
 
+                // Folia start - mark these tasks as completed before releasing the scheduling lock
+                for (final GenericDataLoadTaskCallback callback : waiters) {
+                    callback.markCompleted();
+                }
+                // Folia end - mark these tasks as completed before releasing the scheduling lock
+
                 completeWaiters = waiters;
             } else {
                 // cancelled
@@ -301,7 +313,7 @@ public final class NewChunkHolder {
         // avoid holding the scheduling lock while completing
         if (completeWaiters != null) {
             for (final GenericDataLoadTaskCallback callback : completeWaiters) {
-                callback.accept(result);
+                callback.acceptCompleted(result); // Folia - mark these tasks as completed before releasing the scheduling lock
             }
         }
         this.scheduler.schedulingLock.lock();
@@ -354,7 +366,7 @@ public final class NewChunkHolder {
         }
     }
 
-    public static abstract class GenericDataLoadTaskCallback implements Cancellable, Consumer<GenericDataLoadTask.TaskResult<?, Throwable>> {
+    public static abstract class GenericDataLoadTaskCallback implements Cancellable { // Folia - mark callbacks as completed before unlocking scheduling lock
 
         protected final Consumer<GenericDataLoadTask.TaskResult<?, Throwable>> consumer;
         protected final NewChunkHolder chunkHolder;
@@ -382,21 +394,23 @@ public final class NewChunkHolder {
             return this.completed;
         }
 
+        // Folia start - mark callbacks as completed before unlocking scheduling lock
         // must hold scheduling lock
-        private boolean setCompleted() {
+        void markCompleted() {
             if (this.completed) {
-                return false;
+                throw new IllegalStateException("May not be completed here");
             }
-            return this.completed = true;
+            this.completed = true;
         }
+        // Folia end - mark callbacks as completed before unlocking scheduling lock
 
-        @Override
-        public void accept(final GenericDataLoadTask.TaskResult<?, Throwable> result) {
+        // Folia - mark callbacks as completed before unlocking scheduling lock
+        void acceptCompleted(final GenericDataLoadTask.TaskResult<?, Throwable> result) {
             if (result != null) {
-                if (this.setCompleted()) {
+                if (this.completed) { // Folia - mark callbacks as completed before unlocking scheduling lock
                     this.consumer.accept(result);
                 } else {
-                    throw new IllegalStateException("Cannot be cancelled at this point");
+                    throw new IllegalStateException("Cannot be uncompleted at this point"); // Folia - mark callbacks as completed before unlocking scheduling lock
                 }
             } else {
                 throw new NullPointerException("Result cannot be null (cancelled)");
@@ -1200,7 +1214,7 @@ public final class NewChunkHolder {
         }
     }
 
-    // only call on main thread, must hold ticket level and scheduling lock
+    // only call on main thread // Folia - update comment
     private void onFullChunkLoadChange(final boolean loaded, final List<NewChunkHolder> changedFullStatus) {
         for (int dz = -NEIGHBOUR_RADIUS; dz <= NEIGHBOUR_RADIUS; ++dz) {
             for (int dx = -NEIGHBOUR_RADIUS; dx <= NEIGHBOUR_RADIUS; ++dx) {

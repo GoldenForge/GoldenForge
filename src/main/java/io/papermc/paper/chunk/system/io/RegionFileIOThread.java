@@ -819,8 +819,14 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                 return file.hasChunk(chunkPos) ? Boolean.TRUE : Boolean.FALSE;
             });
         } else {
+            // first check if the region file for sure does not exist
+            if (taskController.doesRegionFileNotExist(chunkX, chunkZ)) {
+                return Boolean.FALSE;
+            } // else: it either exists or is not known, fall back to checking the loaded region file
+
             return taskController.computeForRegionFileIfLoaded(chunkX, chunkZ, (final RegionFile file) -> {
                 if (file == null) { // null if not loaded
+                    // not sure at this point, let the I/O thread figure it out
                     return Boolean.TRUE;
                 }
 
@@ -1114,6 +1120,10 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
 
         public boolean hasTasks() {
             return !this.tasks.isEmpty();
+        }
+
+        public boolean doesRegionFileNotExist(final int chunkX, final int chunkZ) {
+            return this.getCache().doesRegionFileNotExistNoIO(new ChunkPos(chunkX, chunkZ));
         }
 
         public <T> T computeForRegionFile(final int chunkX, final int chunkZ, final boolean existingOnly, final Function<RegionFile, T> function) {

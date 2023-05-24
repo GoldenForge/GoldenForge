@@ -12,6 +12,7 @@ import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.commands.arguments.ResourceOrTagLocationArgument;
 import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,6 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.goldenforge.GoldenForge;
 import org.goldenforge.tpsmonitor.TpsMonitorManager;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,6 +36,9 @@ public class GoldenForgeCommand {
 
         dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("tpsmonitor")
                 .executes(GoldenForgeCommand::toggleTPSMonitor));
+
+        dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("tps")
+                .executes(GoldenForgeCommand::tps));
 
     }
 
@@ -113,5 +118,36 @@ private static int chunkInfos(CommandContext<CommandSourceStack> ctx) throws Com
                 .append(Component.literal("\nPowered by Forge " + ForgeVersion.getVersion()).withStyle(ChatFormatting.GRAY)));
         return 0;
 
+    }
+
+    private static final ThreadLocal<DecimalFormat> ONE_DECIMAL_PLACES = ThreadLocal.withInitial(() -> {
+        return new DecimalFormat("#,##0.0");
+    });
+
+    private static final ThreadLocal<DecimalFormat> TWO_DECIMAL_PLACES = ThreadLocal.withInitial(() -> {
+        return new DecimalFormat("#,##0.00");
+    });
+
+    private static int tps(CommandContext<CommandSourceStack> ctx) {
+
+        final long currTime = System.nanoTime();
+        final double genRate = io.papermc.paper.chunk.system.scheduling.ChunkFullTask.genRate(currTime);
+        final double loadRate = io.papermc.paper.chunk.system.scheduling.ChunkFullTask.loadRate(currTime);
+
+        ctx.getSource().sendSystemMessage(
+                Component.empty()
+                        .append(Component.literal("Server Health Report\n").withStyle(ChatFormatting.BLUE))
+
+                        .append(Component.literal(" - "))
+                        .append(Component.literal("Online Players: "))
+                        .append(Component.literal(MinecraftServer.getServer().getPlayerCount() + "\n"))
+
+                        .append(Component.literal(" - "))
+                        .append(Component.literal("Load rate: "))
+                        .append(Component.literal(TWO_DECIMAL_PLACES.get().format(loadRate) + ", "))
+                        .append(Component.literal("Gen rate: "))
+                        .append(Component.literal(TWO_DECIMAL_PLACES.get().format(genRate) + "\n"))
+        );
+        return 0;
     }
 }

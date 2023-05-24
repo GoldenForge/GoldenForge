@@ -206,7 +206,7 @@
     }
  
     public void m_27047_(ChunkPos p_27048_, LevelChunkSection p_27049_) {
-@@ -238,19 +_,98 @@
+@@ -238,19 +_,104 @@
        });
     }
  
@@ -312,6 +312,12 @@
 +            if (section != null && !section.isEmpty()) {
 +                this.m_5839_(SectionPos.m_123209_(chunkX, sectionY, chunkZ));
 +            }
++        }
++    }
++
++    public void checkConsistency(net.minecraft.world.level.chunk.ChunkAccess chunk) {
++        for (LevelChunkSection section : chunk.m_7103_()) {
++            this.m_27047_(chunk.m_7697_(), section);
 +        }
 +    }
 +    // Paper end - rewrite chunk system

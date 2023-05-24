@@ -40,8 +40,11 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
         this.fromStatus = chunk.getStatus();
         this.toStatus = toStatus;
         this.neighbours = neighbours;
-        this.generateTask = (this.toStatus.isParallelCapable ? this.scheduler.parallelGenExecutor : this.scheduler.genExecutor)
-            .createTask(this, priority);
+        if (this.toStatus.isParallelCapable) {
+            this.generateTask = this.scheduler.parallelGenExecutor.createTask(this, priority);
+        } else {
+            this.generateTask = this.scheduler.radiusAwareScheduler.createTask(chunkX, chunkZ, this.toStatus.writeRadius, this, priority);
+        }
     }
 
     @Override

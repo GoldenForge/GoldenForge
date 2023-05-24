@@ -35,9 +35,11 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     private final NewChunkHolder chunkHolder;
     private final ChunkDataLoadTask loadTask;
 
-    private boolean cancelled;
+    private volatile boolean cancelled;
     private NewChunkHolder.GenericDataLoadTaskCallback entityLoadTask;
     private NewChunkHolder.GenericDataLoadTaskCallback poiLoadTask;
+    private GenericDataLoadTask.TaskResult<ChunkAccess, Throwable> loadResult;
+    private final AtomicInteger taskCountToComplete = new AtomicInteger(3); // one for poi, one for entity, and one for chunk data
 
     protected ChunkLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX, final int chunkZ,
                             final NewChunkHolder chunkHolder, final PrioritisedExecutor.Priority priority) {
@@ -47,6 +49,13 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         this.loadTask.addCallback((final GenericDataLoadTask.TaskResult<ChunkAccess, Throwable> result) -> {
             ChunkLoadTask.this.complete(result == null ? null : result.left(), result == null ? null : result.right());
         });
+    }
+
+    private void tryCompleteLoad() {
+        if (this.taskCountToComplete.decrementAndGet() == 0) {
+            final GenericDataLoadTask.TaskResult<ChunkAccess, Throwable> result = this.cancelled ? null : this.loadResult; // only after the getAndDecrement
+            ChunkLoadTask.this.complete(result == null ? null : result.left(), result == null ? null : result.right());
+        }
     }
 
     @Override
@@ -66,11 +75,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         final NewChunkHolder.GenericDataLoadTaskCallback entityLoadTask;
         final NewChunkHolder.GenericDataLoadTaskCallback poiLoadTask;
 
-        final AtomicInteger count = new AtomicInteger();
         final Consumer<GenericDataLoadTask.TaskResult<?, ?>> scheduleLoadTask = (final GenericDataLoadTask.TaskResult<?, ?> result) -> {
-            if (count.decrementAndGet() == 0) {
-                ChunkLoadTask.this.loadTask.schedule(false);
-            }
+            ChunkLoadTask.this.tryCompleteLoad();
         };
 
         // NOTE: it is IMPOSSIBLE for getOrLoadEntityData/getOrLoadPoiData to complete synchronously, because
@@ -86,16 +92,16 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
             }
             if (!this.chunkHolder.isEntityChunkNBTLoaded()) {
                 entityLoadTask = this.chunkHolder.getOrLoadEntityData((Consumer)scheduleLoadTask);
-                count.setPlain(count.getPlain() + 1);
             } else {
                 entityLoadTask = null;
+                this.taskCountToComplete.getAndDecrement(); // we know the chunk load is not done here, as it is not scheduled
             }
 
             if (!this.chunkHolder.isPoiChunkLoaded()) {
                 poiLoadTask = this.chunkHolder.getOrLoadPoiData((Consumer)scheduleLoadTask);
-                count.setPlain(count.getPlain() + 1);
             } else {
                 poiLoadTask = null;
+                this.taskCountToComplete.getAndDecrement(); // we know the chunk load is not done here, as it is not scheduled
             }
 
             this.entityLoadTask = entityLoadTask;
@@ -112,10 +118,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
             poiLoadTask.schedule();
         }
 
-        if (entityLoadTask == null && poiLoadTask == null) {
-            // no need to wait on those, we can schedule now
-            this.loadTask.schedule(false);
-        }
+        this.loadTask.schedule(false);
     }
 
     @Override
@@ -123,6 +126,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         // must be before load task access, so we can synchronise with the writes to the fields
         this.scheduler.schedulingLock.lock();
         try {
+            scheduled = this.scheduled; // Folia - fix cancellation of chunk load task - must read field here, as it may be written later conucrrently - we need to know if we scheduled _before_ cancellation
             this.cancelled = true;
         } finally {
             this.scheduler.schedulingLock.unlock();
@@ -134,12 +138,29 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         we will successfully cancel the load task, which will complete when cancelled
         */
 
-        if (this.entityLoadTask != null) {
-            this.entityLoadTask.cancel();
+        // Folia start - fix cancellation of chunk load task
+        if (scheduled) {
+            // since we scheduled, we need to cancel the tasks
+            if (this.entityLoadTask != null) {
+                if (this.entityLoadTask.cancel()) {
+                    this.tryCompleteLoad();
+                }
+            }
+            if (this.poiLoadTask != null) {
+                if (this.poiLoadTask.cancel()) {
+                    this.tryCompleteLoad();
+                }
+            }
+        } else {
+            // since nothing was scheduled, we need to decrement the task count here ourselves
+
+            // for entity load task
+            this.tryCompleteLoad();
+
+            // for poi load task
+            this.tryCompleteLoad();
         }
-        if (this.poiLoadTask != null) {
-            this.poiLoadTask.cancel();
-        }
+        // Folia end - fix cancellation of chunk load task
         this.loadTask.cancel();
     }
 
@@ -250,7 +271,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
     }
 
-    public final class ChunkDataLoadTask extends CallbackDataLoadTask<ProtoChunk, ChunkAccess> {
+    public static final class ChunkDataLoadTask extends CallbackDataLoadTask<ProtoChunk, ChunkAccess> {
         protected ChunkDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
                                     final int chunkZ, final PrioritisedExecutor.Priority priority) {
             super(scheduler, world, chunkX, chunkZ, RegionFileIOThread.RegionFileType.CHUNK_DATA, priority);
@@ -263,7 +284,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
         @Override
         protected boolean hasOnMain() {
-            return true;
+            return false;
         }
 
         @Override
@@ -273,35 +294,37 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
         @Override
         protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
-            return this.scheduler.createChunkTask(this.chunkX, this.chunkZ, run, priority);
+            //return this.scheduler.createChunkTask(this.chunkX, this.chunkZ, run, priority);
+            throw new UnsupportedOperationException();
         }
 
         @Override
         protected TaskResult<ChunkAccess, Throwable> completeOnMainOffMain(final ProtoChunk data, final Throwable throwable) {
-            if (data != null) {
-                return null;
-            }
-
-            final PoiChunk poiChunk = ChunkLoadTask.this.chunkHolder.getPoiChunk();
-            if (poiChunk == null) {
-                LOGGER.error("Expected poi chunk to be loaded with chunk for task " + this.toString());
-            } else if (!poiChunk.isLoaded()) {
-                // need to call poiChunk.load() on main
-                return null;
-            }
-
-            return new TaskResult<>(this.getEmptyChunk(), null);
+//            if (data != null) {
+//                return null;
+//            }
+//
+//            final PoiChunk poiChunk = ChunkLoadTask.this.chunkHolder.getPoiChunk();
+//            if (poiChunk == null) {
+//                LOGGER.error("Expected poi chunk to be loaded with chunk for task " + this.toString());
+//            } else if (!poiChunk.isLoaded()) {
+//                // need to call poiChunk.load() on main
+//                return null;
+//            }
+//
+//            return new TaskResult<>(this.getEmptyChunk(), null);
+            throw new UnsupportedOperationException();
         }
 
         @Override
         protected TaskResult<ProtoChunk, Throwable> runOffMain(final CompoundTag data, final Throwable throwable) {
             if (throwable != null) {
                 LOGGER.error("Failed to load chunk data for task: " + this.toString() + ", chunk data will be lost", throwable);
-                return new TaskResult<>(null, null);
+                return new TaskResult<>(this.getEmptyChunk(), null);
             }
 
             if (data == null) {
-                return new TaskResult<>(null, null);
+                return new TaskResult<>(this.getEmptyChunk(), null);
             }
 
             // need to convert data, and then deserialize it
@@ -324,7 +347,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                 throw death;
             } catch (final Throwable thr2) {
                 LOGGER.error("Failed to parse chunk data for task: " + this.toString() + ", chunk data will be lost", thr2);
-                return new TaskResult<>(null, thr2);
+                return new TaskResult<>(getEmptyChunk(), null);
             }
         }
 
@@ -337,35 +360,36 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
         @Override
         protected TaskResult<ChunkAccess, Throwable> runOnMain(final ProtoChunk data, final Throwable throwable) {
-            final PoiChunk poiChunk = ChunkLoadTask.this.chunkHolder.getPoiChunk();
-            if (poiChunk == null) {
-                LOGGER.error("Expected poi chunk to be loaded with chunk for task " + this.toString());
-            } else {
-                poiChunk.load();
-            }
-
-            if (data == null) {
-                // throwable could be non-null, but the off-main task will print its exceptions - so we don't need to care,
-                // it's handled already
-
-                return new TaskResult<>(this.getEmptyChunk(), null);
-            }
-
-            // have tasks to run (at this point, it's just the POI consistency checking)
-            try {
-                if (data.tasks != null) {
-                    for (int i = 0, len = data.tasks.size(); i < len; ++i) {
-                        data.tasks.poll().run();
-                    }
-                }
-
-                return new TaskResult<>(data, null);
-            } catch (final ThreadDeath death) {
-                throw death;
-            } catch (final Throwable thr2) {
-                LOGGER.error("Failed to parse main tasks for task " + this.toString() + ", chunk data will be lost", thr2);
-                return new TaskResult<>(this.getEmptyChunk(), null);
-            }
+            throw new UnsupportedOperationException();
+//            final PoiChunk poiChunk = ChunkLoadTask.this.chunkHolder.getPoiChunk();
+//            if (poiChunk == null) {
+//                LOGGER.error("Expected poi chunk to be loaded with chunk for task " + this.toString());
+//            } else {
+//                poiChunk.load();
+//            }
+//
+//            if (data == null) {
+//                // throwable could be non-null, but the off-main task will print its exceptions - so we don't need to care,
+//                // it's handled already
+//
+//                return new TaskResult<>(this.getEmptyChunk(), null);
+//            }
+//
+//            // have tasks to run (at this point, it's just the POI consistency checking)
+//            try {
+//                if (data.tasks != null) {
+//                    for (int i = 0, len = data.tasks.size(); i < len; ++i) {
+//                        data.tasks.poll().run();
+//                    }
+//                }
+//
+//                return new TaskResult<>(data, null);
+//            } catch (final ThreadDeath death) {
+//                throw death;
+//            } catch (final Throwable thr2) {
+//                LOGGER.error("Failed to parse main tasks for task " + this.toString() + ", chunk data will be lost", thr2);
+//                return new TaskResult<>(this.getEmptyChunk(), null);
+//            }
         }
     }
 

@@ -5,6 +5,7 @@ import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadedTaskQueue;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.mojang.logging.LogUtils;
+import io.papermc.paper.chunk.system.scheduling.queue.RadiusAwarePrioritisedExecutor;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.TickThread;
@@ -103,13 +104,14 @@ public final class ChunkTaskScheduler {
 
     public final ServerLevel world;
     public final PrioritisedThreadPool workers;
-    public final PrioritisedThreadPool.PrioritisedPoolExecutor lightExecutor;
-    public final PrioritisedThreadPool.PrioritisedPoolExecutor genExecutor;
+    // public final PrioritisedThreadPool.PrioritisedPoolExecutor lightExecutor;
+    // public final PrioritisedThreadPool.PrioritisedPoolExecutor genExecutor;
     public final PrioritisedThreadPool.PrioritisedPoolExecutor parallelGenExecutor;
     public final PrioritisedThreadPool.PrioritisedPoolExecutor loadExecutor;
 
     private final PrioritisedThreadedTaskQueue mainThreadExecutor = new PrioritisedThreadedTaskQueue();
-
+    public final RadiusAwarePrioritisedExecutor radiusAwareScheduler;
+    private final PrioritisedThreadPool.PrioritisedPoolExecutor radiusAwareGenExecutor;
     final ReentrantLock schedulingLock = new ReentrantLock();
     public final ChunkHolderManager chunkHolderManager;
 
@@ -191,12 +193,16 @@ public final class ChunkTaskScheduler {
         this.workers = workers;
 
         final String worldName = world.getWorld().getName();
-        this.genExecutor = workers.createExecutor("Chunk single-threaded generation executor for world '" + worldName + "'", 1);
+        //this.genExecutor = workers.createExecutor("Chunk single-threaded generation executor for world '" + worldName + "'", 1);
         // same as genExecutor, as there are race conditions between updating blocks in FEATURE status while lighting chunks
-        this.lightExecutor = this.genExecutor;
-        this.parallelGenExecutor = newChunkSystemGenParallelism <= 1 ? this.genExecutor
-                : workers.createExecutor("Chunk parallel generation executor for world '" + worldName + "'", newChunkSystemGenParallelism);
+        // this.lightExecutor = this.genExecutor;
+        this.parallelGenExecutor = workers.createExecutor("Chunk parallel generation executor for world '" + worldName + "'", Math.max(1, newChunkSystemGenParallelism));
         this.loadExecutor = workers.createExecutor("Chunk load executor for world '" + worldName + "'", newChunkSystemLoadParallelism);
+
+        this.radiusAwareGenExecutor =
+                newChunkSystemGenParallelism <= 1 ? this.parallelGenExecutor : workers.createExecutor("Chunk radius aware generator for world '" + worldName + "'", newChunkSystemGenParallelism);
+        this.radiusAwareScheduler = new RadiusAwarePrioritisedExecutor(this.radiusAwareGenExecutor, Math.max(1, newChunkSystemGenParallelism));
+
         this.chunkHolderManager = new ChunkHolderManager(world, this);
     }
 
@@ -688,16 +694,14 @@ public final class ChunkTaskScheduler {
     }
 
     public boolean halt(final boolean sync, final long maxWaitNS) {
-        this.lightExecutor.halt();
-        this.genExecutor.halt();
+        this.radiusAwareGenExecutor.halt();
         this.parallelGenExecutor.halt();
         this.loadExecutor.halt();
         final long time = System.nanoTime();
         if (sync) {
             for (long failures = 9L;; failures = ConcurrentUtil.linearLongBackoff(failures, 500_000L, 50_000_000L)) {
                 if (
-                    !this.lightExecutor.isActive() &&
-                        !this.genExecutor.isActive() &&
+                    !this.radiusAwareGenExecutor.isActive() &&
                         !this.parallelGenExecutor.isActive() &&
                         !this.loadExecutor.isActive()
                 ) {
