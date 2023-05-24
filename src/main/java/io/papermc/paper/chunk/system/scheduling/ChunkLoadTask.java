@@ -81,7 +81,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
         // NOTE: it is IMPOSSIBLE for getOrLoadEntityData/getOrLoadPoiData to complete synchronously, because
         // they must schedule a task to off main or to on main to complete
-        this.scheduler.schedulingLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             if (this.scheduled) {
                 throw new IllegalStateException("schedule() called twice");
@@ -107,7 +107,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
             this.entityLoadTask = entityLoadTask;
             this.poiLoadTask = poiLoadTask;
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
 
         if (entityLoadTask != null) {
@@ -124,12 +124,13 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     @Override
     public void cancel() {
         // must be before load task access, so we can synchronise with the writes to the fields
-        this.scheduler.schedulingLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
+        final boolean scheduled; // Folia - fix cancellation of chunk load task
         try {
             scheduled = this.scheduled; // Folia - fix cancellation of chunk load task - must read field here, as it may be written later conucrrently - we need to know if we scheduled _before_ cancellation
             this.cancelled = true;
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
 
         /*

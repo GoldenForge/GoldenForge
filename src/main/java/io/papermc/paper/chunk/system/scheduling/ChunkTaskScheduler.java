@@ -112,7 +112,7 @@ public final class ChunkTaskScheduler {
     private final PrioritisedThreadedTaskQueue mainThreadExecutor = new PrioritisedThreadedTaskQueue();
     public final RadiusAwarePrioritisedExecutor radiusAwareScheduler;
     private final PrioritisedThreadPool.PrioritisedPoolExecutor radiusAwareGenExecutor;
-    final ReentrantLock schedulingLock = new ReentrantLock();
+    //final ReentrantLock schedulingLock = new ReentrantLock();
     public final ChunkHolderManager chunkHolderManager;
 
     static {
@@ -187,6 +187,66 @@ public final class ChunkTaskScheduler {
             status.isParallelCapable = true;
         }
     }
+
+    public static int getAccessRadius(final ChunkStatus genStatus) {
+        return ACCESS_RADIUS_TABLE[genStatus.getIndex()];
+    }
+
+    public static int getAccessRadius(final ChunkHolder.FullChunkStatus status) {
+        return (status.ordinal() - 1) + getAccessRadius(ChunkStatus.FULL);
+    }
+
+    private static final int LOCK_SHIFT = Math.max(6, 4);
+    public static int getChunkSystemLockShift() {
+        return LOCK_SHIFT;
+    }
+
+    private static final int[] ACCESS_RADIUS_TABLE = new int[ChunkStatus.getStatusList().size()];
+    private static final int[] MAX_ACCESS_RADIUS_TABLE = new int[ACCESS_RADIUS_TABLE.length];
+    static {
+        Arrays.fill(ACCESS_RADIUS_TABLE, -1);
+    }
+
+    private static int maxAccessRadius;
+
+    static {
+        final List<ChunkStatus> statuses = ChunkStatus.getStatusList();
+        for (int i = 0, len = statuses.size(); i < len; ++i) {
+            ACCESS_RADIUS_TABLE[i] = getAccessRadius0(statuses.get(i));
+        }
+        int max = 0;
+        for (int i = 0, len = statuses.size(); i < len; ++i) {
+            MAX_ACCESS_RADIUS_TABLE[i] = max = Math.max(ACCESS_RADIUS_TABLE[i], max);
+        }
+        maxAccessRadius = max;
+    }
+
+    private static int getAccessRadius0(final ChunkStatus genStatus) {
+        if (genStatus == ChunkStatus.EMPTY) {
+            return 0;
+        }
+
+        final int radius = Math.max(genStatus.loadRange, genStatus.getRange());
+        int maxRange = radius;
+
+        for (int dist = 1; dist <= radius; ++dist) {
+            final ChunkStatus requiredNeighbourStatus = ChunkMap.getDependencyStatus(genStatus, radius);
+            final int rad = ACCESS_RADIUS_TABLE[requiredNeighbourStatus.getIndex()];
+            if (rad == -1) {
+                throw new IllegalStateException();
+            }
+
+            maxRange = Math.max(maxRange, dist + rad);
+        }
+
+        return maxRange;
+    }
+
+    public static int getMaxAccessRadius() {
+        return maxAccessRadius;
+    }
+
+    final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock schedulingLockArea = new ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock(getChunkSystemLockShift());
 
     public ChunkTaskScheduler(final ServerLevel world, final PrioritisedThreadPool workers) {
         this.world = world;
@@ -274,10 +334,11 @@ public final class ChunkTaskScheduler {
             }, priority);
             return;
         }
-        if (this.chunkHolderManager.ticketLock.isHeldByCurrentThread()) {
+        final int accessRadius = getAccessRadius(toStatus); // Folia - use area based lock to reduce contention
+        if (this.chunkHolderManager.ticketLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk load during ticket level update");
         }
-        if (this.schedulingLock.isHeldByCurrentThread()) {
+        if (this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk loading recursively");
         }
 
@@ -311,9 +372,9 @@ public final class ChunkTaskScheduler {
 
         final boolean scheduled;
         final LevelChunk chunk;
-        this.chunkHolderManager.ticketLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.chunkHolderManager.ticketLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
         try {
-            this.schedulingLock.lock();
+            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.schedulingLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
             try {
                 final NewChunkHolder chunkHolder = this.chunkHolderManager.getChunkHolder(chunkKey);
                 if (chunkHolder == null || chunkHolder.getTicketLevel() > minLevel) {
@@ -344,10 +405,10 @@ public final class ChunkTaskScheduler {
                     }
                 }
             } finally {
-                this.schedulingLock.unlock();
+                this.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
             }
         } finally {
-            this.chunkHolderManager.ticketLock.unlock();
+            this.chunkHolderManager.ticketLockArea.unlock(ticketLock); // Folia - use area based lock to reduce contention
         }
 
         if (!scheduled) {
@@ -389,10 +450,11 @@ public final class ChunkTaskScheduler {
             }, priority);
             return;
         }
-        if (this.chunkHolderManager.ticketLock.isHeldByCurrentThread()) {
+        final int accessRadius = getAccessRadius(toStatus); // Folia - use area based lock to reduce contention
+        if (this.chunkHolderManager.ticketLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk load during ticket level update");
         }
-        if (this.schedulingLock.isHeldByCurrentThread()) {
+        if (this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk loading recursively");
         }
 
@@ -429,9 +491,9 @@ public final class ChunkTaskScheduler {
 
         final boolean scheduled;
         final ChunkAccess chunk;
-        this.chunkHolderManager.ticketLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.chunkHolderManager.ticketLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
         try {
-            this.schedulingLock.lock();
+            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.schedulingLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
             try {
                 final NewChunkHolder chunkHolder = this.chunkHolderManager.getChunkHolder(chunkKey);
                 if (chunkHolder == null || chunkHolder.getTicketLevel() > minLevel) {
@@ -454,10 +516,10 @@ public final class ChunkTaskScheduler {
                     }
                 }
             } finally {
-                this.schedulingLock.unlock();
+                this.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
             }
         } finally {
-            this.chunkHolderManager.ticketLock.unlock();
+            this.chunkHolderManager.ticketLockArea.unlock(ticketLock); // Folia - use area based lock to reduce contention
         }
 
         for (int i = 0, len = tasks.size(); i < len; ++i) {
@@ -504,7 +566,7 @@ public final class ChunkTaskScheduler {
     private ChunkProgressionTask schedule(final int chunkX, final int chunkZ, final ChunkStatus targetStatus,
                                           final NewChunkHolder chunkHolder, final List<ChunkProgressionTask> allTasks,
                                           final PrioritisedExecutor.Priority minPriority) {
-        if (!this.schedulingLock.isHeldByCurrentThread()) {
+        if (!this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, getAccessRadius(targetStatus))) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Not holding scheduling lock");
         }
 

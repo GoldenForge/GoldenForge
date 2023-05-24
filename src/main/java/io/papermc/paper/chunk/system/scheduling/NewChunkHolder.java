@@ -71,7 +71,7 @@ public final class NewChunkHolder {
         TickThread.ensureTickThread(this.world, this.chunkX, this.chunkZ, "Cannot sync load entity data off-main");
         final CompoundTag entityChunk;
         final ChunkEntitySlices ret;
-        this.scheduler.schedulingLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             if (this.entityChunk != null && (transientChunk || !this.entityChunk.isTransient())) {
                 return this.entityChunk;
@@ -103,7 +103,7 @@ public final class NewChunkHolder {
                 entityChunk = null;
             }
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
 
         if (!transientChunk) {
@@ -142,7 +142,7 @@ public final class NewChunkHolder {
         final List<GenericDataLoadTaskCallback> completeWaiters;
         ChunkLoadTask.EntityDataLoadTask entityDataLoadTask = null;
         boolean scheduleEntityTask = false;
-        this.scheduler.schedulingLock.lock();
+        ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             final List<GenericDataLoadTaskCallback> waiters = this.entityDataLoadTaskWaiters;
             this.entityDataLoadTask = null;
@@ -180,7 +180,7 @@ public final class NewChunkHolder {
                 }
             }
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
 
         if (scheduleEntityTask) {
@@ -194,11 +194,11 @@ public final class NewChunkHolder {
             }
         }
 
-        this.scheduler.schedulingLock.lock();
+        schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             this.checkUnload();
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
     }
 
@@ -209,7 +209,7 @@ public final class NewChunkHolder {
             throw new IllegalStateException("Cannot load entity data, it is already loaded");
         }
         // why not just acquire the lock? because the caller NEEDS to call isEntityChunkNBTLoaded before this!
-        if (!this.scheduler.schedulingLock.isHeldByCurrentThread()) {
+        if (!this.scheduler.schedulingLockArea.isHeldByCurrentThread(this.chunkX, this.chunkZ)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Must hold scheduling lock");
         }
 
@@ -265,7 +265,7 @@ public final class NewChunkHolder {
         final List<GenericDataLoadTaskCallback> completeWaiters;
         ChunkLoadTask.PoiDataLoadTask poiDataLoadTask = null;
         boolean schedulePoiTask = false;
-        this.scheduler.schedulingLock.lock();
+        ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             final List<GenericDataLoadTaskCallback> waiters = this.poiDataLoadTaskWaiters;
             this.poiDataLoadTask = null;
@@ -303,7 +303,7 @@ public final class NewChunkHolder {
                 }
             }
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
 
         if (schedulePoiTask) {
@@ -316,11 +316,11 @@ public final class NewChunkHolder {
                 callback.acceptCompleted(result); // Folia - mark these tasks as completed before releasing the scheduling lock
             }
         }
-        this.scheduler.schedulingLock.lock();
+        schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             this.checkUnload();
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
     }
 
@@ -331,7 +331,7 @@ public final class NewChunkHolder {
             throw new IllegalStateException("Cannot load poi data, it is already loaded");
         }
         // why not just acquire the lock? because the caller NEEDS to call isPoiChunkLoaded before this!
-        if (!this.scheduler.schedulingLock.isHeldByCurrentThread()) {
+        if (!this.scheduler.schedulingLockArea.isHeldByCurrentThread(this.chunkX, this.chunkZ)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Must hold scheduling lock");
         }
 
@@ -422,7 +422,8 @@ public final class NewChunkHolder {
 
         @Override
         public boolean cancel() {
-            this.chunkHolder.scheduler.schedulingLock.lock();
+            final NewChunkHolder holder = this.chunkHolder; // Folia - use area based lock to reduce contention
+            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = holder.scheduler.schedulingLockArea.lock(holder.chunkX, holder.chunkZ); // Folia - use area based lock to reduce contention
             try {
                 if (!this.completed) {
                     this.completed = true;
@@ -431,7 +432,7 @@ public final class NewChunkHolder {
                 }
                 return false;
             } finally {
-                this.chunkHolder.scheduler.schedulingLock.unlock();
+                holder.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
             }
         }
     }
@@ -725,10 +726,10 @@ public final class NewChunkHolder {
         }
         if (this.isSafeToUnload() == null) {
             // ensure in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.add(this);
+            this.scheduler.chunkHolderManager.unloadQueue.addChunk(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         } else {
             // ensure not in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.remove(this);
+            this.scheduler.chunkHolderManager.unloadQueue.removeChunk(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         }
     }
 
@@ -798,13 +799,13 @@ public final class NewChunkHolder {
             RegionFileIOThread.scheduleSave(this.world, this.chunkX, this.chunkZ, data, RegionFileIOThread.RegionFileType.CHUNK_DATA);
         }
         this.chunkDataUnload.completable().complete(data);
-        this.scheduler.schedulingLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
         try {
             // can only write to these fields while holding the schedule lock
             this.chunkDataUnload = null;
             this.checkUnload();
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
     }
 
@@ -841,12 +842,12 @@ public final class NewChunkHolder {
             this.lastEntityUnload = null;
 
             if (entityChunk.unload()) {
-                this.scheduler.schedulingLock.lock();
+                final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
                 try {
                     entityChunk.setTransient(true);
                     this.entityChunk = entityChunk;
                 } finally {
-                    this.scheduler.schedulingLock.unlock();
+                    this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
                 }
             } else {
                 this.world.getEntityLookup().entitySectionUnload(this.chunkX, this.chunkZ);
@@ -1217,7 +1218,7 @@ public final class NewChunkHolder {
     // only call on main thread // Folia - update comment
     private void onFullChunkLoadChange(final boolean loaded, final List<NewChunkHolder> changedFullStatus) {
         // Folia start - chunk system fix - acquire scheduling lock
-        this.scheduler.schedulingLock.lock();
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ, NEIGHBOUR_RADIUS); // Folia - use area based lock to reduce contention
         try {
         // Folia end - chunk system fix - acquire scheduling lock
         for (int dz = -NEIGHBOUR_RADIUS; dz <= NEIGHBOUR_RADIUS; ++dz) {
@@ -1236,7 +1237,7 @@ public final class NewChunkHolder {
         }
          // Folia start - chunk system fix - acquire scheduling lock
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
         }
         // Folia end - chunk system fix - acquire scheduling lock
     }
@@ -1276,7 +1277,7 @@ public final class NewChunkHolder {
         // note: use opaque reads for chunk status read since we need it to be atomic
 
         // test if anything changed
-        final long statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
+        long statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this); // Folia - use area based lock to reduce contention
         if ((int)statusCheck == (int)(statusCheck >>> 32)) {
             // nothing changed
             return ret;
@@ -1285,14 +1286,23 @@ public final class NewChunkHolder {
         final ChunkTaskScheduler scheduler = this.scheduler;
         final ChunkHolderManager holderManager = scheduler.chunkHolderManager;
         final int ticketKeep;
-        final Long ticketId;
-        holderManager.ticketLock.lock();
+        // Folia start - use area based lock to reduce contention
+        final Long ticketId = Long.valueOf(holderManager.getNextStatusUpgradeId());
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = holderManager.ticketLockArea.lock(this.chunkX, this.chunkZ);
+        // Folia end - use area based lock to reduce contention
         try {
             ticketKeep = this.currentTicketLevel;
-            ticketId = Long.valueOf(holderManager.getNextStatusUpgradeId());
-            holderManager.addTicketAtLevel(TicketType.STATUS_UPGRADE, this.chunkX, this.chunkZ, ticketKeep, ticketId);
+            // Folia start - use area based lock to reduce contention
+            statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
+            // handle race condition where ticket level and target status is updated concurrently
+            if ((int)statusCheck == (int)(statusCheck >>> 32)) {
+                // nothing changed
+                return ret;
+            }
+            holderManager.addTicketAtLevel(TicketType.STATUS_UPGRADE, CoordinateUtils.getChunkKey(this.chunkX, this.chunkZ), ticketKeep, ticketId, false);
+            // Folia end - use area based lock to reduce contention
         } finally {
-            holderManager.ticketLock.unlock();
+            holderManager.ticketLockArea.unlock(ticketLock); // Folia - use area based lock to reduce contention
         }
 
         this.processingFullStatus = true;
@@ -1303,11 +1313,11 @@ public final class NewChunkHolder {
                 ChunkHolder.FullChunkStatus nextState = getPendingChunkStatus(currStateEncoded);
                 if (currState == nextState) {
                     if (nextState == ChunkHolder.FullChunkStatus.INACCESSIBLE) {
-                        this.scheduler.schedulingLock.lock();
+                        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
                         try {
                             this.checkUnload();
                         } finally {
-                            this.scheduler.schedulingLock.unlock();
+                            this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
                         }
                     }
                     break;
@@ -1707,14 +1717,14 @@ public final class NewChunkHolder {
                 // this means we have to leave the ticket level update to handle the scheduling
             }
             final List<NewChunkHolder> changedLoadStatus = new ArrayList<>();
-            this.scheduler.schedulingLock.lock();
+            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ, 2 * ChunkTaskScheduler.getMaxAccessRadius()); // Folia - use area based lock to reduce contention - theoretically, we could schedule a chunk at the max radius which performs another max radius access. So we need to double.
             try {
                 for (int i = 0, len = neighbours.size(); i < len; ++i) {
                     neighbours.get(i).removeNeighbourUsingChunk();
                 }
                 this.onChunkGenComplete(access, taskStatus, tasks, changedLoadStatus);
             } finally {
-                this.scheduler.schedulingLock.unlock();
+                this.scheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
             }
             this.scheduler.chunkHolderManager.addChangedStatuses(changedLoadStatus);
 
