@@ -47,7 +47,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         this.chunkHolder = chunkHolder;
         this.loadTask = new ChunkDataLoadTask(scheduler, world, chunkX, chunkZ, priority);
         this.loadTask.addCallback((final GenericDataLoadTask.TaskResult<ChunkAccess, Throwable> result) -> {
-            ChunkLoadTask.this.complete(result == null ? null : result.left(), result == null ? null : result.right());
+            ChunkLoadTask.this.loadResult = result; // must be before getAndDecrement
+            ChunkLoadTask.this.tryCompleteLoad();
         });
     }
 
