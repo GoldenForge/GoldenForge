@@ -681,10 +681,8 @@ public final class ChunkHolderManager {
             final RegionFileIOThread.ChunkCoordinate section = new RegionFileIOThread.ChunkCoordinate(sectionKey);
 
             if (!this.sectionToChunkToExpireCount.containsKey(section)) {
-                //System.out.println("sectionToChunkToExpireCount do not contains");
                 return;
             }
-            System.out.println("sectionToChunkToExpireCount do contains");
 
             final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
                     CoordinateUtils.getChunkX(sectionKey) << sectionShift,
