@@ -672,15 +672,19 @@ public final class ChunkHolderManager {
         };
 
 
-        for (Map.Entry<RegionFileIOThread.ChunkCoordinate, SortedArraySet<Ticket<?>>> value : tickets.entrySet()) {
+        chunkHolders.forEachValue((ticket) -> {
 
-            final long sectionKey = value.getKey().key;
+
+
+            final long sectionKey = CoordinateUtils.getChunkKey(ticket.chunkX, ticket.chunkZ);
 
             final RegionFileIOThread.ChunkCoordinate section = new RegionFileIOThread.ChunkCoordinate(sectionKey);
 
             if (!this.sectionToChunkToExpireCount.containsKey(section)) {
-                continue;
+                //System.out.println("sectionToChunkToExpireCount do not contains");
+                return;
             }
+            System.out.println("sectionToChunkToExpireCount do contains");
 
             final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
                     CoordinateUtils.getChunkX(sectionKey) << sectionShift,
@@ -691,7 +695,7 @@ public final class ChunkHolderManager {
                 final Long2IntOpenHashMap chunkToExpireCount = this.sectionToChunkToExpireCount.get(section);
                 if (chunkToExpireCount == null) {
                     // lost to some race
-                    continue;
+                    return;
                 }
 
                 for (final Iterator<Long2IntMap.Entry> iterator1 = chunkToExpireCount.long2IntEntrySet().fastIterator(); iterator1.hasNext();) {
@@ -736,7 +740,7 @@ public final class ChunkHolderManager {
             } finally {
                 this.ticketLockArea.unlock(ticketLock);
             }
-        }
+        });
 
         this.processTicketUpdates();
     }
