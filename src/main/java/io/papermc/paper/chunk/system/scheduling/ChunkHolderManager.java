@@ -1005,7 +1005,9 @@ public final class ChunkHolderManager {
         holder.vanillaChunkHolder.onChunkRemove();
         this.autoSaveQueue.remove(holder);
         ChunkSystem.onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
-        this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
+        synchronized (this.chunkHolders) { // Folia - use area based lock to reduce contention
+            this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
+        } // Folia - use area based lock to reduce contention
     }
 
     // note: never call while inside the chunk system, this will absolutely break everything

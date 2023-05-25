@@ -196,7 +196,7 @@ public final class ChunkTaskScheduler {
         return (status.ordinal() - 1) + getAccessRadius(ChunkStatus.FULL);
     }
 
-    private static final int LOCK_SHIFT = Math.max(6, 4);
+    private static final int LOCK_SHIFT = Math.max(io.papermc.paper.threadedregions.ThreadedTicketLevelPropagator.SECTION_SHIFT, 4);
     public static int getChunkSystemLockShift() {
         return LOCK_SHIFT;
     }
