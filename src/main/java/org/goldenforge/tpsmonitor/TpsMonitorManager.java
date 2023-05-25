@@ -36,6 +36,10 @@ public class TpsMonitorManager {
         }
     }
 
+    private static final ThreadLocal<DecimalFormat> TWO_DECIMAL_PLACES = ThreadLocal.withInitial(() -> {
+        return new DecimalFormat("#,##0.00");
+    });
+
     public void tick() {
 
         double tps = MinecraftServer.getServer().getTPS()[0];
@@ -64,7 +68,14 @@ public class TpsMonitorManager {
             msptColor = "§4";
         }
 
-        ClientboundSetActionBarTextPacket packet = new ClientboundSetActionBarTextPacket(Component.literal(ChatFormatting.DARK_GRAY + "TPS: " + tpsColor + FORMATER.format(tps) + ChatFormatting.DARK_GRAY + " MSPT: " + msptColor + FORMATER.format(mspt)));
+        final long currTime = System.nanoTime();
+        final double genRate = io.papermc.paper.chunk.system.scheduling.ChunkFullTask.genRate(currTime);
+        final double loadRate = io.papermc.paper.chunk.system.scheduling.ChunkFullTask.loadRate(currTime);
+
+        String msg = ChatFormatting.DARK_GRAY + "TPS: " + tpsColor + FORMATER.format(tps) + ChatFormatting.DARK_GRAY + " MSPT: " + msptColor + FORMATER.format(mspt) + ChatFormatting.DARK_GRAY + " LOAD/GEN RATE: " + TWO_DECIMAL_PLACES.get().format(loadRate) +"/"+TWO_DECIMAL_PLACES.get().format(genRate);
+
+
+        ClientboundSetActionBarTextPacket packet = new ClientboundSetActionBarTextPacket(Component.literal(msg));
 
         for (ServerPlayer player : activesTpsMonitors) {
             player.connection.send(packet);
