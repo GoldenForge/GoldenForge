@@ -44,6 +44,10 @@ public final class ChunkTaskScheduler {
 
     public static PrioritisedThreadPool workerThreads;
 
+    public static int getWorkerCount() {
+        return workerThreads.getThreadCount();
+    }
+
     private static boolean initialised = false;
 
     public static void init() {

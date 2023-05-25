@@ -3,7 +3,6 @@ package ca.spottedleaf.concurrentutil.executor.standard;
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import org.slf4j.Logger;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -70,6 +69,10 @@ public final class PrioritisedThreadPool {
 
     public Thread[] getThreads() {
         return Arrays.copyOf(this.threads, this.threads.length, Thread[].class);
+    }
+
+    public int getThreadCount() {
+        return this.threads.length;
     }
 
     public PrioritisedPoolExecutor createExecutor(final String name, final int parallelism) {
@@ -325,7 +328,7 @@ public final class PrioritisedThreadPool {
 
     protected static final class PrioritisedPoolExecutorImpl extends PrioritisedThreadedTaskQueue implements PrioritisedPoolExecutor {
 
-        private final PrioritisedThreadPool pool;
+        protected final PrioritisedThreadPool pool;
         protected final long[] priorityCounts = new long[Priority.TOTAL_SCHEDULABLE_PRIORITIES];
         protected long schedulingId;
         protected int concurrentExecutors;
@@ -410,7 +413,7 @@ public final class PrioritisedThreadPool {
         private long totalQueuedTasks = 0L;
 
         @Override
-        protected void priorityChange(PrioritisedTask1 prioritisedTask, final Priority from, final Priority to) {
+        protected void priorityChange(final PrioritisedThreadedTaskQueue.PrioritisedTask task, final Priority from, final Priority to) {
             // Note: The superclass' queue lock is ALWAYS held when inside this method. So we do NOT need to do any additional synchronisation
             // for accessing this queue's state.
             final long[] priorityCounts = this.priorityCounts;

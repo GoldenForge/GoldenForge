@@ -114,7 +114,7 @@
        boolean flag = gamerules.m_46207_(GameRules.f_46156_);
        boolean flag1 = gamerules.m_46207_(GameRules.f_46145_);
 -      servergamepacketlistenerimpl.m_9829_(new ClientboundLoginPacket(p_11263_.m_19879_(), leveldata.m_5466_(), p_11263_.f_8941_.m_9290_(), p_11263_.f_8941_.m_9293_(), this.f_11195_.m_129784_(), this.f_11206_, serverlevel1.m_220362_(), serverlevel1.m_46472_(), BiomeManager.m_47877_(serverlevel1.m_7328_()), this.m_11310_(), this.f_11207_, this.f_184208_, flag1, !flag, serverlevel1.m_46659_(), serverlevel1.m_8584_(), p_11263_.m_219759_()));
-+      servergamepacketlistenerimpl.m_9829_(new ClientboundLoginPacket(p_11263_.m_19879_(), leveldata.m_5466_(), p_11263_.f_8941_.m_9290_(), p_11263_.f_8941_.m_9293_(), this.f_11195_.m_129784_(), this.f_11206_, serverlevel1.m_220362_(), serverlevel1.m_46472_(), BiomeManager.m_47877_(serverlevel1.m_7328_()), this.m_11310_(), serverlevel1.m_7726_().f_8325_.playerChunkManager.getTargetSendDistance(), serverlevel1.m_7726_().f_8325_.playerChunkManager.getTargetTickViewDistance(), flag1, !flag, serverlevel1.m_46659_(), serverlevel1.m_8584_(), p_11263_.m_219759_()));
++      servergamepacketlistenerimpl.m_9829_(new ClientboundLoginPacket(p_11263_.m_19879_(), leveldata.m_5466_(), p_11263_.f_8941_.m_9290_(), p_11263_.f_8941_.m_9293_(), this.f_11195_.m_129784_(), this.f_11206_, serverlevel1.m_220362_(), serverlevel1.m_46472_(), BiomeManager.m_47877_(serverlevel1.m_7328_()), this.m_11310_(), serverlevel1.playerChunkLoader.getAPISendViewDistance(), serverlevel1.playerChunkLoader.getAPITickDistance(), flag1, !flag, serverlevel1.m_46659_(), serverlevel1.m_8584_(), p_11263_.m_219759_()));
        servergamepacketlistenerimpl.m_9829_(new ClientboundCustomPayloadPacket(ClientboundCustomPayloadPacket.f_132012_, (new FriendlyByteBuf(Unpooled.buffer())).m_130070_(this.m_7873_().m_130001_())));
        servergamepacketlistenerimpl.m_9829_(new ClientboundChangeDifficultyPacket(leveldata.m_5472_(), leveldata.m_5474_()));
        servergamepacketlistenerimpl.m_9829_(new ClientboundPlayerAbilitiesPacket(p_11263_.m_150110_()));
@@ -244,7 +244,7 @@
        this.f_11196_.remove(p_11237_);
        p_11237_.m_9236_().m_143261_(p_11237_, Entity.RemovalReason.DISCARDED);
        BlockPos blockpos = p_11237_.m_8961_();
-@@ -445,7 +_,8 @@
+@@ -445,12 +_,15 @@
           serverplayer.f_8906_.m_9829_(new ClientboundGameEventPacket(ClientboundGameEventPacket.f_132153_, 0.0F));
        }
  
@@ -254,6 +254,13 @@
           serverplayer.m_6034_(serverplayer.m_20185_(), serverplayer.m_20186_() + 1.0D, serverplayer.m_20189_());
        }
  
+       LevelData leveldata = serverplayer.f_19853_.m_6106_();
+       serverplayer.f_8906_.m_9829_(new ClientboundRespawnPacket(serverplayer.f_19853_.m_220362_(), serverplayer.f_19853_.m_46472_(), BiomeManager.m_47877_(serverplayer.m_9236_().m_7328_()), serverplayer.f_8941_.m_9290_(), serverplayer.f_8941_.m_9293_(), serverplayer.m_9236_().m_46659_(), serverplayer.m_9236_().m_8584_(), p_11238_, serverplayer.m_219759_()));
++      serverplayer.f_8906_.m_9829_(new ClientboundSetChunkCacheRadiusPacket(serverlevel1.playerChunkLoader.getAPISendViewDistance())); // Spigot // Paper - replace old player chunk management
++      serverplayer.f_8906_.m_9829_(new ClientboundSetSimulationDistancePacket(serverlevel1.playerChunkLoader.getAPITickDistance())); // Spigot // Paper - replace old player chunk management
+       serverplayer.f_8906_.m_9774_(serverplayer.m_20185_(), serverplayer.m_20186_(), serverplayer.m_20189_(), serverplayer.m_146908_(), serverplayer.m_146909_());
+       serverplayer.f_8906_.m_9829_(new ClientboundSetDefaultSpawnPositionPacket(serverlevel1.m_220360_(), serverlevel1.m_220361_()));
+       serverplayer.f_8906_.m_9829_(new ClientboundChangeDifficultyPacket(leveldata.m_5472_(), leveldata.m_5474_()));
 @@ -462,6 +_,7 @@
        this.f_11197_.put(serverplayer.m_20148_(), serverplayer);
        serverplayer.m_143429_();

@@ -2,18 +2,14 @@ package io.papermc.paper.chunk.system.scheduling;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.TickThread;
-import io.papermc.paper.util.misc.Delayed8WayDistancePropagator2D;
 import io.papermc.paper.world.ChunkEntitySlices;
 import it.unimi.dsi.fastutil.longs.*;
 import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
-import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
@@ -27,12 +23,10 @@ import org.goldenforge.config.GoldenForgeConfig;
 import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
 public final class ChunkHolderManager {
@@ -343,6 +337,12 @@ public final class ChunkHolderManager {
                 this.ticketLockArea.unlock(ticketLock);
             }
             // Folia end - use area based lock to reduce contention
+        }
+    }
+
+    public SortedArraySet<Ticket<?>> getTicketsSyncronised(long key) {
+        synchronized (tickets) {
+            return this.tickets.getOrDefault(key, SortedArraySet.create(4));
         }
     }
 
@@ -1258,5 +1258,108 @@ public final class ChunkHolderManager {
         }
 
         return ret;
+    }
+
+    public Boolean tryDrainTicketUpdates() {
+        return Boolean.FALSE; // Folia start - use area based lock to reduce contention
+    }
+
+    public void pushDelayedTicketUpdates(final Collection<TicketOperation<?, ?>> operations) {
+        // Folia start - use area based lock to reduce contention
+        for (final TicketOperation<?, ?> operation : operations) {
+            this.processTicketOp(operation);
+        }
+        // Folia end - use area based lock to reduce contention
+    }
+
+    private boolean processTicketOp(TicketOperation operation) {
+        boolean ret = false;
+        switch (operation.op) {
+            case ADD: {
+                ret |= this.addTicketAtLevel(operation.ticketType, operation.chunkCoord, operation.ticketLevel, operation.identifier);
+                break;
+            }
+            case REMOVE: {
+                ret |= this.removeTicketAtLevel(operation.ticketType, operation.chunkCoord, operation.ticketLevel, operation.identifier);
+                break;
+            }
+            case ADD_IF_REMOVED: {
+                ret |= this.addIfRemovedTicket(
+                        operation.chunkCoord,
+                        operation.ticketType, operation.ticketLevel, operation.identifier,
+                        operation.ticketType2, operation.ticketLevel2, operation.identifier2
+                );
+                break;
+            }
+            case ADD_AND_REMOVE: {
+                ret = true;
+                this.addAndRemoveTickets(
+                        operation.chunkCoord,
+                        operation.ticketType, operation.ticketLevel, operation.identifier,
+                        operation.ticketType2, operation.ticketLevel2, operation.identifier2
+                );
+                break;
+            }
+        }
+
+        return ret;
+    }
+
+    public enum TicketOperationType {
+        ADD, REMOVE, ADD_IF_REMOVED, ADD_AND_REMOVE
+    }
+
+    public static record TicketOperation<T, V> (
+            TicketOperationType op, long chunkCoord,
+            TicketType<T> ticketType, int ticketLevel, T identifier,
+            TicketType<V> ticketType2, int ticketLevel2, V identifier2
+    ) {
+
+        private TicketOperation(TicketOperationType op, long chunkCoord,
+                                TicketType<T> ticketType, int ticketLevel, T identifier) {
+            this(op, chunkCoord, ticketType, ticketLevel, identifier, null, 0, null);
+        }
+
+        public static <T> TicketOperation<T, T> addOp(final ChunkPos chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return addOp(CoordinateUtils.getChunkKey(chunk), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> addOp(final int chunkX, final int chunkZ, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return addOp(CoordinateUtils.getChunkKey(chunkX, chunkZ), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> addOp(final long chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return new TicketOperation<>(TicketOperationType.ADD, chunk, type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> removeOp(final ChunkPos chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return removeOp(CoordinateUtils.getChunkKey(chunk), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> removeOp(final int chunkX, final int chunkZ, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return removeOp(CoordinateUtils.getChunkKey(chunkX, chunkZ), type, ticketLevel, identifier);
+        }
+
+        public static <T> TicketOperation<T, T> removeOp(final long chunk, final TicketType<T> type, final int ticketLevel, final T identifier) {
+            return new TicketOperation<>(TicketOperationType.REMOVE, chunk, type, ticketLevel, identifier);
+        }
+
+        public static <T, V> TicketOperation<T, V> addIfRemovedOp(final long chunk,
+                                                                  final TicketType<T> addType, final int addLevel, final T addIdentifier,
+                                                                  final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
+            return new TicketOperation<>(
+                    TicketOperationType.ADD_IF_REMOVED, chunk, addType, addLevel, addIdentifier,
+                    removeType, removeLevel, removeIdentifier
+            );
+        }
+
+        public static <T, V> TicketOperation<T, V> addAndRemove(final long chunk,
+                                                                final TicketType<T> addType, final int addLevel, final T addIdentifier,
+                                                                final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
+            return new TicketOperation<>(
+                    TicketOperationType.ADD_AND_REMOVE, chunk, addType, addLevel, addIdentifier,
+                    removeType, removeLevel, removeIdentifier
+            );
+        }
     }
 }

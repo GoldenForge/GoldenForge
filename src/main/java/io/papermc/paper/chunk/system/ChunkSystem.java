@@ -117,15 +117,15 @@ public final class ChunkSystem {
 
 
     public static int getSendViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getSendViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPISendViewDistance(player);
     }
 
-    public static int getLoadViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getLoadViewDistance(player);
-    }
+//    public static int getLoadViewDistance(final ServerPlayer player) {
+//        return io.papermc.paper.chunk.PlayerChunkLoader.getLoadViewDistance(player);
+//    }
 
     public static int getTickViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getTickViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPITickViewDistance(player);
     }
 
     private ChunkSystem() {

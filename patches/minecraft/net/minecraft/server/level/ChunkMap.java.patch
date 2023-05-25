@@ -259,7 +259,7 @@
 +   // Paper end - use distance map to optimise tracker
 +
 +   void addPlayerToDistanceMaps(ServerPlayer player) {
-+      this.playerChunkManager.addPlayer(player); // Paper - replace chunk loader
++      this.f_140133_.playerChunkLoader.addPlayer(player); // Paper - replace chunk loader
 +      int chunkX = MCUtil.getChunkCoordinate(player.m_20185_());
 +      int chunkZ = MCUtil.getChunkCoordinate(player.m_20189_());
 +      this.playerChunkTickRangeMap.add(player, chunkX, chunkZ, net.minecraft.server.level.DistanceManager.MOB_SPAWN_RANGE); // Paper - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
@@ -280,7 +280,7 @@
 +   }
 +
 +   void removePlayerFromDistanceMaps(ServerPlayer player) {
-+      this.playerChunkManager.removePlayer(player); // Paper - replace chunk loader
++      this.f_140133_.playerChunkLoader.removePlayer(player); // Paper - replace chunk loader
 +      // Paper start - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
 +      this.playerMobSpawnMap.remove(player);
 +      this.playerChunkTickRangeMap.remove(player);
@@ -301,7 +301,7 @@
 +   void updateMaps(ServerPlayer player) {
 +      int chunkX = MCUtil.getChunkCoordinate(player.m_20185_());
 +      int chunkZ = MCUtil.getChunkCoordinate(player.m_20189_());
-+      this.playerChunkManager.updatePlayer(player); // Paper - replace chunk loader
++      this.f_140133_.playerChunkLoader.updatePlayer(player); // Paper - replace chunk loader
 +      this.playerChunkTickRangeMap.update(player, chunkX, chunkZ, net.minecraft.server.level.DistanceManager.MOB_SPAWN_RANGE); // Paper - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
 +      // Paper start - per player mob spawning
 +      if (this.playerMobDistanceMap != null) {
@@ -1038,7 +1038,7 @@
     }
  
     public int m_140368_() {
-@@ -746,113 +_,42 @@
+@@ -746,114 +_,46 @@
     }
  
     private boolean m_198874_(ChunkHolder p_198875_) {
@@ -1127,7 +1127,7 @@
 -      }
 +   // Paper start - replace player loader system
 +   public void setTickViewDistance(int distance) {
-+      this.playerChunkManager.setTickDistance(distance);
++      this.f_140133_.playerChunkLoader.setTickDistance(distance);
     }
 +   // Paper end - replace player loader system
  
@@ -1154,30 +1154,44 @@
 +         int k = this.f_140126_;
 +
 +         this.f_140126_ = j;
-+         this.playerChunkManager.setLoadDistance(this.f_140126_); // Paper - replace player loader system
++         this.f_140133_.playerChunkLoader.setLoadDistance(this.f_140126_); // Paper - replace player loader system
        }
  
     }
  
 -   protected void m_183754_(ServerPlayer p_183755_, ChunkPos p_183756_, MutableObject<ClientboundLevelChunkWithLightPacket> p_183757_, boolean p_183758_, boolean p_183759_) {
 +   public void m_183754_(ServerPlayer p_183755_, ChunkPos p_183756_, MutableObject<ClientboundLevelChunkWithLightPacket> p_183757_, boolean p_183758_, boolean p_183759_) {
++      io.papermc.paper.util.TickThread.ensureTickThread(this.f_140133_, p_183756_, "May not update chunk tracking for chunk async"); // Paper - replace chunk loader system
++      io.papermc.paper.util.TickThread.ensureTickThread(p_183755_, "May not update chunk tracking for player async"); // Paper - replace chunk loader system
        if (p_183755_.f_19853_ == this.f_140133_) {
++         ChunkHolder chunkholder = this.m_140327_(p_183756_.m_45588_());
           if (p_183759_ && !p_183758_) {
-             ChunkHolder chunkholder = this.m_140327_(p_183756_.m_45588_());
+-            ChunkHolder chunkholder = this.m_140327_(p_183756_.m_45588_());
              if (chunkholder != null) {
 -               LevelChunk levelchunk = chunkholder.m_140085_();
 +               LevelChunk levelchunk = chunkholder.getSendingChunk(); // Paper - replace chunk loader system;
                 if (levelchunk != null) {
++                  chunkholder.addPlayer(p_183755_); // Paper - replace chunk loader system
                    this.m_183760_(p_183755_, p_183757_, levelchunk);
                 }
-@@ -863,13 +_,14 @@
+ 
+@@ -862,14 +_,22 @@
+          }
  
           if (!p_183759_ && p_183758_) {
++            // Paper start - replace chunk loader system
++            if (chunkholder != null) {
++               chunkholder.removePlayer(p_183755_);
++            } else {
++               f_140128_.warn("ChunkHolder at " + p_183756_ + " in world '" + this.f_140133_.getWorld().getName() + "' does not exist to untrack chunk for " + p_183755_, new Throwable());
++            }
++            // Paper end - replace chunk loader system
              p_183755_.m_9088_(p_183756_);
 +            net.minecraftforge.event.ForgeEventFactory.fireChunkUnWatch(p_183755_, p_183756_, this.f_140133_);
           }
  
-       }
+-      }
++      } else { f_140128_.warn("Mismatch in world for chunk " + p_183756_ + " in world '" + this.f_140133_.getWorld().getName() + "' for player " + p_183755_, new Throwable()); } // Paper - replace chunk loader system
     }
  
     public int m_140394_() {
@@ -1440,7 +1454,7 @@
        int i2 = SectionPos.m_123171_(p_140185_.m_146903_());
        int j2 = SectionPos.m_123171_(p_140185_.m_146907_());
        SectionPos sectionpos = p_140185_.m_8965_();
-@@ -1051,63 +_,82 @@
+@@ -1051,63 +_,65 @@
           }
        }
  
@@ -1482,7 +1496,6 @@
 -      }
 +
 +      this.updateMaps(p_140185_); // Paper - distance maps
-+      this.playerChunkManager.updatePlayer(p_140185_); // Paper - respond to movement immediately
 +
 +//      int k = sectionpos.x();
 +//      int l = sectionpos.z();
@@ -1523,6 +1536,7 @@
  
     }
  
++   @Override
     public List<ServerPlayer> m_183262_(ChunkPos p_183801_, boolean p_183802_) {
 -      Set<ServerPlayer> set = this.f_140149_.m_183926_(p_183801_.m_45588_());
 -      ImmutableList.Builder<ServerPlayer> builder = ImmutableList.builder();
@@ -1532,33 +1546,15 @@
 -         if (p_183802_ && m_183828_(p_183801_.f_45578_, p_183801_.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_) || !p_183802_ && m_200878_(p_183801_.f_45578_, p_183801_.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_)) {
 -            builder.add(serverplayer);
 -         }
--      }
++      // Paper start - per player view distance
++      ChunkHolder holder = this.m_140327_(p_183801_.m_45588_());
++      if (holder == null) {
++         return new java.util.ArrayList<>();
++      } else {
++         return holder.getPlayers(p_183802_);
+       }
 -
 -      return builder.build();
-+      // Paper start - per player view distance
-+      // there can be potential desync with player's last mapped section and the view distance map, so use the
-+      // view distance map here.
-+      List<ServerPlayer> ret = new java.util.ArrayList<>(4);
-+
-+      com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> players = this.playerChunkManager.broadcastMap.getObjectsInRange(p_183801_);
-+      if (players == null) {
-+         return ret;
-+      }
-+
-+      Object[] backingSet = players.getBackingSet();
-+      for (int i = 0, len = backingSet.length; i < len; ++i) {
-+         Object temp = backingSet[i];
-+         if (!(temp instanceof ServerPlayer)) {
-+            continue;
-+         }
-+         ServerPlayer player = (ServerPlayer)temp;
-+         if (!this.playerChunkManager.isChunkSent(player, p_183801_.f_45578_, p_183801_.f_45579_, p_183802_)) {
-+            continue;
-+         }
-+         ret.add(player);
-+      }
-+
-+      return ret;
 +      // Paper end - per player view distance
     }
  
@@ -1740,7 +1736,7 @@
 +            double vec3d_dx = p_140498_.m_20185_() - this.f_140472_.m_20185_();
 +            double vec3d_dz = p_140498_.m_20189_() - this.f_140472_.m_20189_();
 +            // Paper end - remove allocation of Vec3D here
-+            double d0 = (double)Math.min(this.m_140496_(), io.papermc.paper.chunk.PlayerChunkLoader.getSendViewDistance(p_140498_) * 16); // Paper - per player view distance
++            double d0 = (double) Math.min(this.m_140496_(), io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(p_140498_) * 16); // Paper - per player view distance
 +            double d1 = vec3d_dx * vec3d_dx + vec3d_dz * vec3d_dz; // Paper
              double d2 = d0 * d0;
              boolean flag = d1 <= d2 && this.f_140472_.m_6459_(p_140498_);
