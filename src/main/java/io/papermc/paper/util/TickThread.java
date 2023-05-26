@@ -3,8 +3,6 @@ package io.papermc.paper.util;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.ChunkPos;
-
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TickThread extends Thread {
@@ -41,17 +39,6 @@ public class TickThread extends Thread {
 
     public static void ensureTickThread(final ServerLevel world, final int chunkX, final int chunkZ, final String reason) {
         if (!isTickThreadFor(world, chunkX, chunkZ)) {
-            MinecraftServer.LOGGER.error("Thread " + Thread.currentThread().getName() + " failed main thread check: " + reason, new Throwable());
-            throw new IllegalStateException(reason);
-        }
-    }
-
-    public static boolean isTickThreadFor(final ServerLevel world, final ChunkPos pos) {
-        return isTickThreadFor(world, pos.x, pos.z);
-    }
-
-    public static void ensureTickThread(final ServerLevel world, final ChunkPos pos, final String reason) {
-        if (!isTickThreadFor(world, pos)) {
             MinecraftServer.LOGGER.error("Thread " + Thread.currentThread().getName() + " failed main thread check: " + reason, new Throwable());
             throw new IllegalStateException(reason);
         }

@@ -328,7 +328,7 @@
  
     protected void m_140777_(int p_140778_) {
 -      this.f_140764_.m_140912_(p_140778_);
-+      this.chunkMap.m_140167_(p_140778_);// Paper - route to player chunk manager
++      this.chunkMap.playerChunkManager.setTargetNoTickViewDistance(p_140778_); // Paper - route to player chunk manager
 +
     }
  
@@ -339,14 +339,14 @@
 -      }
 -
 -   }
-+      this.chunkMap.f_140133_.playerChunkLoader.setTickDistance(p_183912_); // Paper - route to player chunk manager
++      this.chunkMap.playerChunkManager.setTargetTickViewDistance(p_183912_); // Paper - route to player chunk manager
 +
 +   }
 +
 +
 +   // Paper start
 +   public int getSimulationDistance() {
-+      return this.chunkMap.f_140133_.playerChunkLoader.getAPITickDistance();
++      return this.chunkMap.playerChunkManager.getTargetTickViewDistance(); // Paper - route to player chunk manager
 +   }
 +   // Paper end
  
@@ -448,7 +448,7 @@
 +   }
 +
 +   private SortedArraySet<Ticket<?>> m_140857_(long p_140858_) {
-+      return this.getChunkHolderManager().getTicketsSyncronised(p_140858_);
++      return this.getChunkHolderManager().getTicketsCopy().getOrDefault(p_140858_, SortedArraySet.m_14246_(4));
     }
  
     public boolean m_201911_() {
