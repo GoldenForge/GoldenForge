@@ -6,7 +6,7 @@ on:
       - folia-scheduling-improvements
 jobs:
   build:
-    runs-on: [goldenforge]
+    runs-on: self-hosted
     steps:
       - name: Checkout
         uses: actions/checkout@v2
