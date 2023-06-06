@@ -82,10 +82,7 @@ public final class ChunkQueue {
 
     // write operation
     public boolean addChunk(final int chunkX, final int chunkZ) {
-        final int shift = this.coordinateShift;
-        final int sectionX = chunkX >> shift;
-        final int sectionZ = chunkZ >> shift;
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
+        final Coordinate coordinate = new Coordinate(Coordinate.key(chunkX, chunkZ));
         final long chunkKey = Coordinate.key(chunkX, chunkZ);
 
         UnloadSection section = this.unloadSections.get(coordinate);
@@ -100,10 +97,7 @@ public final class ChunkQueue {
 
     // write operation
     public boolean removeChunk(final int chunkX, final int chunkZ) {
-        final int shift = this.coordinateShift;
-        final int sectionX = chunkX >> shift;
-        final int sectionZ = chunkZ >> shift;
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
+        final Coordinate coordinate = new Coordinate(Coordinate.key(chunkX, chunkZ));
         final long chunkKey = Coordinate.key(chunkX, chunkZ);
 
         final UnloadSection section = this.unloadSections.get(coordinate);

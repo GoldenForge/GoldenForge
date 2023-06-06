@@ -726,10 +726,10 @@ public final class NewChunkHolder {
         }
         if (this.isSafeToUnload() == null) {
             // ensure in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.addChunk(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
+            this.scheduler.chunkHolderManager.unloadQueue.add(this);
         } else {
             // ensure not in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.removeChunk(this.chunkX, this.chunkZ); // Folia - use area based lock to reduce contention
+            this.scheduler.chunkHolderManager.unloadQueue.remove(this);
         }
     }
 

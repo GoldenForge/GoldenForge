@@ -320,7 +320,7 @@
        this.f_8557_ = false;
        profilerfiller.m_7238_();
 -      boolean flag = !this.f_8546_.isEmpty() || !this.m_8902_().isEmpty();
-+      boolean flag = !this.f_8546_.isEmpty() || !this.f_8546_.isEmpty() || net.minecraftforge.common.world.ForgeChunkManager.hasForcedChunks(this); //Forge: Replace vanilla's has forced chunk check with forge's that checks both the vanilla and forge added ones  // CraftBukkit - this prevents entity cleanup, other issues on servers with no players
++      boolean flag = true || !this.f_8546_.isEmpty() || !this.f_8546_.isEmpty() || net.minecraftforge.common.world.ForgeChunkManager.hasForcedChunks(this); //Forge: Replace vanilla's has forced chunk check with forge's that checks both the vanilla and forge added ones  // CraftBukkit - this prevents entity cleanup, other issues on servers with no players
        if (flag) {
           this.m_8886_();
        }

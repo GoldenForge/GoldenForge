@@ -448,7 +448,7 @@
 +   }
 +
 +   private SortedArraySet<Ticket<?>> m_140857_(long p_140858_) {
-+      return this.getChunkHolderManager().getTicketsCopy().getOrDefault(p_140858_, SortedArraySet.m_14246_(4));
++      return this.getChunkHolderManager().getTicketsSyncronised(p_140858_);
     }
  
     public boolean m_201911_() {
