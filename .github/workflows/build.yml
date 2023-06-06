@@ -1,0 +1,27 @@
+name: Goldenforge nightly builds
+on:
+  push:
+    branches:
+      - 1.19.2
+      - folia-scheduling-improvements
+jobs:
+  build:
+    runs-on: [self-hosted, linux, minecraft]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Java
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+      - name: Run chmod to make gradlew executable
+        run: chmod +x ./gradlew
+      - name: Build
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: clean setup installerjar
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: goldenforge
+          path: projects/forge/build/libs/forge-1.19.2-*-installer.jar
