@@ -145,7 +145,7 @@
     }
  
     boolean m_27197_(long p_27198_) {
-@@ -194,17 +_,54 @@
+@@ -194,18 +_,61 @@
     }
  
     public void m_6202_(BooleanSupplier p_27105_) {
@@ -204,8 +204,15 @@
 +      //this.distanceTracker.update(p_27145_, this.distanceTracker.getLevelFromSource(p_27145_), false);
 +      this.updateDistanceTracking(p_27145_); // Paper - move to new distance tracking util
     }
++
++    public void checkConsistency(net.minecraft.world.level.chunk.ChunkAccess chunk) {
++        for (LevelChunkSection section : chunk.m_7103_()) {
++            this.m_27047_(chunk.m_7697_(), section);
++        }
++    }
  
     public void m_27047_(ChunkPos p_27048_, LevelChunkSection p_27049_) {
+       SectionPos sectionpos = SectionPos.m_123196_(p_27048_, SectionPos.m_123171_(p_27049_.m_63017_()));
 @@ -238,19 +_,98 @@
        });
     }

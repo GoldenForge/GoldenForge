@@ -29,7 +29,7 @@
  import net.minecraft.world.entity.EntityType;
  import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.level.ChunkPos;
-@@ -74,26 +_,105 @@
+@@ -74,6 +_,75 @@
     public static final String f_223446_ = "BlockLight";
     public static final String f_223447_ = "SkyLight";
  
@@ -103,11 +103,9 @@
 +
 +
     public static ProtoChunk m_188230_(ServerLevel p_188231_, PoiManager p_188232_, ChunkPos p_188233_, CompoundTag p_188234_) {
-+      java.util.ArrayDeque<Runnable> tasksToExecuteOnMain = new java.util.ArrayDeque<>();
-+
        ChunkPos chunkpos = new ChunkPos(p_188234_.m_128451_("xPos"), p_188234_.m_128451_("zPos"));
        if (!Objects.equals(p_188233_, chunkpos)) {
-          f_63449_.error("Chunk file at {} is in the wrong location; relocating. (Expected {}, got {})", p_188233_, p_188233_, chunkpos);
+@@ -81,19 +_,27 @@
        }
  
        UpgradeData upgradedata = p_188234_.m_128425_("UpgradeData", 10) ? new UpgradeData(p_188234_.m_128469_("UpgradeData"), p_188231_) : UpgradeData.f_63320_;
@@ -142,9 +140,9 @@
              LevelChunkSection levelchunksection = new LevelChunkSection(k, palettedcontainer, palettedcontainerro);
              alevelchunksection[l] = levelchunksection;
 -            p_188232_.m_27047_(p_188233_, levelchunksection);
-+            tasksToExecuteOnMain.add(() -> { // Paper - delay this task since we're executing off-main
-+               p_188232_.m_27047_(p_188233_, levelchunksection);
-+            }); // Paper - delay this task since we're executing off-main
++//            tasksToExecuteOnMain.add(() -> { // Paper - delay this task since we're executing off-main
++//               p_188232_.checkConsistencyWithBlocks(p_188233_, levelchunksection);
++//            }); // Paper - delay this task since we're executing off-main
           }
  
           boolean flag4 = compoundtag.m_128425_("BlockLight", 7);
@@ -255,14 +253,13 @@
           }
        }
  
-@@ -219,7 +_,10 @@
+@@ -219,7 +_,9 @@
        }
  
        if (chunkstatus$chunktype == ChunkStatus.ChunkType.LEVELCHUNK) {
 -         return new ImposterProtoChunk((LevelChunk)chunkaccess, false);
 +         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Load(chunkaccess, p_188234_, chunkstatus$chunktype));
 +         ProtoChunk chunk = new ImposterProtoChunk((LevelChunk) chunkaccess, false);
-+         chunk.tasks = tasksToExecuteOnMain;
 +         return chunk;
        } else {
           ProtoChunk protochunk1 = (ProtoChunk)chunkaccess;
@@ -293,12 +290,11 @@
  
           CompoundTag compoundtag4 = p_188234_.m_128469_("CarvingMasks");
  
-@@ -252,10 +_,45 @@
+@@ -252,10 +_,44 @@
              protochunk1.m_188186_(generationstep$carving, new CarvingMask(compoundtag4.m_128467_(s1), chunkaccess.m_141937_()));
           }
  
 +         net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Load(chunkaccess, p_188234_, chunkstatus$chunktype));
-+         protochunk1.tasks = tasksToExecuteOnMain;
           return protochunk1;
        }
     }
