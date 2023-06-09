@@ -10,6 +10,8 @@
 ## Disclaimer
 This is not a drop-in replacement for forge. Don't expect everything to work without configuration.
 
+Nightly builds are available [here](https://github.com/GoldenForge/GoldenForge/actions)
+
 Before starting your server, remove these mods because their modifications are incompatible with Goldenforge. Goldenforge already includes their patches.
 - starlight
 - smoothchunk
