@@ -220,10 +220,12 @@ public final class PoiAccess {
         final int centerX = sourcePosition.getX() >> 4;
         final int centerY = Mth.clamp(sourcePosition.getY() >> 4, lowerY, upperY);
         final int centerZ = sourcePosition.getZ() >> 4;
+        final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
 
         final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-        queue.enqueue(CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ));
         final LongOpenHashSet seen = new LongOpenHashSet();
+        seen.add(centerKey);
+        queue.enqueue(centerKey);
 
         while (!queue.isEmpty()) {
             final long key = queue.dequeueLong();
@@ -277,7 +279,7 @@ public final class PoiAccess {
                 continue;
             }
 
-            final PoiSection poiSection = poiSectionOptional.orElse(null);
+            final PoiSection poiSection = poiSectionOptional.get();
 
             final Map<Holder<PoiType>, Set<PoiRecord>> sectionData = poiSection.getData();
             if (sectionData.isEmpty()) {
@@ -461,10 +463,12 @@ public final class PoiAccess {
         final int centerX = sourcePosition.getX() >> 4;
         final int centerY = Mth.clamp(sourcePosition.getY() >> 4, lowerY, upperY);
         final int centerZ = sourcePosition.getZ() >> 4;
+        final long centerKey = CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ);
 
         final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-        queue.enqueue(CoordinateUtils.getChunkSectionKey(centerX, centerY, centerZ));
         final LongOpenHashSet seen = new LongOpenHashSet();
+        seen.add(centerKey);
+        queue.enqueue(centerKey);
 
         while (!queue.isEmpty()) {
             final long key = queue.dequeueLong();
@@ -519,7 +523,7 @@ public final class PoiAccess {
                 continue;
             }
 
-            final PoiSection poiSection = poiSectionOptional.orElse(null);
+            final PoiSection poiSection = poiSectionOptional.get();
 
             final Map<Holder<PoiType>, Set<PoiRecord>> sectionData = poiSection.getData();
             if (sectionData.isEmpty()) {
