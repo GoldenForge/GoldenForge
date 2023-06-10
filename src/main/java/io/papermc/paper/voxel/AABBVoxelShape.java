@@ -179,7 +179,7 @@ public final class AABBVoxelShape extends VoxelShape {
 
     @Override
     public double collide(Direction.Axis enumdirection_enumaxis, AABB axisalignedbb, double d0) {
-        if (CollisionUtil.isEmpty(this.aabb) || CollisionUtil.isEmpty(axisalignedbb)) {
+        if (CollisionUtil.isEmpty(this.aabb)) {
             return d0;
         }
         switch (enumdirection_enumaxis.ordinal()) {
