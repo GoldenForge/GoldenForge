@@ -10,7 +10,6 @@ import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
-
 import java.lang.invoke.VarHandle;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -101,8 +100,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
     @Override
     public String toString() {
         return "GenericDataLoadTask{class: " + this.getClass().getName() + ", world: " + this.world.getWorld().getName() +
-            ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
-            ", type: " + this.type.toString() + "}";
+                ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
+                ", type: " + this.type.toString() + "}";
     }
 
     public PrioritisedExecutor.Priority getPriority() {
@@ -148,7 +147,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
     // returns whether scheduleNow() needs to be called
     public boolean schedule(final boolean delay) {
         if (this.stageAndReferenceCount.get() != STAGE_NOT_STARTED ||
-            !this.stageAndReferenceCount.compareAndSet(STAGE_NOT_STARTED, (1L << 32) | STAGE_LOADING)) {
+                !this.stageAndReferenceCount.compareAndSet(STAGE_NOT_STARTED, (1L << 32) | STAGE_LOADING)) {
             // try and increment reference count
             int failures = 0;
             for (long curr = this.stageAndReferenceCount.get();;) {
@@ -209,7 +208,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 return false;
             }
 
-             if ((curr & STAGE_MASK) == STAGE_NOT_STARTED || (curr & ~STAGE_MASK) == (1L << 32)) {
+            if ((curr & STAGE_MASK) == STAGE_NOT_STARTED || (curr & ~STAGE_MASK) == (1L << 32)) {
                 // no other references, so we can cancel
                 final long newVal = STAGE_CANCELLED;
                 if (curr == (curr = this.stageAndReferenceCount.compareAndExchange(curr, newVal))) {
@@ -282,9 +281,9 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             } catch (final Throwable thr2) {
                 LOGGER.error("Failed I/O callback for task: " + GenericDataLoadTask.this.toString(), thr2);
                 GenericDataLoadTask.this.scheduler.unrecoverableChunkSystemFailure(
-                    GenericDataLoadTask.this.chunkX, GenericDataLoadTask.this.chunkZ, Map.of(
-                        "Callback throwable", ChunkTaskScheduler.stringIfNull(throwable)
-                    ), thr2);
+                        GenericDataLoadTask.this.chunkX, GenericDataLoadTask.this.chunkZ, Map.of(
+                                "Callback throwable", ChunkTaskScheduler.stringIfNull(throwable)
+                        ), thr2);
             }
         }
     }
@@ -409,8 +408,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 this.onComplete.accept(data, throwable);
             } catch (final Throwable thr2) {
                 this.world.chunkTaskScheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                    "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable),
-                    "Regionfile type", ChunkTaskScheduler.stringIfNull(this.type)
+                        "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable),
+                        "Regionfile type", ChunkTaskScheduler.stringIfNull(this.type)
                 ), thr2);
                 if (thr2 instanceof ThreadDeath) {
                     throw (ThreadDeath)thr2;
@@ -634,8 +633,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
 
             if (!scheduledUnload) {
                 this.dataLoadTask = RegionFileIOThread.loadDataAsync(
-                    this.world, this.chunkX, this.chunkZ, this.type, consumer,
-                    initialPriority.isHigherPriority(PrioritisedExecutor.Priority.NORMAL), initialPriority
+                        this.world, this.chunkX, this.chunkZ, this.type, consumer,
+                        initialPriority.isHigherPriority(PrioritisedExecutor.Priority.NORMAL), initialPriority
                 );
             }
 

@@ -42,9 +42,9 @@ public class RegionizedPlayerChunkLoader {
     public static final int LOADED_TICKET_LEVEL = 33 + ChunkStatus.getDistance(ChunkStatus.EMPTY);
 
     public static final record ViewDistances(
-        int tickViewDistance,
-        int loadViewDistance,
-        int sendViewDistance
+            int tickViewDistance,
+            int loadViewDistance,
+            int sendViewDistance
     ) {
         public ViewDistances setTickViewDistance(final int distance) {
             return new ViewDistances(distance, this.loadViewDistance, this.sendViewDistance);
@@ -60,19 +60,8 @@ public class RegionizedPlayerChunkLoader {
         }
     }
 
-
-    public static int getAPITickViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.getLevel();
-        final PlayerChunkLoaderData data = player.chunkLoader;
-        if (data == null) {
-            return level.playerChunkLoader.getAPITickDistance();
-        }
-        return data.lastTickDistance;
-    }
-
-
     public static int getAPIViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.getLevel();
+        final ServerLevel level = (ServerLevel)player.level;
         final PlayerChunkLoaderData data = player.chunkLoader;
         if (data == null) {
             return level.playerChunkLoader.getAPIViewDistance();
@@ -82,7 +71,7 @@ public class RegionizedPlayerChunkLoader {
     }
 
     public static int getLoadViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.getLevel();
+        final ServerLevel level = (ServerLevel)player.level;
         final PlayerChunkLoaderData data = player.chunkLoader;
         if (data == null) {
             return level.playerChunkLoader.getAPIViewDistance();
@@ -91,9 +80,10 @@ public class RegionizedPlayerChunkLoader {
         return data.lastLoadDistance - 1;
     }
 
+    private final ServerLevel world;
 
     public static int getAPISendViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.getLevel();
+        final ServerLevel level = (ServerLevel)player.level;
         final PlayerChunkLoaderData data = player.chunkLoader;
         if (data == null) {
             return level.playerChunkLoader.getAPISendViewDistance();
@@ -101,7 +91,14 @@ public class RegionizedPlayerChunkLoader {
         return data.lastSendDistance;
     }
 
-    private final ServerLevel world;
+    public static int getAPITickViewDistance(final ServerPlayer player) {
+        final ServerLevel level = (ServerLevel)player.level;
+        final PlayerChunkLoaderData data = player.chunkLoader;
+        if (data == null) {
+            return level.playerChunkLoader.getAPITickDistance();
+        }
+        return data.lastTickDistance;
+    }
 
     public RegionizedPlayerChunkLoader(final ServerLevel world) {
         this.world = world;
@@ -109,9 +106,6 @@ public class RegionizedPlayerChunkLoader {
 
     public void addPlayer(final ServerPlayer player) {
         TickThread.ensureTickThread(player, "Cannot add player to player chunk loader async");
-        if (!player.isRealPlayer) {
-            return;
-        }
 
         if (player.chunkLoader != null) {
             throw new IllegalStateException("Player is already added to player chunk loader");
@@ -132,14 +126,11 @@ public class RegionizedPlayerChunkLoader {
 
     public void removePlayer(final ServerPlayer player) {
         TickThread.ensureTickThread(player, "Cannot remove player from player chunk loader async");
-        if (!player.isRealPlayer) {
-            return;
-        }
 
         final PlayerChunkLoaderData loader = player.chunkLoader;
 
         if (loader == null) {
-            throw new IllegalStateException("Player is already removed from player chunk loader");
+            return;
         }
 
         loader.remove();
@@ -179,7 +170,7 @@ public class RegionizedPlayerChunkLoader {
         final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(-1, distances.tickViewDistance);
         final int loadDistance = PlayerChunkLoaderData.getLoadViewDistance(tickViewDistance, -1, distances.loadViewDistance);
         final int sendViewDistance = PlayerChunkLoaderData.getSendViewDistance(
-            loadDistance, -1, -1, distances.sendViewDistance
+                loadDistance, -1, -1, distances.sendViewDistance
         );
 
         return sendViewDistance;
@@ -218,7 +209,7 @@ public class RegionizedPlayerChunkLoader {
     public void tick() {
         TickThread.ensureTickThread("Cannot tick player chunk loader async");
         long currTime = System.nanoTime();
-        for (final ServerPlayer player : new java.util.ArrayList<>(this.world.players())) {
+        for (final ServerPlayer player : new java.util.ArrayList<>(this.world.players())) { // Folia - region threding
             final PlayerChunkLoaderData loader = player.chunkLoader;
             if (loader == null || loader.world != this.world) {
                 // not our problem anymore
@@ -404,12 +395,12 @@ public class RegionizedPlayerChunkLoader {
         private static final byte CHUNK_TICKET_STAGE_GENERATED      = 4;
         private static final byte CHUNK_TICKET_STAGE_TICK           = 5;
         private static final int[] TICKET_STAGE_TO_LEVEL = new int[] {
-            ChunkHolderManager.MAX_TICKET_LEVEL + 1,
-            LOADED_TICKET_LEVEL,
-            LOADED_TICKET_LEVEL,
-            GENERATED_TICKET_LEVEL,
-            GENERATED_TICKET_LEVEL,
-            TICK_TICKET_LEVEL
+                ChunkHolderManager.MAX_TICKET_LEVEL + 1,
+                LOADED_TICKET_LEVEL,
+                LOADED_TICKET_LEVEL,
+                GENERATED_TICKET_LEVEL,
+                GENERATED_TICKET_LEVEL,
+                TICK_TICKET_LEVEL
         };
         private final Long2ByteOpenHashMap chunkTicketStage = new Long2ByteOpenHashMap();
         {
@@ -433,8 +424,8 @@ public class RegionizedPlayerChunkLoader {
             final int centerZ = PlayerChunkLoaderData.this.lastChunkZ;
 
             return Integer.compare(
-                Math.abs(c1x - centerX) + Math.abs(c1z - centerZ),
-                Math.abs(c2x - centerX) + Math.abs(c2z - centerZ)
+                    Math.abs(c1x - centerX) + Math.abs(c1z - centerZ),
+                    Math.abs(c2x - centerX) + Math.abs(c2z - centerZ)
             );
         };
         private final LongHeapPriorityQueue sendQueue = new LongHeapPriorityQueue(CLOSEST_MANHATTAN_DIST);
@@ -466,7 +457,7 @@ public class RegionizedPlayerChunkLoader {
         private void sendChunk(final int chunkX, final int chunkZ) {
             if (this.sentChunks.add(CoordinateUtils.getChunkKey(chunkX, chunkZ))) {
                 this.world.getChunkSource().chunkMap.updateChunkTracking(this.player,
-                    new ChunkPos(chunkX, chunkZ), new MutableObject<>(), false, true); // unloaded, loaded
+                        new ChunkPos(chunkX, chunkZ), new MutableObject<>(), false, true); // unloaded, loaded
                 return;
             }
             throw new IllegalStateException();
@@ -481,7 +472,7 @@ public class RegionizedPlayerChunkLoader {
 
         private void sendUnloadChunkRaw(final int chunkX, final int chunkZ) {
             this.player.getLevel().getChunkSource().chunkMap.updateChunkTracking(this.player,
-                new ChunkPos(chunkX, chunkZ), null, true, false); // unloaded, loaded
+                    new ChunkPos(chunkX, chunkZ), null, true, false); // unloaded, loaded
         }
 
         private final SingleUserAreaMap<PlayerChunkLoaderData> broadcastMap = new SingleUserAreaMap<>(this) {
@@ -511,9 +502,9 @@ public class RegionizedPlayerChunkLoader {
                 }
 
                 parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addAndRemove(
-                    chunk,
-                    TicketType.UNKNOWN, level, new ChunkPos(chunkX, chunkZ),
-                    REGION_PLAYER_TICKET, level, parameter.idBoxed
+                        chunk,
+                        TicketType.UNKNOWN, level, new ChunkPos(chunkX, chunkZ),
+                        REGION_PLAYER_TICKET, level, parameter.idBoxed
                 ));
             }
         };
@@ -535,14 +526,14 @@ public class RegionizedPlayerChunkLoader {
                 // Since we are possibly downgrading the ticket level, we add an unknown ticket so that
                 // the level is kept until tick().
                 parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addAndRemove(
-                    chunk,
-                    TicketType.UNKNOWN, TICK_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
-                    REGION_PLAYER_TICKET, TICK_TICKET_LEVEL, parameter.idBoxed
+                        chunk,
+                        TicketType.UNKNOWN, TICK_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
+                        REGION_PLAYER_TICKET, TICK_TICKET_LEVEL, parameter.idBoxed
                 ));
                 // keep chunk at new generated level
                 parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addOp(
-                    chunk,
-                    REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, parameter.idBoxed
+                        chunk,
+                        REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, parameter.idBoxed
                 ));
             }
         };
@@ -570,8 +561,8 @@ public class RegionizedPlayerChunkLoader {
         private static int getSendViewDistance(final int loadViewDistance, final int clientViewDistance,
                                                final int playerSendViewDistance, final int worldSendViewDistance) {
             return Math.min(
-                loadViewDistance - 1,
-                playerSendViewDistance < 0 ? (!GoldenForgeConfig.Server.autoconfigSendDistance.get() || clientViewDistance < 0 ? (worldSendViewDistance < 0 ? (loadViewDistance - 1) : worldSendViewDistance) : clientViewDistance + 1) : playerSendViewDistance
+                    loadViewDistance,
+                    playerSendViewDistance < 0 ? (!GoldenForgeConfig.Server.autoconfigSendDistance.get() || clientViewDistance < 0 ? (worldSendViewDistance < 0 ? loadViewDistance : worldSendViewDistance) : clientViewDistance + 1) : playerSendViewDistance
             );
         }
 
@@ -602,20 +593,20 @@ public class RegionizedPlayerChunkLoader {
         }
 
         private double getMaxChunkGenRate() {
-            final double configRate = GoldenForgeConfig.Server.playerMaxChunkGenerateRate.get();
+            final double configRate =  GoldenForgeConfig.Server.playerMaxChunkGenerateRate.get();
 
             return configRate < 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private double getMaxChunkSendRate() {
-            final double configRate = GoldenForgeConfig.Server.targetPlayerChunkSendRate.get();;
+            final double configRate =  GoldenForgeConfig.Server.playerMaxChunkSendRate.get();
 
             return configRate < 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private long getMaxChunkLoads() {
             final long radiusChunks = (2L * this.lastLoadDistance + 1L) * (2L * this.lastLoadDistance + 1L);
-            long configLimit = GoldenForgeConfig.Server.playerMaxConcurrentChunkLoads.get();
+            long configLimit =  GoldenForgeConfig.Server.playerMaxConcurrentChunkLoads.get();
             if (configLimit == 0L) {
                 // by default, only allow 1/5th of the chunks in the view distance to be concurrently active
                 configLimit = Math.max(5L, radiusChunks / 5L);
@@ -629,7 +620,7 @@ public class RegionizedPlayerChunkLoader {
 
         private long getMaxChunkGenerates() {
             final long radiusChunks = (2L * this.lastLoadDistance + 1L) * (2L * this.lastLoadDistance + 1L);
-            long configLimit = GoldenForgeConfig.Server.playerMaxConcurrentChunkGenerates.get();
+            long configLimit =  GoldenForgeConfig.Server.playerMaxConcurrentChunkGenerates.get();
             if (configLimit == 0L) {
                 // by default, only allow 1/5th of the chunks in the view distance to be concurrently active
                 configLimit = Math.max(5L, radiusChunks / 5L);
@@ -705,10 +696,10 @@ public class RegionizedPlayerChunkLoader {
                         throw new IllegalStateException("Previous state should be " + CHUNK_TICKET_STAGE_NONE + ", not " + prev);
                     }
                     this.pushDelayedTicketOp(
-                        ChunkHolderManager.TicketOperation.addOp(
-                            chunk,
-                            REGION_PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
-                        )
+                            ChunkHolderManager.TicketOperation.addOp(
+                                    chunk,
+                                    REGION_PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
+                            )
                     );
                     chunks.add(chunk);
                     this.loadingQueue.enqueue(chunk);
@@ -732,7 +723,7 @@ public class RegionizedPlayerChunkLoader {
                     final int queuedChunkX = CoordinateUtils.getChunkX(queuedLoadChunk);
                     final int queuedChunkZ = CoordinateUtils.getChunkZ(queuedLoadChunk);
                     this.world.chunkTaskScheduler.scheduleChunkLoad(
-                        queuedChunkX, queuedChunkZ, ChunkStatus.EMPTY, false, PrioritisedExecutor.Priority.NORMAL, null
+                            queuedChunkX, queuedChunkZ, ChunkStatus.EMPTY, false, PrioritisedExecutor.Priority.NORMAL, null
                     );
                     if (this.removed) {
                         return;
@@ -779,11 +770,11 @@ public class RegionizedPlayerChunkLoader {
                     throw new IllegalStateException("Previous state should be " + CHUNK_TICKET_STAGE_LOADED + ", not " + prev);
                 }
                 this.pushDelayedTicketOp(
-                    ChunkHolderManager.TicketOperation.addAndRemove(
-                        chunk,
-                        REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed,
-                        REGION_PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
-                    )
+                        ChunkHolderManager.TicketOperation.addAndRemove(
+                                chunk,
+                                REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed,
+                                REGION_PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
+                        )
                 );
                 this.generatingQueue.enqueue(chunk);
             }
@@ -811,11 +802,11 @@ public class RegionizedPlayerChunkLoader {
                 // only gets here if all neighbours were marked as generated or ticking themselves
                 this.tickingQueue.dequeueLong();
                 this.pushDelayedTicketOp(
-                    ChunkHolderManager.TicketOperation.addAndRemove(
-                        pendingTicking,
-                        REGION_PLAYER_TICKET, TICK_TICKET_LEVEL, this.idBoxed,
-                        REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed
-                    )
+                        ChunkHolderManager.TicketOperation.addAndRemove(
+                                pendingTicking,
+                                REGION_PLAYER_TICKET, TICK_TICKET_LEVEL, this.idBoxed,
+                                REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed
+                        )
                 );
                 // there is no queue to add after ticking
                 final byte prev = this.chunkTicketStage.put(pendingTicking, CHUNK_TICKET_STAGE_TICK);
@@ -922,16 +913,16 @@ public class RegionizedPlayerChunkLoader {
 
             if (
                 // has view distance stayed the same?
-                sendViewDistance == this.lastSendDistance
-                    && loadViewDistance == this.lastLoadDistance
-                    && tickViewDistance == this.lastTickDistance
+                    sendViewDistance == this.lastSendDistance
+                            && loadViewDistance == this.lastLoadDistance
+                            && tickViewDistance == this.lastTickDistance
 
-                    // has our chunk stayed the same?
-                    && prevChunkX == currentChunkX
-                    && prevChunkZ == currentChunkZ
+                            // has our chunk stayed the same?
+                            && prevChunkX == currentChunkX
+                            && prevChunkZ == currentChunkZ
 
-                    // can we still generate chunks?
-                    && this.canGenerateChunks == canGenerateChunks
+                            // can we still generate chunks?
+                            && this.canGenerateChunks == canGenerateChunks
             ) {
                 // nothing we care about changed, so we're not re-calculating
                 return;

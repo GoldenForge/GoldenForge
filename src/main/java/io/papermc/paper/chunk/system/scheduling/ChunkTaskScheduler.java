@@ -3,17 +3,15 @@ package io.papermc.paper.chunk.system.scheduling;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadedTaskQueue;
-import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.mojang.logging.LogUtils;
 import io.papermc.paper.chunk.system.scheduling.queue.RadiusAwarePrioritisedExecutor;
 import io.papermc.paper.util.CoordinateUtils;
+import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.TickThread;
-import java.util.function.BooleanSupplier;
 import net.minecraft.CrashReport;
 import net.minecraft.CrashReportCategory;
 import net.minecraft.ReportedException;
-import io.papermc.paper.util.MCUtil;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
@@ -26,16 +24,13 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import org.bukkit.Bukkit;
 import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
+
 import java.io.File;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 public final class ChunkTaskScheduler {
@@ -47,7 +42,7 @@ public final class ChunkTaskScheduler {
     static int newChunkSystemGenParallelism;
     static int newChunkSystemLoadParallelism;
 
-    public static ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool workerThreads;
+    public static PrioritisedThreadPool workerThreads;
 
     private static boolean initialised = false;
 
@@ -96,12 +91,12 @@ public final class ChunkTaskScheduler {
         ChunkTaskScheduler.newChunkSystemLoadParallelism = newChunkSystemWorkerThreads;
 
         io.papermc.paper.chunk.system.io.RegionFileIOThread.init(newChunkSystemIOThreads);
-        workerThreads = new ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool(
+        workerThreads = new PrioritisedThreadPool(
                 "Paper Chunk System Worker Pool", newChunkSystemWorkerThreads,
                 (final Thread thread, final Integer id) -> {
                     thread.setPriority(Thread.NORM_PRIORITY - 2);
-                    thread.setName("Tuinity Chunk System Worker #" + id.intValue());
-                    thread.setUncaughtExceptionHandler(io.papermc.paper.chunk.system.scheduling.NewChunkHolder.CHUNKSYSTEM_UNCAUGHT_EXCEPTION_HANDLER);
+                    thread.setName("Paper Chunk System Worker #" + id.intValue());
+                    thread.setUncaughtExceptionHandler(NewChunkHolder.CHUNKSYSTEM_UNCAUGHT_EXCEPTION_HANDLER);
                 }, (long)(20.0e6)); // 20ms
 
         LOGGER.info("Chunk system is using " + newChunkSystemIOThreads + " I/O threads, " + newChunkSystemWorkerThreads + " worker threads, and gen parallelism of " + ChunkTaskScheduler.newChunkSystemGenParallelism + " threads");
@@ -109,13 +104,15 @@ public final class ChunkTaskScheduler {
 
     public final ServerLevel world;
     public final PrioritisedThreadPool workers;
-    public final RadiusAwarePrioritisedExecutor radiusAwareScheduler;
+    // public final PrioritisedThreadPool.PrioritisedPoolExecutor lightExecutor;
+    // public final PrioritisedThreadPool.PrioritisedPoolExecutor genExecutor;
     public final PrioritisedThreadPool.PrioritisedPoolExecutor parallelGenExecutor;
-    private final PrioritisedThreadPool.PrioritisedPoolExecutor radiusAwareGenExecutor;
     public final PrioritisedThreadPool.PrioritisedPoolExecutor loadExecutor;
 
     private final PrioritisedThreadedTaskQueue mainThreadExecutor = new PrioritisedThreadedTaskQueue();
-
+    public final RadiusAwarePrioritisedExecutor radiusAwareScheduler;
+    private final PrioritisedThreadPool.PrioritisedPoolExecutor radiusAwareGenExecutor;
+    //final ReentrantLock schedulingLock = new ReentrantLock();
     public final ChunkHolderManager chunkHolderManager;
 
     static {
@@ -128,7 +125,7 @@ public final class ChunkTaskScheduler {
         ChunkStatus.CARVERS.writeRadius = 0;
         ChunkStatus.LIQUID_CARVERS.writeRadius = 0;
         ChunkStatus.FEATURES.writeRadius = 1;
-        ChunkStatus.LIGHT.writeRadius = 2;
+        ChunkStatus.LIGHT.writeRadius = 1;
         ChunkStatus.SPAWN.writeRadius = 0;
         ChunkStatus.HEIGHTMAPS.writeRadius = 0;
         ChunkStatus.FULL.writeRadius = 0;
@@ -144,6 +141,7 @@ public final class ChunkTaskScheduler {
 
                 // This is parallel capable, as CB has fixed the concurrency issue with stronghold generations.
                 // Does not touch neighbour chunks.
+                // TODO On another note, what the fuck is StructureFeatureManager.StructureCheck and why is it used? it's leaking
                 ChunkStatus.STRUCTURE_STARTS,
 
                 // Surprisingly this is parallel capable. It is simply reading the already-created structure starts
@@ -162,10 +160,12 @@ public final class ChunkTaskScheduler {
                 ChunkStatus.SURFACE,
 
                 // No global state is modified in the carvers. It only touches the specified chunk. So it is parallel safe.
-                ChunkStatus.CARVERS
+                ChunkStatus.CARVERS,
+
+                // No-op executor. Was replaced in 1.18 with carvers, I think.
+                ChunkStatus.LIQUID_CARVERS,
 
                 // FEATURES is not parallel safe. It writes to neighbours.
-
 
                 // LIGHT is not parallel safe. It also doesn't run on the generation executor, so no point.
 
@@ -177,6 +177,9 @@ public final class ChunkTaskScheduler {
                 // safe to execute this in parallel.
                 // SPAWN
 
+                // No-op executor.
+                ChunkStatus.HEIGHTMAPS
+
                 // FULL is executed on main.
         );
 
@@ -185,11 +188,14 @@ public final class ChunkTaskScheduler {
         }
     }
 
-    // must be >= region shift (in paper, doesn't exist) and must be >= ticket propagator section shift
-    // it must be >= region shift since the regioniser assumes ticket updates do not occur in parallel for the region sections
-    // it must be >= ticket propagator section shift so that the ticket propagator can assume that owning a position implies owning
-    // the entire section
-    // we just take the max, as we want the smallest shift that satifies these properties
+    public static int getAccessRadius(final ChunkStatus genStatus) {
+        return ACCESS_RADIUS_TABLE[genStatus.getIndex()];
+    }
+
+    public static int getAccessRadius(final ChunkHolder.FullChunkStatus status) {
+        return (status.ordinal() - 1) + getAccessRadius(ChunkStatus.FULL);
+    }
+
     private static final int LOCK_SHIFT = ThreadedTicketLevelPropagator.SECTION_SHIFT;
     public static int getChunkSystemLockShift() {
         return LOCK_SHIFT;
@@ -199,6 +205,20 @@ public final class ChunkTaskScheduler {
     private static final int[] MAX_ACCESS_RADIUS_TABLE = new int[ACCESS_RADIUS_TABLE.length];
     static {
         Arrays.fill(ACCESS_RADIUS_TABLE, -1);
+    }
+
+    private static int maxAccessRadius;
+
+    static {
+        final List<ChunkStatus> statuses = ChunkStatus.getStatusList();
+        for (int i = 0, len = statuses.size(); i < len; ++i) {
+            ACCESS_RADIUS_TABLE[i] = getAccessRadius0(statuses.get(i));
+        }
+        int max = 0;
+        for (int i = 0, len = statuses.size(); i < len; ++i) {
+            MAX_ACCESS_RADIUS_TABLE[i] = max = Math.max(ACCESS_RADIUS_TABLE[i], max);
+        }
+        maxAccessRadius = max;
     }
 
     private static int getAccessRadius0(final ChunkStatus genStatus) {
@@ -222,45 +242,27 @@ public final class ChunkTaskScheduler {
         return maxRange;
     }
 
-    private static int maxAccessRadius;
-
-    static {
-        final List<ChunkStatus> statuses = ChunkStatus.getStatusList();
-        for (int i = 0, len = statuses.size(); i < len; ++i) {
-            ACCESS_RADIUS_TABLE[i] = getAccessRadius0(statuses.get(i));
-        }
-        int max = 0;
-        for (int i = 0, len = statuses.size(); i < len; ++i) {
-            MAX_ACCESS_RADIUS_TABLE[i] = max = Math.max(ACCESS_RADIUS_TABLE[i], max);
-        }
-        maxAccessRadius = max;
-    }
-
     public static int getMaxAccessRadius() {
         return maxAccessRadius;
     }
 
-    public static int getAccessRadius(final ChunkStatus genStatus) {
-        return ACCESS_RADIUS_TABLE[genStatus.getIndex()];
-    }
-
-    public static int getAccessRadius(final ChunkHolder.FullChunkStatus status) {
-        return (status.ordinal() - 1) + getAccessRadius(ChunkStatus.FULL);
-    }
-
-    final ReentrantAreaLock schedulingLockArea = new ReentrantAreaLock(getChunkSystemLockShift());
-    // Folia end - use area based lock to reduce contention
+    final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock schedulingLockArea = new ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock(getChunkSystemLockShift());
 
     public ChunkTaskScheduler(final ServerLevel world, final PrioritisedThreadPool workers) {
         this.world = world;
         this.workers = workers;
 
         final String worldName = world.getWorld().getName();
+        //this.genExecutor = workers.createExecutor("Chunk single-threaded generation executor for world '" + worldName + "'", 1);
+        // same as genExecutor, as there are race conditions between updating blocks in FEATURE status while lighting chunks
+        // this.lightExecutor = this.genExecutor;
         this.parallelGenExecutor = workers.createExecutor("Chunk parallel generation executor for world '" + worldName + "'", Math.max(1, newChunkSystemGenParallelism));
+        this.loadExecutor = workers.createExecutor("Chunk load executor for world '" + worldName + "'", newChunkSystemLoadParallelism);
+
         this.radiusAwareGenExecutor =
                 newChunkSystemGenParallelism <= 1 ? this.parallelGenExecutor : workers.createExecutor("Chunk radius aware generator for world '" + worldName + "'", newChunkSystemGenParallelism);
-        this.loadExecutor = workers.createExecutor("Chunk load executor for world '" + worldName + "'", newChunkSystemLoadParallelism);
         this.radiusAwareScheduler = new RadiusAwarePrioritisedExecutor(this.radiusAwareGenExecutor, Math.max(1, newChunkSystemGenParallelism));
+
         this.chunkHolderManager = new ChunkHolderManager(world, this);
     }
 
@@ -332,11 +334,11 @@ public final class ChunkTaskScheduler {
             }, priority);
             return;
         }
-        final int accessRadius = getAccessRadius(toStatus);
-        if (this.chunkHolderManager.ticketLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) {
+        final int accessRadius = getAccessRadius(toStatus); // Folia - use area based lock to reduce contention
+        if (this.chunkHolderManager.ticketLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk load during ticket level update");
         }
-        if (this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) {
+        if (this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk loading recursively");
         }
 
@@ -370,9 +372,9 @@ public final class ChunkTaskScheduler {
 
         final boolean scheduled;
         final LevelChunk chunk;
-        final ReentrantAreaLock.Node ticketLock = this.chunkHolderManager.ticketLockArea.lock(chunkX, chunkZ, accessRadius);
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.chunkHolderManager.ticketLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
         try {
-            final ReentrantAreaLock.Node schedulingLock = this.schedulingLockArea.lock(chunkX, chunkZ, accessRadius);
+            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.schedulingLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
             try {
                 final NewChunkHolder chunkHolder = this.chunkHolderManager.getChunkHolder(chunkKey);
                 if (chunkHolder == null || chunkHolder.getTicketLevel() > minLevel) {
@@ -403,10 +405,10 @@ public final class ChunkTaskScheduler {
                     }
                 }
             } finally {
-                this.schedulingLockArea.unlock(schedulingLock);
+                this.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
             }
         } finally {
-            this.chunkHolderManager.ticketLockArea.unlock(ticketLock);
+            this.chunkHolderManager.ticketLockArea.unlock(ticketLock); // Folia - use area based lock to reduce contention
         }
 
         if (!scheduled) {
@@ -419,25 +421,6 @@ public final class ChunkTaskScheduler {
                 LOGGER.error("Failed to process chunk full status callback", thr);
             }
         }
-    }
-
-    public void scheduleChunkLoad(final int chunkX, final int chunkZ, final boolean gen, final ChunkStatus toStatus, final boolean addTicket,
-                                  final PrioritisedExecutor.Priority priority, final Consumer<ChunkAccess> onComplete) {
-        if (gen) {
-            this.scheduleChunkLoad(chunkX, chunkZ, toStatus, addTicket, priority, onComplete);
-            return;
-        }
-        this.scheduleChunkLoad(chunkX, chunkZ, ChunkStatus.EMPTY, addTicket, priority, (final ChunkAccess chunk) -> {
-            if (chunk == null) {
-                onComplete.accept(null);
-            } else {
-                if (chunk.getStatus().isOrAfter(toStatus)) {
-                    this.scheduleChunkLoad(chunkX, chunkZ, toStatus, addTicket, priority, onComplete);
-                } else {
-                    onComplete.accept(null);
-                }
-            }
-        });
     }
 
     // only appropriate to use with ServerLevel#syncLoadNonFull
@@ -480,6 +463,25 @@ public final class ChunkTaskScheduler {
         return true;
     }
 
+    public void scheduleChunkLoad(final int chunkX, final int chunkZ, final boolean gen, final ChunkStatus toStatus, final boolean addTicket,
+                                  final PrioritisedExecutor.Priority priority, final Consumer<ChunkAccess> onComplete) {
+        if (gen) {
+            this.scheduleChunkLoad(chunkX, chunkZ, toStatus, addTicket, priority, onComplete);
+            return;
+        }
+        this.scheduleChunkLoad(chunkX, chunkZ, ChunkStatus.EMPTY, addTicket, priority, (final ChunkAccess chunk) -> {
+            if (chunk == null) {
+                onComplete.accept(null);
+            } else {
+                if (chunk.getStatus().isOrAfter(toStatus)) {
+                    this.scheduleChunkLoad(chunkX, chunkZ, toStatus, addTicket, priority, onComplete);
+                } else {
+                    onComplete.accept(null);
+                }
+            }
+        });
+    }
+
     public void scheduleChunkLoad(final int chunkX, final int chunkZ, final ChunkStatus toStatus, final boolean addTicket,
                                   final PrioritisedExecutor.Priority priority, final Consumer<ChunkAccess> onComplete) {
         if (!TickThread.isTickThread()) {
@@ -488,11 +490,11 @@ public final class ChunkTaskScheduler {
             }, priority);
             return;
         }
-        final int accessRadius = getAccessRadius(toStatus);
-        if (this.chunkHolderManager.ticketLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) {
+        final int accessRadius = getAccessRadius(toStatus); // Folia - use area based lock to reduce contention
+        if (this.chunkHolderManager.ticketLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk load during ticket level update");
         }
-        if (this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) {
+        if (this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, accessRadius)) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Cannot schedule chunk loading recursively");
         }
 
@@ -529,9 +531,9 @@ public final class ChunkTaskScheduler {
 
         final boolean scheduled;
         final ChunkAccess chunk;
-        final ReentrantAreaLock.Node ticketLock = this.chunkHolderManager.ticketLockArea.lock(chunkX, chunkZ, accessRadius);
+        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.chunkHolderManager.ticketLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
         try {
-            final ReentrantAreaLock.Node schedulingLock = this.schedulingLockArea.lock(chunkX, chunkZ, accessRadius);
+            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.schedulingLockArea.lock(chunkX, chunkZ, accessRadius); // Folia - use area based lock to reduce contention
             try {
                 final NewChunkHolder chunkHolder = this.chunkHolderManager.getChunkHolder(chunkKey);
                 if (chunkHolder == null || chunkHolder.getTicketLevel() > minLevel) {
@@ -554,10 +556,10 @@ public final class ChunkTaskScheduler {
                     }
                 }
             } finally {
-                this.schedulingLockArea.unlock(schedulingLock);
+                this.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
             }
         } finally {
-            this.chunkHolderManager.ticketLockArea.unlock(ticketLock);
+            this.chunkHolderManager.ticketLockArea.unlock(ticketLock); // Folia - use area based lock to reduce contention
         }
 
         for (int i = 0, len = tasks.size(); i < len; ++i) {
@@ -604,7 +606,7 @@ public final class ChunkTaskScheduler {
     private ChunkProgressionTask schedule(final int chunkX, final int chunkZ, final ChunkStatus targetStatus,
                                           final NewChunkHolder chunkHolder, final List<ChunkProgressionTask> allTasks,
                                           final PrioritisedExecutor.Priority minPriority) {
-        if (!this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, getAccessRadius(targetStatus))) {
+        if (!this.schedulingLockArea.isHeldByCurrentThread(chunkX, chunkZ, getAccessRadius(targetStatus))) { // Folia - use area based lock to reduce contention
             throw new IllegalStateException("Not holding scheduling lock");
         }
 

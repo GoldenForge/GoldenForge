@@ -15,36 +15,10 @@
     private SortedArraySet(int p_14244_, Comparator<T> p_14245_) {
        this.f_14240_ = p_14245_;
        if (p_14244_ < 0) {
-@@ -22,6 +_,67 @@
+@@ -22,6 +_,41 @@
           this.f_14241_ = (T[])m_14258_(new Object[p_14244_]);
        }
     }
-+
-+   // Paper start - rewrite chunk system
-+   public T replace(T object) {
-+      int i = this.m_14269_(object);
-+      if (i >= 0) {
-+         T old = this.f_14241_[i];
-+         this.f_14241_[i] = object;
-+         return old;
-+      } else {
-+         this.m_14255_(object, m_14263_(i));
-+         return object;
-+      }
-+   }
-+
-+   public T removeAndGet(T object) {
-+      int i = this.m_14269_(object);
-+      if (i >= 0) {
-+         final T ret = this.f_14241_[i];
-+         this.m_14274_(i);
-+         return ret;
-+      } else {
-+         return null;
-+      }
-+   }
-+   // Paper end - rewrite chunk system
-+
 +   // Paper start - optimise removeIf
 +   @Override
 +   public boolean removeIf(java.util.function.Predicate<? super T> filter) {
@@ -83,3 +57,133 @@
  
     public static <T extends Comparable<T>> SortedArraySet<T> m_144975_() {
        return m_14246_(10);
+@@ -51,6 +_,7 @@
+       return -p_14264_ - 1;
+    }
+ 
++   @Override
+    public boolean add(T p_14261_) {
+       int i = this.m_14269_(p_14261_);
+       if (i >= 0) {
+@@ -70,9 +_,9 @@
+             p_14268_ = 10;
+          }
+ 
+-         Object[] aobject = new Object[p_14268_];
+-         System.arraycopy(this.f_14241_, 0, aobject, 0, this.f_14242_);
+-         this.f_14241_ = (T[])m_14258_(aobject);
++         Object[] objects = new Object[p_14268_];
++         System.arraycopy(this.f_14241_, 0, objects, 0, this.f_14242_);
++         this.f_14241_ = (T[])m_14258_(objects);
+       }
+    }
+ 
+@@ -109,6 +_,32 @@
+       }
+    }
+ 
++   // Paper start - rewrite chunk system
++   public T replace(T object) {
++      int i = this.m_14269_(object);
++      if (i >= 0) {
++         T old = this.f_14241_[i];
++         this.f_14241_[i] = object;
++         return old;
++      } else {
++         this.m_14255_(object, m_14263_(i));
++         return object;
++      }
++   }
++
++   public T removeAndGet(T object) {
++      int i = this.m_14269_(object);
++      if (i >= 0) {
++         final T ret = this.f_14241_[i];
++         this.m_14274_(i);
++         return ret;
++      } else {
++         return null;
++      }
++   }
++   // Paper end - rewrite chunk system
++
++   @Override
+    public boolean remove(Object p_14282_) {
+       int i = this.m_14269_((T)p_14282_);
+       if (i >= 0) {
+@@ -133,23 +_,28 @@
+       return this.m_14276_(this.f_14242_ - 1);
+    }
+ 
++   @Override
+    public boolean contains(Object p_14273_) {
+       int i = this.m_14269_((T)p_14273_);
+       return i >= 0;
+    }
+ 
++   @Override
+    public Iterator<T> iterator() {
+       return new SortedArraySet.ArrayIterator();
+    }
+ 
++   @Override
+    public int size() {
+       return this.f_14242_;
+    }
+ 
++   @Override
+    public Object[] toArray() {
+-      return this.f_14241_.clone();
++      return Arrays.copyOf(this.f_14241_, this.f_14242_, Object[].class);
+    }
+ 
++   @Override
+    public <U> U[] toArray(U[] p_14286_) {
+       if (p_14286_.length < this.f_14242_) {
+          return (U[])Arrays.copyOf(this.f_14241_, this.f_14242_, p_14286_.getClass());
+@@ -163,19 +_,21 @@
+       }
+    }
+ 
++   @Override
+    public void clear() {
+       Arrays.fill(this.f_14241_, 0, this.f_14242_, (Object)null);
+       this.f_14242_ = 0;
+    }
+ 
++   @Override
+    public boolean equals(Object p_14279_) {
+       if (this == p_14279_) {
+          return true;
+       } else {
+          if (p_14279_ instanceof SortedArraySet) {
+-            SortedArraySet<?> sortedarrayset = (SortedArraySet)p_14279_;
+-            if (this.f_14240_.equals(sortedarrayset.f_14240_)) {
+-               return this.f_14242_ == sortedarrayset.f_14242_ && Arrays.equals(this.f_14241_, sortedarrayset.f_14241_);
++            SortedArraySet<?> sortedArraySet = (SortedArraySet)p_14279_;
++            if (this.f_14240_.equals(sortedArraySet.f_14240_)) {
++               return this.f_14242_ == sortedArraySet.f_14242_ && Arrays.equals(this.f_14241_, sortedArraySet.f_14241_);
+             }
+          }
+ 
+@@ -187,10 +_,12 @@
+       private int f_14288_;
+       private int f_14289_ = -1;
+ 
++      @Override
+       public boolean hasNext() {
+          return this.f_14288_ < SortedArraySet.this.f_14242_;
+       }
+ 
++      @Override
+       public T next() {
+          if (this.f_14288_ >= SortedArraySet.this.f_14242_) {
+             throw new NoSuchElementException();
+@@ -200,6 +_,7 @@
+          }
+       }
+ 
++      @Override
+       public void remove() {
+          if (this.f_14289_ == -1) {
+             throw new IllegalStateException();

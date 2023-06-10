@@ -45,7 +45,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,212 @@
+@@ -65,97 +_,217 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -305,6 +305,11 @@
  
     public void m_140056_(BlockPos p_140057_) {
 -      LevelChunk levelchunk = this.m_140085_();
++      // Paper start - replace player chunk loader
++      if (this.playersSentChunkTo.size() == 0) {
++         return;
++      }
++      // Paper end - replace player chunk loader
 +      LevelChunk levelchunk = this.getSendingChunk(); // Paper - no-tick view distance
        if (levelchunk != null) {
           int i = this.f_142983_.m_151564_(p_140057_.m_123342_());
@@ -339,7 +344,7 @@
 +            LevelChunk chunk = this.getSendingChunk();
 +            // Paper end - no-tick view distance
 +
-+            if (chunk != null) {
++            if (this.playersSentChunkTo.size() != 0 && chunk != null) { // Paper - replace player chunk loader
 +               int j = this.f_140014_.m_164447_();
 +               int k = this.f_140014_.m_164448_();
 +

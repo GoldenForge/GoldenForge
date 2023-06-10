@@ -13,7 +13,6 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkStatus;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -234,23 +233,23 @@ public final class LightQueue {
 
         @Override
         public void run() {
+            synchronized (this.queue) {
+                this.queue.chunkTasks.remove(this.chunkCoordinate);
+            }
+
+            boolean litChunk = false;
+            if (this.lightTasks != null) {
+                for (final BooleanSupplier run : this.lightTasks) {
+                    if (run.getAsBoolean()) {
+                        litChunk = true;
+                        break;
+                    }
+                }
+            }
+
             final SkyStarLightEngine skyEngine = this.lightEngine.getSkyLightEngine();
             final BlockStarLightEngine blockEngine = this.lightEngine.getBlockLightEngine();
             try {
-                synchronized (this.queue) {
-                    this.queue.chunkTasks.remove(this.chunkCoordinate);
-                }
-
-                boolean litChunk = false;
-                if (this.lightTasks != null) {
-                    for (final BooleanSupplier run : this.lightTasks) {
-                        if (run.getAsBoolean()) {
-                            litChunk = true;
-                            break;
-                        }
-                    }
-                }
-
                 final long coordinate = this.chunkCoordinate;
                 final int chunkX = CoordinateUtils.getChunkX(coordinate);
                 final int chunkZ = CoordinateUtils.getChunkZ(coordinate);

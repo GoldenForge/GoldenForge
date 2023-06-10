@@ -32,32 +32,22 @@
     }
  
     public boolean m_215159_(ChunkPos p_215160_, int p_215161_) {
-@@ -117,7 +_,23 @@
+@@ -120,6 +_,14 @@
+       return this.m_46819_(p_9507_, p_9508_, ChunkStatus.f_62314_);
     }
  
-    public ChunkAccess m_6325_(int p_9507_, int p_9508_) {
--      return this.m_46819_(p_9507_, p_9508_, ChunkStatus.f_62314_);
-+      int x = p_9507_ - this.minChunkX;
-+      int z = p_9508_ - this.minChunkZ;
-+      int w = this.f_9478_;
-+
-+      if (x >= 0 && z >= 0 && x < w && z < w) {
-+         return this.chunksArr[x + z * w];
-+      } else {
-+         throw new NullPointerException("No chunk exists at " + new ChunkPos(p_9507_, p_9508_));
-+      }
-+   }
-+
 +   /**
 +    * Use our chunk fetch function
 +    */
 +   public ChunkAccess m_46865_(BlockPos pos) {
 +      // Skip checking chunk.getStatus().isAtLeast(ChunkStatus.EMPTY) here, because it is always true
 +      return this.m_6325_(Pos.ChunkCoord.fromBlockCoord(pos.m_123341_()), Pos.ChunkCoord.fromBlockCoord(pos.m_123343_()));
-    }
- 
++   }
++
     @Nullable
-@@ -147,12 +_,31 @@
+    public ChunkAccess m_6522_(int p_9514_, int p_9515_, ChunkStatus p_9516_, boolean p_9517_) {
+       ChunkAccess chunkaccess;
+@@ -147,12 +_,24 @@
        }
     }
  
@@ -77,16 +67,8 @@
     }
  
     public BlockState m_8055_(BlockPos p_9587_) {
--      return this.m_6325_(SectionPos.m_123171_(p_9587_.m_123341_()), SectionPos.m_123171_(p_9587_.m_123343_())).m_8055_(p_9587_);
-+      int x = (Pos.ChunkCoord.fromBlockCoord(p_9587_.m_123341_())) - this.minChunkX;
-+      int z = (Pos.ChunkCoord.fromBlockCoord(p_9587_.m_123343_())) - this.minChunkZ;
-+      int w = this.f_9478_;
+       return this.m_6325_(SectionPos.m_123171_(p_9587_.m_123341_()), SectionPos.m_123171_(p_9587_.m_123343_())).m_8055_(p_9587_);
 +
-+      if (x >= 0 && z >= 0 && x < w && z < w) {
-+         return this.chunksArr[x + z * w].m_8055_(p_9587_);
-+      } else {
-+         throw new NullPointerException("No chunk exists at " + new ChunkPos(p_9587_));
-+      }
     }
  
     public FluidState m_6425_(BlockPos p_9577_) {

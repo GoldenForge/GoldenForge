@@ -9,3 +9,12 @@
     }
  
     public abstract void m_213679_(WorldGenRegion p_223043_, long p_223044_, RandomState p_223045_, BiomeManager p_223046_, StructureManager p_223047_, ChunkAccess p_223048_, GenerationStep.Carving p_223049_);
+@@ -336,7 +_,7 @@
+                return Pair.of(p_223203_.m_227039_(p_223204_), holder);
+             }
+ 
+-            ChunkAccess chunkaccess = p_223200_.m_46819_(p_223204_.f_45578_, p_223204_.f_45579_, ChunkStatus.f_62315_);
++            ChunkAccess chunkaccess = p_223200_.syncLoadNonFull(p_223204_.f_45578_, p_223204_.f_45579_, ChunkStatus.f_62315_); // Paper - rewrite chunk system
+             StructureStart structurestart = p_223201_.m_220512_(SectionPos.m_175562_(chunkaccess), holder.m_203334_(), chunkaccess);
+             if (structurestart != null && structurestart.m_73603_() && (!p_223202_ || m_223059_(p_223201_, structurestart))) {
+                return Pair.of(p_223203_.m_227039_(structurestart.m_163625_()), holder);

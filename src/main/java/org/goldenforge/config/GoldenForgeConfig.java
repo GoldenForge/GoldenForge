@@ -29,20 +29,13 @@ public class GoldenForgeConfig {
         public static ConfigValue<Integer> ioThreads;
         public static ConfigValue<Integer> workerThreads;
 
-        public static ConfigValue<Integer> minLoadRadius;
-        public static ConfigValue<Integer> maxConcurrentSends;
         public static ConfigValue<Boolean> autoconfigSendDistance;
-        public static ConfigValue<Double> targetPlayerChunkSendRate;
-        public static ConfigValue<Double> globalMaxChunkSendRate;
-        public static ConfigValue<Boolean> enableFrustumPriority;
-        public static ConfigValue<Double> globalMaxChunkLoadRate;
-        public static ConfigValue<Double> playerMaxConcurrentLoads;
-        public static ConfigValue<Double> globalMaxConcurrentLoads;
         public static ConfigValue<Double> playerMaxChunkLoadRate;
         public static ConfigValue<Long> delayChunkUnloadsBy;
         public static ConfigValue<Long> playerMaxConcurrentChunkLoads;
         public static ConfigValue<Long> playerMaxConcurrentChunkGenerates;
         public static ConfigValue<Long> playerMaxChunkGenerateRate;
+        public static ConfigValue<Double> playerMaxChunkSendRate;
 
         public static ConfigValue<Boolean> isVelocityEnabled;
         public static ConfigValue<String> velocityForwardingToken;
@@ -75,61 +68,15 @@ public class GoldenForgeConfig {
                     .worldRestart()
                     .define("workerThreads", -1);
 
-            maxConcurrentSends = builder
-                    .comment("The maximum number of chunks that will be queued to send at any one time. Lower values will help alleviate server-side networking bottlenecks such as anti-xray or compression; however, it is unlikely to help users with a poor internet connection.")
-                    .worldRestart()
-                    .define("maxConcurrentSends", 2);
-
-
-            minLoadRadius = builder
-                    .comment("The radius of chunks around a player that are not throttled for chunk loading. The number of chunks affected is actually the configured value plus one, as this config controls the number of chunks the client will actually be able to render.")
-                    .worldRestart()
-                    .define("minLoadRadius", 2);
-
-            maxConcurrentSends = builder
-                    .comment("The maximum number of chunks that will be queued to send at any one time. Lower values will help alleviate server-side networking bottlenecks such as anti-xray or compression; however, it is unlikely to help users with a poor internet connection.")
-                    .worldRestart()
-                    .define("maxConcurrentSends", 2);
-
             autoconfigSendDistance = builder
                     .comment("Whether to use the client's view distance for the chunk send distance of the server. This will exclusively change the radius of chunks sent to the client and will not affect server-side chunk loading or ticking.")
                     .worldRestart()
                     .define("autoconfigSendDistance", true);
 
-            targetPlayerChunkSendRate = builder
-                    .comment("The maximum number of chunks sent to an individual player within one second.")
-                    .worldRestart()
-                    .define("targetPlayerChunkSendRate", 100.0);
-
-            globalMaxChunkSendRate = builder
-                    .comment("The maximum number of chunks loaded per second for the whole server. Takes priority over player-max-chunk-load-rate.")
-                    .worldRestart()
-                    .define("globalMaxChunkSendRate", (double)-1);
-
-            enableFrustumPriority = builder
-                    .comment("Whether to attempt to load chunks in front of the player before loading chunks to their sides or behind. Due to the client reacting poorly to receiving chunks out of order, this is disabled by default and not generally recommended for use.")
-                    .worldRestart()
-                    .define("enableFrustumPriority", false);
-
-            globalMaxChunkLoadRate = builder
-                    .comment("The maximum number of chunks loaded per second for the whole server. Takes priority over player-max-chunk-load-rate.")
-                    .worldRestart()
-                    .define("globalMaxChunkLoadRate", (double)-1);
-
-            playerMaxConcurrentLoads = builder
-                    .comment("The maximum number of chunk loads processed per player at one time.")
-                    .worldRestart()
-                    .define("playerMaxConcurrentLoads",20.0);
-
-            globalMaxConcurrentLoads = builder
-                    .comment("The maximum number of chunk loads processed for the whole server one time. This will override player-max-concurrent-loads if exceeded.")
-                    .worldRestart()
-                    .define("globalMaxConcurrentLoads",500.0);
-
             playerMaxChunkLoadRate = builder
                     .comment("The maximum number of chunks loaded per second per player.")
                     .worldRestart()
-                    .define("playerMaxChunkLoadRate",(double)-1);
+                    .define("playerMaxChunkLoadRate",(double)100.0);
 
             delayChunkUnloadsBy = builder
                     .comment("Chunk unload delay in second")
@@ -150,6 +97,11 @@ public class GoldenForgeConfig {
                     .comment("The maximum rate at which chunks will generate for any individual player. Set to -1 to disable this limit.")
                     .worldRestart()
                     .define("playerMaxChunkGenerateRate",(long)-1.0);
+
+            playerMaxChunkSendRate = builder
+                    .comment("The maximum rate in chunks per second that the server will send to any individual player. Set to -1 to disable this limit.")
+                    .worldRestart()
+                    .define("playerMaxChunkSendRate",(double)75.0);
 
 
             builder.pop();

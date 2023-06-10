@@ -54,7 +54,7 @@
     public static final ChunkStatus f_62323_ = m_62406_("light", f_62322_, 1, f_62328_, ChunkStatus.ChunkType.PROTOCHUNK, (p_223296_, p_223297_, p_223298_, p_223299_, p_223300_, p_223301_, p_223302_, p_223303_, p_223304_, p_223305_) -> {
        return m_62388_(p_223296_, p_223301_, p_223304_);
     }, (p_223289_, p_223290_, p_223291_, p_223292_, p_223293_, p_223294_) -> {
-@@ -178,6 +_,18 @@
+@@ -178,13 +_,25 @@
     private final ChunkStatus.ChunkType f_62338_;
     private final EnumSet<Heightmap.Types> f_62339_;
  
@@ -72,7 +72,18 @@
 +
     private static CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_62388_(ChunkStatus p_62389_, ThreadedLevelLightEngine p_62390_, ChunkAccess p_62391_) {
        boolean flag = m_62392_(p_62389_, p_62391_);
-       if (!p_62391_.m_6415_().m_62427_(p_62389_)) {
+-      if (!p_62391_.m_6415_().m_62427_(p_62389_)) {
+-         ((ProtoChunk)p_62391_).m_7150_(p_62389_);
+-      }
++//      if (!p_62391_.getStatus().isOrAfter(p_62389_)) {
++//         ((ProtoChunk)p_62391_).setStatus(p_62389_);
++//      }
+ 
+-      return p_62390_.m_9353_(p_62391_, flag).thenApply(Either::left);
++      return CompletableFuture.completedFuture(Either.left(p_62391_)); // Paper - rewrite chunk system
+    }
+ 
+    private static ChunkStatus m_62414_(String p_62415_, @Nullable ChunkStatus p_62416_, int p_62417_, EnumSet<Heightmap.Types> p_62418_, ChunkStatus.ChunkType p_62419_, ChunkStatus.SimpleGenerationTask p_62420_) {
 @@ -241,6 +_,13 @@
        this.f_62338_ = p_62346_;
        this.f_62339_ = p_62345_;

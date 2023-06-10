@@ -23,7 +23,6 @@ import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.chunk.storage.EntityStorage;
 import net.minecraft.world.level.levelgen.blending.BlendingData;
 import org.slf4j.Logger;
-
 import java.lang.invoke.VarHandle;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -241,8 +240,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                     consumer.accept(this.result);
                 } catch (final Throwable throwable) {
                     this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                        "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
-                        "Completed throwable", ChunkTaskScheduler.stringIfNull(this.result.right())
+                            "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
+                            "Completed throwable", ChunkTaskScheduler.stringIfNull(this.result.right())
                     ), throwable);
                     if (throwable instanceof ThreadDeath) {
                         throw (ThreadDeath)throwable;
@@ -263,8 +262,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                     consumer.accept(result);
                 } catch (final Throwable throwable) {
                     this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                        "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
-                        "Completed throwable", ChunkTaskScheduler.stringIfNull(result.right())
+                            "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
+                            "Completed throwable", ChunkTaskScheduler.stringIfNull(result.right())
                     ), throwable);
                     if (throwable instanceof ThreadDeath) {
                         throw (ThreadDeath)throwable;
@@ -275,7 +274,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
     }
 
-    public static final class ChunkDataLoadTask extends CallbackDataLoadTask<ProtoChunk, ChunkAccess> {
+    public static final class ChunkDataLoadTask extends CallbackDataLoadTask<ChunkAccess, ChunkAccess> {
         protected ChunkDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
                                     final int chunkZ, final PrioritisedExecutor.Priority priority) {
             super(scheduler, world, chunkX, chunkZ, RegionFileIOThread.RegionFileType.CHUNK_DATA, priority);
@@ -302,12 +301,19 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
 
         @Override
-        protected TaskResult<ChunkAccess, Throwable> completeOnMainOffMain(final ProtoChunk data, final Throwable throwable) {
+        protected TaskResult<ChunkAccess, Throwable> completeOnMainOffMain(final ChunkAccess data, final Throwable throwable) {
             throw new UnsupportedOperationException();
         }
 
+        private ProtoChunk getEmptyChunk() {
+            return new ProtoChunk(
+                    new ChunkPos(this.chunkX, this.chunkZ), UpgradeData.EMPTY, this.world,
+                    this.world.registryAccess().registryOrThrow(Registry.BIOME_REGISTRY), (BlendingData)null
+            );
+        }
+
         @Override
-        protected TaskResult<ProtoChunk, Throwable> runOffMain(final CompoundTag data, final Throwable throwable) {
+        protected TaskResult<ChunkAccess, Throwable> runOffMain(final CompoundTag data, final Throwable throwable) {
             if (throwable != null) {
                 LOGGER.error("Failed to load chunk data for task: " + this.toString() + ", chunk data will be lost", throwable);
                 return new TaskResult<>(this.getEmptyChunk(), null);
@@ -325,11 +331,11 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                 // run converters
                 // note: upgradeChunkTag copies the data already
                 final CompoundTag converted = chunkMap.upgradeChunkTag(
-                    this.world.dimension(), chunkMap.overworldDataStorage, data, chunkMap.generator.getTypeNameForDataFixer()
+                        this.world.dimension(), chunkMap.overworldDataStorage, data, chunkMap.generator.getTypeNameForDataFixer()
                 );
                 // deserialize
                 final ProtoChunk chunkHolder = ChunkSerializer.read(
-                    this.world, chunkMap.getPoiManager(), chunkPos, converted
+                        this.world, chunkMap.getPoiManager(), chunkPos, converted
                 );
 
                 return new TaskResult<>(chunkHolder, null);
@@ -341,15 +347,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
             }
         }
 
-        private ProtoChunk getEmptyChunk() {
-            return new ProtoChunk(
-                new ChunkPos(this.chunkX, this.chunkZ), UpgradeData.EMPTY, this.world,
-                this.world.registryAccess().registryOrThrow(Registry.BIOME_REGISTRY), (BlendingData)null
-            );
-        }
-
         @Override
-        protected TaskResult<ChunkAccess, Throwable> runOnMain(final ProtoChunk data, final Throwable throwable) {
+        protected TaskResult<ChunkAccess, Throwable> runOnMain(final ChunkAccess data, final Throwable throwable) {
             throw new UnsupportedOperationException();
         }
     }
@@ -402,7 +401,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                 // run converters
                 final int dataVersion = !data.contains(SharedConstants.DATA_VERSION_TAG, 99) ? 1945 : data.getInt(SharedConstants.DATA_VERSION_TAG);
                 final CompoundTag converted = MCDataConverter.convertTag(
-                    MCTypeRegistry.POI_CHUNK, data, dataVersion, SharedConstants.getCurrentVersion().getDataVersion().getVersion()
+                        MCTypeRegistry.POI_CHUNK, data, dataVersion, SharedConstants.getCurrentVersion().getDataVersion().getVersion()
                 );
 
                 // now we need to parse it

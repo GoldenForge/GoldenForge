@@ -322,7 +322,7 @@
     public ThreadedLevelLightEngine m_7827_() {
        return this.f_8331_;
     }
-@@ -107,11 +_,18 @@
+@@ -107,27 +_,42 @@
  
     @Nullable
     public ChunkAccess m_7587_(int p_8360_, int p_8361_, ChunkStatus p_8362_, boolean p_8363_) {
@@ -342,16 +342,23 @@
           ProfilerFiller profilerfiller = this.f_8329_.m_46473_();
           profilerfiller.m_6174_("getChunk");
           long i = ChunkPos.m_45589_(p_8360_, p_8361_);
-@@ -119,15 +_,23 @@
-          for(int j = 0; j < 4; ++j) {
-             if (i == this.f_8337_[j] && p_8362_ == this.f_8338_[j]) {
-                ChunkAccess chunkaccess = this.f_8339_[j];
+ 
+-         for(int j = 0; j < 4; ++j) {
+-            if (i == this.f_8337_[j] && p_8362_ == this.f_8338_[j]) {
+-               ChunkAccess chunkaccess = this.f_8339_[j];
 -               if (chunkaccess != null || !p_8363_) {
-+               if (chunkaccess != null) { // CraftBukkit - the chunk can become accessible in the meantime TODO for non-null chunks it might also make sense to check that the chunk's state hasn't changed in the meantime
-                   return chunkaccess;
-                }
-             }
-          }
+-                  return chunkaccess;
+-               }
+-            }
+-         }
++//         for(int j = 0; j < 4; ++j) {
++//            if (i == this.lastChunkPos[j] && p_8362_ == this.lastChunkStatus[j]) {
++//               ChunkAccess chunkaccess = this.lastChunk[j];
++//               if (chunkaccess != null) { // CraftBukkit - the chunk can become accessible in the meantime TODO for non-null chunks it might also make sense to check that the chunk's state hasn't changed in the meantime
++//                  return chunkaccess;
++//               }
++//            }
++//         }
  
           profilerfiller.m_6174_("getChunkCacheMiss");
 -         CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture = this.m_8456_(p_8360_, p_8361_, p_8362_, p_8363_);
