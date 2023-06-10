@@ -4,6 +4,7 @@ import ca.spottedleaf.concurrentutil.completable.Completable;
 import ca.spottedleaf.concurrentutil.executor.Cancellable;
 import ca.spottedleaf.concurrentutil.executor.standard.DelayedPrioritisedTask;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -34,9 +35,12 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.chunk.storage.EntityStorage;
 import org.slf4j.Logger;
-
 import java.lang.invoke.VarHandle;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -71,7 +75,7 @@ public final class NewChunkHolder {
         TickThread.ensureTickThread(this.world, this.chunkX, this.chunkZ, "Cannot sync load entity data off-main");
         final CompoundTag entityChunk;
         final ChunkEntitySlices ret;
-        this.scheduler.schedulingLock.lock();
+        final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             if (this.entityChunk != null && (transientChunk || !this.entityChunk.isTransient())) {
                 return this.entityChunk;
@@ -83,8 +87,8 @@ public final class NewChunkHolder {
 
             if (this.entityChunk == null) {
                 ret = this.entityChunk = new ChunkEntitySlices(
-                    this.world, this.chunkX, this.chunkZ, this.getChunkStatus(),
-                    WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world)
+                        this.world, this.chunkX, this.chunkZ, this.getChunkStatus(),
+                        WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world)
                 );
 
                 ret.setTransient(transientChunk);
@@ -103,7 +107,7 @@ public final class NewChunkHolder {
                 entityChunk = null;
             }
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
 
         if (!transientChunk) {
@@ -142,7 +146,7 @@ public final class NewChunkHolder {
         final List<GenericDataLoadTaskCallback> completeWaiters;
         ChunkLoadTask.EntityDataLoadTask entityDataLoadTask = null;
         boolean scheduleEntityTask = false;
-        this.scheduler.schedulingLock.lock();
+        ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             final List<GenericDataLoadTaskCallback> waiters = this.entityDataLoadTaskWaiters;
             this.entityDataLoadTask = null;
@@ -151,6 +155,10 @@ public final class NewChunkHolder {
                 this.pendingEntityChunk = result.left() == null ? EMPTY_ENTITY_CHUNK : result.left();
                 if (result.right() != null) {
                     LOGGER.error("Unhandled entity data load exception, data data will be lost: ", result.right());
+                }
+
+                for (final GenericDataLoadTaskCallback callback : waiters) {
+                    callback.markCompleted();
                 }
 
                 completeWaiters = waiters;
@@ -164,7 +172,7 @@ public final class NewChunkHolder {
                     // no tasks to schedule _for_
                 } else {
                     entityDataLoadTask = this.entityDataLoadTask = new ChunkLoadTask.EntityDataLoadTask(
-                        this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                            this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
                     );
                     entityDataLoadTask.addCallback(this::completeEntityLoad);
                     // need one schedule() per waiter
@@ -174,7 +182,7 @@ public final class NewChunkHolder {
                 }
             }
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
 
         if (scheduleEntityTask) {
@@ -184,15 +192,15 @@ public final class NewChunkHolder {
         // avoid holding the scheduling lock while completing
         if (completeWaiters != null) {
             for (final GenericDataLoadTaskCallback callback : completeWaiters) {
-                callback.accept(result);
+                callback.acceptCompleted(result);
             }
         }
 
-        this.scheduler.schedulingLock.lock();
+        schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             this.checkUnload();
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
     }
 
@@ -203,7 +211,7 @@ public final class NewChunkHolder {
             throw new IllegalStateException("Cannot load entity data, it is already loaded");
         }
         // why not just acquire the lock? because the caller NEEDS to call isEntityChunkNBTLoaded before this!
-        if (!this.scheduler.schedulingLock.isHeldByCurrentThread()) {
+        if (!this.scheduler.schedulingLockArea.isHeldByCurrentThread(this.chunkX, this.chunkZ)) {
             throw new IllegalStateException("Must hold scheduling lock");
         }
 
@@ -211,7 +219,7 @@ public final class NewChunkHolder {
 
         if (this.entityDataLoadTask == null) {
             this.entityDataLoadTask = new ChunkLoadTask.EntityDataLoadTask(
-                this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                    this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
             );
             this.entityDataLoadTask.addCallback(this::completeEntityLoad);
             this.entityDataLoadTaskWaiters = new ArrayList<>();
@@ -259,7 +267,7 @@ public final class NewChunkHolder {
         final List<GenericDataLoadTaskCallback> completeWaiters;
         ChunkLoadTask.PoiDataLoadTask poiDataLoadTask = null;
         boolean schedulePoiTask = false;
-        this.scheduler.schedulingLock.lock();
+        ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             final List<GenericDataLoadTaskCallback> waiters = this.poiDataLoadTaskWaiters;
             this.poiDataLoadTask = null;
@@ -268,6 +276,10 @@ public final class NewChunkHolder {
                 this.poiChunk = result.left();
                 if (result.right() != null) {
                     LOGGER.error("Unhandled poi load exception, poi data will be lost: ", result.right());
+                }
+
+                for (final GenericDataLoadTaskCallback callback : waiters) {
+                    callback.markCompleted();
                 }
 
                 completeWaiters = waiters;
@@ -281,7 +293,7 @@ public final class NewChunkHolder {
                     // no tasks to schedule _for_
                 } else {
                     poiDataLoadTask = this.poiDataLoadTask = new ChunkLoadTask.PoiDataLoadTask(
-                        this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                            this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
                     );
                     poiDataLoadTask.addCallback(this::completePoiLoad);
                     // need one schedule() per waiter
@@ -291,7 +303,7 @@ public final class NewChunkHolder {
                 }
             }
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
 
         if (schedulePoiTask) {
@@ -301,14 +313,14 @@ public final class NewChunkHolder {
         // avoid holding the scheduling lock while completing
         if (completeWaiters != null) {
             for (final GenericDataLoadTaskCallback callback : completeWaiters) {
-                callback.accept(result);
+                callback.acceptCompleted(result);
             }
         }
-        this.scheduler.schedulingLock.lock();
+        schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             this.checkUnload();
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
     }
 
@@ -319,7 +331,7 @@ public final class NewChunkHolder {
             throw new IllegalStateException("Cannot load poi data, it is already loaded");
         }
         // why not just acquire the lock? because the caller NEEDS to call isPoiChunkLoaded before this!
-        if (!this.scheduler.schedulingLock.isHeldByCurrentThread()) {
+        if (!this.scheduler.schedulingLockArea.isHeldByCurrentThread(this.chunkX, this.chunkZ)) {
             throw new IllegalStateException("Must hold scheduling lock");
         }
 
@@ -327,7 +339,7 @@ public final class NewChunkHolder {
 
         if (this.poiDataLoadTask == null) {
             this.poiDataLoadTask = new ChunkLoadTask.PoiDataLoadTask(
-                this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                    this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
             );
             this.poiDataLoadTask.addCallback(this::completePoiLoad);
             this.poiDataLoadTaskWaiters = new ArrayList<>();
@@ -354,7 +366,7 @@ public final class NewChunkHolder {
         }
     }
 
-    public static abstract class GenericDataLoadTaskCallback implements Cancellable, Consumer<GenericDataLoadTask.TaskResult<?, Throwable>> {
+    public static abstract class GenericDataLoadTaskCallback implements Cancellable {
 
         protected final Consumer<GenericDataLoadTask.TaskResult<?, Throwable>> consumer;
         protected final NewChunkHolder chunkHolder;
@@ -390,13 +402,20 @@ public final class NewChunkHolder {
             return this.completed = true;
         }
 
-        @Override
-        public void accept(final GenericDataLoadTask.TaskResult<?, Throwable> result) {
+        // must hold scheduling lock
+        void markCompleted() {
+            if (this.completed) {
+                throw new IllegalStateException("May not be completed here");
+            }
+            this.completed = true;
+        }
+
+        void acceptCompleted(final GenericDataLoadTask.TaskResult<?, Throwable> result) {
             if (result != null) {
-                if (this.setCompleted()) {
+                if (this.completed) {
                     this.consumer.accept(result);
                 } else {
-                    throw new IllegalStateException("Cannot be cancelled at this point");
+                    throw new IllegalStateException("Cannot be uncompleted at this point");
                 }
             } else {
                 throw new NullPointerException("Result cannot be null (cancelled)");
@@ -408,7 +427,8 @@ public final class NewChunkHolder {
 
         @Override
         public boolean cancel() {
-            this.chunkHolder.scheduler.schedulingLock.lock();
+            final NewChunkHolder holder = this.chunkHolder; // Folia - use area based lock to reduce contention
+            final ReentrantAreaLock.Node schedulingLock = holder.scheduler.schedulingLockArea.lock(holder.chunkX, holder.chunkZ);
             try {
                 if (!this.completed) {
                     this.completed = true;
@@ -417,7 +437,7 @@ public final class NewChunkHolder {
                 }
                 return false;
             } finally {
-                this.chunkHolder.scheduler.schedulingLock.unlock();
+                holder.scheduler.schedulingLockArea.unlock(schedulingLock);
             }
         }
     }
@@ -711,10 +731,10 @@ public final class NewChunkHolder {
         }
         if (this.isSafeToUnload() == null) {
             // ensure in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.add(this);
+            this.scheduler.chunkHolderManager.unloadQueue.addChunk(this.chunkX, this.chunkZ);
         } else {
             // ensure not in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.remove(this);
+            this.scheduler.chunkHolderManager.unloadQueue.removeChunk(this.chunkX, this.chunkZ);
         }
     }
 
@@ -784,13 +804,13 @@ public final class NewChunkHolder {
             RegionFileIOThread.scheduleSave(this.world, this.chunkX, this.chunkZ, data, RegionFileIOThread.RegionFileType.CHUNK_DATA);
         }
         this.chunkDataUnload.completable().complete(data);
-        this.scheduler.schedulingLock.lock();
+        final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             // can only write to these fields while holding the schedule lock
             this.chunkDataUnload = null;
             this.checkUnload();
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
     }
 
@@ -827,12 +847,12 @@ public final class NewChunkHolder {
             this.lastEntityUnload = null;
 
             if (entityChunk.unload()) {
-                this.scheduler.schedulingLock.lock();
+                final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
                 try {
                     entityChunk.setTransient(true);
                     this.entityChunk = entityChunk;
                 } finally {
-                    this.scheduler.schedulingLock.unlock();
+                    this.scheduler.schedulingLockArea.unlock(schedulingLock);
                 }
             } else {
                 this.world.getEntityLookup().entitySectionUnload(this.chunkX, this.chunkZ);
@@ -952,7 +972,7 @@ public final class NewChunkHolder {
                             this.requestedGenStatus = ChunkStatus.FULL;
                         } else {
                             this.scheduler.schedule(
-                                this.chunkX, this.chunkZ, ChunkStatus.FULL, this, scheduledTasks
+                                    this.chunkX, this.chunkZ, ChunkStatus.FULL, this, scheduledTasks
                             );
                         }
                     } else {
@@ -1202,19 +1222,24 @@ public final class NewChunkHolder {
 
     // only call on main thread, must hold ticket level and scheduling lock
     private void onFullChunkLoadChange(final boolean loaded, final List<NewChunkHolder> changedFullStatus) {
-        for (int dz = -NEIGHBOUR_RADIUS; dz <= NEIGHBOUR_RADIUS; ++dz) {
-            for (int dx = -NEIGHBOUR_RADIUS; dx <= NEIGHBOUR_RADIUS; ++dx) {
-                final NewChunkHolder holder = (dx | dz) == 0 ? this : this.scheduler.chunkHolderManager.getChunkHolder(dx + this.chunkX, dz + this.chunkZ);
-                if (loaded) {
-                    if (holder.setNeighbourFullLoaded(-dx, -dz)) {
-                        changedFullStatus.add(holder);
-                    }
-                } else {
-                    if (holder != null && holder.setNeighbourFullUnloaded(-dx, -dz)) {
-                        changedFullStatus.add(holder);
+        final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ, NEIGHBOUR_RADIUS);
+        try {
+            for (int dz = -NEIGHBOUR_RADIUS; dz <= NEIGHBOUR_RADIUS; ++dz) {
+                for (int dx = -NEIGHBOUR_RADIUS; dx <= NEIGHBOUR_RADIUS; ++dx) {
+                    final NewChunkHolder holder = (dx | dz) == 0 ? this : this.scheduler.chunkHolderManager.getChunkHolder(dx + this.chunkX, dz + this.chunkZ);
+                    if (loaded) {
+                        if (holder.setNeighbourFullLoaded(-dx, -dz)) {
+                            changedFullStatus.add(holder);
+                        }
+                    } else {
+                        if (holder != null && holder.setNeighbourFullUnloaded(-dx, -dz)) {
+                            changedFullStatus.add(holder);
+                        }
                     }
                 }
             }
+        } finally {
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
     }
 
@@ -1253,7 +1278,7 @@ public final class NewChunkHolder {
         // note: use opaque reads for chunk status read since we need it to be atomic
 
         // test if anything changed
-        final long statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
+        long statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
         if ((int)statusCheck == (int)(statusCheck >>> 32)) {
             // nothing changed
             return ret;
@@ -1262,14 +1287,19 @@ public final class NewChunkHolder {
         final ChunkTaskScheduler scheduler = this.scheduler;
         final ChunkHolderManager holderManager = scheduler.chunkHolderManager;
         final int ticketKeep;
-        final Long ticketId;
-        holderManager.ticketLock.lock();
+        final Long ticketId = Long.valueOf(holderManager.getNextStatusUpgradeId());
+        final ReentrantAreaLock.Node ticketLock = holderManager.ticketLockArea.lock(this.chunkX, this.chunkZ);
         try {
             ticketKeep = this.currentTicketLevel;
-            ticketId = Long.valueOf(holderManager.getNextStatusUpgradeId());
-            holderManager.addTicketAtLevel(TicketType.STATUS_UPGRADE, this.chunkX, this.chunkZ, ticketKeep, ticketId);
+            statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
+            // handle race condition where ticket level and target status is updated concurrently
+            if ((int)statusCheck == (int)(statusCheck >>> 32)) {
+                // nothing changed
+                return ret;
+            }
+            holderManager.addTicketAtLevel(TicketType.STATUS_UPGRADE, CoordinateUtils.getChunkKey(this.chunkX, this.chunkZ), ticketKeep, ticketId, false);
         } finally {
-            holderManager.ticketLock.unlock();
+            holderManager.ticketLockArea.unlock(ticketLock);
         }
 
         this.processingFullStatus = true;
@@ -1280,11 +1310,11 @@ public final class NewChunkHolder {
                 ChunkHolder.FullChunkStatus nextState = getPendingChunkStatus(currStateEncoded);
                 if (currState == nextState) {
                     if (nextState == ChunkHolder.FullChunkStatus.INACCESSIBLE) {
-                        this.scheduler.schedulingLock.lock();
+                        final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
                         try {
                             this.checkUnload();
                         } finally {
-                            this.scheduler.schedulingLock.unlock();
+                            this.scheduler.schedulingLockArea.unlock(schedulingLock);
                         }
                     }
                     break;
@@ -1511,7 +1541,7 @@ public final class NewChunkHolder {
 
                 // note: only after generationTask -> null, generationTaskStatus -> null, and requestedGenStatus -> null
                 this.scheduler.schedule(
-                    this.chunkX, this.chunkZ, requestedGenStatus, this, scheduleList
+                        this.chunkX, this.chunkZ, requestedGenStatus, this, scheduleList
                 );
 
                 // return, can't do anything further
@@ -1604,7 +1634,7 @@ public final class NewChunkHolder {
 
             // we need to schedule more tasks now
             this.scheduler.schedule(
-                this.chunkX, this.chunkZ, requestedGenStatus, this, scheduleList
+                    this.chunkX, this.chunkZ, requestedGenStatus, this, scheduleList
             );
         } else {
             // we're done now
@@ -1625,7 +1655,7 @@ public final class NewChunkHolder {
                 final NewChunkHolder neighbour = needsScheduling.get(i);
 
                 this.scheduler.schedule(
-                    neighbour.chunkX, neighbour.chunkZ, neighbour.requestedGenStatus, neighbour, scheduleList
+                        neighbour.chunkX, neighbour.chunkZ, neighbour.requestedGenStatus, neighbour, scheduleList
                 );
             }
         }
@@ -1651,7 +1681,7 @@ public final class NewChunkHolder {
         generationTask.onComplete((final ChunkAccess access, final Throwable thr) -> {
             if (generationTask != this.generationTask) {
                 throw new IllegalStateException(
-                    "Cannot complete generation task '" + generationTask + "' because we are waiting on '" + this.generationTask + "' instead!"
+                        "Cannot complete generation task '" + generationTask + "' because we are waiting on '" + this.generationTask + "' instead!"
                 );
             }
             if (thr != null) {
@@ -1667,8 +1697,8 @@ public final class NewChunkHolder {
                 this.genTaskFailedThread = Thread.currentThread();
 
                 this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                    "Generation task", ChunkTaskScheduler.stringIfNull(generationTask),
-                    "Task to status", ChunkTaskScheduler.stringIfNull(taskStatus)
+                        "Generation task", ChunkTaskScheduler.stringIfNull(generationTask),
+                        "Task to status", ChunkTaskScheduler.stringIfNull(taskStatus)
                 ), thr);
                 return;
             }
@@ -1684,14 +1714,15 @@ public final class NewChunkHolder {
                 // this means we have to leave the ticket level update to handle the scheduling
             }
             final List<NewChunkHolder> changedLoadStatus = new ArrayList<>();
-            this.scheduler.schedulingLock.lock();
+            // theoretically, we could schedule a chunk at the max radius which performs another max radius access. So we need to double the radius.
+            final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ, 2 * ChunkTaskScheduler.getMaxAccessRadius());
             try {
                 for (int i = 0, len = neighbours.size(); i < len; ++i) {
                     neighbours.get(i).removeNeighbourUsingChunk();
                 }
                 this.onChunkGenComplete(access, taskStatus, tasks, changedLoadStatus);
             } finally {
-                this.scheduler.schedulingLock.unlock();
+                this.scheduler.schedulingLockArea.unlock(schedulingLock);
             }
             this.scheduler.chunkHolderManager.addChangedStatuses(changedLoadStatus);
 
@@ -1743,24 +1774,23 @@ public final class NewChunkHolder {
         }
 
         boolean canSaveChunk = !(chunk instanceof LevelChunk levelChunk && levelChunk.mustNotSave) &&
-                                (chunk != null && ((shutdown || chunk instanceof LevelChunk) && chunk.isUnsaved()));
+                (chunk != null && ((shutdown || chunk instanceof LevelChunk) && chunk.isUnsaved()));
         boolean canSavePOI = !(chunk instanceof LevelChunk levelChunk && levelChunk.mustNotSave) && (poi != null && poi.isDirty());
         boolean canSaveEntities = entities != null;
 
-            if (canSaveChunk) {
-                canSaveChunk = this.saveChunk(chunk, unloading);
+        if (canSaveChunk) {
+            canSaveChunk = this.saveChunk(chunk, unloading);
+        }
+        if (canSavePOI) {
+            canSavePOI = this.savePOI(poi, unloading);
+        }
+        if (canSaveEntities) {
+            // on shutdown, we need to force transient entity chunks to save
+            canSaveEntities = this.saveEntities(entities, unloading || shutdown);
+            if (unloading || shutdown) {
+                this.lastEntityUnload = null;
             }
-            if (canSavePOI) {
-                canSavePOI = this.savePOI(poi, unloading);
-            }
-            if (canSaveEntities) {
-                // on shutdown, we need to force transient entity chunks to save
-                canSaveEntities = this.saveEntities(entities, unloading || shutdown);
-                if (unloading || shutdown) {
-                    this.lastEntityUnload = null;
-                }
-            }
-
+        }
 
         return executedUnloadTask | canSaveChunk | canSaveEntities | canSavePOI ? new SaveStat(executedUnloadTask || canSaveChunk, canSaveEntities, canSavePOI): null;
     }
@@ -1815,8 +1845,8 @@ public final class NewChunkHolder {
         @Override
         public String toString() {
             return "AsyncChunkSerializeTask{" +
-                "chunk={pos=" + this.chunk.getPos() + ",world=\"" + this.world.getWorld().getName() + "\"}" +
-                "}";
+                    "chunk={pos=" + this.chunk.getPos() + ",world=\"" + this.world.getWorld().getName() + "\"}" +
+                    "}";
         }
     }
 
@@ -1954,29 +1984,29 @@ public final class NewChunkHolder {
         final ChunkHolder.FullChunkStatus currentFullStatus = fullChunkStatus < 0 || fullChunkStatus >= CHUNK_STATUS_BY_ID.length ? null : CHUNK_STATUS_BY_ID[fullChunkStatus];
         final ChunkHolder.FullChunkStatus pendingFullStatus = pendingChunkStatus < 0 || pendingChunkStatus >= CHUNK_STATUS_BY_ID.length ? null : CHUNK_STATUS_BY_ID[pendingChunkStatus];
         return "NewChunkHolder{" +
-            "world=" + this.world.getWorld().getName() +
-            ", chunkX=" + this.chunkX +
-            ", chunkZ=" + this.chunkZ +
-            ", entityChunkFromDisk=" + (entityChunk != null && !entityChunk.isTransient()) +
-            ", lastChunkCompletion={chunk_class=" + (lastCompletion == null || lastCompletion.chunk() == null ? "null" : lastCompletion.chunk().getClass().getName()) + ",status=" + (lastCompletion == null ? "null" : lastCompletion.genStatus()) + "}" +
-            ", currentGenStatus=" + this.currentGenStatus +
-            ", requestedGenStatus=" + this.requestedGenStatus +
-            ", generationTask=" + this.generationTask +
-            ", generationTaskStatus=" + this.generationTaskStatus +
-            ", priority=" + this.priority +
-            ", priorityLocked=" + this.priorityLocked +
-            ", neighbourRequestedPriority=" + this.neighbourRequestedPriority +
-            ", effective_priority=" + this.getEffectivePriority() +
-            ", oldTicketLevel=" + this.oldTicketLevel +
-            ", currentTicketLevel=" + this.currentTicketLevel +
-            ", totalNeighboursUsingThisChunk=" + this.totalNeighboursUsingThisChunk +
-            ", fullNeighbourChunksLoadedBitset=" + this.fullNeighbourChunksLoadedBitset +
-            ", chunkStatusRaw=" + chunkStatus +
-            ", currentChunkStatus=" + currentFullStatus +
-            ", pendingChunkStatus=" + pendingFullStatus +
-            ", is_unload_safe=" + this.isSafeToUnload() +
-            ", killed=" + this.killed +
-            '}';
+                "world=" + this.world.getWorld().getName() +
+                ", chunkX=" + this.chunkX +
+                ", chunkZ=" + this.chunkZ +
+                ", entityChunkFromDisk=" + (entityChunk != null && !entityChunk.isTransient()) +
+                ", lastChunkCompletion={chunk_class=" + (lastCompletion == null || lastCompletion.chunk() == null ? "null" : lastCompletion.chunk().getClass().getName()) + ",status=" + (lastCompletion == null ? "null" : lastCompletion.genStatus()) + "}" +
+                ", currentGenStatus=" + this.currentGenStatus +
+                ", requestedGenStatus=" + this.requestedGenStatus +
+                ", generationTask=" + this.generationTask +
+                ", generationTaskStatus=" + this.generationTaskStatus +
+                ", priority=" + this.priority +
+                ", priorityLocked=" + this.priorityLocked +
+                ", neighbourRequestedPriority=" + this.neighbourRequestedPriority +
+                ", effective_priority=" + this.getEffectivePriority() +
+                ", oldTicketLevel=" + this.oldTicketLevel +
+                ", currentTicketLevel=" + this.currentTicketLevel +
+                ", totalNeighboursUsingThisChunk=" + this.totalNeighboursUsingThisChunk +
+                ", fullNeighbourChunksLoadedBitset=" + this.fullNeighbourChunksLoadedBitset +
+                ", chunkStatusRaw=" + chunkStatus +
+                ", currentChunkStatus=" + currentFullStatus +
+                ", pendingChunkStatus=" + pendingFullStatus +
+                ", is_unload_safe=" + this.isSafeToUnload() +
+                ", killed=" + this.killed +
+                '}';
     }
 
     private static JsonElement serializeCompletable(final Completable<?> completable) {

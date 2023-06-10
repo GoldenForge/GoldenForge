@@ -39,7 +39,10 @@ public class GoldenForgeConfig {
         public static ConfigValue<Double> playerMaxConcurrentLoads;
         public static ConfigValue<Double> globalMaxConcurrentLoads;
         public static ConfigValue<Double> playerMaxChunkLoadRate;
-
+        public static ConfigValue<Long> delayChunkUnloadsBy;
+        public static ConfigValue<Long> playerMaxConcurrentChunkLoads;
+        public static ConfigValue<Long> playerMaxConcurrentChunkGenerates;
+        public static ConfigValue<Long> playerMaxChunkGenerateRate;
 
         public static ConfigValue<Boolean> isVelocityEnabled;
         public static ConfigValue<String> velocityForwardingToken;
@@ -127,6 +130,27 @@ public class GoldenForgeConfig {
                     .comment("The maximum number of chunks loaded per second per player.")
                     .worldRestart()
                     .define("playerMaxChunkLoadRate",(double)-1);
+
+            delayChunkUnloadsBy = builder
+                    .comment("Chunk unload delay in second")
+                    .worldRestart()
+                    .define("delayChunkUnloadsBy",(long)10);
+
+            playerMaxConcurrentChunkLoads = builder
+                    .comment("Specifies the maximum amount of concurrent chunk loads that an individual player can have.")
+                    .worldRestart()
+                    .define("playerMaxConcurrentChunkLoads",(long)0);
+
+            playerMaxConcurrentChunkGenerates = builder
+                    .comment("Specifies the maximum amount of concurrent chunk generations that an individual player can have.")
+                    .worldRestart()
+                    .define("playerMaxConcurrentChunkGenerates",(long)0);
+
+            playerMaxChunkGenerateRate = builder
+                    .comment("The maximum rate at which chunks will generate for any individual player. Set to -1 to disable this limit.")
+                    .worldRestart()
+                    .define("playerMaxChunkGenerateRate",(long)-1.0);
+
 
             builder.pop();
 

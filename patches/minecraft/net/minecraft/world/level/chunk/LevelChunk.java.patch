@@ -35,7 +35,7 @@
     @Nullable
     private Supplier<ChunkHolder.FullChunkStatus> f_62790_;
     @Nullable
-@@ -77,13 +_,377 @@
+@@ -77,13 +_,338 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -224,6 +224,7 @@
 +
 +   public void loadCallback() {
 +      if (this.loadedTicketLevel) { f_62771_.error("Double calling chunk load!", new Throwable()); } // Paper
++      this.loadedTicketLevel = true;
 +      // Paper start - neighbour cache
 +      int chunkX = this.f_187604_.f_45578_;
 +      int chunkZ = this.f_187604_.f_45579_;
@@ -240,9 +241,7 @@
 +      }
 +      this.setNeighbourLoaded(0, 0, this);
 +      // Paper end - neighbour cache
-+      this.loadedTicketLevel = true;
 +      ((ServerChunkCache) this.f_62776_.m_7726_()).addLoadedChunk(this); // Paper
-+      ((ServerLevel)this.f_62776_).m_7726_().f_8325_.playerChunkManager.onChunkLoad(this.f_187604_.f_45578_, this.f_187604_.f_45579_); // Paper - rewrite player chunk management
 +   }
 +
 +   public void unloadCallback() {
@@ -317,44 +316,6 @@
 +   }
 +
 +   protected void onNeighbourChange(final long bitsetBefore, final long bitsetAfter) {
-+
-+      // Paper start - no-tick view distance
-+      ServerChunkCache chunkProviderServer = ((ServerLevel)this.f_62776_).m_7726_();
-+      net.minecraft.server.level.ChunkMap chunkMap = chunkProviderServer.f_8325_;
-+      // this code handles the addition of ticking tickets - the distance map handles the removal
-+      if (!areNeighboursLoaded(bitsetBefore, 2) && areNeighboursLoaded(bitsetAfter, 2)) {
-+         if (chunkMap.playerChunkManager.tickMap.getObjectsInRange(this.coordinateKey) != null) { // Paper - replace old player chunk loading system
-+            // now we're ready for entity ticking
-+            chunkProviderServer.f_8332_.execute(() -> {
-+               // double check that this condition still holds.
-+               if (LevelChunk.this.areNeighboursLoaded(2) && chunkMap.playerChunkManager.tickMap.getObjectsInRange(LevelChunk.this.coordinateKey) != null) { // Paper - replace old player chunk loading system
-+                  chunkMap.playerChunkManager.onChunkPlayerTickReady(this.f_187604_.f_45578_, this.f_187604_.f_45579_); // Paper - replace old player chunk
-+                  chunkProviderServer.addTicketAtLevel(net.minecraft.server.level.TicketType.f_9444_, LevelChunk.this.f_187604_, 31, LevelChunk.this.f_187604_); // 31 -> entity ticking, TODO check on update
-+               }
-+            });
-+         }
-+      }
-+
-+      // this code handles the chunk sending
-+      if (!areNeighboursLoaded(bitsetBefore, 1) && areNeighboursLoaded(bitsetAfter, 1)) {
-+         // Paper start - replace old player chunk loading system
-+         if (chunkMap.playerChunkManager.isChunkNearPlayers(this.f_187604_.f_45578_, this.f_187604_.f_45579_)) {
-+            // the post processing is expensive, so we don't want to run it unless we're actually near
-+            // a player.
-+            chunkProviderServer.f_8332_.execute(() -> {
-+               if (!LevelChunk.this.areNeighboursLoaded(1)) {
-+                  return;
-+               }
-+               LevelChunk.this.m_62812_();
-+               if (!LevelChunk.this.areNeighboursLoaded(1)) {
-+                  return;
-+               }
-+               chunkMap.playerChunkManager.onChunkSendReady(this.f_187604_.f_45578_, this.f_187604_.f_45579_);
-+            });
-+         }
-+         // Paper end - replace old player chunk loading system
-+      }
-+      // Paper end - no-tick view distance
 +   }
 +
 +   public final boolean isAnyNeighborsLoaded() {
@@ -633,13 +594,12 @@
        ChunkPos chunkpos = this.m_7697_();
  
        for(int i = 0; i < this.f_187602_.length; ++i) {
-@@ -498,6 +_,11 @@
+@@ -498,6 +_,10 @@
  
        this.f_187609_.clear();
        this.f_187606_.m_63341_(this);
 +      } finally { // Paper start - replace chunk loader system
 +         this.isPostProcessingDone = true;
-+         ((ServerChunkCache) this.f_62776_.m_7726_()).f_8325_.playerChunkManager.onChunkPostProcessing(this.f_187604_.f_45578_, this.f_187604_.f_45579_);
 +      }
 +      // Paper end - replace chunk loader system
     }

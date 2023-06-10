@@ -88,7 +88,7 @@
 +         ++totalChunks;
 +      }
 +
-+      this.f_9299_.f_140133_.chunkTaskScheduler.lightExecutor.queueRunnable(() -> { // Paper - rewrite chunk system
++      this.f_9299_.f_140133_.chunkTaskScheduler.radiusAwareScheduler.queueInfiniteRadiusTask(() -> { // Paper - rewrite chunk system
 +         this.theLightEngine.relightChunks(chunks, (ChunkPos chunkPos) -> {
 +            chunkLightCallback.accept(chunkPos);
 +            ((java.util.concurrent.Executor)((ServerLevel)this.theLightEngine.getWorld()).m_7726_().f_8332_).execute(() -> {

@@ -1,16 +1,22 @@
 package io.papermc.paper.chunk.system;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import com.destroystokyo.paper.util.SneakyThrow;
+import com.mojang.datafixers.util.Either;
 import com.mojang.logging.LogUtils;
+import io.papermc.paper.util.CoordinateUtils;
 import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.server.level.*;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
+import org.bukkit.Bukkit;
 import org.slf4j.Logger;
-
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public final class ChunkSystem {
@@ -65,16 +71,16 @@ public final class ChunkSystem {
 
     public static void onEntityPreAdd(final ServerLevel level, final Entity entity) {
         // Paper start - duplicate uuid resolving
-        if (ChunkMap.checkDupeUUID(level, entity)) {
+        if (net.minecraft.server.level.ChunkMap.checkDupeUUID(level, entity)) {
             return;
         }
-//        if (net.minecraft.world.level.Level.DEBUG_ENTITIES && ((Entity) entity).level.paperConfig().entities.spawning.duplicateUuid.mode != io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode.NOTHING) {
+//        if (net.minecraft.world.level.Level.DEBUG_ENTITIES && ((Entity) entity).level().paperConfig().entities.spawning.duplicateUuid.mode != io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DuplicateUUID.DuplicateUUIDMode.NOTHING) {
 //            if (((Entity) entity).addedToWorldStack != null) {
 //                ((Entity) entity).addedToWorldStack.printStackTrace();
 //            }
-//            ServerLevel.getAddToWorldStackTrace((Entity) entity).printStackTrace();
+//            net.minecraft.server.level.ServerLevel.getAddToWorldStackTrace((Entity) entity).printStackTrace();
 //        }
-        // Paper end - duplicate uuid resolving
+//        // Paper end - duplicate uuid resolving
     }
 
     public static void onChunkHolderCreate(final ServerLevel level, final ChunkHolder holder) {
@@ -117,15 +123,15 @@ public final class ChunkSystem {
 
 
     public static int getSendViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getSendViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPISendViewDistance(player);
     }
 
     public static int getLoadViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getLoadViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getLoadViewDistance(player);
     }
 
     public static int getTickViewDistance(final ServerPlayer player) {
-        return io.papermc.paper.chunk.PlayerChunkLoader.getTickViewDistance(player);
+        return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPITickViewDistance(player);
     }
 
     private ChunkSystem() {

@@ -194,12 +194,12 @@
 +
 +   boolean addTicket(long i, Ticket<?> ticket) {
 +      org.spigotmc.AsyncCatcher.catchOp("ChunkMapDistance::addTicket"); // Paper
-+      return this.getChunkHolderManager().addTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_, this.forcedTickets); // Paper - rewrite chunk system
++      return this.getChunkHolderManager().addTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.m_9433_()); // Paper - rewrite chunk system
 +   }
 +
 +   boolean removeTicket(long i, Ticket<?> ticket) {
 +      org.spigotmc.AsyncCatcher.catchOp("ChunkMapDistance::removeTicket"); // Paper
-+      return this.getChunkHolderManager().removeTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_, this.forcedTickets); // Paper - rewrite chunk system
++      return this.getChunkHolderManager().removeTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.m_9433_()); // Paper - rewrite chunk system
     }
  
     public <T> void m_140792_(TicketType<T> p_140793_, ChunkPos p_140794_, int p_140795_, T p_140796_) {
@@ -328,7 +328,7 @@
  
     protected void m_140777_(int p_140778_) {
 -      this.f_140764_.m_140912_(p_140778_);
-+      this.chunkMap.playerChunkManager.setTargetNoTickViewDistance(p_140778_); // Paper - route to player chunk manager
++      this.chunkMap.m_140167_(p_140778_);// Paper - route to player chunk manager
 +
     }
  
@@ -339,14 +339,14 @@
 -      }
 -
 -   }
-+      this.chunkMap.playerChunkManager.setTargetTickViewDistance(p_183912_); // Paper - route to player chunk manager
++      this.chunkMap.f_140133_.playerChunkLoader.setTickDistance(p_183912_); // Paper - route to player chunk manager
 +
 +   }
 +
 +
 +   // Paper start
 +   public int getSimulationDistance() {
-+      return this.chunkMap.playerChunkManager.getTargetTickViewDistance(); // Paper - route to player chunk manager
++      return this.chunkMap.f_140133_.playerChunkLoader.getAPITickDistance();
 +   }
 +   // Paper end
  
@@ -448,7 +448,7 @@
 +   }
 +
 +   private SortedArraySet<Ticket<?>> m_140857_(long p_140858_) {
-+      return this.getChunkHolderManager().getTicketsCopy().getOrDefault(p_140858_, SortedArraySet.m_14246_(4));
++      return this.getChunkHolderManager().getTicketsSyncronised(p_140858_);
     }
  
     public boolean m_201911_() {

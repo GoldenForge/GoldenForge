@@ -254,7 +254,7 @@
                    this.m_7260_(p_46605_, blockstate, p_46606_, p_46607_);
 +                  // Paper start - per player view distance - allow block updates for non-ticking chunks in player view distance
 +                  // if copied from above
-+               } else if ((p_46607_ & 2) != 0 && (!this.f_46443_ || (p_46607_ & 4) == 0) && (this.f_46443_ || levelchunk == null || ((ServerLevel)this).m_7726_().f_8325_.playerChunkManager.broadcastMap.getObjectsInRange(MCUtil.getCoordinateKey(p_46605_)) != null)) { // Paper - replace old player chunk management
++               } else if ((p_46607_ & 2) != 0 && (!this.f_46443_ || (p_46607_ & 4) == 0)) { // Paper - replace old player chunk management
 +                  ((ServerLevel)this).m_7726_().m_8450_(p_46605_);
 +                  // Paper end - per player view distance
                 }

@@ -45,7 +45,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,204 @@
+@@ -65,97 +_,212 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -63,12 +63,6 @@
 +   long inactiveTimeStart; // Paper - incremental autosave
 +
 +   // Paper start - optimize chunk status progression without jumping through thread pool
-+   public boolean canAdvanceStatus() {
-+      ChunkStatus status = getChunkHolderStatus();
-+      ChunkAccess chunk = getAvailableChunkNow();
-+      return chunk != null && (status == null || chunk.m_6415_().m_62427_(getNextStatus(status)));
-+   }
-+
 +   public final LevelChunk getSendingChunk() {
 +      // it's important that we use getChunkAtIfLoadedImmediately to mirror the chunk sending logic used
 +      // in Chunk's neighbour callback
@@ -147,6 +141,20 @@
 +         chunk.removeGeneralAreaCache();
 +      }
 +      // Paper end - optimise checkDespaw
++   }
++
++   private final com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> playersSentChunkTo = new com.destroystokyo.paper.util.maplist.ReferenceList<>();
++
++   public void addPlayer(ServerPlayer player) {
++      if (!this.playersSentChunkTo.add(player)) {
++         throw new IllegalStateException("Already sent chunk " + this.f_140009_ + " in world '" + this.chunkMap.f_140133_.getWorld().getName() + "' to player " + player);
++      }
++   }
++
++   public void removePlayer(ServerPlayer player) {
++      if (!this.playersSentChunkTo.remove(player)) {
++         throw new IllegalStateException("Have not sent chunk " + this.f_140009_ + " in world '" + this.chunkMap.f_140133_.getWorld().getName() + "' to player " + player);
++      }
 +   }
 +   public final io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder; // Paper - rewrite chunk system
 +   public ChunkHolder(ChunkPos p_142986_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.PlayerProvider p_142991_, io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder) { // Paper - rewrite chunk system) {
@@ -432,7 +440,7 @@
        }
     }
  
-@@ -248,63 +_,33 @@
+@@ -248,63 +_,35 @@
  
     }
  
@@ -490,27 +498,29 @@
 -         });
 -      });
 -   }
-+   public void m_140063_(Packet<?> p_140064_, boolean p_140065_) {
-+      // Paper start - per player view distance
-+      // there can be potential desync with player's last mapped section and the view distance map, so use the
-+      // view distance map here.
-+      com.destroystokyo.paper.util.misc.PlayerAreaMap viewDistanceMap = this.chunkMap.playerChunkManager.broadcastMap; // Paper - replace old player chunk manager
-+      com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> players = viewDistanceMap.getObjectsInRange(this.f_140009_);
-+      if (players == null) {
-+         return;
++   // Paper start - rewrite chunk system
++   public List<ServerPlayer> getPlayers(boolean onlyOnWatchDistanceEdge){
++      List<ServerPlayer> ret = new java.util.ArrayList<>();
++      for (int i = 0, len = this.playersSentChunkTo.size(); i < len; ++i) {
++         ServerPlayer player = this.playersSentChunkTo.getUnchecked(i);
++         if (onlyOnWatchDistanceEdge && !this.chunkMap.f_140133_.playerChunkLoader.isChunkSent(player, this.f_140009_.f_45578_, this.f_140009_.f_45579_, onlyOnWatchDistanceEdge)) {
++            continue;
++         }
++         ret.add(player);
 +      }
 +
-+      Object[] backingSet = players.getBackingSet();
-+      for (int i = 0, len = backingSet.length; i < len; ++i) {
-+         if (!(backingSet[i] instanceof ServerPlayer player)) {
-+            continue;
-+         }
-+         if (!this.chunkMap.playerChunkManager.isChunkSent(player, this.f_140009_.f_45578_, this.f_140009_.f_45579_, p_140065_)) {
-+            continue;
-+         }
-+         player.f_8906_.m_9829_(p_140064_);
-+      }
-+      // Paper end - per player view distance
++      return ret;
++   }
++
++   public void m_140063_(Packet<?> p_140064_, boolean p_140065_) {
++      this.broadcast(this.getPlayers(p_140065_), p_140064_);
++   }
++   // Paper end - rewrite chunk system
++
++   private void broadcast(List<ServerPlayer> players, Packet<?> packet) {
++      players.forEach((entityplayer) -> {
++         entityplayer.f_8906_.m_9829_(packet);
++      });
 +   }
 +
 +   // Paper - rewrite chunk system

@@ -1,9 +1,25 @@
 --- a/net/minecraft/util/SortedArraySet.java
 +++ b/net/minecraft/util/SortedArraySet.java
-@@ -23,6 +_,67 @@
+@@ -14,6 +_,14 @@
+    T[] f_14241_;
+    int f_14242_;
+ 
++   // Paper start - rewrite chunk system
++   public SortedArraySet(final SortedArraySet<T> other) {
++      this.f_14240_ = other.f_14240_;
++      this.f_14242_ = other.f_14242_;
++      this.f_14241_ = Arrays.copyOf(other.f_14241_, this.f_14242_);
++   }
++   // Paper end - rewrite chunk system
++
+    private SortedArraySet(int p_14244_, Comparator<T> p_14245_) {
+       this.f_14240_ = p_14245_;
+       if (p_14244_ < 0) {
+@@ -22,6 +_,67 @@
+          this.f_14241_ = (T[])m_14258_(new Object[p_14244_]);
        }
     }
- 
++
 +   // Paper start - rewrite chunk system
 +   public T replace(T object) {
 +      int i = this.m_14269_(object);
@@ -64,7 +80,6 @@
 +      return true;
 +   }
 +   // Paper end - optimise removeIf
-+
+ 
     public static <T extends Comparable<T>> SortedArraySet<T> m_144975_() {
        return m_14246_(10);
-    }

@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkStatus;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -201,7 +202,10 @@ public final class LightQueue {
             this.chunkCoordinate = chunkCoordinate;
             this.lightEngine = lightEngine;
             this.queue = queue;
-            this.task = queue.world.chunkTaskScheduler.lightExecutor.createTask(this, priority);
+            this.task = queue.world.chunkTaskScheduler.radiusAwareScheduler.createTask(
+                    CoordinateUtils.getChunkX(chunkCoordinate), CoordinateUtils.getChunkZ(chunkCoordinate),
+                    ChunkStatus.LIGHT.writeRadius, this, priority
+            );
         }
 
         public void schedule() {

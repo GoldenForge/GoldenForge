@@ -2,6 +2,7 @@ package io.papermc.paper.chunk.system.scheduling;
 
 import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import ca.spottedleaf.dataconverter.minecraft.MCDataConverter;
 import ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry;
@@ -82,7 +83,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
         // NOTE: it is IMPOSSIBLE for getOrLoadEntityData/getOrLoadPoiData to complete synchronously, because
         // they must schedule a task to off main or to on main to complete
-        this.scheduler.schedulingLock.lock();
+        final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             if (this.scheduled) {
                 throw new IllegalStateException("schedule() called twice");
@@ -108,14 +109,14 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
             this.entityLoadTask = entityLoadTask;
             this.poiLoadTask = poiLoadTask;
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
 
         if (entityLoadTask != null) {
             entityLoadTask.schedule();
         }
 
-        if (poiLoadTask !=  null) {
+        if (poiLoadTask != null) {
             poiLoadTask.schedule();
         }
 
@@ -125,28 +126,44 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     @Override
     public void cancel() {
         // must be before load task access, so we can synchronise with the writes to the fields
-        this.scheduler.schedulingLock.lock();
+        final boolean scheduled;
+        final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
+            // must read field here, as it may be written later conucrrently -
+            // we need to know if we scheduled _before_ cancellation
+            scheduled = this.scheduled;
             this.cancelled = true;
         } finally {
-            this.scheduler.schedulingLock.unlock();
+            this.scheduler.schedulingLockArea.unlock(schedulingLock);
         }
 
         /*
         Note: The entityLoadTask/poiLoadTask do not complete when cancelled,
-        but this is fine because if they are successfully cancelled then
-        we will successfully cancel the load task, which will complete when cancelled
+        so we need to manually try to complete in those cases
+        It is also important to note that we set the cancelled field first, just in case
+        the chunk load task attempts to complete with a non-null value
         */
 
-        if (this.entityLoadTask != null) {
-            if (this.entityLoadTask.cancel()) {
-                this.tryCompleteLoad();
+        if (scheduled) {
+            // since we scheduled, we need to cancel the tasks
+            if (this.entityLoadTask != null) {
+                if (this.entityLoadTask.cancel()) {
+                    this.tryCompleteLoad();
+                }
             }
-        }
-        if (this.poiLoadTask != null) {
-            if (this.poiLoadTask.cancel()) {
-                this.tryCompleteLoad();
+            if (this.poiLoadTask != null) {
+                if (this.poiLoadTask.cancel()) {
+                    this.tryCompleteLoad();
+                }
             }
+        } else {
+            // since nothing was scheduled, we need to decrement the task count here ourselves
+
+            // for entity load task
+            this.tryCompleteLoad();
+
+            // for poi load task
+            this.tryCompleteLoad();
         }
         this.loadTask.cancel();
     }

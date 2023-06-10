@@ -591,7 +591,7 @@
        this.m_8489_();
        this.f_8329_.m_46473_().m_6182_("chunks");
        if (p_201914_) {
-+         this.f_8325_.playerChunkManager.tick(); // Paper - this is mostly is to account for view distance changes);
++         this.f_8325_.f_140133_.playerChunkLoader.tick(); // Paper - replace player chunk loader - this is mostly required to account for view distance changes
           this.m_8490_();
        }
  
@@ -847,11 +847,8 @@
        MainThreadExecutor(Level p_8494_) {
           super("Chunk source main thread executor for " + p_8494_.m_46472_().m_135782_());
        }
-@@ -529,12 +_,11 @@
-       }
- 
+@@ -531,10 +_,8 @@
        public boolean m_7245_() {
-+         ServerChunkCache.this.f_8325_.playerChunkManager.tickMidTick();
           if (ServerChunkCache.this.m_8489_()) {
              return true;
 -         } else {

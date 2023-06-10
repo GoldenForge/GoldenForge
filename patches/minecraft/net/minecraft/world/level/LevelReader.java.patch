@@ -1,5 +1,22 @@
 --- a/net/minecraft/world/level/LevelReader.java
 +++ b/net/minecraft/world/level/LevelReader.java
+@@ -26,6 +_,16 @@
+    @Deprecated
+    boolean m_7232_(int p_46838_, int p_46839_);
+ 
++
++   // Paper start - rewrite chunk system
++   default ChunkAccess syncLoadNonFull(int chunkX, int chunkZ, ChunkStatus status) {
++      if (status == null || status.m_62427_(ChunkStatus.f_62326_)) {
++         throw new IllegalArgumentException("Status: " + status.toString());
++      }
++      return this.m_6522_(chunkX, chunkZ, status, true);
++   }
++   // Paper end - rewrite chunk system
++
+    int m_6924_(Heightmap.Types p_46827_, int p_46828_, int p_46829_);
+ 
+    int m_7445_();
 @@ -182,6 +_,10 @@
     }
  
