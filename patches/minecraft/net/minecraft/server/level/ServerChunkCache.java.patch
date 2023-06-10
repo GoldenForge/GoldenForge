@@ -722,7 +722,7 @@
 +               if (holder != null) {
 +                  // Paper - move down
 +                  ChunkPos chunkpos = levelchunk1.m_7697_();
-+                  if ((this.f_8329_.m_201916_(chunkpos) && this.f_8325_.m_183879_(chunkpos)) || this.f_8327_.shouldForceTicks(chunkpos.m_45588_())) {
++                  if ((true || this.f_8329_.m_201916_(chunkpos)) && this.f_8325_.anyPlayerCloseEnoughForSpawning(holder, chunkpos, false) || this.f_8327_.shouldForceTicks(chunkpos.m_45588_())) { // Paper - optimise anyPlayerCloseEnoughForSpawning // Paper - the chunk is known ticking
 +                     levelchunk1.m_187632_(j);
 +                     if (flag2 && (!GoldenForgeConfig.Server.enableAsyncMobSpawning.get() || _pufferfish_spawnCountsReady.get()) && (this.f_8335_ || this.f_8336_) && this.f_8329_.m_6857_().m_61927_(chunkpos) && this.f_8325_.anyPlayerCloseEnoughForSpawning(holder, chunkpos, true)) { // Spigot // Paper - optimise anyPlayerCloseEnoughForSpawning & optimise chunk tick iteration
 +                        NaturalSpawner.m_47029_(this.f_8329_, levelchunk1, f_8340_, this.f_8336_, this.f_8335_, flag1); // Pufferfish

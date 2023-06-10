@@ -57,7 +57,7 @@
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
     private static final byte f_143034_ = -1;
-@@ -110,35 +_,249 @@
+@@ -110,35 +_,195 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -161,56 +161,11 @@
 +
 +   public static final class DataRegionSectionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSectionData {
 +
-+      // Paper start - optimise notify()
-+      private io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> navigators;
-+
-+      public io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> getNavigators() {
-+         return this.navigators;
-+      }
-+
-+      public boolean addToNavigators(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section, final Mob navigator) {
-+         if (this.navigators == null) {
-+            this.navigators = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>();
-+         }
-+         final boolean ret = this.navigators.add(navigator);
-+         if (ret) {
-+            final DataRegionData data = (DataRegionData)section.getRegion().regionData;
-+            if (!data.addToNavigators(navigator)) {
-+               throw new IllegalStateException();
-+            }
-+         }
-+         return ret;
-+      }
-+
-+      public boolean removeFromNavigators(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section, final Mob navigator) {
-+         if (this.navigators == null) {
-+            return false;
-+         }
-+         final boolean ret = this.navigators.remove(navigator);
-+         if (ret) {
-+            final DataRegionData data = (DataRegionData)section.getRegion().regionData;
-+            if (!data.removeFromNavigators(navigator)) {
-+               throw new IllegalStateException();
-+            }
-+         }
-+         return ret;
-+      }
-+      // Paper end - optimise notify()
-+
 +      @Override
 +      public void removeFromRegion(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section,
 +                                   final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region from) {
 +         final DataRegionSectionData sectionData = (DataRegionSectionData)section.sectionData;
 +         final DataRegionData fromData = (DataRegionData)from.regionData;
-+         // Paper start - optimise notify()
-+         if (sectionData.navigators != null) {
-+            for (final Iterator<Mob> iterator = sectionData.navigators.unsafeIterator(io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.ITERATOR_FLAG_SEE_ADDITIONS); iterator.hasNext();) {
-+               if (!fromData.removeFromNavigators(iterator.next())) {
-+                  throw new IllegalStateException();
-+               }
-+            }
-+         }
-+         // Paper end - optimise notify()
 +      }
 +
 +      @Override
@@ -220,15 +175,6 @@
 +         final DataRegionSectionData sectionData = (DataRegionSectionData)section.sectionData;
 +         final DataRegionData oldRegionData = oldRegion == null ? null : (DataRegionData)oldRegion.regionData;
 +         final DataRegionData newRegionData = (DataRegionData)newRegion.regionData;
-+         // Paper start - optimise notify()
-+         if (sectionData.navigators != null) {
-+            for (final Iterator<Mob> iterator = sectionData.navigators.unsafeIterator(io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet.ITERATOR_FLAG_SEE_ADDITIONS); iterator.hasNext();) {
-+               if (!newRegionData.addToNavigators(iterator.next())) {
-+                  throw new IllegalStateException();
-+               }
-+            }
-+         }
-+         // Paper end - optimise notify()
 +      }
 +   }
 +
@@ -1147,7 +1093,7 @@
 -               this.m_183754_(p_214864_, chunkpos, mutableobject, flag, flag1);
 -            });
 -         }
-+      int j = Mth.m_14045_(p_140168_ + 1, (int) 3, (int) 33);
++      int j = Mth.m_14045_(p_140168_, 2, 32);
 +
 +      if (j != this.f_140126_) {
 +         int k = this.f_140126_;
@@ -1187,7 +1133,8 @@
 +            net.minecraftforge.event.ForgeEventFactory.fireChunkUnWatch(p_183755_, p_183756_, this.f_140133_);
           }
  
-       }
+-      }
++      } else { f_140128_.warn("Mismatch in world for chunk " + p_183756_ + " in world '" + this.f_140133_.getWorld().getName() + "' for player " + p_183755_, new Throwable()); } // Paper - replace chunk loader system
     }
  
     public int m_140394_() {
@@ -1381,7 +1328,7 @@
     }
  
     public List<ServerPlayer> m_183888_(ChunkPos p_183889_) {
-@@ -960,6 +_,14 @@
+@@ -960,6 +_,15 @@
        }
     }
  
@@ -1389,7 +1336,8 @@
 +   public final int getEffectiveViewDistance() {
 +      // TODO this needs to be checked on update
 +      // Mojang currently sets it to +1 of the configured view distance. So subtract one to get the one we really want.
-+      return this.f_140126_ - 1;
++      //TODO check if +0 is correct now
++      return this.f_140126_;
 +   }
 +   // Paper end
 +
@@ -1571,7 +1519,15 @@
                 if (p_140200_ instanceof ServerPlayer) {
                    ServerPlayer serverplayer = (ServerPlayer)p_140200_;
                    this.m_140192_(serverplayer, true);
-@@ -1149,33 +_,41 @@
+@@ -1133,6 +_,7 @@
+    }
+ 
+    protected void m_140331_(Entity p_140332_) {
++      org.spigotmc.AsyncCatcher.catchOp("entity untrack"); // Spigot
+       if (p_140332_ instanceof ServerPlayer serverplayer) {
+          this.m_140192_(serverplayer, false);
+ 
+@@ -1149,33 +_,38 @@
     }
  
     protected void m_140421_() {
@@ -1605,9 +1561,6 @@
 +      for (TrackedEntity tracker : this.f_140150_.values()) {
 +         // update tracker entry
 +         tracker.updatePlayers(tracker.f_140472_.getPlayersInTrackRange());
-+      }
-+
-+      for (TrackedEntity tracker : this.f_140150_.values()) {
 +         tracker.f_140471_.m_8533_();
 +      }
 +//      List<ServerPlayer> list = Lists.newArrayList();
@@ -1640,10 +1593,40 @@
  
     }
  
-@@ -1231,9 +_,10 @@
-          }
-       }
+@@ -1202,38 +_,11 @@
  
+       p_183761_.m_184135_(p_183763_.m_7697_(), p_183762_.getValue());
+       DebugPackets.m_133676_(this.f_140133_, p_183763_.m_7697_());
+-      List<Entity> list = Lists.newArrayList();
+-      List<Entity> list1 = Lists.newArrayList();
+-
+-      for(ChunkMap.TrackedEntity chunkmap$trackedentity : this.f_140150_.values()) {
+-         Entity entity = chunkmap$trackedentity.f_140472_;
+-         if (entity != p_183761_ && entity.m_146902_().equals(p_183763_.m_7697_())) {
+-            chunkmap$trackedentity.m_140497_(p_183761_);
+-            if (entity instanceof Mob && ((Mob)entity).m_21524_() != null) {
+-               list.add(entity);
+-            }
+-
+-            if (!entity.m_20197_().isEmpty()) {
+-               list1.add(entity);
+-            }
+-         }
+-      }
+-
+-      if (!list.isEmpty()) {
+-         for(Entity entity1 : list) {
+-            p_183761_.f_8906_.m_9829_(new ClientboundSetEntityLinkPacket(entity1, ((Mob)entity1).m_21524_()));
+-         }
+-      }
+-
+-      if (!list1.isEmpty()) {
+-         for(Entity entity2 : list1) {
+-            p_183761_.f_8906_.m_9829_(new ClientboundSetPassengersPacket(entity2));
+-         }
+-      }
+-
++      // Paper - no longer needed - this was used to account for clients bugging out since they needed a chunk to store entities, but they no longer need a chunk
 +      net.minecraftforge.event.ForgeEventFactory.fireChunkWatch(p_183761_, p_183763_, this.f_140133_);
     }
  

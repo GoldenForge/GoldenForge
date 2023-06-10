@@ -1,12 +1,12 @@
 package org.spigotmc;
 
-import io.papermc.paper.ConfigTemp;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.entity.item.ItemEntity;
+import org.goldenforge.GoldenConfig;
 
 public class TrackingRange {
     /**
@@ -23,30 +23,30 @@ public class TrackingRange {
         {
             return defaultRange;
         }
-        if (entity instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon) return defaultRange; // Paper - enderdragon is exempt
-        if ( entity instanceof ServerPlayer)
+        if ( entity instanceof ServerPlayer )
         {
-            return ConfigTemp.playerTrackingRange;
+            return GoldenConfig.playerTrackingRange;
             // Paper start - Simplify and set water mobs to animal tracking range
         }
         switch (entity.activationType) {
             case RAIDER:
             case MONSTER:
             case FLYING_MONSTER:
-                return ConfigTemp.monsterTrackingRange;
+                return GoldenConfig.monsterTrackingRange;
             case WATER:
             case VILLAGER:
             case ANIMAL:
-                return ConfigTemp.animalTrackingRange;
+                return GoldenConfig.animalTrackingRange;
             case MISC:
         }
-        if ( entity instanceof ItemFrame || entity instanceof Painting || entity instanceof ItemEntity || entity instanceof ExperienceOrb)
+        if ( entity instanceof ItemFrame || entity instanceof Painting || entity instanceof ItemEntity || entity instanceof ExperienceOrb )
         // Paper end
         {
-            return ConfigTemp.miscTrackingRange;
+            return GoldenConfig.miscTrackingRange;
         } else
         {
-            return ConfigTemp.otherTrackingRange;
+            if (entity instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon) return ((net.minecraft.server.level.ServerLevel)(entity.getCommandSenderWorld())).getChunkSource().chunkMap.getEffectiveViewDistance(); // Paper - enderdragon is exempt
+            return GoldenConfig.otherTrackingRange;
         }
     }
 
