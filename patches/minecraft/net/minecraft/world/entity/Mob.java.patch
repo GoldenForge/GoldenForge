@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/entity/Mob.java
 +++ b/net/minecraft/world/entity/Mob.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.entity;
+ 
++import com.destroystokyo.paper.PaperConfig;
+ import com.google.common.collect.ImmutableSet;
+ import com.google.common.collect.Maps;
+ import java.util.Arrays;
 @@ -116,6 +_,8 @@
     private CompoundTag f_21359_;
     private BlockPos f_21360_ = BlockPos.f_121853_;
@@ -9,6 +16,26 @@
  
     protected Mob(EntityType<? extends Mob> p_21368_, Level p_21369_) {
        super(p_21368_, p_21369_);
+@@ -178,6 +_,19 @@
+       return this.f_21365_;
+    }
+ 
++   // Paper start
++   @Override
++   public void inactiveTick() {
++      super.inactiveTick();
++      if (this.f_21345_.inactiveTick()) {
++         this.f_21345_.m_25373_();
++      }
++      if (this.f_21346_.inactiveTick()) {
++         this.f_21346_.m_25373_();
++      }
++   }
++   // Paper end
++
+    public MoveControl m_21566_() {
+       if (this.m_20159_() && this.m_20202_() instanceof Mob) {
+          Mob mob = (Mob)this.m_20202_();
 @@ -210,7 +_,11 @@
     }
  
@@ -58,9 +85,16 @@
           for(ItemEntity itementity : this.f_19853_.m_45976_(ItemEntity.class, this.m_20191_().m_82377_((double)vec3i.m_123341_(), (double)vec3i.m_123342_(), (double)vec3i.m_123343_()))) {
              if (!itementity.m_213877_() && !itementity.m_32055_().m_41619_() && !itementity.m_32063_() && this.m_7243_(itementity.m_32055_())) {
                 this.m_7581_(itementity);
-@@ -657,6 +_,14 @@
+@@ -656,7 +_,21 @@
+       if (this.f_19853_.m_46791_() == Difficulty.PEACEFUL && this.m_8028_()) {
           this.m_146870_();
        } else if (!this.m_21532_() && !this.m_8023_()) {
++         // Paper start - optimise checkDespawn
++         Player entityhuman = this.f_19853_.findNearbyPlayer(this, PaperConfig.despawnRanges.get(this.m_6095_().m_20674_()).hard() + 1, EntitySelector.PLAYER_AFFECTS_SPAWNING); // Paper
++         if (entityhuman == null) {
++            entityhuman = ((ServerLevel)this.f_19853_).playersAffectingSpawning.isEmpty() ? null : ((ServerLevel)this.f_19853_).playersAffectingSpawning.get(0);
++         }
++         // Paper end - optimise checkDespawn
           Entity entity = this.f_19853_.m_45930_(this, -1.0D);
 +         net.minecraftforge.eventbus.api.Event.Result result = net.minecraftforge.event.ForgeEventFactory.canEntityDespawn(this);
 +         if (result == net.minecraftforge.eventbus.api.Event.Result.DENY) {

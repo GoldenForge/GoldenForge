@@ -172,13 +172,17 @@
     }
  
     public static boolean m_46741_(BlockPos p_46742_) {
-@@ -164,12 +_,26 @@
+@@ -164,12 +_,30 @@
        return this.m_6325_(SectionPos.m_123171_(p_46746_.m_123341_()), SectionPos.m_123171_(p_46746_.m_123343_()));
     }
  
 +   @Override
 +   public final boolean m_46805_(BlockPos pos) {
 +      return getChunkIfLoaded(pos.m_123341_() >> 4, pos.m_123343_() >> 4) != null; // Paper
++   }
++
++   public final @Nullable BlockState getBlockStateIfLoadedAndInBounds(BlockPos blockposition) {
++      return m_6857_().m_61937_(blockposition) ? getBlockStateIfLoaded(blockposition) : null;
 +   }
 +
     public LevelChunk m_6325_(int p_46727_, int p_46728_) {

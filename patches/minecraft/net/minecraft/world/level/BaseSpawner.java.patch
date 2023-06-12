@@ -1,6 +1,10 @@
 --- a/net/minecraft/world/level/BaseSpawner.java
 +++ b/net/minecraft/world/level/BaseSpawner.java
-@@ -127,10 +_,15 @@
+@@ -124,13 +_,19 @@
+                      return;
+                   }
+ 
++                  entity.preserveMotion = true; // Paper - preserve entity motion from tag
                    entity.m_7678_(entity.m_20185_(), entity.m_20186_(), entity.m_20189_(), randomsource.m_188501_() * 360.0F, 0.0F);
                    if (entity instanceof Mob) {
                       Mob mob = (Mob)entity;
