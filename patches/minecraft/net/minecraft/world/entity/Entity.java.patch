@@ -673,6 +673,14 @@
     }
  
     public void m_20248_(double p_20249_, double p_20250_, double p_20251_) {
+@@ -1216,6 +_,7 @@
+       this.f_19855_ = p_20250_;
+       this.f_19856_ = d1;
+       this.m_6034_(d0, p_20250_, d1);
++      if (this.isValid) this.f_19853_.m_6325_((int) Math.floor(this.m_20185_()) >> 4, (int) Math.floor(this.m_20189_()) >> 4); // CraftBukkit
+    }
+ 
+    public void m_20219_(Vec3 p_20220_) {
 @@ -1231,11 +_,19 @@
     }
  
@@ -902,6 +910,55 @@
           });
        }
  
+@@ -2652,24 +_,44 @@
+    }
+ 
+    private Stream<Entity> m_146920_() {
++      if (this.f_19823_.isEmpty()) { return Stream.of(); } // Paper
+       return this.f_19823_.stream().flatMap(Entity::m_20199_);
+    }
+ 
+    public Stream<Entity> m_20199_() {
++      if (this.f_19823_.isEmpty()) { return Stream.of(this); } // Paper
+       return Stream.concat(Stream.of(this), this.m_146920_());
+    }
+ 
+    public Stream<Entity> m_142429_() {
++      if (this.f_19823_.isEmpty()) { return Stream.of(this); } // Paper
+       return Stream.concat(this.f_19823_.stream().flatMap(Entity::m_142429_), Stream.of(this));
+    }
+ 
+    public Iterable<Entity> m_146897_() {
+-      return () -> {
+-         return this.m_146920_().iterator();
+-      };
+-   }
++      // Paper start - rewrite this method
++      if (this.f_19823_.isEmpty()) { return ImmutableList.of(); }
++      ImmutableList.Builder<Entity> indirectPassengers = ImmutableList.builder();
++      for (Entity passenger : this.f_19823_) {
++         indirectPassengers.add(passenger);
++         indirectPassengers.addAll(passenger.m_146897_());
++      }
++      return indirectPassengers.build();
++      // Paper end
++   }
++
++   // Paper start - rewrite chunk system
++   public boolean hasAnyPlayerPassengers() {
++      // copied from below
++      if (this.f_19823_.isEmpty()) { return false; }
++      return this.m_146920_().anyMatch((entity) -> {
++         return entity instanceof Player;
++      });
++   }
++   // Paper end - rewrite chunk system
+ 
+    public boolean m_146898_() {
++      if (this.f_19823_.isEmpty()) { return false; } // Paper
+       return this.m_146920_().filter((p_185943_) -> {
+          return p_185943_ instanceof Player;
+       }).count() == 1L;
 @@ -2768,9 +_,17 @@
        this.f_19859_ = this.m_146908_();
     }
@@ -1078,6 +1135,15 @@
     }
  
     public void m_6043_() {
+@@ -3074,7 +_,7 @@
+       } else if (this.m_20159_()) {
+          return false;
+       } else {
+-         return !this.m_20160_() || !this.m_146898_();
++         return !this.m_20160_() || !this.hasAnyPlayerPassengers(); // Paper - rewrite chunk system - it should check if the entity has ANY player passengers
+       }
+    }
+ 
 @@ -3085,6 +_,103 @@
     public boolean m_142265_(Level p_146843_, BlockPos p_146844_) {
        return true;
