@@ -503,7 +503,7 @@
              lightningbolt.m_20874_(flag1);
              this.m_7967_(lightningbolt);
           }
-@@ -405,52 +_,93 @@
+@@ -405,52 +_,92 @@
  
        profilerfiller.m_6182_("iceandsnow");
        if (this.f_46441_.m_188503_(16) == 0) {
@@ -519,9 +519,8 @@
 +         blockposition.m_142448_(normalY);
 +         // Paper end
 +         Biome biome = this.m_204166_(blockposition).m_203334_();
-+         if (this.isAreaLoaded(blockposition, 1)) // Forge: check area to avoid loading neighbors in unloaded chunks
 +
-+            blockposition.m_142448_(downY);
++         blockposition.m_142448_(downY);
 +         if (biome.m_47477_(this, blockposition)) {
 +            this.m_46597_(blockposition, Blocks.f_50126_.m_49966_());
           }
