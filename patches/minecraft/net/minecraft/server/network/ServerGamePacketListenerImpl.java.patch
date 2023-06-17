@@ -335,6 +335,53 @@
        }
  
     }
+@@ -737,6 +_,46 @@
+    }
+ 
+    public void m_6829_(ServerboundEditBookPacket p_9862_) {
++      // Paper start
++      if (!MinecraftServer.getServer().m_18695_()) {
++         List<String> pageList = p_9862_.m_182755_();
++         long byteTotal = 0;
++         int maxBookPageSize = GoldenConfig.pageMax; //TODO: add to config file
++         double multiplier = Math.max(0.3D, Math.min(1D, GoldenConfig.totalMultiplier)); //TODO: add to config file
++         long byteAllowed = maxBookPageSize;
++         for (String testString : pageList) {
++            int byteLength = testString.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
++            if (byteLength > 256 * 4) {
++               ServerGamePacketListenerImpl.f_9744_.warn(this.f_9743_.m_6302_() + " tried to send a book with with a page too large!");
++               f_9745_.scheduleOnMain(() -> this.m_9942_(Component.m_237113_("Book too large!")));
++               return;
++            }
++            byteTotal += byteLength;
++            int length = testString.length();
++            int multibytes = 0;
++            if (byteLength != length) {
++               for (char c : testString.toCharArray()) {
++                  if (c > 127) {
++                     multibytes++;
++                  }
++               }
++            }
++            byteAllowed += (maxBookPageSize * Math.min(1, Math.max(0.1D, (double) length / 255D))) * multiplier;
++
++            if (multibytes > 1) {
++               // penalize MB
++               byteAllowed -= multibytes;
++            }
++         }
++
++         if (byteTotal > byteAllowed) {
++            ServerGamePacketListenerImpl.f_9744_.warn(this.f_9743_.m_6302_() + " tried to send too large of a book. Book Size: " + byteTotal + " - Allowed:  "+ byteAllowed + " - Pages: " + pageList.size());
++            f_9745_.scheduleOnMain(() -> this.m_9942_(Component.m_237113_("Book too large!")));
++            return;
++         }
++      }
++      // Paper end
++
+       int i = p_9862_.m_134013_();
+       if (Inventory.m_36045_(i) || i == 40) {
+          List<String> list = Lists.newArrayList();
 @@ -831,34 +_,153 @@
        }
     }
@@ -672,6 +719,14 @@
  
     private boolean m_9795_(LevelReader p_9796_, AABB p_9797_) {
        Iterable<VoxelShape> iterable = p_9796_.m_186431_(this.f_9743_, this.f_9743_.m_20191_().m_82406_((double)1.0E-5F));
+@@ -965,6 +_,7 @@
+    }
+ 
+    public void m_143617_(double p_143618_, double p_143619_, double p_143620_, float p_143621_, float p_143622_, Set<ClientboundPlayerPositionPacket.RelativeArgument> p_143623_, boolean p_143624_) {
++      org.spigotmc.AsyncCatcher.catchOp("teleport"); // Paper
+       double d0 = p_143623_.contains(ClientboundPlayerPositionPacket.RelativeArgument.X) ? this.f_9743_.m_20185_() : 0.0D;
+       double d1 = p_143623_.contains(ClientboundPlayerPositionPacket.RelativeArgument.Y) ? this.f_9743_.m_20186_() : 0.0D;
+       double d2 = p_143623_.contains(ClientboundPlayerPositionPacket.RelativeArgument.Z) ? this.f_9743_.m_20189_() : 0.0D;
 @@ -976,7 +_,8 @@
        }
  
