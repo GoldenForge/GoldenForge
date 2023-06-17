@@ -829,6 +829,14 @@ public class RegionizedPlayerChunkLoader {
                     // the target chunk may not be owned by this region, but this should be resolved in the future
                     break;
                 }
+                if (!chunk.isPostProcessingDone) {
+                    // not yet post-processed, need to do this so that tile entities can properly be sent to clients
+                    chunk.postProcessGeneration();
+                    // check if there was any recursive action
+                    if (this.removed || this.sendQueue.isEmpty() || this.sendQueue.firstLong() != pendingSend) {
+                        return;
+                    } // else: good to dequeue and send, fall through
+                }
                 this.sendQueue.dequeueLong();
 
                 this.sendChunk(pendingSendX, pendingSendZ);
