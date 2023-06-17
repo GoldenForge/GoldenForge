@@ -1,5 +1,21 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
+@@ -35,6 +_,7 @@
+ import net.minecraft.world.item.MapItem;
+ import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+ import net.minecraft.world.phys.Vec3;
++import org.goldenforge.GoldenConfig;
+ import org.slf4j.Logger;
+ 
+ public class ServerEntity {
+@@ -57,6 +_,7 @@
+    private boolean f_8525_;
+ 
+    public ServerEntity(ServerLevel p_8528_, Entity p_8529_, int p_8530_, boolean p_8531_, Consumer<Packet<?>> p_8532_) {
++      this.f_8523_ = com.google.common.collect.ImmutableList.of(); // Paper - optimize passenger checks
+       this.f_8509_ = p_8528_;
+       this.f_8513_ = p_8532_;
+       this.f_8510_ = p_8529_;
 @@ -80,10 +_,9 @@
        if ($$11 instanceof ItemFrame itemframe) {
           if (this.f_8521_ % 10 == 0) {
@@ -28,7 +44,7 @@
  
        if (this.f_8521_ % this.f_8511_ == 0 || this.f_8510_.f_19812_ || this.f_8510_.m_20088_().m_135352_()) {
           if (this.f_8510_.m_20159_()) {
-@@ -117,7 +_,14 @@
+@@ -117,16 +_,24 @@
              int l = Mth.m_14143_(this.f_8510_.m_146908_() * 256.0F / 360.0F);
              int k1 = Mth.m_14143_(this.f_8510_.m_146909_() * 256.0F / 360.0F);
              Vec3 vec3 = this.f_8510_.m_213870_();
@@ -44,10 +60,14 @@
              Packet<?> packet1 = null;
              boolean flag3 = flag2 || this.f_8521_ % 60 == 0;
              boolean flag4 = Math.abs(l - this.f_8517_) >= 1 || Math.abs(k1 - this.f_8518_) >= 1;
-@@ -127,6 +_,7 @@
+-            if (this.f_8521_ > 0 || this.f_8510_ instanceof AbstractArrow) {
++            if (!(this.f_8510_ instanceof net.minecraft.world.entity.decoration.HangingEntity) || this.f_8521_ > 0 || this.f_8510_ instanceof AbstractArrow) { // Paper - Always update position
+                long i = this.f_214995_.m_238025_(vec3);
+                long j = this.f_214995_.m_238027_(vec3);
                 long k = this.f_214995_.m_238029_(vec3);
                 boolean flag = i < -32768L || i > 32767L || j < -32768L || j > 32767L || k < -32768L || k > 32767L;
-                if (!flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_()) {
+-               if (!flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_()) {
++               if (!flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_() && !(GoldenConfig.sendFullPosForHardCollidingEntities && this.f_8510_.hardCollides())) { // Paper - send full pos for hard colliding entities to prevent collision problems due to desync
 +                  if (flag2 || flag3 || this.f_8510_ instanceof AbstractArrow) { // Pufferfish
                    if ((!flag3 || !flag4) && !(this.f_8510_ instanceof AbstractArrow)) {
                       if (flag3) {
@@ -81,3 +101,23 @@
        }
  
        Packet<?> packet = this.f_8510_.m_5654_();
+@@ -238,6 +_,7 @@
+          if (!list.isEmpty()) {
+             p_8537_.accept(new ClientboundSetEquipmentPacket(this.f_8510_.m_19879_(), list));
+          }
++         ((LivingEntity) this.f_8510_).m_21315_(); // CraftBukkit - SPIGOT-3789: sync again immediately after sending
+       }
+ 
+       if (this.f_8510_ instanceof LivingEntity) {
+@@ -247,6 +_,11 @@
+             p_8537_.accept(new ClientboundUpdateMobEffectPacket(this.f_8510_.m_19879_(), mobeffectinstance));
+          }
+       }
++
++      // CraftBukkit start - Fix for nonsensical head yaw
++      this.f_8519_ = Mth.m_14143_(this.f_8510_.m_6080_() * 256.0F / 360.0F);
++      p_8537_.accept(new ClientboundRotateHeadPacket(this.f_8510_, (byte) this.f_8519_));
++      // CraftBukkit end
+ 
+       if (!this.f_8510_.m_20197_().isEmpty()) {
+          p_8537_.accept(new ClientboundSetPassengersPacket(this.f_8510_));
