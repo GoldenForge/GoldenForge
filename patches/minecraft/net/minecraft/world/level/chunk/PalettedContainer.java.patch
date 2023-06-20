@@ -42,15 +42,15 @@
        PalettedContainer.Data<T> data = this.f_188032_;
        PalettedContainer.Data<T> data1 = this.m_188051_(data, p_63142_);
        data1.m_188111_(data.f_188102_, data.f_188101_);
-@@ -97,7 +_,7 @@
-       return data1.f_188102_.m_6796_(p_63143_);
+@@ -114,7 +_,7 @@
+       return this.m_63096_(this.f_188033_.m_188145_(p_63128_, p_63129_, p_63130_), p_63131_);
     }
  
--   public T m_63091_(int p_63092_, int p_63093_, int p_63094_, T p_63095_) {
-+   public synchronized T m_63091_(int p_63092_, int p_63093_, int p_63094_, T p_63095_) {
-       this.m_63084_();
- 
-       Object object;
+-   private T m_63096_(int p_63097_, T p_63098_) {
++   private synchronized T m_63096_(int p_63097_, T p_63098_) {
+       int i = this.f_188032_.f_188102_.m_6796_(p_63098_);
+       int j = this.f_188032_.f_188101_.m_13516_(p_63097_, i);
+       return this.f_188032_.f_188102_.m_5795_(j);
 @@ -131,7 +_,7 @@
  
     }
