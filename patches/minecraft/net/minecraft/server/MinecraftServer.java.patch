@@ -171,38 +171,9 @@
  
     public GameType m_130008_() {
        return this.f_129749_.m_5464_();
-@@ -481,32 +_,80 @@
- 
+@@ -482,31 +_,51 @@
     public abstract boolean m_6983_();
  
-+//   public boolean saveAllChunks(boolean p_129886_, boolean p_129887_, boolean p_129888_) {
-+//      boolean flag = false;
-+//
-+//      for(ServerLevel serverlevel : this.getAllLevels()) {
-+//         if (!p_129886_) {
-+//            LOGGER.info("Saving chunks for level '{}'/{}", serverlevel, serverlevel.dimension().location());
-+//         }
-+//
-+//         serverlevel.save((ProgressListener)null, p_129887_, serverlevel.noSave && !p_129888_);
-+//         flag = true;
-+//      }
-+//
-+//      ServerLevel serverlevel2 = this.overworld();
-+//      ServerLevelData serverleveldata = this.worldData.overworldData();
-+//      serverleveldata.setWorldBorder(serverlevel2.getWorldBorder().createSettings());
-+//      this.worldData.setCustomBossEvents(this.getCustomBossEvents().save());
-+//      this.storageSource.saveDataTag(this.registryAccess(), this.worldData, this.getPlayerList().getSingleplayerData());
-+//      if (p_129887_) {
-+//         for(ServerLevel serverlevel1 : this.getAllLevels()) {
-+//            LOGGER.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", (Object)serverlevel1.getChunkSource().chunkMap.getStorageName());
-+//         }
-+//
-+//         LOGGER.info("ThreadedAnvilChunkStorage: All dimensions are saved");
-+//      }
-+//
-+//      return flag;
-+//   }
-+
     public boolean m_129885_(boolean p_129886_, boolean p_129887_, boolean p_129888_) {
 -      boolean flag = false;
 -
@@ -277,15 +248,13 @@
     }
  
     public boolean m_195514_(boolean p_195515_, boolean p_195516_, boolean p_195517_) {
-@@ -526,7 +_,41 @@
+@@ -526,7 +_,39 @@
        this.m_7041_();
     }
  
 +
 +   // CraftBukkit start
 +   private boolean hasStopped = false;
-+   public volatile boolean hasFullyShutdown = false; // Paper
-+   private boolean hasLoggedStop = false; // Paper
 +   private final Object stopLock = new Object();
 +   public final boolean hasStopped() {
 +      synchronized (this.stopLock) {
@@ -327,7 +296,7 @@
        }
  
        f_129750_.info("Saving worlds");
-@@ -551,42 +_,46 @@
+@@ -551,42 +_,27 @@
           }
        }
  
@@ -370,25 +339,6 @@
 +         MinecraftServer.f_129750_.error("Failed to unlock level {}", this.f_129744_.m_78277_(), ioexception1);
        }
  
-+//      for(ServerLevel serverlevel2 : this.getAllLevels()) {
-+//         if (serverlevel2 != null) {
-+//            try {
-+//               net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.LevelEvent.Unload(serverlevel2));
-+//               serverlevel2.close();
-+//            } catch (IOException ioexception1) {
-+//               LOGGER.error("Exception closing the level", (Throwable)ioexception1);
-+//            }
-+//         }
-+//      }
-+//
-+//      this.isSaving = false;
-+//      this.resources.close();
-+//
-+//      try {
-+//         this.storageSource.close();
-+//      } catch (IOException ioexception) {
-+//         LOGGER.error("Failed to unlock level {}", this.storageSource.getLevelId(), ioexception);
-+//      }
 +
 +      f_129750_.info("Flushing Chunk IO");
 +      io.papermc.paper.chunk.system.io.RegionFileIOThread.close(true); // Paper // Paper - rewrite chunk system
@@ -402,7 +352,7 @@
     }
  
     public String m_130009_() {
-@@ -602,23 +_,94 @@
+@@ -602,23 +_,93 @@
     }
  
     public void m_7570_(boolean p_129884_) {
@@ -410,7 +360,6 @@
 +      this.safeShutdown(p_129884_);
 +   }
 +   public void safeShutdown(boolean waitForShutdown) {
-+      this.hasLoggedStop = true; // Paper
 +      // Paper end
        this.f_129764_ = false;
 -      if (p_129884_) {
