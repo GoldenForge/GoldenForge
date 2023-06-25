@@ -43,7 +43,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,123 @@
+@@ -104,8 +_,132 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -161,12 +161,35 @@
 +   public int wakeupInactiveRemainingMonsters;
 +   public int wakeupInactiveRemainingVillagers;
 +   // Paper end
++
++   // Pufferfish start - ensure these get inlined
++   private final int minBuildHeight, minSection, height, maxBuildHeight, maxSection;
++   @Override public final int m_151558_() { return this.maxBuildHeight; }
++   @Override public final int m_151560_() { return this.minSection; }
++   @Override public final int m_151561_() { return this.maxSection; }
++   @Override public final int m_141937_() { return this.minBuildHeight; }
++   @Override public final int m_141928_() { return this.height; }
++   // Pufferfish end
  
     protected Level(WritableLevelData p_220352_, ResourceKey<Level> p_220353_, Holder<DimensionType> p_220354_, Supplier<ProfilerFiller> p_220355_, boolean p_220356_, boolean p_220357_, long p_220358_, int p_220359_) {
 +      super(Level.class);
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
+@@ -113,6 +_,13 @@
+          return new IllegalArgumentException("Dimension must be registered, got " + p_220354_);
+       });
+       final DimensionType dimensiontype = p_220354_.m_203334_();
++      // Pufferfish start
++      this.minBuildHeight = dimensiontype.f_156647_();
++      this.minSection = SectionPos.m_123171_(this.minBuildHeight);
++      this.height = dimensiontype.f_156648_();
++      this.maxBuildHeight = this.minBuildHeight + this.height;
++      this.maxSection = SectionPos.m_123171_(this.maxBuildHeight - 1) + 1;
++      // Pufferfish end
+       this.f_46421_ = p_220353_;
+       this.f_46443_ = p_220356_;
+       if (dimensiontype.f_63859_() != 1.0D) {
 @@ -145,7 +_,7 @@
     }
  
