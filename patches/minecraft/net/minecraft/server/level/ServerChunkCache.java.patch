@@ -60,7 +60,7 @@
     public ServerChunkCache(ServerLevel p_214982_, LevelStorageSource.LevelStorageAccess p_214983_, DataFixer p_214984_, StructureTemplateManager p_214985_, Executor p_214986_, ChunkGenerator p_214987_, int p_214988_, int p_214989_, boolean p_214990_, ChunkProgressListener p_214991_, ChunkStatusUpdateListener p_214992_, Supplier<DimensionDataStorage> p_214993_) {
        this.f_8329_ = p_214982_;
        this.f_8332_ = new ServerChunkCache.MainThreadExecutor(p_214982_);
-@@ -80,6 +_,261 @@
+@@ -80,6 +_,127 @@
        this.m_8488_();
     }
  
@@ -168,110 +168,6 @@
 +      return ret;
 +   }
 +
-+   public void getEntityTickingChunkAsync(int x, int z, java.util.function.Consumer<LevelChunk> onLoad) {
-+      io.papermc.paper.chunk.system.ChunkSystem.scheduleTickingState(
-+              this.f_8329_, x, z, ChunkHolder.FullChunkStatus.ENTITY_TICKING, true,
-+              ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL, onLoad
-+      );
-+   }
-+
-+   public void getTickingChunkAsync(int x, int z, java.util.function.Consumer<LevelChunk> onLoad) {
-+      io.papermc.paper.chunk.system.ChunkSystem.scheduleTickingState(
-+              this.f_8329_, x, z, ChunkHolder.FullChunkStatus.TICKING, true,
-+              ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL, onLoad
-+      );
-+   }
-+
-+   public void getFullChunkAsync(int x, int z, java.util.function.Consumer<LevelChunk> onLoad) {
-+      io.papermc.paper.chunk.system.ChunkSystem.scheduleTickingState(
-+              this.f_8329_, x, z, ChunkHolder.FullChunkStatus.BORDER, true,
-+              ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL, onLoad
-+      );
-+   }
-+
-+   void chunkLoadAccept(int chunkX, int chunkZ, ChunkAccess chunk, java.util.function.Consumer<ChunkAccess> consumer) {
-+      try {
-+         consumer.accept(chunk);
-+      } catch (Throwable throwable) {
-+         if (throwable instanceof ThreadDeath) {
-+            throw (ThreadDeath)throwable;
-+         }
-+         MinecraftServer.getServer().f_129750_.error("Load callback for chunk " + chunkX + "," + chunkZ + " in world '" + this.f_8329_.getWorld().getName() + "' threw an exception", throwable);
-+      }
-+   }
-+
-+   void getChunkAtAsynchronously(int chunkX, int chunkZ, int ticketLevel,
-+                                 java.util.function.Consumer<ChunkAccess> consumer) {
-+      if (ticketLevel <= 33) {
-+         this.getFullChunkAsync(chunkX, chunkZ, (java.util.function.Consumer)consumer);
-+         return;
-+      }
-+
-+      io.papermc.paper.chunk.system.ChunkSystem.scheduleChunkLoad(
-+              this.f_8329_, chunkX, chunkZ, ChunkHolder.m_140074_(ticketLevel), true,
-+              ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL, consumer
-+      );
-+   }
-+
-+
-+   public final void getChunkAtAsynchronously(int chunkX, int chunkZ, ChunkStatus status, boolean gen, boolean allowSubTicketLevel, java.util.function.Consumer<ChunkAccess> onLoad) {
-+      // try to fire sync
-+      int chunkStatusTicketLevel = 33 + ChunkStatus.m_62370_(status);
-+      ChunkHolder playerChunk = this.f_8325_.m_140174_(io.papermc.paper.util.CoordinateUtils.getChunkKey(chunkX, chunkZ));
-+      if (playerChunk != null) {
-+         ChunkStatus holderStatus = playerChunk.getChunkHolderStatus();
-+         ChunkAccess immediate = playerChunk.getAvailableChunkNow();
-+         if (immediate != null) {
-+            if (allowSubTicketLevel ? immediate.m_6415_().m_62427_(status) : (playerChunk.m_140093_() <= chunkStatusTicketLevel && holderStatus != null && holderStatus.m_62427_(status))) {
-+               this.chunkLoadAccept(chunkX, chunkZ, immediate, onLoad);
-+               return;
-+            } else {
-+               if (gen || (!allowSubTicketLevel && immediate.m_6415_().m_62427_(status))) {
-+                  this.getChunkAtAsynchronously(chunkX, chunkZ, chunkStatusTicketLevel, onLoad);
-+                  return;
-+               } else {
-+                  this.chunkLoadAccept(chunkX, chunkZ, null, onLoad);
-+                  return;
-+               }
-+            }
-+         }
-+      }
-+
-+      // need to fire async
-+
-+      if (gen && !allowSubTicketLevel) {
-+         this.getChunkAtAsynchronously(chunkX, chunkZ, chunkStatusTicketLevel, onLoad);
-+         return;
-+      }
-+
-+      this.getChunkAtAsynchronously(chunkX, chunkZ, io.papermc.paper.util.MCUtil.getTicketLevelFor(ChunkStatus.f_62314_), (ChunkAccess chunk) -> {
-+         if (chunk == null) {
-+            throw new IllegalStateException("Chunk cannot be null");
-+         }
-+
-+         if (!chunk.m_6415_().m_62427_(status)) {
-+            if (gen) {
-+               this.getChunkAtAsynchronously(chunkX, chunkZ, chunkStatusTicketLevel, onLoad);
-+               return;
-+            } else {
-+               ServerChunkCache.this.chunkLoadAccept(chunkX, chunkZ, null, onLoad);
-+               return;
-+            }
-+         } else {
-+            if (allowSubTicketLevel) {
-+               ServerChunkCache.this.chunkLoadAccept(chunkX, chunkZ, chunk, onLoad);
-+               return;
-+            } else {
-+               this.getChunkAtAsynchronously(chunkX, chunkZ, chunkStatusTicketLevel, onLoad);
-+               return;
-+            }
-+         }
-+      });
-+   }
-+   // Paper end
-+
-+
-+   // Paper start
 +   @Nullable
 +   public ChunkAccess getChunkAtImmediately(int x, int z) {
 +      ChunkHolder holder = this.f_8325_.m_140327_(ChunkPos.m_45589_(x, z));
@@ -281,36 +177,6 @@
 +
 +      return holder.m_140089_();
 +   }
-+
-+   private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> bringToFullStatusAsync(int x, int z, ChunkPos chunkPos, boolean isUrgent) {
-+      return this.bringToStatusAsync(x, z, chunkPos, ChunkStatus.f_62326_, isUrgent);
-+   }
-+   private long asyncLoadSeqCounter;
-+
-+   private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> bringToStatusAsync(int x, int z, ChunkPos chunkPos, ChunkStatus status, boolean isUrgent) {
-+      CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future = this.getChunkFutureMainThread(x, z, status, true, isUrgent);
-+      Long identifier = Long.valueOf(this.asyncLoadSeqCounter++);
-+      int ticketLevel = MCUtil.getTicketLevelFor(status);
-+      this.addTicketAtLevel(TicketType.ASYNC_LOAD, chunkPos, ticketLevel, identifier);
-+
-+      return future.thenComposeAsync((Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either) -> {
-+         // either left -> success
-+         // either right -> failure
-+
-+         this.removeTicketAtLevel(TicketType.ASYNC_LOAD, chunkPos, ticketLevel, identifier);
-+         this.addTicketAtLevel(TicketType.f_9449_, chunkPos, ticketLevel, chunkPos); // allow unloading
-+
-+         Optional<ChunkHolder.ChunkLoadingFailure> failure = either.right();
-+
-+         if (failure.isPresent()) {
-+            // failure
-+            throw new IllegalStateException("Chunk failed to load: " + failure.get().toString());
-+         }
-+
-+         return CompletableFuture.completedFuture(either);
-+      }, this.f_8332_);
-+   }
-+
 +   public <T> void addTicketAtLevel(TicketType<T> ticketType, ChunkPos chunkPos, int ticketLevel, T identifier) {
 +      this.f_8327_.m_140792_(ticketType, chunkPos, ticketLevel, identifier);
 +   }
