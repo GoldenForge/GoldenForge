@@ -1,0 +1,76 @@
+--- a/net/minecraft/world/phys/shapes/EntityCollisionContext.java
++++ b/net/minecraft/world/phys/shapes/EntityCollisionContext.java
+@@ -18,43 +_,58 @@
+          return p_82900_;
+       }
+    };
+-   private final boolean f_82866_;
+-   private final double f_82867_;
+-   private final ItemStack f_82868_;
+-   private final Predicate<FluidState> f_82869_;
++   // Pufferfish start - remove these and pray no plugin uses them
++   //   private final boolean descending;
++//   private final double entityBottom;
++//   private final ItemStack heldItem;
++//   private final Predicate<FluidState> canStandOnFluid;
++   // Pufferfish end
+    @Nullable
+    private final Entity f_166002_;
+ 
+    protected EntityCollisionContext(boolean p_198916_, double p_198917_, ItemStack p_198918_, Predicate<FluidState> p_198919_, @Nullable Entity p_198920_) {
+-      this.f_82866_ = p_198916_;
+-      this.f_82867_ = p_198917_;
+-      this.f_82868_ = p_198918_;
+-      this.f_82869_ = p_198919_;
++//      this.descending = p_198916_;
++//      this.entityBottom = p_198917_;
++//      this.heldItem = p_198918_;
++//      this.canStandOnFluid = p_198919_;
+       this.f_166002_ = p_198920_;
+    }
+ 
+    /** @deprecated */
+    @Deprecated
+    protected EntityCollisionContext(Entity p_82872_) {
+-      this(p_82872_.m_20164_(), p_82872_.m_20186_(), p_82872_ instanceof LivingEntity ? ((LivingEntity)p_82872_).m_21205_() : ItemStack.f_41583_, p_82872_ instanceof LivingEntity ? ((LivingEntity)p_82872_)::m_203441_ : (p_205113_) -> {
+-         return false;
+-      }, p_82872_);
++//      this(p_82872_.isDescending(), p_82872_.getY(), p_82872_ instanceof LivingEntity ? ((LivingEntity)p_82872_).getMainHandItem() : ItemStack.EMPTY, p_82872_ instanceof LivingEntity ? ((LivingEntity)p_82872_)::canStandOnFluid : (p_205113_) -> {
++//         return false;
++//      }, p_82872_);
++      this.f_166002_ = p_82872_;
+    }
+ 
+    public boolean m_7142_(Item p_82879_) {
+-      return this.f_82868_.m_150930_(p_82879_);
++      // Pufferfish start
++      Entity entity = this.f_166002_;
++      if (entity instanceof LivingEntity livingEntity) {
++         return livingEntity.m_21205_().m_150930_(p_82879_);
++      }
++      return ItemStack.f_41583_.m_150930_(p_82879_);
++      // Pufferfish end
+    }
+ 
+    public boolean m_203682_(FluidState p_205115_, FluidState p_205116_) {
+-      return this.f_82869_.test(p_205116_) && !p_205115_.m_76152_().m_6212_(p_205116_.m_76152_());
++      // Pufferfish start
++      Entity entity = this.f_166002_;
++      if (entity instanceof LivingEntity livingEntity) {
++         return livingEntity.m_203441_(p_205116_) && !p_205115_.m_76152_().m_6212_(p_205116_.m_76152_());
++      }
++      return false;
++      // Pufferfish end
+    }
+ 
+    public boolean m_6226_() {
+-      return this.f_82866_;
++      return this.f_166002_ != null && this.f_166002_.m_20164_(); // Pufferfish
+    }
+ 
+    public boolean m_6513_(VoxelShape p_82886_, BlockPos p_82887_, boolean p_82888_) {
+-      return this.f_82867_ > (double)p_82887_.m_123342_() + p_82886_.m_83297_(Direction.Axis.Y) - (double)1.0E-5F;
++      return (this.f_166002_ == null ? -Double.MAX_VALUE : f_166002_.m_20186_()) > (double)p_82887_.m_123342_() + p_82886_.m_83297_(Direction.Axis.Y) - (double)1.0E-5F; // Pufferfish
+    }
+ 
+    @Nullable
