@@ -125,7 +125,7 @@ public final class ChunkTaskScheduler {
         ChunkStatus.CARVERS.writeRadius = 0;
         ChunkStatus.LIQUID_CARVERS.writeRadius = 0;
         ChunkStatus.FEATURES.writeRadius = 1;
-        ChunkStatus.LIGHT.writeRadius = 1;
+        ChunkStatus.LIGHT.writeRadius = 2;
         ChunkStatus.SPAWN.writeRadius = 0;
         ChunkStatus.HEIGHTMAPS.writeRadius = 0;
         ChunkStatus.FULL.writeRadius = 0;
