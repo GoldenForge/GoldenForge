@@ -43,7 +43,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,119 @@
+@@ -104,8 +_,123 @@
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;
@@ -79,6 +79,10 @@
 +
 +   public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
 +      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(x, z);
++   }
++
++   public final @Nullable LevelChunk getChunkIfLoaded(BlockPos blockposition) {
++      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4);
 +   }
 +
 +   // Paper start

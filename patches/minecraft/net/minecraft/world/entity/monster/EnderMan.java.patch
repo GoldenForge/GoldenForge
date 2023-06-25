@@ -25,7 +25,24 @@
           return false;
        } else {
           Vec3 vec3 = p_32535_.m_20252_(1.0F).m_82541_();
-@@ -273,8 +_,10 @@
+@@ -264,17 +_,25 @@
+ 
+    private boolean m_32543_(double p_32544_, double p_32545_, double p_32546_) {
+       BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos(p_32544_, p_32545_, p_32546_);
++      // Pufferfish start - single chunk lookup
++      net.minecraft.world.level.chunk.LevelChunk chunk = this.f_19853_.getChunkIfLoaded(blockpos$mutableblockpos);
++      if (chunk == null) {
++         return false;
++      }
++      // Pufferfish end
+ 
+-      while(blockpos$mutableblockpos.m_123342_() > this.f_19853_.m_141937_() && !this.f_19853_.m_8055_(blockpos$mutableblockpos).m_60767_().m_76334_()) {
++      while(blockpos$mutableblockpos.m_123342_() > this.f_19853_.m_141937_() && !chunk.m_8055_(blockpos$mutableblockpos).m_60767_().m_76334_()) { // Pufferfish
+          blockpos$mutableblockpos.m_122173_(Direction.DOWN);
+       }
+ 
+-      BlockState blockstate = this.f_19853_.m_8055_(blockpos$mutableblockpos);
++      BlockState blockstate = chunk.m_8055_(blockpos$mutableblockpos); // Pufferfish
        boolean flag = blockstate.m_60767_().m_76334_();
        boolean flag1 = blockstate.m_60819_().m_205070_(FluidTags.f_13131_);
        if (flag && !flag1) {
