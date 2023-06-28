@@ -19,7 +19,7 @@
 +
 +            // Paper start
 +            int packetLength = friendlybytebuf.readableBytes();
-+            if (packetLength > MAX_PACKET_SIZE) {
++            if (packetLength > 8388608) {
 +               throw new PacketTooLargeException(p_130546_, packetLength);
 +            }
 +            // Paper end
