@@ -72,6 +72,16 @@
     }
  
     public FluidState m_6425_(BlockPos p_9577_) {
+@@ -189,7 +_,8 @@
+       if (blockstate.m_60795_()) {
+          return false;
+       } else {
+-         if (p_9551_) {
++         if (p_9551_) f_9474_.warn("Potential async entity add during worldgen", new Throwable()); // Paper - log when this happens
++         if (false) { // CraftBukkit - SPIGOT-6833: Do not drop during world generation
+             BlockEntity blockentity = blockstate.m_155947_() ? this.m_7702_(p_9550_) : null;
+             Block.m_49881_(blockstate, this.f_9479_, p_9550_, blockentity, p_9552_, ItemStack.f_41583_);
+          }
 @@ -416,4 +_,11 @@
     public long m_183596_() {
        return this.f_184182_.getAndIncrement();
