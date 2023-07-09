@@ -17,8 +17,8 @@ Before starting your server, remove these mods because their modifications are i
 - smoothchunk
 - chunksending
 - pluto (krypton)
-- ~~canary~~ (require custom config [here](https://github.com/GoldenForge/GoldenForge/docs/configs/canary.properties))
-- ~~modernfix~~ (require custom config [here](https://github.com/GoldenForge/GoldenForge/docs/configs/modernfix-mixins.properties))
+- ~~canary~~ (require custom config [here](https://github.com/GoldenForge/GoldenForge/tree/1.19.2/docs/configs/canary.properties))
+- ~~modernfix~~ (require custom config [here](https://github.com/GoldenForge/GoldenForge/tree/1.19.2/docs/configs/modernfix-mixins.properties))
 
 ## How goldenforge is working ?
 We integrate paper optimizations in forge keeping in mind mod compatibility. Goldenforge achieves a great performance improvement (benchmark coming soon) while ensuring  compatibility and stability.
