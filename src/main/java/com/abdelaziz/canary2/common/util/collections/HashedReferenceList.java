@@ -1,4 +1,4 @@
-package com.abdelaziz.canary.common.util.collections;
+package com.abdelaziz.canary2.common.util.collections;
 
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;

@@ -72,19 +72,7 @@
     public abstract static class BlockStateBase extends StateHolder<Block, BlockState> {
        private final int f_60594_;
        private final boolean f_60595_;
-@@ -425,9 +_,11 @@
-       private final BlockBehaviour.OffsetType f_222962_;
-       @Nullable
-       protected BlockBehaviour.BlockStateBase.Cache f_60593_;
-+      private FluidState fluidState;
- 
-       protected BlockStateBase(Block p_60608_, ImmutableMap<Property<?>, Comparable<?>> p_60609_, MapCodec<BlockState> p_60610_) {
-          super(p_60608_, p_60609_, p_60610_);
-+         this.fluidState = Fluids.f_76191_.m_76145_();
-          BlockBehaviour.Properties blockbehaviour$properties = p_60608_.f_60439_;
-          this.f_60594_ = blockbehaviour$properties.f_60886_.applyAsInt(this.m_7160_());
-          this.f_60595_ = p_60608_.m_7923_(this.m_7160_());
-@@ -443,13 +_,74 @@
+@@ -443,6 +_,33 @@
           this.f_60605_ = blockbehaviour$properties.f_60901_;
           this.f_60606_ = blockbehaviour$properties.f_60902_;
           this.f_222962_ = blockbehaviour$properties.f_222978_.apply(this.m_7160_());
@@ -118,8 +106,7 @@
        }
  
        public void m_60611_() {
-+         this.fluidState = ((Block) this.f_61112_).m_5888_(this.m_7160_());
-          if (!this.m_60734_().m_49967_()) {
+@@ -450,6 +_,39 @@
              this.f_60593_ = new BlockBehaviour.BlockStateBase.Cache(this.m_7160_());
           }
  
@@ -205,9 +192,8 @@
        }
  
 -      public FluidState m_60819_() {
--         return this.m_60734_().m_5888_(this.m_7160_());
 +      public FluidState m_60819_() {  // Paper
-+         return this.fluidState;
+          return this.m_60734_().m_5888_(this.m_7160_());
        }
  
 -      public boolean m_60823_() {

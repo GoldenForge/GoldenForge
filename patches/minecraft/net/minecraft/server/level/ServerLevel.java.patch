@@ -469,7 +469,7 @@
     }
  
 +   // Paper start - optimise random block ticking
-+   private final BlockPos.MutableBlockPos chunkTickMutablePosition = new BlockPos.MutableBlockPos();
++   private final BlockPos.MutableBlockPos blockposition = new BlockPos.MutableBlockPos();
 +   // Paper end
     public void m_8714_(LevelChunk p_8715_, int p_8716_) {
        ChunkPos chunkpos = p_8715_.m_7697_();
@@ -478,7 +478,7 @@
        int j = chunkpos.m_45605_();
        ProfilerFiller profilerfiller = this.m_46473_();
        profilerfiller.m_6180_("thunder");
-+      final BlockPos.MutableBlockPos blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
++      //final BlockPos.MutableBlockPos blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
        if (flag && this.m_46470_() && this.f_46441_.m_188503_(100000) == 0) {
 -         BlockPos blockpos = this.m_143288_(this.m_46496_(i, 0, j, 15));
 -         if (this.m_46758_(blockpos)) {
@@ -503,7 +503,7 @@
              lightningbolt.m_20874_(flag1);
              this.m_7967_(lightningbolt);
           }
-@@ -405,52 +_,92 @@
+@@ -405,52 +_,100 @@
  
        profilerfiller.m_6182_("iceandsnow");
        if (this.f_46441_.m_188503_(16) == 0) {
@@ -592,7 +592,15 @@
 +               BlockPos blockposition2 = blockposition.m_122178_(i + randomX, randomY, j + randomZ);
 +               BlockState iblockdata = com.destroystokyo.paper.util.maplist.IBlockDataList.getBlockDataFromRaw(raw);
 +
++               profilerfiller.m_6180_("randomTick");
 +               iblockdata.m_222972_(this, blockposition2, this.randomTickRandom);
++
++//               FluidState fluidstate = iblockdata.getFluidState();
++//               if (fluidstate.isRandomlyTicking()) {
++//                  fluidstate.randomTick(this, blockposition2, this.randomTickRandom);
++//               }
++               profilerfiller.m_7238_();
++
 +               // We drop the fluid tick since LAVA is ALREADY TICKED by the above method (See LiquidBlock).
 +               // TODO CHECK ON UPDATE (ping the Canadian)
              }

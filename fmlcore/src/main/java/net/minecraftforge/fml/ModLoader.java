@@ -153,7 +153,7 @@ public class ModLoader
             throw new LoadingFailedException(loadingExceptions);
         }
 
-        List<String> incompatibleMods = Lists.newArrayList("canary", "smoothchunk", "chunksending", "starlight");
+        List<String> incompatibleMods = Lists.newArrayList("smoothchunk", "chunksending", "starlight");
         statusConsumer.ifPresent(c->c.accept("Checking goldenforge compatibility"));
         List<ModInfo> incompatibleModList = Lists.newArrayList();
         for (ModInfo mod : loadingModList.getMods()) {
@@ -161,7 +161,7 @@ public class ModLoader
         }
         if (!incompatibleModList.isEmpty()) {
             LOGGER.fatal(CORE, "Goldenforge found incompatible mods! please delete them to continue.");
-            LOGGER.fatal(CORE, "incompatible mod list: {}", incompatibleModList);
+            LOGGER.fatal(CORE, "incompatible mod list: {}", incompatibleModList.stream().map(ModInfo::getModId));
             throw new RuntimeException("Goldenforge found incompatible mods! please delete them to continue.");
         }
 

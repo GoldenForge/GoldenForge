@@ -21,11 +21,3 @@
  
     public <U extends T> void m_156816_(EntityTypeTest<T, U> p_156817_, Consumer<U> p_156818_) {
        for(T t : this.f_156807_.values()) {
-@@ -56,6 +_,6 @@
-    }
- 
-    public int m_156821_() {
--      return this.f_156808_.size();
-+      return level.getEntityLookup().count();
-    }
- }

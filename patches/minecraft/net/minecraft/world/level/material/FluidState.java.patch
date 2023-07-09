@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/material/FluidState.java
 +++ b/net/minecraft/world/level/material/FluidState.java
-@@ -21,13 +_,16 @@
+@@ -21,11 +_,10 @@
  import net.minecraft.world.phys.Vec3;
  import net.minecraft.world.phys.shapes.VoxelShape;
  
@@ -10,24 +10,9 @@
     public static final int f_164510_ = 9;
     public static final int f_164511_ = 8;
 -
-+   // Paper start
-+   protected final boolean isEmpty;
-+   // Paper end
     public FluidState(Fluid p_76149_, ImmutableMap<Property<?>, Comparable<?>> p_76150_, MapCodec<FluidState> p_76151_) {
        super(p_76149_, p_76150_, p_76151_);
-+      this.isEmpty = p_76149_.m_6759_(); // Paper - moved from isEmpty()
     }
- 
-    public Fluid m_76152_() {
-@@ -43,7 +_,7 @@
-    }
- 
-    public boolean m_76178_() {
--      return this.m_76152_().m_6759_();
-+      return this.isEmpty; // Paper - moved into constructor
-    }
- 
-    public float m_76155_(BlockGetter p_76156_, BlockPos p_76157_) {
 @@ -113,6 +_,7 @@
        return this.m_76152_() == p_192918_;
     }

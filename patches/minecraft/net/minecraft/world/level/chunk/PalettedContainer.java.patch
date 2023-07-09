@@ -1,12 +1,16 @@
 --- a/net/minecraft/world/level/chunk/PalettedContainer.java
 +++ b/net/minecraft/world/level/chunk/PalettedContainer.java
-@@ -1,5 +_,6 @@
+@@ -1,9 +_,9 @@
  package net.minecraft.world.level.chunk;
  
-+import com.abdelaziz.canary.common.world.chunk.CanaryHashPalette;
++import com.abdelaziz.canary2.common.world.chunk.CanaryHashPalette;
  import com.mojang.serialization.Codec;
  import com.mojang.serialization.DataResult;
  import com.mojang.serialization.codecs.RecordCodecBuilder;
+-import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+ import it.unimi.dsi.fastutil.ints.IntArraySet;
+ import it.unimi.dsi.fastutil.ints.IntSet;
+ import java.util.Arrays;
 @@ -24,6 +_,7 @@
  import net.minecraft.util.ZeroBitStorage;
  

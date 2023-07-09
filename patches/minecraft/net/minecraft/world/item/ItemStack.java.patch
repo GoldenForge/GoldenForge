@@ -39,12 +39,7 @@
           this.m_41721_(this.m_41773_());
        }
  
-@@ -146,18 +_,23 @@
- 
-    private void m_41617_() {
-       this.f_41591_ = false;
--      this.f_41591_ = this.m_41619_();
-+      this.f_41591_ = (this.f_41589_ == null || this.f_41589_ == Items.f_41852_ || this.f_41587_ <= 0);
+@@ -150,14 +_,19 @@
     }
  
     private ItemStack(CompoundTag p_41608_) {
@@ -65,21 +60,6 @@
           this.m_41721_(this.m_41773_());
        }
  
-@@ -174,13 +_,7 @@
-    }
- 
-    public boolean m_41619_() {
--      if (this == f_41583_) {
--         return true;
--      } else if (this.m_41720_() != null && !this.m_150930_(Items.f_41852_)) {
--         return this.f_41587_ <= 0;
--      } else {
--         return true;
--      }
-+      return this.f_41591_;
-    }
- 
-    public ItemStack m_41620_(int p_41621_) {
 @@ -192,7 +_,7 @@
     }
  

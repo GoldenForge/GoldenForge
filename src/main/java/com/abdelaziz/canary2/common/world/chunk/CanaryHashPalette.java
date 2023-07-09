@@ -1,4 +1,4 @@
-package com.abdelaziz.canary.common.world.chunk;
+package com.abdelaziz.canary2.common.world.chunk;
 
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.HashCommon;
