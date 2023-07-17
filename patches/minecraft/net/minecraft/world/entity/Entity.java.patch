@@ -1135,6 +1135,29 @@
     }
  
     public void m_6043_() {
+@@ -3048,6 +_,13 @@
+    }
+ 
+    public final void m_142467_(Entity.RemovalReason p_146876_) {
++      // Paper start - rewrite chunk system
++      io.papermc.paper.util.TickThread.ensureTickThread(this, "Cannot remove entity off-main");
++      if (this.updatingSectionStatus) {
++         f_19849_.warn("Entity " + this + " is currently prevented from being added/removed to world since it is processing section status updates", new Throwable());
++         return;
++      }
++      // Paper end - rewrite chunk system
+       if (this.f_146795_ == null) {
+          this.f_146795_ = p_146876_;
+       }
+@@ -3056,7 +_,7 @@
+          this.m_8127_();
+       }
+ 
+-      this.m_20197_().forEach(Entity::m_8127_);
++      if (p_146876_ != RemovalReason.UNLOADED_TO_CHUNK) this.m_20197_().forEach(Entity::m_8127_); // Paper - chunk system - don't adjust passenger state when unloading, it's just not safe (and messes with our logic in entity chunk unload)
+       this.f_146801_.m_142472_(p_146876_);
+    }
+ 
 @@ -3074,7 +_,7 @@
        } else if (this.m_20159_()) {
           return false;
