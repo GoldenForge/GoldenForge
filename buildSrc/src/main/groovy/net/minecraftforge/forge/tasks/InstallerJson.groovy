@@ -30,7 +30,7 @@ abstract class InstallerJson extends DefaultTask {
                 
         getOutput().convention(project.layout.buildDirectory.file('install_profile.json'))
 
-        ['server'].each { side ->
+        ['client', 'server'].each { side ->
             ['slim', 'extra'].each { type ->
                 def tsk = project.tasks.getByName("download${side.capitalize()}${type.capitalize()}")
                 dependsOn(tsk)
