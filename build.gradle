@@ -685,30 +685,39 @@ project(':fmlonly') {
                 welcome: "Welcome to the simple FML installer.",
                 data: [
                     MAPPINGS: [
+                        client: "[${MCP_ARTIFACT.group}:${MCP_ARTIFACT.name}:${MCP_ARTIFACT.version}:mappings@txt]",
                         server: "[${MCP_ARTIFACT.group}:${MCP_ARTIFACT.name}:${MCP_ARTIFACT.version}:mappings@txt]"
                     ],
                     MOJMAPS: [
+                        client: "[net.minecraft:client:${MC_VERSION}-${MCP_VERSION}:mappings@txt]",
                         server: "[net.minecraft:server:${MC_VERSION}-${MCP_VERSION}:mappings@txt]"
                     ],
                     MERGED_MAPPINGS: [
+                        client: "[${MCP_ARTIFACT.group}:${MCP_ARTIFACT.name}:${MCP_ARTIFACT.version}:mappings-merged@txt]",
                         server: "[${MCP_ARTIFACT.group}:${MCP_ARTIFACT.name}:${MCP_ARTIFACT.version}:mappings-merged@txt]"
                     ],
                     MC_UNPACKED: [
+                        client: "[net.minecraft:client:${MC_VERSION}-${MCP_VERSION}:unpacked]",
                         server: "[net.minecraft:server:${MC_VERSION}-${MCP_VERSION}:unpacked]"
                     ],
                     MC_SLIM: [
+                        client: "[net.minecraft:client:${MC_VERSION}-${MCP_VERSION}:slim]",
                         server: "[net.minecraft:server:${MC_VERSION}-${MCP_VERSION}:slim]"
                     ],
                     MC_SLIM_SHA: [
+                        client: "'${downloadClientSlim.output.get().asFile.sha1()}'",
                         server: "'${downloadServerSlim.output.get().asFile.sha1()}'"
                     ],
                     MC_EXTRA: [
+                        client: "[net.minecraft:client:${MC_VERSION}-${MCP_VERSION}:extra]",
                         server: "[net.minecraft:server:${MC_VERSION}-${MCP_VERSION}:extra]"
                     ],
                     MC_EXTRA_SHA: [
+                        client: "'${downloadClientExtra.output.get().asFile.sha1()}'",
                         server: "'${downloadServerExtra.output.get().asFile.sha1()}'"
                     ],
                     MC_SRG: [
+                        client: "[net.minecraft:client:${MC_VERSION}-${MCP_VERSION}:srg]",
                         server: "[net.minecraft:server:${MC_VERSION}-${MCP_VERSION}:srg]"
                     ],
                     /*MC_SRG_SHA: [
