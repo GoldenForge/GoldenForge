@@ -464,174 +464,20 @@
     }
  
     protected void m_8809_() {
-@@ -376,6 +_,9 @@
-       });
-    }
- 
-+   // Paper start - optimise random block ticking
-+   private final BlockPos.MutableBlockPos blockposition = new BlockPos.MutableBlockPos();
-+   // Paper end
-    public void m_8714_(LevelChunk p_8715_, int p_8716_) {
-       ChunkPos chunkpos = p_8715_.m_7697_();
-       boolean flag = this.m_46471_();
-@@ -383,21 +_,22 @@
-       int j = chunkpos.m_45605_();
-       ProfilerFiller profilerfiller = this.m_46473_();
-       profilerfiller.m_6180_("thunder");
-+      //final BlockPos.MutableBlockPos blockposition = this.chunkTickMutablePosition; // Paper - use mutable to reduce allocation rate, final to force compile fail on change
-       if (flag && this.m_46470_() && this.f_46441_.m_188503_(100000) == 0) {
--         BlockPos blockpos = this.m_143288_(this.m_46496_(i, 0, j, 15));
--         if (this.m_46758_(blockpos)) {
--            DifficultyInstance difficultyinstance = this.m_6436_(blockpos);
--            boolean flag1 = this.m_46469_().m_46207_(GameRules.f_46134_) && this.f_46441_.m_188500_() < (double)difficultyinstance.m_19056_() * 0.01D && !this.m_8055_(blockpos.m_7495_()).m_60713_(Blocks.f_152587_);
-+         blockposition.m_122190_(this.m_143288_(this.m_46496_(i, 0, j, 15))); // Paper
-+         if (this.m_46758_(blockposition)) {
-+            DifficultyInstance difficultyinstance = this.m_6436_(blockposition);
-+            boolean flag1 = this.m_46469_().m_46207_(GameRules.f_46134_) && this.f_46441_.m_188500_() < (double)difficultyinstance.m_19056_() * 0.01D && !this.m_8055_(blockposition.m_7495_()).m_60713_(Blocks.f_152587_);
-             if (flag1) {
-                SkeletonHorse skeletonhorse = EntityType.f_20525_.m_20615_(this);
-                skeletonhorse.m_30923_(true);
-                skeletonhorse.m_146762_(0);
--               skeletonhorse.m_6034_((double)blockpos.m_123341_(), (double)blockpos.m_123342_(), (double)blockpos.m_123343_());
-+               skeletonhorse.m_6034_((double)blockposition.m_123341_(), (double)blockposition.m_123342_(), (double)blockposition.m_123343_());
-                this.m_7967_(skeletonhorse);
-             }
- 
-             LightningBolt lightningbolt = EntityType.f_20465_.m_20615_(this);
--            lightningbolt.m_20219_(Vec3.m_82539_(blockpos));
-+            lightningbolt.m_20219_(Vec3.m_82539_(blockposition));
-             lightningbolt.m_20874_(flag1);
-             this.m_7967_(lightningbolt);
-          }
-@@ -405,52 +_,100 @@
- 
-       profilerfiller.m_6182_("iceandsnow");
-       if (this.f_46441_.m_188503_(16) == 0) {
--         BlockPos blockpos2 = this.m_5452_(Heightmap.Types.MOTION_BLOCKING, this.m_46496_(i, 0, j, 15));
--         BlockPos blockpos3 = blockpos2.m_7495_();
--         Biome biome = this.m_204166_(blockpos2).m_203334_();
+@@ -408,9 +_,10 @@
+          BlockPos blockpos2 = this.m_5452_(Heightmap.Types.MOTION_BLOCKING, this.m_46496_(i, 0, j, 15));
+          BlockPos blockpos3 = blockpos2.m_7495_();
+          Biome biome = this.m_204166_(blockpos2).m_203334_();
 -         if (biome.m_47477_(this, blockpos3)) {
 -            this.m_46597_(blockpos3, Blocks.f_50126_.m_49966_());
-+         // Paper start - optimise chunk ticking
-+         this.getRandomBlockPosition(i, 0, j, 15, blockposition);
-+         int normalY = p_8715_.m_5885_(Heightmap.Types.MOTION_BLOCKING, blockposition.m_123341_() & 15, blockposition.m_123343_() & 15) + 1;
-+         int downY = normalY - 1;
-+         blockposition.m_142448_(normalY);
-+         // Paper end
-+         Biome biome = this.m_204166_(blockposition).m_203334_();
-+
-+         blockposition.m_142448_(downY);
-+         if (biome.m_47477_(this, blockposition)) {
-+            this.m_46597_(blockposition, Blocks.f_50126_.m_49966_());
-          }
+-         }
++         if (this.isAreaLoaded(blockpos2, 1)) // Forge: check area to avoid loading neighbors in unloaded chunks
++            if (biome.m_47477_(this, blockpos3)) {
++               this.m_46597_(blockpos3, Blocks.f_50126_.m_49966_());
++            }
  
           if (flag) {
--            if (biome.m_47519_(this, blockpos2)) {
--               this.m_46597_(blockpos2, Blocks.f_50125_.m_49966_());
-+            blockposition.m_142448_(normalY); // Paper
-+            if (biome.m_47519_(this, blockposition)) {
-+               this.m_46597_(blockposition, Blocks.f_50125_.m_49966_());
-             }
- 
--            BlockState blockstate1 = this.m_8055_(blockpos3);
-+            blockposition.m_142448_(downY); // Paper
-+            BlockState blockstate1 = this.m_8055_(blockposition);
-             Biome.Precipitation biome$precipitation = biome.m_47530_();
--            if (biome$precipitation == Biome.Precipitation.RAIN && biome.m_198904_(blockpos3)) {
-+            if (biome$precipitation == Biome.Precipitation.RAIN && biome.m_198904_(blockposition)) {
-                biome$precipitation = Biome.Precipitation.SNOW;
-             }
- 
--            blockstate1.m_60734_().m_141997_(blockstate1, this, blockpos3, biome$precipitation);
-+            blockstate1.m_60734_().m_141997_(blockstate1, this, blockposition, biome$precipitation);
-          }
-       }
- 
-       profilerfiller.m_6182_("tickBlocks");
-       if (p_8716_ > 0) {
--         for(LevelChunkSection levelchunksection : p_8715_.m_7103_()) {
--            if (levelchunksection.m_63014_()) {
--               int l = levelchunksection.m_63017_();
--
--               for(int k = 0; k < p_8716_; ++k) {
--                  BlockPos blockpos1 = this.m_46496_(i, l, j, 15);
--                  profilerfiller.m_6180_("randomTick");
--                  BlockState blockstate = levelchunksection.m_62982_(blockpos1.m_123341_() - i, blockpos1.m_123342_() - l, blockpos1.m_123343_() - j);
--                  if (blockstate.m_60823_()) {
--                     blockstate.m_222972_(this, blockpos1, this.f_46441_);
--                  }
--
--                  FluidState fluidstate = blockstate.m_60819_();
--                  if (fluidstate.m_76187_()) {
--                     fluidstate.m_230562_(this, blockpos1, this.f_46441_);
--                  }
--
--                  profilerfiller.m_7238_();
-+         LevelChunkSection[] sections = p_8715_.m_7103_();
-+         int minSection = io.papermc.paper.util.WorldUtil.getMinSection(this);
-+         for (int sectionIndex = 0; sectionIndex < sections.length; ++sectionIndex) {
-+            LevelChunkSection section = sections[sectionIndex];
-+            if (section == null || section.tickingList.size() == 0) {
-+               continue;
-+            }
-+
-+            int yPos = (sectionIndex + minSection) << 4;
-+            for (int a = 0; a < p_8716_; ++a) {
-+               int tickingBlocks = section.tickingList.size();
-+               int index = this.randomTickRandom.m_188503_(16 * 16 * 16);
-+               if (index >= tickingBlocks) {
-+                  continue;
-                }
-+
-+               long raw = section.tickingList.getRaw(index);
-+               int location = com.destroystokyo.paper.util.maplist.IBlockDataList.getLocationFromRaw(raw);
-+               int randomX = location & 15;
-+               int randomY = ((location >>> (4 + 4)) & 255) | yPos;
-+               int randomZ = (location >>> 4) & 15;
-+
-+               BlockPos blockposition2 = blockposition.m_122178_(i + randomX, randomY, j + randomZ);
-+               BlockState iblockdata = com.destroystokyo.paper.util.maplist.IBlockDataList.getBlockDataFromRaw(raw);
-+
-+               profilerfiller.m_6180_("randomTick");
-+               iblockdata.m_222972_(this, blockposition2, this.randomTickRandom);
-+
-+//               FluidState fluidstate = iblockdata.getFluidState();
-+//               if (fluidstate.isRandomlyTicking()) {
-+//                  fluidstate.randomTick(this, blockposition2, this.randomTickRandom);
-+//               }
-+               profilerfiller.m_7238_();
-+
-+               // We drop the fluid tick since LAVA is ALREADY TICKED by the above method (See LiquidBlock).
-+               // TODO CHECK ON UPDATE (ping the Canadian)
-             }
-          }
-       }
-+//      if (p_8716_ > 0) {
-+//         for(LevelChunkSection levelchunksection : p_8715_.getSections()) {
-+//            if (levelchunksection.isRandomlyTicking()) {
-+//               int l = levelchunksection.bottomBlockY();
-+//
-+//               for(int k = 0; k < p_8716_; ++k) {
-+//                  BlockPos blockpos1 = this.getBlockRandomPos(i, l, j, 15);
-+//                  profilerfiller.push("randomTick");
-+//                  BlockState blockstate = levelchunksection.getBlockState(blockpos1.getX() - i, blockpos1.getY() - l, blockpos1.getZ() - j);
-+//                  if (blockstate.isRandomlyTicking()) {
-+//                     blockstate.randomTick(this, blockpos1, this.random);
-+//                  }
-+//
-+//                  FluidState fluidstate = blockstate.getFluidState();
-+//                  if (fluidstate.isRandomlyTicking()) {
-+//                     fluidstate.randomTick(this, blockpos1, this.random);
-+//                  }
-+//
-+//                  profilerfiller.pop();
-+//               }
-+//            }
-+//         }
-+//      }
- 
-       profilerfiller.m_7238_();
-    }
+             if (biome.m_47519_(this, blockpos2)) {
 @@ -598,15 +_,19 @@
           this.f_8548_.m_6846_().m_11270_(new ClientboundGameEventPacket(ClientboundGameEventPacket.f_132161_, this.f_46440_), this.m_46472_());
        }
