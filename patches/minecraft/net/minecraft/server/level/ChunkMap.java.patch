@@ -1398,7 +1398,7 @@
        int i2 = SectionPos.m_123171_(p_140185_.m_146903_());
        int j2 = SectionPos.m_123171_(p_140185_.m_146907_());
        SectionPos sectionpos = p_140185_.m_8965_();
-@@ -1051,63 +_,64 @@
+@@ -1051,63 +_,68 @@
           }
        }
  
@@ -1488,13 +1488,16 @@
 -         SectionPos sectionpos = serverplayer.m_8965_();
 -         if (p_183802_ && m_183828_(p_183801_.f_45578_, p_183801_.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_) || !p_183802_ && m_200878_(p_183801_.f_45578_, p_183801_.f_45579_, sectionpos.m_123170_(), sectionpos.m_123222_(), this.f_140126_)) {
 -            builder.add(serverplayer);
--         }
 +      // Paper start - per player view distance
 +      ChunkHolder holder = this.m_140327_(p_183801_.m_45588_());
 +      if (holder == null) {
 +         return new java.util.ArrayList<>();
 +      } else {
-+         return holder.getPlayers(p_183802_);
++         List<ServerPlayer> players =  holder.getPlayers(p_183802_);
++         for (ServerPlayer player : players) {
++            player.m_8965_(); // Goldenforge: mixin hack for railways mod
+          }
++         return players;
        }
 -
 -      return builder.build();
@@ -1702,23 +1705,15 @@
        public boolean equals(Object p_140506_) {
           if (p_140506_ instanceof ChunkMap.TrackedEntity) {
              return ((ChunkMap.TrackedEntity)p_140506_).f_140472_.m_19879_() == this.f_140472_.m_19879_();
-@@ -1322,9 +_,13 @@
- 
+@@ -1323,7 +_,7 @@
        public void m_140497_(ServerPlayer p_140498_) {
           if (p_140498_ != this.f_140472_) {
--            Vec3 vec3 = p_140498_.m_20182_().m_82546_(this.f_140472_.m_20182_());
+             Vec3 vec3 = p_140498_.m_20182_().m_82546_(this.f_140472_.m_20182_());
 -            double d0 = (double)Math.min(this.m_140496_(), (ChunkMap.this.f_140126_ - 1) * 16);
--            double d1 = vec3.f_82479_ * vec3.f_82479_ + vec3.f_82481_ * vec3.f_82481_;
-+            // Paper start - remove allocation of Vec3D here
-+            //Vec3 vec3 = p_140498_.position().subtract(this.entity.position());
-+            double vec3d_dx = p_140498_.m_20185_() - this.f_140472_.m_20185_();
-+            double vec3d_dz = p_140498_.m_20189_() - this.f_140472_.m_20189_();
-+            // Paper end - remove allocation of Vec3D here
 +            double d0 = (double)Math.min(this.m_140496_(),io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(p_140498_) * 16); // Paper - per player view distance
-+            double d1 = vec3d_dx * vec3d_dx + vec3d_dz * vec3d_dz; // Paper
+             double d1 = vec3.f_82479_ * vec3.f_82479_ + vec3.f_82481_ * vec3.f_82481_;
              double d2 = d0 * d0;
              boolean flag = d1 <= d2 && this.f_140472_.m_6459_(p_140498_);
-             if (flag) {
 @@ -1342,15 +_,34 @@
           return ChunkMap.this.f_140133_.m_7654_().m_7186_(p_140484_);
        }
