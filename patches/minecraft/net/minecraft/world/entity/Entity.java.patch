@@ -275,7 +275,7 @@
  
     public void m_142687_(Entity.RemovalReason p_146834_) {
        this.m_142467_(p_146834_);
-+      this.invalidateCaps();
++      //this.invalidateCaps();
     }
  
     public void m_142036_() {
@@ -1149,13 +1149,18 @@
        if (this.f_146795_ == null) {
           this.f_146795_ = p_146876_;
        }
-@@ -3056,7 +_,7 @@
+@@ -3056,11 +_,11 @@
           this.m_8127_();
        }
  
 -      this.m_20197_().forEach(Entity::m_8127_);
 +      if (p_146876_ != RemovalReason.UNLOADED_TO_CHUNK) this.m_20197_().forEach(Entity::m_8127_); // Paper - chunk system - don't adjust passenger state when unloading, it's just not safe (and messes with our logic in entity chunk unload)
        this.f_146801_.m_142472_(p_146876_);
+    }
+ 
+-   protected void m_146912_() {
++   public void m_146912_() {
+       this.f_146795_ = null;
     }
  
 @@ -3074,7 +_,7 @@

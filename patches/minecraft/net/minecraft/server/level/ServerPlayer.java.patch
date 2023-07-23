@@ -1,6 +1,27 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
-@@ -146,6 +_,7 @@
+@@ -88,6 +_,7 @@
+ import net.minecraft.world.Container;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.MenuProvider;
++import net.minecraft.world.damagesource.CombatTracker;
+ import net.minecraft.world.damagesource.DamageSource;
+ import net.minecraft.world.damagesource.EntityDamageSource;
+ import net.minecraft.world.effect.MobEffectInstance;
+@@ -106,6 +_,7 @@
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.entity.player.ProfilePublicKey;
+ import net.minecraft.world.entity.projectile.AbstractArrow;
++import net.minecraft.world.food.FoodData;
+ import net.minecraft.world.inventory.AbstractContainerMenu;
+ import net.minecraft.world.inventory.ContainerListener;
+ import net.minecraft.world.inventory.ContainerSynchronizer;
+@@ -142,10 +_,12 @@
+ import net.minecraft.world.scores.Score;
+ import net.minecraft.world.scores.Team;
+ import net.minecraft.world.scores.criteria.ObjectiveCriteria;
++import org.bukkit.Bukkit;
+ import org.slf4j.Logger;
  
  public class ServerPlayer extends Player {
     private static final Logger f_8907_ = LogUtils.getLogger();
@@ -8,7 +29,7 @@
     private static final int f_143381_ = 32;
     private static final int f_143382_ = 10;
     public ServerGamePacketListenerImpl f_8906_;
-@@ -191,6 +_,11 @@
+@@ -191,6 +_,15 @@
     private final TextFilter f_8939_;
     private boolean f_143378_;
     private boolean f_184127_ = true;
@@ -16,6 +37,10 @@
 +   public boolean isRealPlayer; // Paper - chunk priority
 +   public double lastEntitySpawnRadiusSquared; // Paper - optimise isOutsideRange, this field is in blocks
 +   public net.minecraft.network.Connection networkManager; // Paper
++   public int newExp = 0;
++   public int newLevel = 0;
++   public int newTotalExp = 0;
++   public boolean keepLevel = false;
 +
     private final ContainerSynchronizer f_143379_ = new ContainerSynchronizer() {
        public void m_142589_(AbstractContainerMenu p_143448_, NonNullList<ItemStack> p_143449_, ItemStack p_143450_, int[] p_143451_) {
@@ -80,15 +105,56 @@
  
     public ServerPlayer(MinecraftServer p_215088_, ServerLevel p_215089_, GameProfile p_215090_, @Nullable ProfilePublicKey p_215091_) {
        super(p_215089_, p_215089_.m_220360_(), p_215089_.m_220361_(), p_215090_, p_215091_);
-@@ -244,6 +_,8 @@
+@@ -244,7 +_,48 @@
        this.f_8909_ = p_215088_.m_6846_().m_11296_(this);
        this.f_19793_ = 1.0F;
        this.m_9201_(p_215089_);
+-   }
 +      this.cachedSingleHashSet = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<>(this); // Paper
 +      this.cachedSingleMobDistanceMap = new com.destroystokyo.paper.util.PooledHashSets.PooledObjectLinkedOpenHashSet<>(this); // Paper
-    }
++   }
++
++   // Yes, this doesn't match Vanilla, but it's the best we can do for now.
++   // If this is an issue, PRs are welcome
++   public final BlockPos getSpawnPoint(ServerLevel worldserver) {
++      BlockPos blockposition = worldserver.m_220360_();
++
++      if (worldserver.m_6042_().f_223549_() && worldserver.f_8549_.m_5464_() != GameType.ADVENTURE) {
++         int i = Math.max(0, this.f_8924_.m_129803_(worldserver));
++         int j = Mth.m_14107_(worldserver.m_6857_().m_61941_((double) blockposition.m_123341_(), (double) blockposition.m_123343_()));
++
++         if (j < i) {
++            i = j;
++         }
++
++         if (j <= 1) {
++            i = 1;
++         }
++
++         long k = (long) (i * 2 + 1);
++         long l = k * k;
++         int i1 = l > 2147483647L ? Integer.MAX_VALUE : (int) l;
++         int j1 = this.m_9237_(i1);
++         int k1 = RandomSource.m_216327_().m_188503_(i1);
++
++         for (int l1 = 0; l1 < i1; ++l1) {
++            int i2 = (k1 + j1 * l1) % i1;
++            int j2 = i2 % (i * 2 + 1);
++            int k2 = i2 / (i * 2 + 1);
++            BlockPos blockposition1 = PlayerRespawnLogic.m_183928_(worldserver, blockposition.m_123341_() + j2 - i, blockposition.m_123343_() + k2 - i);
++
++            if (blockposition1 != null) {
++               return blockposition1;
++            }
++         }
++      }
++
++      return blockposition;
++   }
++   // CraftBukkit end
  
     private void m_9201_(ServerLevel p_9202_) {
+       BlockPos blockpos = p_9202_.m_220360_();
 @@ -272,7 +_,7 @@
              BlockPos blockpos1 = PlayerRespawnLogic.m_183928_(p_9202_, blockpos.m_123341_() + j2 - i, blockpos.m_123343_() + k2 - i);
              if (blockpos1 != null) {
@@ -107,6 +173,36 @@
              this.m_6034_(this.m_20185_(), this.m_20186_() + 1.0D, this.m_20189_());
           }
        }
+@@ -356,6 +_,29 @@
+ 
+    }
+ 
++   // CraftBukkit start - World fallback code, either respawn location or global spawn
++   public void spawnIn(ServerLevel world) {
++      this.m_143425_(world);
++      if (world == null) {
++         this.m_146912_();
++         Vec3 position = null;
++         if (this.f_8935_ != null) {
++            world = this.f_8924_.m_129880_(this.f_8935_);
++            if (world != null && this.m_8961_() != null) {
++               position = Player.m_36130_((ServerLevel) world, this.m_8961_(), this.m_8962_(), false, false).orElse(null);
++            }
++         }
++         if (world == null || position == null) {
++            world = MinecraftServer.getServer().m_129783_();
++            position = Vec3.m_82512_(world.m_220360_());
++         }
++         this.m_143425_(world);
++         this.m_20343_(position.m_7096_(), position.m_7098_(), position.m_7094_()); // Paper - don't register to chunks yet
++      }
++      this.f_8941_.m_9260_((ServerLevel) world);
++   }
++   // CraftBukkit end
++
+    public void m_8985_(int p_8986_) {
+       float f = (float)this.m_36323_();
+       float f1 = (f - 1.0F) / f;
 @@ -406,6 +_,11 @@
     }
  
@@ -124,18 +220,21 @@
     public void m_9240_() {
        try {
 -         if (!this.m_5833_() || !this.m_146899_()) {
-+         if (isValid && !this.m_5833_() || !this.m_146899_()) { // Paper - don't tick dead players that are not in the world currently (pending respawn)
++         if (!this.m_5833_() || !this.m_146899_()) { // Paper - don't tick dead players that are not in the world currently (pending respawn)
              super.m_8119_();
           }
  
-@@ -550,6 +_,7 @@
+@@ -550,7 +_,10 @@
  
     public void m_6667_(DamageSource p_9035_) {
        this.m_146850_(GameEvent.f_223707_);
 +      if (net.minecraftforge.common.ForgeHooks.onLivingDeath(this, p_9035_)) return;
        boolean flag = this.f_19853_.m_46469_().m_46207_(GameRules.f_46142_);
++      boolean keepInventory = this.f_19853_.m_46469_().m_46207_(GameRules.f_46133_) || this.m_5833_();
++      this.keepLevel = keepInventory; // SPIGOT-2222: pre-set keepLevel
        if (flag) {
           Component component = this.m_21231_().m_19293_();
+          this.f_8906_.m_243119_(new ClientboundPlayerCombatKillPacket(this.m_21231_(), component), PacketSendListener.m_243073_(() -> {
 @@ -692,11 +_,12 @@
     }
  
@@ -192,6 +291,15 @@
           }
  
           return this;
+@@ -778,7 +_,7 @@
+       }
+    }
+ 
+-   private void m_9209_(ServerLevel p_9210_) {
++   public void m_9209_(ServerLevel p_9210_) {
+       ResourceKey<Level> resourcekey = p_9210_.m_46472_();
+       ResourceKey<Level> resourcekey1 = this.f_19853_.m_46472_();
+       CriteriaTriggers.f_10588_.m_19757_(this, resourcekey, resourcekey1);
 @@ -806,6 +_,9 @@
     }
  
@@ -243,7 +351,14 @@
        this.f_36096_ = this.f_36095_;
     }
  
-@@ -1131,6 +_,15 @@
+@@ -1125,12 +_,21 @@
+       this.f_8920_ = -1;
+       this.f_8917_ = -1.0F;
+       this.f_8918_ = -1;
+-      this.f_8929_.m_12685_(p_9016_.f_8929_);
++      //this.recipeBook.copyOverData(p_9016_.recipeBook);
+       this.f_8928_ = p_9016_.f_8928_;
+       this.f_8933_ = p_9016_.f_8933_;
        this.m_36362_(p_9016_.m_36331_());
        this.m_36364_(p_9016_.m_36332_());
        this.m_219749_(p_9016_.m_219759_());
@@ -332,14 +447,64 @@
        }
  
     }
-@@ -1410,6 +_,7 @@
+@@ -1409,7 +_,13 @@
+       return this.f_8937_;
     }
  
++   public void forceSetPositionRotation(double x, double y, double z, float yaw, float pitch) {
++      this.m_7678_(x, y, z, yaw, pitch);
++      this.f_8906_.m_9953_();
++   }
++
     public void m_9158_(ResourceKey<Level> p_9159_, @Nullable BlockPos p_9160_, float p_9161_, boolean p_9162_, boolean p_9163_) {
 +      if (net.minecraftforge.event.ForgeEventFactory.onPlayerSpawnSet(this, p_9160_ == null ? Level.f_46428_ : p_9159_, p_9160_, p_9162_)) return;
        if (p_9160_ != null) {
           boolean flag = p_9160_.equals(this.f_8936_) && p_9159_.equals(this.f_8935_);
           if (p_9163_ && !flag) {
+@@ -1440,6 +_,43 @@
+ 
+    }
+ 
++   public void reset() {
++      float exp = 0;
++      boolean keepInventory = this.f_19853_.m_46469_().m_46207_(GameRules.f_46133_);
++
++      if (this.keepLevel) { // CraftBukkit - SPIGOT-6687: Only use keepLevel (was pre-set with RULE_KEEPINVENTORY value in PlayerDeathEvent)
++         exp = this.f_36080_;
++         this.newTotalExp = this.f_36079_;
++         this.newLevel = this.f_36078_;
++      }
++
++      this.m_21153_(this.m_21233_());
++      this.m_5810_(); // CraftBukkit - SPIGOT-6682: Clear active item on reset
++      this.m_20301_(this.m_6062_()); // Paper
++      this.m_7311_(0);
++      this.f_19789_ = 0;
++      this.f_36097_ = new FoodData();
++      this.f_36078_ = this.newLevel;
++      this.f_36079_ = this.newTotalExp;
++      this.f_36080_ = 0;
++      this.f_20919_ = 0;
++      this.m_21317_(0); // CraftBukkit - ArrowBodyCountChangeEvent
++      this.m_21219_();
++      this.f_20948_ = true;
++      this.f_36096_ = this.f_36095_;
++      this.f_20888_ = null;
++      this.f_20949_ = null;
++      this.f_20944_ = new CombatTracker(this);
++      this.f_8920_ = -1;
++      if (this.keepLevel) { // CraftBukkit - SPIGOT-6687: Only use keepLevel (was pre-set with RULE_KEEPINVENTORY value in PlayerDeathEvent)
++         this.f_36080_ = exp;
++      } else {
++         this.m_6756_(this.newExp);
++      }
++      this.keepLevel = false;
++      this.m_20334_(0, 0, 0); // CraftBukkit - SPIGOT-6948: Reset velocity on death
++   }
++
+    public SectionPos m_8965_() {
+       return this.f_8934_;
+    }
 @@ -1461,6 +_,8 @@
        if (itementity == null) {
           return null;

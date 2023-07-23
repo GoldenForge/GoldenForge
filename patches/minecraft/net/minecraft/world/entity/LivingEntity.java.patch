@@ -16,11 +16,13 @@
     public static final int f_147166_ = 2;
     public static final int f_147167_ = 4;
     public static final int f_147168_ = 98;
-@@ -154,7 +_,7 @@
+@@ -153,8 +_,8 @@
+    protected static final EntityDimensions f_20910_ = EntityDimensions.m_20398_(0.2F, 0.2F);
     public static final float f_147165_ = 0.5F;
     private final AttributeMap f_20943_;
-    private final CombatTracker f_20944_ = new CombatTracker(this);
+-   private final CombatTracker f_20944_ = new CombatTracker(this);
 -   private final Map<MobEffect, MobEffectInstance> f_20945_ = Maps.newHashMap();
++   public CombatTracker f_20944_ = new CombatTracker(this);
 +   public final Map<MobEffect, MobEffectInstance> f_20945_ = Maps.newHashMap();
     private final NonNullList<ItemStack> f_20946_ = NonNullList.m_122780_(2, ItemStack.f_41583_);
     private final NonNullList<ItemStack> f_20947_ = NonNullList.m_122780_(4, ItemStack.f_41583_);
@@ -34,6 +36,18 @@
     public float f_20900_;
     public float f_20901_;
     public float f_20902_;
+@@ -205,9 +_,9 @@
+    protected double f_20908_;
+    protected double f_20933_;
+    protected int f_20934_;
+-   private boolean f_20948_ = true;
++   public boolean f_20948_ = true;
+    @Nullable
+-   private LivingEntity f_20949_;
++   public LivingEntity f_20949_;
+    private int f_20950_;
+    private LivingEntity f_20951_;
+    private int f_20952_;
 @@ -228,6 +_,14 @@
     protected Brain<?> f_20939_;
     private boolean f_217034_;
@@ -574,7 +588,7 @@
        Entity entity = this.m_20202_();
        super.m_8127_();
 -      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_) {
-+      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_ && entity.isValid) { // Paper - don't process on world gen
++      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_) { // Paper - don't process on world gen
           this.m_21028_(entity);
        }
  

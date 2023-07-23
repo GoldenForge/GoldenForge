@@ -43,7 +43,15 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -104,8 +_,132 @@
+@@ -97,15 +_,139 @@
+    private final RandomSource f_220348_ = RandomSource.m_216337_();
+    private final ResourceKey<DimensionType> f_220349_;
+    private final Holder<DimensionType> f_204147_;
+-   protected final WritableLevelData f_46442_;
++   public final WritableLevelData f_46442_;
+    private final Supplier<ProfilerFiller> f_46446_;
+    public final boolean f_46443_;
+    private final WorldBorder f_46447_;
     private final BiomeManager f_46420_;
     private final ResourceKey<Level> f_46421_;
     private long f_186455_;

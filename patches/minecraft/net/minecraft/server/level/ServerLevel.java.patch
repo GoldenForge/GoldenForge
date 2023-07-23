@@ -17,6 +17,20 @@
  import java.util.concurrent.Executor;
  import java.util.function.BooleanSupplier;
  import java.util.function.Function;
+@@ -119,12 +_,7 @@
+ import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+ import net.minecraft.world.level.dimension.LevelStem;
+ import net.minecraft.world.level.dimension.end.EndDragonFight;
+-import net.minecraft.world.level.entity.EntityPersistentStorage;
+-import net.minecraft.world.level.entity.EntityTickList;
+-import net.minecraft.world.level.entity.EntityTypeTest;
+-import net.minecraft.world.level.entity.LevelCallback;
+-import net.minecraft.world.level.entity.LevelEntityGetter;
+-import net.minecraft.world.level.entity.PersistentEntitySectionManager;
++import net.minecraft.world.level.entity.*;
+ import net.minecraft.world.level.gameevent.DynamicGameEventListener;
+ import net.minecraft.world.level.gameevent.GameEvent;
+ import net.minecraft.world.level.gameevent.GameEventListener;
 @@ -163,11 +_,12 @@
     private static final int f_143242_ = 300;
     private static final int f_184046_ = 65536;
@@ -24,7 +38,8 @@
 -   private final ServerChunkCache f_8547_;
 +   public final ServerChunkCache f_8547_;
     private final MinecraftServer f_8548_;
-    private final ServerLevelData f_8549_;
+-   private final ServerLevelData f_8549_;
++   public final ServerLevelData f_8549_;
     final EntityTickList f_143243_ = new EntityTickList();
 -   private final PersistentEntitySectionManager<Entity> f_143244_;
 +   // Goldenforge: Compat
