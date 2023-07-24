@@ -85,22 +85,23 @@
  
     public PlayerList(MinecraftServer p_203842_, RegistryAccess.Frozen p_203843_, PlayerDataStorage p_203844_, int p_203845_) {
        this.f_11195_ = p_203842_;
-@@ -134,6 +_,12 @@
+@@ -134,6 +_,7 @@
     }
  
     public void m_11261_(Connection p_11262_, ServerPlayer p_11263_) {
 +      p_11263_.isRealPlayer = true; // Paper - Chunk priority
-+      ServerPlayer prev = pendingPlayers.put(p_11263_.m_20148_(), p_11263_);// Paper
-+      if (prev != null) {
-+         disconnectPendingPlayer(prev);
-+      }
-+      p_11263_.networkManager = p_11262_; // Paper
        GameProfile gameprofile = p_11263_.m_36316_();
        GameProfileCache gameprofilecache = this.f_11195_.m_129927_();
        Optional<GameProfile> optional = gameprofilecache.m_11002_(gameprofile.getId());
-@@ -151,23 +_,30 @@
+@@ -150,24 +_,36 @@
+          serverlevel1 = serverlevel;
        }
  
++      // Paper start
++      if (compoundtag == null) {
++         p_11263_.m_9201_(serverlevel1); // only move to spawn on first login, otherwise, stay where you are....
++      }
++      // Paper end
        p_11263_.m_143425_(serverlevel1);
 -      String s1 = "local";
 +      // Paper start - make s1 final
@@ -157,27 +158,16 @@
        if (compoundtag != null && compoundtag.m_128425_("RootVehicle", 10)) {
           CompoundTag compoundtag1 = compoundtag.m_128469_("RootVehicle");
           Entity entity1 = EntityType.m_20645_(compoundtag1.m_128469_("Entity"), serverlevel1, (p_215603_) -> {
-@@ -240,7 +_,19 @@
+@@ -240,6 +_,9 @@
        }
  
        p_11263_.m_143429_();
--   }
 +      pendingPlayers.remove(p_11263_.m_20148_(), p_11263_);
 +      net.minecraftforge.event.ForgeEventFactory.firePlayerLoggedIn( p_11263_ );
 +
-+   }
-+
-+   void disconnectPendingPlayer(ServerPlayer entityplayer) {
-+      Component msg = Component.m_237115_("multiplayer.disconnect.duplicate_login");
-+      entityplayer.networkManager.m_243124_(new ClientboundDisconnectPacket(msg), PacketSendListener.m_243092_(() -> {
-+         entityplayer.networkManager.m_129507_(msg);
-+         entityplayer.networkManager = null;
-+      }));
-+   }
-+
+    }
  
     protected void m_11273_(ServerScoreboard p_11274_, ServerPlayer p_11275_) {
-       Set<Objective> set = Sets.newHashSet();
 @@ -300,6 +_,7 @@
           compoundtag1 = compoundtag;
           p_11225_.m_20258_(compoundtag);
@@ -203,20 +193,7 @@
        ServerLevel serverlevel = p_11287_.m_9236_();
        p_11287_.m_36220_(Stats.f_12989_);
        this.m_6765_(p_11287_);
-@@ -349,11 +_,40 @@
-          this.f_11203_.remove(uuid);
-       }
- 
-+      // Paper start
-+      serverplayer = pendingPlayers.get(uuid);
-+      if (serverplayer == p_11287_) {
-+         pendingPlayers.remove(uuid);
-+      }
-+      p_11287_.networkManager = null;
-+      // Paper end
-+
-       this.m_11268_(new ClientboundPlayerInfoPacket(ClientboundPlayerInfoPacket.Action.REMOVE_PLAYER, p_11287_));
-    }
+@@ -354,6 +_,19 @@
  
     @Nullable
     public Component m_6418_(SocketAddress p_11257_, GameProfile p_11258_) {
@@ -232,14 +209,6 @@
 +            list.add(entityplayer);
 +         }
 +      }
-+
-+      // Paper start - check pending players too
-+      entityplayer = pendingPlayers.get(uuid);
-+      if (entityplayer != null) {
-+         this.pendingPlayers.remove(uuid);
-+         disconnectPendingPlayer(entityplayer);
-+      }
-+      // Paper end
 +
        if (this.f_11198_.m_11406_(p_11258_)) {
           UserBanListEntry userbanlistentry = this.f_11198_.m_11388_(p_11258_);

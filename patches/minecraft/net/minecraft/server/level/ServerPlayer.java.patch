@@ -29,14 +29,13 @@
     private static final int f_143381_ = 32;
     private static final int f_143382_ = 10;
     public ServerGamePacketListenerImpl f_8906_;
-@@ -191,6 +_,15 @@
+@@ -191,6 +_,14 @@
     private final TextFilter f_8939_;
     private boolean f_143378_;
     private boolean f_184127_ = true;
 +
 +   public boolean isRealPlayer; // Paper - chunk priority
 +   public double lastEntitySpawnRadiusSquared; // Paper - optimise isOutsideRange, this field is in blocks
-+   public net.minecraft.network.Connection networkManager; // Paper
 +   public int newExp = 0;
 +   public int newLevel = 0;
 +   public int newTotalExp = 0;
@@ -105,11 +104,15 @@
  
     public ServerPlayer(MinecraftServer p_215088_, ServerLevel p_215089_, GameProfile p_215090_, @Nullable ProfilePublicKey p_215091_) {
        super(p_215089_, p_215089_.m_220360_(), p_215089_.m_220361_(), p_215090_, p_215091_);
-@@ -244,7 +_,48 @@
+@@ -243,10 +_,51 @@
+       this.f_8910_ = p_215088_.m_6846_().m_11239_(this);
        this.f_8909_ = p_215088_.m_6846_().m_11296_(this);
        this.f_19793_ = 1.0F;
-       this.m_9201_(p_215089_);
+-      this.m_9201_(p_215089_);
 -   }
+-
+-   private void m_9201_(ServerLevel p_9202_) {
++      //this.fudgeSpawnLocation(p_215089_); // Paper - don't move to spawn on login, only first join
 +      this.cachedSingleHashSet = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<>(this); // Paper
 +      this.cachedSingleMobDistanceMap = new com.destroystokyo.paper.util.PooledHashSets.PooledObjectLinkedOpenHashSet<>(this); // Paper
 +   }
@@ -152,9 +155,11 @@
 +      return blockposition;
 +   }
 +   // CraftBukkit end
- 
-    private void m_9201_(ServerLevel p_9202_) {
++
++   public void m_9201_(ServerLevel p_9202_) {
        BlockPos blockpos = p_9202_.m_220360_();
+       if (p_9202_.m_6042_().f_223549_() && p_9202_.m_7654_().m_129910_().m_5464_() != GameType.ADVENTURE) {
+          int i = Math.max(0, this.f_8924_.m_129803_(p_9202_));
 @@ -272,7 +_,7 @@
              BlockPos blockpos1 = PlayerRespawnLogic.m_183928_(p_9202_, blockpos.m_123341_() + j2 - i, blockpos.m_123343_() + k2 - i);
              if (blockpos1 != null) {
@@ -220,7 +225,7 @@
     public void m_9240_() {
        try {
 -         if (!this.m_5833_() || !this.m_146899_()) {
-+         if (!this.m_5833_() || !this.m_146899_()) { // Paper - don't tick dead players that are not in the world currently (pending respawn)
++         if (isValid && !this.m_5833_() || !this.m_146899_()) { // Paper - don't tick dead players that are not in the world currently (pending respawn)
              super.m_8119_();
           }
  
