@@ -57,13 +57,13 @@
                    }
                 }
              }
-@@ -495,7 +_,11 @@
+@@ -495,7 +_,10 @@
     }
  
     protected static BlockPathTypes m_77643_(BlockGetter p_77644_, BlockPos p_77645_) {
-+      BlockState blockState = p_77644_.getBlockStateIfLoaded(p_77645_); // Paper
-+      if (blockState == null) return BlockPathTypes.BLOCKED; // Paper
-       BlockState blockstate = p_77644_.m_8055_(p_77645_);
+-      BlockState blockstate = p_77644_.m_8055_(p_77645_);
++      BlockState blockstate = p_77644_.getBlockStateIfLoaded(p_77645_); // Paper
++      if (blockstate == null) return BlockPathTypes.BLOCKED; // Paper
 +      BlockPathTypes type = blockstate.getBlockPathType(p_77644_, p_77645_, null);
 +      if (type != null) return type;
        Block block = blockstate.m_60734_();
