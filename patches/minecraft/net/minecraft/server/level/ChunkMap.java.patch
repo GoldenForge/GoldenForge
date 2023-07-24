@@ -1398,7 +1398,7 @@
        int i2 = SectionPos.m_123171_(p_140185_.m_146903_());
        int j2 = SectionPos.m_123171_(p_140185_.m_146907_());
        SectionPos sectionpos = p_140185_.m_8965_();
-@@ -1051,63 +_,68 @@
+@@ -1051,63 +_,76 @@
           }
        }
  
@@ -1506,6 +1506,14 @@
  
     protected void m_140199_(Entity p_140200_) {
 -      if (!(p_140200_ instanceof EnderDragonPart)) {
++      org.spigotmc.AsyncCatcher.catchOp("entity track"); // Spigot
++      // Paper start - ignore and warn about illegal addEntity calls instead of crashing server
++      if (!p_140200_.isValid || p_140200_.f_19853_ != this.f_140133_ || this.f_140150_.containsKey(p_140200_.m_19879_())) {
++         f_140128_.error("Illegal ChunkMap::addEntity for world " + this.f_140133_.getWorld().getName()
++                 + ": " + p_140200_  + (this.f_140150_.containsKey(p_140200_.m_19879_()) ? " ALREADY CONTAINED (This would have crashed your server)" : ""), new Throwable());
++         return;
++      }
++      // Paper end
 +      if (!(p_140200_ instanceof net.minecraftforge.entity.PartEntity)) {
           EntityType<?> entitytype = p_140200_.m_6095_();
           int i = entitytype.m_20681_() * 16;
