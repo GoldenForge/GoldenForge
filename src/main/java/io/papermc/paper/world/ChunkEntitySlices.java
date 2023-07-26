@@ -147,6 +147,10 @@ public final class ChunkEntitySlices {
         return ret;
     }
 
+    public boolean isPreventingStatusUpdates() {
+        return this.preventStatusUpdates;
+    }
+
     public void stopPreventingStatusUpdates(final boolean prev) {
         this.preventStatusUpdates = prev;
     }

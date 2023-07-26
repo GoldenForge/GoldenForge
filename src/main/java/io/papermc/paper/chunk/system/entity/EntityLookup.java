@@ -389,6 +389,17 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         return true;
     }
 
+    public boolean canRemoveEntity(final Entity entity) {
+        if (entity.updatingSectionStatus) {
+            return false;
+        }
+
+        final int sectionX = entity.sectionX;
+        final int sectionZ = entity.sectionZ;
+        final ChunkEntitySlices slices = this.getChunk(sectionX, sectionZ);
+        return slices == null || !slices.isPreventingStatusUpdates();
+    }
+
     private void removeEntity(final Entity entity) {
         final int sectionX = entity.sectionX;
         final int sectionY = entity.sectionY;
@@ -402,6 +413,9 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         if (slices == null) {
             LOGGER.warn("Cannot remove entity " + entity + " from null entity slices (" + sectionX + "," + sectionZ + ")");
         } else {
+            if (slices.isPreventingStatusUpdates()) {
+                throw new IllegalStateException("Attempting to remove entity " + entity + " from entity slices (" + sectionX + "," + sectionZ + ") that is receiving status updates");
+            }
             if (!slices.removeEntity(entity, sectionY)) {
                 LOGGER.warn("Failed to remove entity " + entity + " from entity slices (" + sectionX + "," + sectionZ + ")");
             }
