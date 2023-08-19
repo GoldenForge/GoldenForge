@@ -31,12 +31,13 @@
 +   public final RegionFileStorage regionFileCache;
 +   // Paper end - async chunk loading
  
-    public ChunkStorage(Path p_196912_, DataFixer p_196913_, boolean p_196914_) {
+-   public ChunkStorage(Path p_196912_, DataFixer p_196913_, boolean p_196914_) {
++   public ChunkStorage(dev.kaiijumc.kaiiju.region.RegionFileFormat format, int linearCompression, boolean linearCrashOnBrokenSymlink, Path p_196912_, DataFixer p_196913_, boolean p_196914_) {
        this.f_63496_ = p_196913_;
 -      this.f_63495_ = new IOWorker(p_196912_, p_196914_, "chunk");
 +      // Paper start - async chunk io
 +      // remove IO worker
-+      this.regionFileCache = new RegionFileStorage(p_196912_, p_196914_, true); // Paper - nuke IOWorker // Paper
++      this.regionFileCache = new RegionFileStorage(format, linearCompression, linearCrashOnBrokenSymlink, p_196912_, p_196914_, true); // Paper - nuke IOWorker // Paper
 +      // Paper end - async chunk io
     }
  

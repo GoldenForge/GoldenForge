@@ -7,6 +7,7 @@ package org.goldenforge.config;
 
 import static net.minecraftforge.fml.Logging.FORGEMOD;
 
+import dev.kaiijumc.kaiiju.region.RegionFileFormat;
 import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -14,13 +15,7 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 
-import net.minecraftforge.common.ForgeConfigSpec.BooleanValue;
-import net.minecraftforge.common.ForgeConfigSpec.DoubleValue;
 import net.minecraftforge.common.ForgeConfigSpec.ConfigValue;
-import org.bukkit.Bukkit;
-import org.goldenforge.GoldenForge;
-
-import java.util.logging.Level;
 
 
 public class GoldenForgeConfig {
@@ -53,6 +48,13 @@ public class GoldenForgeConfig {
         public static ConfigValue<Integer> loginTicks;
         public static ConfigValue<Boolean> optimizeExplosions;
         public static ConfigValue<Integer> nettyThreads;
+
+        public static ConfigValue<Integer> linearFlushFrequency;
+        public static ConfigValue<Integer> linearFlushThreads;
+        public static ConfigValue<String> regionFormatName;
+        public static RegionFileFormat regionFormat = RegionFileFormat.ANVIL;
+        public static ConfigValue<Integer> regionFormatLinearCompressionLevel;
+        public static ConfigValue<Boolean> linearCrashOnBrokenSymlink;
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -181,6 +183,28 @@ public class GoldenForgeConfig {
                     .define("chatExecutorMaxSize", -1);
 
             builder.pop();
+
+            builder.push("Linear region format");
+            linearFlushFrequency = builder
+                    .comment("linearFlushFrequency")
+                    .worldRestart()
+                    .define("linearFlushFrequency", 10);
+            linearFlushThreads = builder
+                    .comment("linearFlushThreads")
+                    .worldRestart()
+                    .define("linearFlushThreads", 1);
+            regionFormatName = builder
+                    .comment("ANVIL or LINEAR. WARNING: THIS IS EXPERIMENTAL. AFTER EDITING THIS CONFIG, YOU NEED TO CONVERT YOUR WORLD!!! ")
+                    .worldRestart()
+                    .define("regionFormatName", "ANVIL");
+            regionFormatLinearCompressionLevel = builder
+                    .comment("ZSTD compression level.")
+                    .worldRestart()
+                    .define("regionFormatLinearCompressionLevel", 1);
+            linearCrashOnBrokenSymlink = builder
+                    .worldRestart()
+                    .define("linearCrashOnBrokenSymlink", true);
+
         }
 
         public void postConfig() {
@@ -197,6 +221,8 @@ public class GoldenForgeConfig {
             java.util.concurrent.ThreadPoolExecutor executor = (java.util.concurrent.ThreadPoolExecutor) net.minecraft.server.MinecraftServer.getServer().chatExecutor;
             executor.setCorePoolSize(_chatExecutorCoreSize);
             executor.setMaximumPoolSize(_chatExecutorMaxSize);
+
+            regionFormat = RegionFileFormat.fromString(regionFormatName.get());
 
         }
 

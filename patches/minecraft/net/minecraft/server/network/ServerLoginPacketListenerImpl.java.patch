@@ -1,10 +1,19 @@
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-@@ -38,17 +_,19 @@
+@@ -13,7 +_,6 @@
+ import java.util.UUID;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import javax.annotation.Nullable;
+-import javax.crypto.Cipher;
+ import javax.crypto.SecretKey;
+ import net.minecraft.DefaultUncaughtExceptionHandler;
+ import net.minecraft.core.UUIDUtil;
+@@ -38,17 +_,20 @@
  import net.minecraft.util.SignatureValidator;
  import net.minecraft.world.entity.player.ProfilePublicKey;
  import org.apache.commons.lang3.Validate;
 +import org.goldenforge.VelocityProxy;
++import org.goldenforge.bukkit.craftbukkit.util.RandomSourceWrapper;
 +import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
@@ -13,7 +22,7 @@
     static final Logger f_10015_ = LogUtils.getLogger();
     private static final int f_143698_ = 600;
 -   private static final RandomSource f_10016_ = RandomSource.m_216327_();
-+   private static final RandomSource f_10016_ = new org.bukkit.craftbukkit.util.RandomSourceWrapper(new java.util.Random()); // Paper - This is called across threads, make safe
++   private static final RandomSource f_10016_ = new RandomSourceWrapper(new java.util.Random()); // Paper - This is called across threads, make safe
     private final byte[] f_10017_;
     final MinecraftServer f_10018_;
     public final Connection f_10013_;

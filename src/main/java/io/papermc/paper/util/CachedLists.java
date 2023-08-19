@@ -2,8 +2,8 @@ package io.papermc.paper.util;
 
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
-import org.bukkit.Bukkit;
-import org.bukkit.craftbukkit.util.UnsafeList;
+import org.goldenforge.bukkit.Bukkit;
+import org.goldenforge.bukkit.craftbukkit.util.UnsafeList;
 
 import java.util.List;
 

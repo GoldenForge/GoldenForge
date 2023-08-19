@@ -20,6 +20,11 @@
     public static final int f_148566_ = 1;
 -   private final PoiManager.DistanceTracker f_27029_;
 -   private final LongSet f_27030_ = new LongOpenHashSet();
+-
+-   public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
+-      super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
+-      this.f_27029_ = new PoiManager.DistanceTracker();
+-   }
 +  // private final PoiManager.DistanceTracker distanceTracker;
 +  // private final LongSet loadedChunks = new LongOpenHashSet();
 +
@@ -37,13 +42,12 @@
 +         this.villageDistanceTracker.removeSource(section);
 +      }
 +   }
- 
-    public PoiManager(Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
-       super(p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
--      this.f_27029_ = new PoiManager.DistanceTracker();
++
++   public PoiManager(dev.kaiijumc.kaiiju.region.RegionFileFormat formatName, int linearCompression, boolean linearCrashOnBrokenSymlink, Path p_217869_, DataFixer p_217870_, boolean p_217871_, RegistryAccess p_217872_, LevelHeightAccessor p_217873_) {
++      super(formatName, linearCompression, linearCrashOnBrokenSymlink, p_217869_, PoiSection::m_27295_, PoiSection::new, p_217870_, DataFixTypes.POI_CHUNK, p_217871_, p_217872_, p_217873_);
 +      //this.distanceTracker = new PoiManager.DistanceTracker();
 +      this.world = (net.minecraft.server.level.ServerLevel)p_217873_; // Paper
-    }
++   }
 +
  
     public void m_217919_(BlockPos p_217920_, Holder<PoiType> p_217921_) {

@@ -1,4 +1,4 @@
-package org.bukkit.craftbukkit.util;
+package org.goldenforge.bukkit.craftbukkit.util;
 
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.levelgen.PositionalRandomFactory;

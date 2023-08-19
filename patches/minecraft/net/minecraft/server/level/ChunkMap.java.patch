@@ -57,7 +57,7 @@
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
     private static final byte f_143034_ = -1;
-@@ -110,35 +_,195 @@
+@@ -110,37 +_,197 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -267,8 +267,11 @@
 +
 +   boolean unloadingPlayerChunk = false; // Paper - do not allow ticket level changes while unloading chunks
     public ChunkMap(ServerLevel p_214836_, LevelStorageSource.LevelStorageAccess p_214837_, DataFixer p_214838_, StructureTemplateManager p_214839_, Executor p_214840_, BlockableEventLoop<Runnable> p_214841_, LightChunkGetter p_214842_, ChunkGenerator p_214843_, ChunkProgressListener p_214844_, ChunkStatusUpdateListener p_214845_, Supplier<DimensionDataStorage> p_214846_, int p_214847_, boolean p_214848_) {
-       super(p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
+-      super(p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
++      super(GoldenForgeConfig.Server.regionFormat, GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get(), GoldenForgeConfig.Server.linearCrashOnBrokenSymlink.get(), p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
        this.f_214833_ = p_214839_;
+       Path path = p_214837_.m_197394_(p_214836_.m_46472_());
+       this.f_182284_ = path.getFileName().toString();
 @@ -153,19 +_,112 @@
        }
  
@@ -292,7 +295,8 @@
 +      this.f_140134_ = new ThreadedLevelLightEngine(p_214842_, this, this.f_140133_.m_6042_().f_223549_(), null); // Paper - rewrite chunk system
        this.f_140145_ = new ChunkMap.DistanceManager(p_214840_, p_214841_);
        this.f_140137_ = p_214846_;
-       this.f_140138_ = new PoiManager(path.resolve("poi"), p_214838_, p_214848_, p_214836_.m_5962_(), p_214836_);
+-      this.f_140138_ = new PoiManager(path.resolve("poi"), p_214838_, p_214848_, p_214836_.m_5962_(), p_214836_);
++      this.f_140138_ = new PoiManager(GoldenForgeConfig.Server.regionFormat, GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get(), GoldenForgeConfig.Server.linearCrashOnBrokenSymlink.get(), path.resolve("poi"), p_214838_, p_214848_, p_214836_.m_5962_(), p_214836_);
        this.m_140167_(p_214847_);
 +      // Paper start
 +      this.dataRegionManager = new io.papermc.paper.chunk.SingleThreadChunkRegionManager(this.f_140133_, 2, (1.0 / 3.0), 1, 6, "Data", DataRegionData::new, DataRegionSectionData::new);
@@ -1219,7 +1223,7 @@
     }
  
 +   public ChunkStatus getChunkStatusOnDisk(ChunkPos chunkPos) throws IOException {
-+      net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFile(chunkPos, true);
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionFile = regionFileCache.getRegionFile(chunkPos, true); // Kaiiju
 +
 +      if (regionFile == null || !regionFileCache.chunkExists(chunkPos)) {
 +         return null;
@@ -1266,7 +1270,7 @@
 +   }
 +
 +   public void updateChunkStatusOnDisk(ChunkPos chunkPos, @Nullable CompoundTag compound) throws IOException {
-+      net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFile(chunkPos, false);
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionFile = regionFileCache.getRegionFile(chunkPos, false); // Kaiiju
 +
 +      regionFile.setStatus(chunkPos.f_45578_, chunkPos.f_45579_, ChunkSerializer.getStatus(compound));
 +   }

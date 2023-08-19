@@ -811,7 +811,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                                                final ChunkDataController taskController) {
         final ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
         if (intendingToBlock) {
-            return taskController.computeForRegionFile(chunkX, chunkZ, true, (final RegionFile file) -> {
+            return taskController.computeForRegionFile(chunkX, chunkZ, true, (final dev.kaiijumc.kaiiju.region.AbstractRegionFile file) -> { // Kaiiju
                 if (file == null) { // null if no regionfile exists
                     return Boolean.FALSE;
                 }
@@ -824,7 +824,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                 return Boolean.FALSE;
             } // else: it either exists or is not known, fall back to checking the loaded region file
 
-            return taskController.computeForRegionFileIfLoaded(chunkX, chunkZ, (final RegionFile file) -> {
+            return taskController.computeForRegionFileIfLoaded(chunkX, chunkZ, (final dev.kaiijumc.kaiiju.region.AbstractRegionFile file) -> { // Kaiiju
                 if (file == null) { // null if not loaded
                     // not sure at this point, let the I/O thread figure it out
                     return Boolean.TRUE;
@@ -1127,9 +1127,9 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             return this.getCache().doesRegionFileNotExistNoIO(new ChunkPos(chunkX, chunkZ));
         }
 
-        public <T> T computeForRegionFile(final int chunkX, final int chunkZ, final boolean existingOnly, final Function<RegionFile, T> function) {
+        public <T> T computeForRegionFile(final int chunkX, final int chunkZ, final boolean existingOnly, final Function<dev.kaiijumc.kaiiju.region.AbstractRegionFile, T> function) { // Kaiiju
             final RegionFileStorage cache = this.getCache();
-            final RegionFile regionFile;
+            final dev.kaiijumc.kaiiju.region.AbstractRegionFile regionFile; // Kaiiju
             synchronized (cache) {
                 try {
                     regionFile = cache.getRegionFile(new ChunkPos(chunkX, chunkZ), existingOnly, true);
@@ -1142,19 +1142,19 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                 return function.apply(regionFile);
             } finally {
                 if (regionFile != null) {
-                    regionFile.fileLock.unlock();
+                    regionFile.getFileLock().unlock(); // Kaiiju
                 }
             }
         }
 
-        public <T> T computeForRegionFileIfLoaded(final int chunkX, final int chunkZ, final Function<RegionFile, T> function) {
+        public <T> T computeForRegionFileIfLoaded(final int chunkX, final int chunkZ, final Function<dev.kaiijumc.kaiiju.region.AbstractRegionFile, T> function) { // Kaiiju
             final RegionFileStorage cache = this.getCache();
-            final RegionFile regionFile;
+            final dev.kaiijumc.kaiiju.region.AbstractRegionFile regionFile; // Kaiiju
 
             synchronized (cache) {
                 regionFile = cache.getRegionFileIfLoaded(new ChunkPos(chunkX, chunkZ));
                 if (regionFile != null) {
-                    regionFile.fileLock.lock();
+                    regionFile.getFileLock().lock(); // Kaiiju
                 }
             }
 
@@ -1162,7 +1162,7 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                 return function.apply(regionFile);
             } finally {
                 if (regionFile != null) {
-                    regionFile.fileLock.unlock();
+                    regionFile.getFileLock().unlock(); // Kaiiju
                 }
             }
         }

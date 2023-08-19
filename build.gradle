@@ -153,6 +153,9 @@ subprojects {
             url = 'https://libraries.minecraft.net/'
         }
         maven { url='https://repo.papermc.io/repository/maven-public/'}
+        maven {
+            url "https://raw.githubusercontent.com/GoldenForge/maven/master/"
+        }
     }
 
     java.toolchain.languageVersion = JavaLanguageVersion.of(17)
@@ -298,6 +301,9 @@ def sharedDeps = {
     installer "net.minecraftforge:JarJarSelector:${JARJAR_VERSION}"
     installer "net.minecraftforge:JarJarMetadata:${JARJAR_VERSION}"
     installer "com.velocitypowered:velocity-native:3.1.2-SNAPSHOT"
+    installer "com.github.luben:zstd-jni:1.5.4-1"
+    installer "org.lz4:lz4-java:1.8.0"
+    //installer "org.goldenforge:GoldenForgeLib:1.1"
 
     installer "net.objecthunter:exp4j:0.4.8"
     installer "com.ibm.async:asyncutil:0.1.0"

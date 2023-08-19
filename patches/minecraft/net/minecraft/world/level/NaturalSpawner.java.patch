@@ -140,8 +140,13 @@
  
           for(int k = 0; k < 3; ++k) {
              int l = p_47042_.m_123341_();
-@@ -162,7 +_,7 @@
-                Player player = p_47040_.m_45924_(d0, (double)i, d1, -1.0D, false);
+@@ -159,10 +_,11 @@
+                blockpos$mutableblockpos.m_122178_(l, i, i1);
+                double d0 = (double)l + 0.5D;
+                double d1 = (double)i1 + 0.5D;
+-               Player player = p_47040_.m_45924_(d0, (double)i, d1, -1.0D, false);
++               Player player = (p_47041_ instanceof LevelChunk) ? ((LevelChunk)p_47041_).findNearestPlayer(d0, i, d1, 576.0D, net.minecraft.world.entity.EntitySelector.f_20408_) : p_47040_.m_45924_(d0, (double)i, d1, -1.0D, false); // Paper - use chunk's player cache to optimize search in range
++
                 if (player != null) {
                    double d2 = player.m_20275_(d0, (double)i, d1);
 -                  if (m_47024_(p_47040_, p_47041_, blockpos$mutableblockpos, d2)) {

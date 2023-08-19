@@ -1,6 +1,6 @@
 package com.destroystokyo.paper.io;
 
-import org.bukkit.Bukkit;
+import org.goldenforge.bukkit.Bukkit;
 
 public final class IOUtil {
 

@@ -31,6 +31,14 @@
  import net.minecraft.world.level.gameevent.DynamicGameEventListener;
  import net.minecraft.world.level.gameevent.GameEvent;
  import net.minecraft.world.level.gameevent.GameEventListener;
+@@ -147,6 +_,7 @@
+ import net.minecraft.world.phys.shapes.Shapes;
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraft.world.ticks.LevelTicks;
++import org.goldenforge.config.GoldenForgeConfig;
+ import org.slf4j.Logger;
+ 
+ public class ServerLevel extends Level implements WorldGenLevel {
 @@ -163,11 +_,12 @@
     private static final int f_143242_ = 300;
     private static final int f_184046_ = 65536;
@@ -120,8 +128,8 @@
 +
 +   private static final class EntityRegionFileStorage extends net.minecraft.world.level.chunk.storage.RegionFileStorage {
 +
-+      public EntityRegionFileStorage(Path directory, boolean dsync) {
-+         super(directory, dsync);
++      public EntityRegionFileStorage(dev.kaiijumc.kaiiju.region.RegionFileFormat format, int linearCompression, boolean linearCrashOnBrokenSymlink, Path directory, boolean dsync) { // Kaiiju
++         super(format, linearCompression, linearCrashOnBrokenSymlink, directory, dsync); // Kaiiju
 +      }
 +
 +      protected void m_63708_(ChunkPos pos, net.minecraft.nbt.CompoundTag nbt) throws IOException {
@@ -378,7 +386,7 @@
 -      this.f_143244_ = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
 -      this.f_8547_ = new ServerChunkCache(this, p_215001_, datafixer, p_214999_.m_236738_(), p_215000_, chunkgenerator, p_214999_.m_6846_().m_11312_(), p_214999_.m_6846_().m_184213_(), flag, p_215005_, this.f_143244_::m_157524_, () -> {
 +      boolean flag2 = p_214999_.m_6365_();
-+      this.entityStorage = new EntityRegionFileStorage(p_215001_.m_197394_(p_215003_).resolve("entities"), flag2); // Paper - rewrite chunk system  //EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(this, convertable_conversionsession.getDimensionPath(resourcekey).resolve("entities"), datafixer, flag2, minecraftserver);
++      this.entityStorage = new EntityRegionFileStorage(GoldenForgeConfig.Server.regionFormat, GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get(), GoldenForgeConfig.Server.linearCrashOnBrokenSymlink.get(), p_215001_.m_197394_(p_215003_).resolve("entities"), flag2); // Paper - rewrite chunk system  //EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(this, convertable_conversionsession.getDimensionPath(resourcekey).resolve("entities"), datafixer, flag2, minecraftserver);
 +      f_143244_ = new PersistentEntitySectionManager<>(this);
 +      //EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(this, p_215001_.getDimensionPath(p_215003_).resolve("entities"), datafixer, flag, p_214999_);
 +      //this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage, this.entitySliceManager);

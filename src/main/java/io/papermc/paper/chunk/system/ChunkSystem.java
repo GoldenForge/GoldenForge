@@ -1,22 +1,15 @@
 package io.papermc.paper.chunk.system;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
-import com.destroystokyo.paper.util.SneakyThrow;
-import com.mojang.datafixers.util.Either;
 import com.mojang.logging.LogUtils;
-import io.papermc.paper.util.CoordinateUtils;
-import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.server.level.*;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
-import org.bukkit.Bukkit;
 import org.slf4j.Logger;
-import java.util.ArrayList;
+
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public final class ChunkSystem {

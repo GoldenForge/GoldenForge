@@ -1,5 +1,22 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
+@@ -1,13 +_,12 @@
+ package net.minecraft.server.level;
+ 
++import com.google.common.base.Preconditions;
+ import com.google.common.collect.Lists;
+ import com.mojang.authlib.GameProfile;
+ import com.mojang.datafixers.util.Either;
+ import com.mojang.logging.LogUtils;
+-import java.util.Collection;
+-import java.util.List;
+-import java.util.Optional;
+-import java.util.OptionalInt;
++
++import java.util.*;
+ import javax.annotation.Nullable;
+ import net.minecraft.BlockUtil;
+ import net.minecraft.ChatFormatting;
 @@ -88,6 +_,7 @@
  import net.minecraft.world.Container;
  import net.minecraft.world.InteractionHand;
@@ -16,12 +33,7 @@
  import net.minecraft.world.inventory.AbstractContainerMenu;
  import net.minecraft.world.inventory.ContainerListener;
  import net.minecraft.world.inventory.ContainerSynchronizer;
-@@ -142,10 +_,12 @@
- import net.minecraft.world.scores.Score;
- import net.minecraft.world.scores.Team;
- import net.minecraft.world.scores.criteria.ObjectiveCriteria;
-+import org.bukkit.Bukkit;
- import org.slf4j.Logger;
+@@ -146,6 +_,7 @@
  
  public class ServerPlayer extends Player {
     private static final Logger f_8907_ = LogUtils.getLogger();
@@ -44,7 +56,7 @@
     private final ContainerSynchronizer f_143379_ = new ContainerSynchronizer() {
        public void m_142589_(AbstractContainerMenu p_143448_, NonNullList<ItemStack> p_143449_, ItemStack p_143450_, int[] p_143451_) {
           ServerPlayer.this.f_8906_.m_9829_(new ClientboundContainerSetContentPacket(p_143448_.f_38840_, p_143448_.m_182425_(), p_143449_, p_143450_));
-@@ -234,6 +_,59 @@
+@@ -234,6 +_,87 @@
     public int f_8940_;
     public int f_8943_;
     public boolean f_8944_;
@@ -101,6 +113,34 @@
 +         return input.setSendViewDistance(distance);
 +      });
 +   }
++
++   // Goldenforge API
++//   public boolean teleport(Location location) {
++//      // Paper end
++//      Preconditions.checkArgument(location != null, "location cannot be null");
++//      location.checkFinite();
++//      // Don't allow teleporting between worlds while keeping passengers
++//      if (this.isVehicle() && location.getWorld() != this.level) {
++//         return false;
++//      }
++//
++//      // If this entity is riding another entity, we must dismount before teleporting.
++//      this.stopRiding(); // Paper - Teleport passenger API
++//
++//      // Let the server handle cross world teleports
++//      if (location.getWorld() != null && !location.getWorld().equals(this.level)) {
++//         // Prevent teleportation to an other world during world generation
++//         //Preconditions.checkState(!generation, "Cannot teleport entity to an other world during world generation");
++//         this.teleportTo(((ServerLevel) location.getWorld()), location.getX(), location.getY(), location.getZ(), yRot, xRot);
++//         return true;
++//      }
++//
++//      // entity.setLocation() throws no event, and so cannot be cancelled
++//      moveTo(location.getX(), location.getY(), location.getZ(), location.getYaw(), location.getPitch()); // Paper - use proper moveTo, as per vanilla teleporting
++//
++//      return true;
++//   }
++   // Goldenforge end
  
     public ServerPlayer(MinecraftServer p_215088_, ServerLevel p_215089_, GameProfile p_215090_, @Nullable ProfilePublicKey p_215091_) {
        super(p_215089_, p_215089_.m_220360_(), p_215089_.m_220361_(), p_215090_, p_215091_);

@@ -1,7 +1,31 @@
 --- a/net/minecraft/server/level/ThreadedLevelLightEngine.java
 +++ b/net/minecraft/server/level/ThreadedLevelLightEngine.java
-@@ -23,43 +_,198 @@
+@@ -1,65 +_,213 @@
+ package net.minecraft.server.level;
+ 
+-import com.mojang.datafixers.util.Pair;
+ import com.mojang.logging.LogUtils;
+-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+-import it.unimi.dsi.fastutil.objects.ObjectList;
+-import it.unimi.dsi.fastutil.objects.ObjectListIterator;
++
+ import java.util.concurrent.CompletableFuture;
+-import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.function.IntSupplier;
+ import javax.annotation.Nullable;
+ import net.minecraft.Util;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.SectionPos;
+-import net.minecraft.util.thread.ProcessorHandle;
+ import net.minecraft.util.thread.ProcessorMailbox;
+ import net.minecraft.world.level.ChunkPos;
+ import net.minecraft.world.level.LightLayer;
+ import net.minecraft.world.level.chunk.ChunkAccess;
+ import net.minecraft.world.level.chunk.DataLayer;
+-import net.minecraft.world.level.chunk.LevelChunkSection;
+ import net.minecraft.world.level.chunk.LightChunkGetter;
  import net.minecraft.world.level.lighting.LevelLightEngine;
++import org.goldenforge.bukkit.Bukkit;
  import org.slf4j.Logger;
  
 +// Paper start
@@ -10,8 +34,6 @@
 +import java.util.function.Supplier;
 +import net.minecraft.world.level.lighting.LayerLightEventListener;
 +import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
-+import it.unimi.dsi.fastutil.longs.LongArrayList;
-+import it.unimi.dsi.fastutil.longs.LongIterator;
 +import net.minecraft.world.level.chunk.ChunkStatus;
 +// Paper end
 +
@@ -62,7 +84,7 @@
 +   public int relight(java.util.Set<ChunkPos> chunks_param,
 +                      java.util.function.Consumer<ChunkPos> chunkLightCallback,
 +                      java.util.function.IntConsumer onComplete) {
-+      if (!org.bukkit.Bukkit.isPrimaryThread()) {
++      if (!Bukkit.isPrimaryThread()) {
 +         throw new IllegalStateException("Must only be called on the main thread");
 +      }
 +

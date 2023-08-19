@@ -1,4 +1,4 @@
-package org.bukkit;
+package org.goldenforge.bukkit;
 
 public class Bukkit {
     public static boolean isPrimaryThread() {

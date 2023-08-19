@@ -7,7 +7,6 @@ import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.mojang.logging.LogUtils;
 import io.papermc.paper.chunk.system.scheduling.queue.RadiusAwarePrioritisedExecutor;
 import io.papermc.paper.util.CoordinateUtils;
-import io.papermc.paper.util.MCUtil;
 import io.papermc.paper.util.TickThread;
 import net.minecraft.CrashReport;
 import net.minecraft.CrashReportCategory;
@@ -21,7 +20,7 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
-import org.bukkit.Bukkit;
+import org.goldenforge.bukkit.Bukkit;
 import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
 
@@ -29,7 +28,6 @@ import java.io.File;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 

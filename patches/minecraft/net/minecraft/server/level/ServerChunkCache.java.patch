@@ -1,12 +1,6 @@
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -1,25 +_,26 @@
- package net.minecraft.server.level;
- 
-+import com.destroystokyo.paper.util.MCUtil;
- import com.google.common.annotations.VisibleForTesting;
- import com.google.common.collect.Lists;
- import com.mojang.datafixers.DataFixer;
+@@ -6,16 +_,15 @@
  import com.mojang.datafixers.util.Either;
  import java.io.File;
  import java.io.IOException;
@@ -26,11 +20,6 @@
  import net.minecraft.Util;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.SectionPos;
- import net.minecraft.network.protocol.Packet;
-+import net.minecraft.server.MinecraftServer;
- import net.minecraft.server.level.progress.ChunkProgressListener;
- import net.minecraft.util.VisibleForDebug;
- import net.minecraft.util.profiling.ProfilerFiller;
 @@ -45,14 +_,16 @@
  import net.minecraft.world.level.storage.DimensionDataStorage;
  import net.minecraft.world.level.storage.LevelData;
@@ -735,7 +724,11 @@
        this.f_8327_.m_140849_(p_8439_, p_8440_, p_8441_, p_8442_);
     }
  
-@@ -502,7 +_,7 @@
+@@ -498,11 +_,10 @@
+    public void m_201915_() {
+       this.f_8327_.m_201910_();
+    }
+-
     static record ChunkAndHolder(LevelChunk f_184028_, ChunkHolder f_184029_) {
     }
  

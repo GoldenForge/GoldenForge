@@ -29,8 +29,9 @@
 +   public final RegistryAccess f_223507_;
     protected final LevelHeightAccessor f_156618_;
  
-    public SectionStorage(Path p_223509_, Function<Runnable, Codec<R>> p_223510_, Function<Runnable, R> p_223511_, DataFixer p_223512_, DataFixTypes p_223513_, boolean p_223514_, RegistryAccess p_223515_, LevelHeightAccessor p_223516_) {
-+      super(p_223509_, p_223514_);
+-   public SectionStorage(Path p_223509_, Function<Runnable, Codec<R>> p_223510_, Function<Runnable, R> p_223511_, DataFixer p_223512_, DataFixTypes p_223513_, boolean p_223514_, RegistryAccess p_223515_, LevelHeightAccessor p_223516_) {
++   public SectionStorage(dev.kaiijumc.kaiiju.region.RegionFileFormat format, int linearCompression, boolean linearCrashOnBrokenSymlink, Path p_223509_, Function<Runnable, Codec<R>> p_223510_, Function<Runnable, R> p_223511_, DataFixer p_223512_, DataFixTypes p_223513_, boolean p_223514_, RegistryAccess p_223515_, LevelHeightAccessor p_223516_) {
++      super(format, linearCompression, linearCrashOnBrokenSymlink, p_223509_, p_223514_);
        this.f_63776_ = p_223510_;
        this.f_63777_ = p_223511_;
        this.f_63778_ = p_223512_;

@@ -1,14 +1,12 @@
 package org.spigotmc;
 
 import net.minecraft.server.MinecraftServer;
-import org.bukkit.Bukkit;
 import org.goldenforgelauncher.GoldenForgeEntryPoint;
 import org.slf4j.Logger;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
-import java.util.logging.Level;
 
 public final class WatchdogThread extends io.papermc.paper.util.TickThread // Paper - rewrite chunk system
 {

@@ -8,7 +8,12 @@
  import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
  import it.unimi.dsi.fastutil.shorts.ShortSet;
  import java.util.ArrayList;
-@@ -21,6 +_,7 @@
+@@ -17,10 +_,12 @@
+ import net.minecraft.Util;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.SectionPos;
++import net.minecraft.network.chat.Component;
+ import net.minecraft.network.protocol.Packet;
  import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
  import net.minecraft.network.protocol.game.ClientboundLightUpdatePacket;
  import net.minecraft.network.protocol.game.ClientboundSectionBlocksUpdatePacket;
@@ -16,6 +21,14 @@
  import net.minecraft.util.DebugBuffer;
  import net.minecraft.util.Mth;
  import net.minecraft.world.level.ChunkPos;
+@@ -36,6 +_,7 @@
+ import net.minecraft.world.level.chunk.LevelChunkSection;
+ import net.minecraft.world.level.chunk.ProtoChunk;
+ import net.minecraft.world.level.lighting.LevelLightEngine;
++import org.goldenforge.GoldenForge;
+ 
+ public class ChunkHolder {
+    public static final Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> f_139995_ = Either.right(ChunkHolder.ChunkLoadingFailure.f_140101_);
 @@ -46,18 +_,19 @@
     private static final List<ChunkStatus> f_139999_ = ChunkStatus.m_62349_();
     private static final ChunkHolder.FullChunkStatus[] f_140000_ = ChunkHolder.FullChunkStatus.values();
@@ -45,7 +58,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,217 @@
+@@ -65,97 +_,222 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -147,7 +160,12 @@
 +
 +   public void addPlayer(ServerPlayer player) {
 +      if (!this.playersSentChunkTo.add(player)) {
-+         throw new IllegalStateException("Already sent chunk " + this.f_140009_ + " in world '" + this.chunkMap.f_140133_.getWorld().getName() + "' to player " + player);
++         // Kaiiju start - Kick player instead of crashing
++         String errorMsg = "Already sent chunk " + this.f_140009_ + " in world " + this.chunkMap.f_140133_.getWorld().getName();
++         player.f_8906_.m_9942_(Component.m_237113_(errorMsg));
++         GoldenForge.LOGGER.error(errorMsg);
++         //throw new IllegalStateException("Already sent chunk " + this.pos + " in world '" + this.chunkMap.level.getWorld().getName() + "' to player " + player);
++         // Kaiiju end
 +      }
 +   }
 +

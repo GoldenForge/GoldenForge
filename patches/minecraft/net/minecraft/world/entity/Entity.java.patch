@@ -8,6 +8,14 @@
  import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
  import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
  import java.util.Arrays;
+@@ -15,6 +_,7 @@
+ import java.util.Optional;
+ import java.util.Set;
+ import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import java.util.function.BiConsumer;
+ import java.util.function.Predicate;
 @@ -85,7 +_,6 @@
  import net.minecraft.world.level.Level;
  import net.minecraft.world.level.block.Block;
@@ -46,8 +54,9 @@
     private ChunkPos f_185933_;
     private Vec3 f_19827_ = Vec3.f_82478_;
 -   private float f_19857_;
+-   private float f_19858_;
 +   public float f_19857_;
-    private float f_19858_;
++   public float f_19858_;
     public float f_19859_;
     public float f_19860_;
     private AABB f_19828_ = f_19845_;
@@ -835,7 +844,7 @@
     }
  
     public boolean m_7306_(Entity p_20356_) {
-@@ -2257,14 +_,20 @@
+@@ -2257,32 +_,40 @@
  
     @Nullable
     public Entity m_5489_(ServerLevel p_20118_) {
@@ -853,25 +862,35 @@
           if (portalinfo == null) {
              return null;
           } else {
-+            Entity transportedEntity = teleporter.placeEntity(this, (ServerLevel) this.f_19853_, p_20118_, this.f_19857_, spawnPortal -> { //Forge: Start vanilla logic
-             this.f_19853_.m_46473_().m_6182_("reloading");
-             Entity entity = this.m_6095_().m_20615_(p_20118_);
-             if (entity != null) {
-@@ -2272,17 +_,19 @@
-                entity.m_7678_(portalinfo.f_77676_.f_82479_, portalinfo.f_77676_.f_82480_, portalinfo.f_77676_.f_82481_, portalinfo.f_77678_, entity.m_146909_());
-                entity.m_20256_(portalinfo.f_77677_);
-                p_20118_.m_143334_(entity);
+-            this.f_19853_.m_46473_().m_6182_("reloading");
+-            Entity entity = this.m_6095_().m_20615_(p_20118_);
+-            if (entity != null) {
+-               entity.m_20361_(this);
+-               entity.m_7678_(portalinfo.f_77676_.f_82479_, portalinfo.f_77676_.f_82480_, portalinfo.f_77676_.f_82481_, portalinfo.f_77678_, entity.m_146909_());
+-               entity.m_20256_(portalinfo.f_77677_);
+-               p_20118_.m_143334_(entity);
 -               if (p_20118_.m_46472_() == Level.f_46430_) {
-+               if (spawnPortal && p_20118_.m_46472_() == Level.f_46430_) {
-                   ServerLevel.m_8617_(p_20118_);
+-                  ServerLevel.m_8617_(p_20118_);
++            Entity transportedEntity = teleporter.placeEntity(this, (ServerLevel) this.f_19853_, p_20118_, this.f_19857_, spawnPortal -> { //Forge: Start vanilla logic
++               this.f_19853_.m_46473_().m_6182_("reloading");
++               Entity entity = this.m_6095_().m_20615_(p_20118_);
++               if (entity != null) {
++                  entity.m_20361_(this);
++                  entity.m_7678_(portalinfo.f_77676_.f_82479_, portalinfo.f_77676_.f_82480_, portalinfo.f_77676_.f_82481_, portalinfo.f_77678_, entity.m_146909_());
++                  entity.m_20256_(portalinfo.f_77677_);
++                  p_20118_.m_143334_(entity);
++                  if (spawnPortal && p_20118_.m_46472_() == Level.f_46430_) {
++                     ServerLevel.m_8617_(p_20118_);
++                  }
                 }
-             }
-+            return entity;
+-            }
++               return entity;
 +            }); //Forge: End vanilla logic
  
              this.m_6089_();
              this.f_19853_.m_46473_().m_7238_();
-             ((ServerLevel)this.f_19853_).m_8886_();
+-            ((ServerLevel)this.f_19853_).m_8886_();
++            ((ServerLevel) this.f_19853_).m_8886_();
              p_20118_.m_8886_();
              this.f_19853_.m_46473_().m_7238_();
 -            return entity;

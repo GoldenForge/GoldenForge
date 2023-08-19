@@ -41,7 +41,7 @@
     protected long f_129726_ = Util.m_137550_();
     private long f_129727_;
     private boolean f_129728_;
-@@ -235,12 +_,29 @@
+@@ -235,12 +_,28 @@
     private String f_129739_;
     private MinecraftServer.ReloadableResources f_129740_;
     private final StructureTemplateManager f_236720_;
@@ -54,7 +54,6 @@
 +   public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
 +   public static int currentTick = 0; // Paper - Further improve tick loop
 +   public volatile boolean abnormalExit = false; // Paper
-+
 +   public gg.pufferfish.pufferfish.util.AsyncExecutor mobSpawnExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("MobSpawning"); // Pufferfish - optimize mob spawning
 +
 +   public final java.util.concurrent.ExecutorService chatExecutor = java.util.concurrent.Executors.newCachedThreadPool(

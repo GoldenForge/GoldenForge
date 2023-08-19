@@ -27,12 +27,13 @@
  import net.minecraft.world.level.ChunkPos;
  import org.slf4j.Logger;
  
- public class RegionFile implements AutoCloseable {
+-public class RegionFile implements AutoCloseable {
++public class RegionFile implements AutoCloseable, dev.kaiijumc.kaiiju.region.AbstractRegionFile {
 +
     private static final Logger f_63619_ = LogUtils.getLogger();
     private static final int f_156605_ = 4096;
     @VisibleForTesting
-@@ -35,108 +_,630 @@
+@@ -35,108 +_,640 @@
     private final FileChannel f_63621_;
     private final Path f_63622_;
     final RegionFileVersion f_63623_;
@@ -45,6 +46,16 @@
 +   protected final RegionBitmap f_63618_;
 +   public final java.util.concurrent.locks.ReentrantLock fileLock = new java.util.concurrent.locks.ReentrantLock(true); // Paper
 +   public final Path regionFile; // Paper
++
++   // Kaiiju start - Abstract getters
++   public Path getRegionFile() {
++      return this.regionFile;
++   }
++
++   public java.util.concurrent.locks.ReentrantLock getFileLock() {
++      return this.fileLock;
++   }
++   // Kaiiju end
 +
 +   // Paper start - try to recover from RegionFile header corruption
 +   private static long roundToSectors(long bytes) {
@@ -124,7 +135,7 @@
 +   }
 +
 +   // note: only call for CHUNK regionfiles
-+   boolean recalculateHeader() throws IOException {
++   public boolean recalculateHeader() throws IOException { // Kaiiju
 +      if (!this.canRecalcHeader) {
 +         return false;
 +      }
@@ -381,7 +392,7 @@
 +
 +         // write new header
 +         try {
-+            this.m_63637_();
++            this.flush();
 +            this.f_63621_.force(true); // try to ensure it goes through...
 +            f_63619_.info("Successfully wrote new header to disk for regionfile " + this.regionFile.toAbsolutePath());
 +         } catch (IOException ex) {
@@ -605,7 +616,8 @@
 +   // Paper end
 +
     @Nullable
-    public synchronized DataInputStream m_63645_(ChunkPos p_63646_) throws IOException {
+-   public synchronized DataInputStream m_63645_(ChunkPos p_63646_) throws IOException {
++   public synchronized DataInputStream getChunkDataInputStream(ChunkPos p_63646_) throws IOException {
        int i = this.m_63686_(p_63646_);
 +
        if (i == 0) {
@@ -634,7 +646,7 @@
 +            RegionFile.f_63619_.error("Chunk {} header is truncated: expected {} but read {}", new Object[]{p_63646_, l, bytebuffer.remaining()});
 +            // Paper start - recalculate header on regionfile corruption
 +            if (this.canRecalcHeader && this.recalculateHeader()) {
-+               return this.m_63645_(p_63646_);
++               return this.getChunkDataInputStream(p_63646_);
 +            }
 +            // Paper end - recalculate header on regionfile corruption
              return null;
@@ -647,7 +659,7 @@
 +               RegionFile.f_63619_.warn("Chunk {} is allocated, but stream is missing", p_63646_);
 +               // Paper start - recalculate header on regionfile corruption
 +               if (this.canRecalcHeader && this.recalculateHeader()) {
-+                  return this.m_63645_(p_63646_);
++                  return this.getChunkDataInputStream(p_63646_);
 +               }
 +               // Paper end - recalculate header on regionfile corruption
                 return null;
@@ -661,7 +673,7 @@
 +                     RegionFile.f_63619_.warn("Chunk has both internal and external streams");
 +                     // Paper start - recalculate header on regionfile corruption
 +                     if (this.canRecalcHeader && this.recalculateHeader()) {
-+                        return this.m_63645_(p_63646_);
++                        return this.getChunkDataInputStream(p_63646_);
 +                     }
 +                     // Paper end - recalculate header on regionfile corruption
                    }
@@ -670,7 +682,7 @@
 +                  // Paper start - recalculate header on regionfile corruption
 +                  final DataInputStream ret = this.m_63647_(p_63646_, RegionFile.m_63669_(b0));
 +                  if (ret == null && this.canRecalcHeader && this.recalculateHeader()) {
-+                     return this.m_63645_(p_63646_);
++                     return this.getChunkDataInputStream(p_63646_);
 +                  }
 +                  return ret;
 +                  // Paper end - recalculate header on regionfile corruption
@@ -679,7 +691,7 @@
 +                  RegionFile.f_63619_.error("Chunk {} stream is truncated: expected {} but read {}", new Object[]{p_63646_, j1, bytebuffer.remaining()});
 +                  // Paper start - recalculate header on regionfile corruption
 +                  if (this.canRecalcHeader && this.recalculateHeader()) {
-+                     return this.m_63645_(p_63646_);
++                     return this.getChunkDataInputStream(p_63646_);
 +                  }
 +                  // Paper end - recalculate header on regionfile corruption
                    return null;
@@ -688,7 +700,7 @@
 +                  RegionFile.f_63619_.error("Declared size {} of chunk {} is negative", i1, p_63646_);
 +                  // Paper start - recalculate header on regionfile corruption
 +                  if (this.canRecalcHeader && this.recalculateHeader()) {
-+                     return this.m_63645_(p_63646_);
++                     return this.getChunkDataInputStream(p_63646_);
 +                  }
 +                  // Paper end - recalculate header on regionfile corruption
                    return null;
@@ -697,7 +709,7 @@
 +                  // Paper start - recalculate header on regionfile corruption
 +                  final DataInputStream ret = this.m_63650_(p_63646_, b0, RegionFile.m_63659_(bytebuffer, j1));
 +                  if (ret == null && this.canRecalcHeader && this.recalculateHeader()) {
-+                     return this.m_63645_(p_63646_);
++                     return this.getChunkDataInputStream(p_63646_);
 +                  }
 +                  return ret;
 +                  // Paper end - recalculate header on regionfile corruption
@@ -753,7 +765,7 @@
     }
  
 -   public boolean m_63673_(ChunkPos p_63674_) {
-+   public synchronized boolean m_63673_(ChunkPos p_63674_) { // Paper - synchronized
++   public synchronized boolean doesChunkExist(ChunkPos p_63674_) { // Paper - synchronized
        int i = this.m_63686_(p_63674_);
 +
        if (i == 0) {
@@ -796,7 +808,7 @@
                    if (i1 < 0 || i1 > 4096 * k) {
                       return false;
                    }
-@@ -240,13 +_,14 @@
+@@ -240,60 +_,65 @@
                 return true;
              }
           } catch (IOException ioexception) {
@@ -806,17 +818,20 @@
        }
     }
  
-    public DataOutputStream m_63678_(ChunkPos p_63679_) throws IOException {
+-   public DataOutputStream m_63678_(ChunkPos p_63679_) throws IOException {
 -      return new DataOutputStream(this.f_63623_.m_63762_(new RegionFile.ChunkBuffer(p_63679_)));
++   public DataOutputStream getChunkDataOutputStream(ChunkPos p_63679_) throws IOException {
 +      return new DataOutputStream(this.f_63623_.m_63762_((OutputStream) (new RegionFile.ChunkBuffer(p_63679_))));
     }
  
-    public void m_63637_() throws IOException {
-@@ -254,46 +_,50 @@
+-   public void m_63637_() throws IOException {
++   public void flush() throws IOException {
+       this.f_63621_.force(true);
     }
  
-    public void m_156613_(ChunkPos p_156614_) throws IOException {
+-   public void m_156613_(ChunkPos p_156614_) throws IOException {
 -      int i = m_63688_(p_156614_);
++   public void clear(ChunkPos p_156614_) throws IOException {
 +      int i = RegionFile.m_63688_(p_156614_);
        int j = this.f_63625_.get(i);
 +
@@ -946,7 +961,8 @@
 +      return this.f_63625_.get(RegionFile.m_63688_(p_63687_));
     }
  
-    public boolean m_63682_(ChunkPos p_63683_) {
+-   public boolean m_63682_(ChunkPos p_63683_) {
++   public boolean hasChunk(ChunkPos p_63683_) {
        return this.m_63686_(p_63683_) != 0;
     }
  
@@ -1026,10 +1042,10 @@
 +   private static int getChunkIndex(int x, int z) {
 +      return (x & 31) + (z & 31) * 32;
 +   }
-+   synchronized boolean isOversized(int x, int z) {
++   public synchronized boolean isOversized(int x, int z) {
 +      return this.oversized[getChunkIndex(x, z)] == 1;
 +   }
-+   synchronized void setOversized(int x, int z, boolean oversized) throws IOException {
++   public synchronized void setOversized(int x, int z, boolean oversized) throws IOException {
 +      final int offset = getChunkIndex(x, z);
 +      boolean previous = this.oversized[offset] == 1;
 +      this.oversized[offset] = (byte) (oversized ? 1 : 0);
@@ -1068,7 +1084,7 @@
 +      return this.regionFile.getParent().resolve(this.regionFile.getFileName().toString().replaceAll("\\.mca$", "") + "_oversized_" + x + "_" + z + ".nbt");
 +   }
 +
-+   synchronized CompoundTag getOversizedData(int x, int z) throws IOException {
++   public synchronized CompoundTag getOversizedData(int x, int z) throws IOException {
 +      Path file = getOversizedFile(x, z);
 +      try (DataInputStream out = new DataInputStream(new java.io.BufferedInputStream(new InflaterInputStream(Files.newInputStream(file))))) {
 +         return NbtIo.m_128928_((java.io.DataInput) out);

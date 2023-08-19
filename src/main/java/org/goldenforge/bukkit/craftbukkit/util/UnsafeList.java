@@ -1,4 +1,4 @@
-package org.bukkit.craftbukkit.util;
+package org.goldenforge.bukkit.craftbukkit.util;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;

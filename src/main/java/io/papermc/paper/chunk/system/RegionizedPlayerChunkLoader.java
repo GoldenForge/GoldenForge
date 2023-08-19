@@ -978,7 +978,7 @@ public class RegionizedPlayerChunkLoader {
                 final int chunkZ = dz + currentChunkZ;
                 final long chunk = CoordinateUtils.getChunkKey(chunkX, chunkZ);
                 final int squareDistance = Math.max(Math.abs(dx), Math.abs(dz));
-                final int manhattanDistance = Math.abs(dx) + Math.abs(dz);
+                //final int manhattanDistance = Math.abs(dx) + Math.abs(dz);
 
                 // since chunk sending is not by radius alone, we need an extra check here to account for
                 // everything <= sendDistance

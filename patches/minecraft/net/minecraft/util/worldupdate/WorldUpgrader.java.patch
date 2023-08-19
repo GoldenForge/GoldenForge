@@ -1,5 +1,32 @@
 --- a/net/minecraft/util/worldupdate/WorldUpgrader.java
 +++ b/net/minecraft/util/worldupdate/WorldUpgrader.java
+@@ -34,6 +_,7 @@
+ import net.minecraft.world.level.levelgen.WorldGenSettings;
+ import net.minecraft.world.level.storage.DimensionDataStorage;
+ import net.minecraft.world.level.storage.LevelStorageSource;
++import org.goldenforge.config.GoldenForgeConfig;
+ import org.slf4j.Logger;
+ 
+ public class WorldUpgrader {
+@@ -52,7 +_,7 @@
+    private volatile int f_18809_;
+    private final Object2FloatMap<ResourceKey<Level>> f_18810_ = Object2FloatMaps.synchronize(new Object2FloatOpenCustomHashMap<>(Util.m_137583_()));
+    private volatile Component f_18811_ = Component.m_237115_("optimizeWorld.stage.counting");
+-   private static final Pattern f_18812_ = Pattern.compile("^r\\.(-?[0-9]+)\\.(-?[0-9]+)\\.mca$");
++   public static Pattern f_18812_ = Pattern.compile("^r\\.(-?[0-9]+)\\.(-?[0-9]+)\\.(linear | mca)$"); // Kaiiju
+    private final DimensionDataStorage f_18813_;
+ 
+    public WorldUpgrader(LevelStorageSource.LevelStorageAccess p_185927_, DataFixer p_185928_, WorldGenSettings p_185929_, boolean p_185930_) {
+@@ -100,7 +_,8 @@
+ 
+          for(ResourceKey<Level> resourcekey1 : immutableset) {
+             Path path = this.f_18801_.m_197394_(resourcekey1);
+-            builder1.put(resourcekey1, new ChunkStorage(path.resolve("region"), this.f_18803_, true));
++
++            builder1.put(resourcekey1, new ChunkStorage(GoldenForgeConfig.Server.regionFormat, GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get(), GoldenForgeConfig.Server.linearCrashOnBrokenSymlink.get(), path.resolve("region"), this.f_18803_, true));
+          }
+ 
+          ImmutableMap<ResourceKey<Level>, ChunkStorage> immutablemap1 = builder1.build();
 @@ -119,7 +_,7 @@
                    boolean flag1 = false;
  
@@ -27,3 +54,32 @@
                    }
  
                    if (flag1) {
+@@ -203,7 +_,7 @@
+       File file1 = this.f_18801_.m_197394_(p_18831_).toFile();
+       File file2 = new File(file1, "region");
+       File[] afile = file2.listFiles((p_18822_, p_18823_) -> {
+-         return p_18823_.endsWith(".mca");
++         return p_18823_.endsWith(".mca") || p_18823_.endsWith(".linear"); // Kaiiju
+       });
+       if (afile == null) {
+          return ImmutableList.of();
+@@ -217,13 +_,17 @@
+                int j = Integer.parseInt(matcher.group(2)) << 5;
+ 
+                try {
+-                  RegionFile regionfile = new RegionFile(file3.toPath(), file2.toPath(), true);
++                  // Kaiiju start
++                  String worldName = this.f_18801_.m_78277_();
++                  int linearCompression = GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get();
++                  dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = dev.kaiijumc.kaiiju.region.AbstractRegionFileFactory.getAbstractRegionFile(linearCompression, file3.toPath(), file2.toPath(), true);
++                  // Kaiiju end
+ 
+                   try {
+                      for(int k = 0; k < 32; ++k) {
+                         for(int l = 0; l < 32; ++l) {
+                            ChunkPos chunkpos = new ChunkPos(k + i, l + j);
+-                           if (regionfile.m_63673_(chunkpos)) {
++                           if (regionfile.doesChunkExist(chunkpos)) {
+                               list.add(chunkpos);
+                            }
+                         }

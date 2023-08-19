@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
-@@ -1,106 +_,322 @@
+@@ -1,106 +_,362 @@
  package net.minecraft.world.level.chunk.storage;
  
  import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
@@ -24,14 +24,14 @@
  
 -public final class RegionFileStorage implements AutoCloseable {
 +public class RegionFileStorage implements AutoCloseable {
-+
++   private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger(); // Kaiiju
     public static final String f_156615_ = ".mca";
     private static final int f_156616_ = 256;
 -   private final Long2ObjectLinkedOpenHashMap<RegionFile> f_63699_ = new Long2ObjectLinkedOpenHashMap<>();
-+   public final Long2ObjectLinkedOpenHashMap<RegionFile> f_63699_ = new Long2ObjectLinkedOpenHashMap();
++   public final Long2ObjectLinkedOpenHashMap<dev.kaiijumc.kaiiju.region.AbstractRegionFile> f_63699_ = new Long2ObjectLinkedOpenHashMap(); // Kaiiju
     private final Path f_63700_;
     private final boolean f_63701_;
- 
+-
 -   RegionFileStorage(Path p_196954_, boolean p_196955_) {
 -      this.f_63700_ = p_196954_;
 -      this.f_63701_ = p_196955_;
@@ -40,6 +40,11 @@
 -   private RegionFile m_63711_(ChunkPos p_63712_) throws IOException {
 -      long i = ChunkPos.m_45589_(p_63712_.m_45610_(), p_63712_.m_45612_());
 -      RegionFile regionfile = this.f_63699_.getAndMoveToFirst(i);
++   // Kaiiju start - Per world chunk format
++   public final dev.kaiijumc.kaiiju.region.RegionFileFormat format;
++   public final int linearCompression;
++   public final boolean linearCrashOnBrokenSymlink;
++   // Kaiiju end
 +   private final boolean isChunkData; // Paper
 +
 +   // Paper start - cache regionfile does not exist state
@@ -71,11 +76,16 @@
 +   }
 +   // Paper end - cache regionfile does not exist state
 +
-+   protected RegionFileStorage(Path p_196954_, boolean p_196955_) { // Paper - protected constructor
++   protected RegionFileStorage(dev.kaiijumc.kaiiju.region.RegionFileFormat format, int linearCompression, boolean linearCrashOnBrokenSymlink, Path p_196954_, boolean p_196955_) { // Paper - protected constructor
 +      // Paper start - add isChunkData param
-+      this(p_196954_, p_196955_, false);
++      this(format, linearCompression, linearCrashOnBrokenSymlink, p_196954_, p_196955_, false);
 +   }
-+   RegionFileStorage(Path directory, boolean dsync, boolean isChunkData) {
++   RegionFileStorage(dev.kaiijumc.kaiiju.region.RegionFileFormat format, int linearCompression, boolean linearCrashOnBrokenSymlink, Path directory, boolean dsync, boolean isChunkData) { // Kaiiju
++      // Kaiiju start
++      this.format = format;
++      this.linearCompression = linearCompression;
++      this.linearCrashOnBrokenSymlink = linearCrashOnBrokenSymlink;
++      // Kaiiju end
 +      this.isChunkData = isChunkData;
 +      // Paper end - add isChunkData param
 +      this.f_63700_ = directory;
@@ -85,7 +95,7 @@
 +   // Paper start
 +   public static @Nullable ChunkPos getRegionFileCoordinates(Path file) {
 +      String fileName = file.getFileName().toString();
-+      if (!fileName.startsWith("r.") || !fileName.endsWith(".mca")) {
++      if (!fileName.startsWith("r.") || !fileName.endsWith(".mca") || !fileName.endsWith(".linear")) { // Kaiiju
 +         return null;
 +      }
 +
@@ -105,29 +115,42 @@
 +      }
 +   }
 +
-+   public synchronized RegionFile getRegionFileIfLoaded(ChunkPos chunkcoordintpair) {
++   public synchronized dev.kaiijumc.kaiiju.region.AbstractRegionFile getRegionFileIfLoaded(ChunkPos chunkcoordintpair) {
 +      return this.f_63699_.getAndMoveToFirst(ChunkPos.m_45589_(chunkcoordintpair.m_45610_(), chunkcoordintpair.m_45612_()));
 +   }
 +
 +   public synchronized boolean chunkExists(ChunkPos pos) throws IOException {
-+      RegionFile regionfile = getRegionFile(pos, true);
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = getRegionFile(pos, true); // Kaiiju
 +
-+      return regionfile != null ? regionfile.m_63682_(pos) : false;
++      return regionfile != null ? regionfile.hasChunk(pos) : false;
 +   }
++   // Kaiiju start
++   private void guardAgainstBrokenSymlinks(Path path) throws IOException {
++      if (!linearCrashOnBrokenSymlink) return;
++      if (!this.format.equals("LINEAR")) return;
++      if (!java.nio.file.Files.isSymbolicLink(path)) return;
++      Path link = java.nio.file.Files.readSymbolicLink(path);
++      if (!java.nio.file.Files.exists(link) || !java.nio.file.Files.isReadable(link)) {
++         LOGGER.error("Linear region file {} is a broken symbolic link, crashing to prevent data loss", path);
++         net.minecraft.server.MinecraftServer.getServer().m_7570_(false);
++         throw new IOException("Linear region file " + path + " is a broken symbolic link, crashing to prevent data loss");
++      }
++   }
++   // Kaiiju end
 +
-+   public synchronized RegionFile getRegionFile(ChunkPos chunkcoordintpair, boolean existingOnly) throws IOException { // CraftBukkit
++   public synchronized dev.kaiijumc.kaiiju.region.AbstractRegionFile getRegionFile(ChunkPos chunkcoordintpair, boolean existingOnly) throws IOException { // CraftBukkit
 +      return this.getRegionFile(chunkcoordintpair, existingOnly, false);
 +   }
-+   public synchronized RegionFile getRegionFile(ChunkPos chunkcoordintpair, boolean existingOnly, boolean lock) throws IOException {
++   public synchronized dev.kaiijumc.kaiiju.region.AbstractRegionFile getRegionFile(ChunkPos chunkcoordintpair, boolean existingOnly, boolean lock) throws IOException {
 +      // Paper end
 +      long i = ChunkPos.m_45589_(chunkcoordintpair.m_45610_(), chunkcoordintpair.m_45612_()); final long regionPos = i; // Paper - OBFHELPER
-+      RegionFile regionfile = (RegionFile) this.f_63699_.getAndMoveToFirst(i);
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = this.f_63699_.getAndMoveToFirst(i); // Kaiiju
 +
        if (regionfile != null) {
 +         // Paper start
 +         if (lock) {
 +            // must be in this synchronized block
-+            regionfile.fileLock.lock();
++            regionfile.getFileLock().lock(); // Kaiiju
 +         }
 +         // Paper end
           return regionfile;
@@ -145,28 +168,46 @@
 +         }
 +         // Paper end - cache regionfile does not exist state
 +         if (this.f_63699_.size() >= 256) { // Paper - configurable
-+            ((RegionFile) this.f_63699_.removeLast()).close();
++            this.f_63699_.removeLast().close(); // Kaiiju
 +         }
 +
 +         // Paper - only create directory if not existing only - moved down
 +         Path path = this.f_63700_;
 +         int j = chunkcoordintpair.m_45610_();
-+         Path path1 = path.resolve("r." + j + "." + chunkcoordintpair.m_45612_() + ".mca"); // Paper - diff on change
-+         if (existingOnly && !java.nio.file.Files.exists(path1)) { // Paper start - cache regionfile does not exist state
-+            this.markNonExisting(regionPos);
-+            return null; // CraftBukkit
++         // Kaiiju start - Polyglot
++         //Path path1 = path.resolve("r." + j + "." + chunkcoordintpair.getRegionZ() + ".mca"); // Paper - diff on change
++         Path path1;
++         if (existingOnly) {
++            Path anvil = path.resolve("r." + j + "." + chunkcoordintpair.m_45612_() + ".mca");
++            Path linear = path.resolve("r." + j + "." + chunkcoordintpair.m_45612_() + ".linear");
++            guardAgainstBrokenSymlinks(linear);
++            if (java.nio.file.Files.exists(anvil)) path1 = anvil;
++            else if (java.nio.file.Files.exists(linear)) path1 = linear;
++            else {
++               this.markNonExisting(regionPos);
++               return null;
++            }
++            // Kaiiju end
 +         } else {
++            // Kaiiju start - Polyglot
++            String extension = switch (this.format) {
++               case LINEAR -> "linear";
++               default -> "mca";
++            };
++            path1 = path.resolve("r." + j + "." + chunkcoordintpair.m_45612_() + "." + extension);
++            // Kaiiju end
++            guardAgainstBrokenSymlinks(path1); // Kaiiju - Crash on broken symlink
 +            this.createRegionFile(regionPos);
 +         }
 +         // Paper end - cache regionfile does not exist state
 +         FileUtil.createDirectoriesSafe(this.f_63700_); // Paper - only create directory if not existing only - moved from above
-+         RegionFile regionfile1 = new RegionFile(path1, this.f_63700_, this.f_63701_, this.isChunkData); // Paper - allow for chunk regionfiles to regen header
++         dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile1 = dev.kaiijumc.kaiiju.region.AbstractRegionFileFactory.getAbstractRegionFile(this.linearCompression, path1, this.f_63700_, this.f_63701_, this.isChunkData); // Paper - allow for chunk regionfiles to regen header // Kaiiju
 +
           this.f_63699_.putAndMoveToFirst(i, regionfile1);
 +         // Paper start
 +         if (lock) {
 +            // must be in this synchronized block
-+            regionfile1.fileLock.lock();
++            regionfile1.getFileLock().lock(); // Kaiiju
 +         }
 +         // Paper end
           return regionfile1;
@@ -194,9 +235,9 @@
 +   }
 +
 +
-+   private static CompoundTag readOversizedChunk(RegionFile regionfile, ChunkPos chunkCoordinate) throws IOException {
++   private static CompoundTag readOversizedChunk(dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile, ChunkPos chunkCoordinate) throws IOException { // Kaiiju
 +      synchronized (regionfile) {
-+         try (DataInputStream datainputstream = regionfile.m_63645_(chunkCoordinate)) {
++         try (DataInputStream datainputstream = regionfile.getChunkDataInputStream(chunkCoordinate)) {
 +            CompoundTag oversizedData = regionfile.getOversizedData(chunkCoordinate.f_45578_, chunkCoordinate.f_45579_);
 +            CompoundTag chunk = NbtIo.m_128928_((DataInput) datainputstream);
 +            if (oversizedData == null) {
@@ -250,24 +291,24 @@
 -               compoundtag = null;
 -               break label43;
 +      // CraftBukkit start - SPIGOT-5680: There's no good reason to preemptively create files on read, save that for writing
-+      RegionFile regionfile = this.getRegionFile(p_63707_, true, true); // Paper
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = this.getRegionFile(p_63707_, true, true); // Paper // Kaiiju
 +      if (regionfile == null) {
 +         return null;
 +      }
 +      // Paper start - Add regionfile parameter
 +      return this.read(p_63707_, regionfile);
 +   }
-+   public CompoundTag read(ChunkPos pos, RegionFile regionfile) throws IOException {
++   public CompoundTag read(ChunkPos pos, dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile) throws IOException {
 +      // We add the regionfile parameter to avoid the potential deadlock (on fileLock) if we went back to obtain a regionfile
 +      // if we decide to re-read
 +      // Paper end
 +      // CraftBukkit end
 +      try { // Paper
-+         DataInputStream datainputstream = regionfile.m_63645_(pos);
++         DataInputStream datainputstream = regionfile.getChunkDataInputStream(pos);
 +
 +         // Paper start
 +         if (regionfile.isOversized(pos.f_45578_, pos.f_45579_)) {
-+            printOversizedLog("Loading Oversized Chunk!", regionfile.regionFile, pos.f_45578_, pos.f_45579_);
++            printOversizedLog("Loading Oversized Chunk!", regionfile.getRegionFile(), pos.f_45578_, pos.f_45579_); // Kaiiju
 +            return readOversizedChunk(regionfile, pos);
 +         }
 +         // Paper end
@@ -281,12 +322,12 @@
 +                  if (this.isChunkData) {
 +                     ChunkPos chunkPos = ChunkSerializer.getChunkCoordinate(nbttagcompound);
 +                     if (!chunkPos.equals(pos)) {
-+                        net.minecraft.server.MinecraftServer.f_129750_.error("Attempting to read chunk data at " + pos + " but got chunk data for " + chunkPos + " instead! Attempting regionfile recalculation for regionfile " + regionfile.regionFile.toAbsolutePath());
++                        net.minecraft.server.MinecraftServer.f_129750_.error("Attempting to read chunk data at " + pos + " but got chunk data for " + chunkPos + " instead! Attempting regionfile recalculation for regionfile " + regionfile.getRegionFile().toAbsolutePath()); // Kaiiju
 +                        if (regionfile.recalculateHeader()) {
-+                           regionfile.fileLock.lock(); // otherwise we will unlock twice and only lock once.
++                           regionfile.getFileLock().lock(); // otherwise we will unlock twice and only lock once. // Kaiiju
 +                           return this.read(pos, regionfile);
 +                        }
-+                        net.minecraft.server.MinecraftServer.f_129750_.error("Can't recalculate regionfile header, regenerating chunk " + pos + " for " + regionfile.regionFile.toAbsolutePath());
++                        net.minecraft.server.MinecraftServer.f_129750_.error("Can't recalculate regionfile header, regenerating chunk " + pos + " for " + regionfile.getRegionFile().toAbsolutePath()); // Kaiiju
 +                        return null;
 +                     }
 +                  }
@@ -336,19 +377,20 @@
 -      return compoundtag;
 +         return nbttagcompound;
 +      } finally { // Paper start
-+         regionfile.fileLock.unlock();
++         regionfile.getFileLock().unlock(); // Kaiiju
 +      } // Paper end
     }
  
     public void m_196956_(ChunkPos p_196957_, StreamTagVisitor p_196958_) throws IOException {
 -      RegionFile regionfile = this.m_63711_(p_196957_);
+-      DataInputStream datainputstream = regionfile.m_63645_(p_196957_);
 +      // CraftBukkit start - SPIGOT-5680: There's no good reason to preemptively create files on read, save that for writing
-+      RegionFile regionfile = this.getRegionFile(p_196957_, true);
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = this.getRegionFile(p_196957_, true); // Kaiiju
 +      if (regionfile == null) {
 +         return;
 +      }
 +      // CraftBukkit end
-       DataInputStream datainputstream = regionfile.m_63645_(p_196957_);
++      DataInputStream datainputstream = regionfile.getChunkDataInputStream(p_196957_);
  
        try {
           if (datainputstream != null) {
@@ -385,7 +427,7 @@
 -            NbtIo.m_128941_(p_63710_, dataoutputstream);
 -         } catch (Throwable throwable1) {
 -            if (dataoutputstream != null) {
-+      RegionFile regionfile = this.getRegionFile(p_63709_, p_63710_ == null, true); // CraftBukkit // Paper // Paper start - rewrite chunk system
++      dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = this.getRegionFile(p_63709_, p_63710_ == null, true); // CraftBukkit // Paper // Paper start - rewrite chunk system // Kaiiju
 +      if (p_63710_ == null && regionfile == null) {
 +         return;
 +      }
@@ -394,9 +436,9 @@
 +         int attempts = 0; Exception laste = null; while (attempts++ < 5) { try { // Paper
 +
 +            if (p_63710_ == null) {
-+               regionfile.m_156613_(p_63709_);
++               regionfile.clear(p_63709_);
 +            } else {
-+               DataOutputStream dataoutputstream = regionfile.m_63678_(p_63709_);
++               DataOutputStream dataoutputstream = regionfile.getChunkDataOutputStream(p_63709_);
 +
                 try {
 -                  dataoutputstream.close();
@@ -407,7 +449,7 @@
 +                  // Paper start - don't write garbage data to disk if writing serialization fails
 +               } catch (RegionFileSizeException e) {
 +                  attempts = 5; // Don't retry
-+                  regionfile.m_156613_(p_63709_);
++                  regionfile.clear(p_63709_);
 +                  throw e;
 +                  // Paper end - don't write garbage data to disk if writing serialization fails
                 } catch (Throwable throwable) {
@@ -446,7 +488,7 @@
 +         }
 +         // Paper end
 +      } finally { // Paper start
-+         regionfile.fileLock.unlock();
++         regionfile.getFileLock().unlock(); // Kaiiju
 +      } // Paper end
     }
  
@@ -459,7 +501,7 @@
 +      ObjectIterator objectiterator = this.f_63699_.values().iterator();
 +
 +      while (objectiterator.hasNext()) {
-+         RegionFile regionfile = (RegionFile) objectiterator.next();
++         dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = (dev.kaiijumc.kaiiju.region.AbstractRegionFile) objectiterator.next(); // Kaiiju
 +
           try {
              regionfile.close();
@@ -470,21 +512,27 @@
        }
  
 -      exceptioncollector.m_13652_();
-+      exceptionsuppressor.m_13652_();
-    }
- 
+-   }
+-
 -   public void m_63705_() throws IOException {
 -      for(RegionFile regionfile : this.f_63699_.values()) {
+-         regionfile.m_63637_();
+-      }
+-
+-   }
++      exceptionsuppressor.m_13652_();
++   }
++
 +   public synchronized void m_63705_() throws IOException { // Paper - synchronize
 +      ObjectIterator objectiterator = this.f_63699_.values().iterator();
 +
 +      while (objectiterator.hasNext()) {
-+         RegionFile regionfile = (RegionFile) objectiterator.next();
++         dev.kaiijumc.kaiiju.region.AbstractRegionFile regionfile = (dev.kaiijumc.kaiiju.region.AbstractRegionFile) objectiterator.next(); // Kaiiju
 +
-          regionfile.m_63637_();
-       }
- 
-    }
++         regionfile.flush();
++      }
++
++   }
 +
 +   // Paper start
 +   public static final class RegionFileSizeException extends RuntimeException {
