@@ -1,0 +1,18 @@
+--- a/net/minecraft/world/level/chunk/storage/IOWorker.java
++++ b/net/minecraft/world/level/chunk/storage/IOWorker.java
+@@ -32,13 +_,13 @@
+    private static final Logger f_63515_ = LogUtils.getLogger();
+    private final AtomicBoolean f_63516_ = new AtomicBoolean();
+    private final ProcessorMailbox<StrictQueue.IntRunnable> f_63517_;
+-   private final RegionFileStorage f_63518_;
++   private final RegionFileStorage f_63518_ = null;
+    private final Map<ChunkPos, IOWorker.PendingStore> f_63519_ = Maps.newLinkedHashMap();
+    private final Long2ObjectLinkedOpenHashMap<CompletableFuture<BitSet>> f_223459_ = new Long2ObjectLinkedOpenHashMap<>();
+    private static final int f_223460_ = 1024;
+ 
+    protected IOWorker(Path p_196930_, boolean p_196931_, String p_196932_) {
+-      this.f_63518_ = new RegionFileStorage(p_196930_, p_196931_);
++      //this.storage = new RegionFileStorage(p_196930_, p_196931_);
+       this.f_63517_ = new ProcessorMailbox<>(new StrictQueue.FixedPriorityQueue(IOWorker.Priority.values().length), Util.m_183992_(), "IOWorker-" + p_196932_);
+    }
+ 
