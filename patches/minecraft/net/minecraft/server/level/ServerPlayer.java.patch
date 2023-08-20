@@ -445,7 +445,14 @@
     }
  
     public boolean m_143432_() {
-@@ -1319,6 +_,7 @@
+@@ -1316,9 +_,14 @@
+       return (Entity)(this.f_8926_ == null ? this : this.f_8926_);
+    }
+ 
++   public Entity getRawCamera() {
++      return this.f_8926_;
++   }
++
     public void m_9213_(@Nullable Entity p_9214_) {
        Entity entity = this.m_8954_();
        this.f_8926_ = (Entity)(p_9214_ == null ? this : p_9214_);

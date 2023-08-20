@@ -1118,7 +1118,7 @@
 -               LevelChunk levelchunk = chunkholder.m_140085_();
 +               LevelChunk levelchunk = chunkholder.getSendingChunk(); // Paper - replace chunk loader system;
                 if (levelchunk != null) {
-+                  chunkholder.addPlayer(p_183755_); // Paper - replace chunk loader system
++                  if (p_183755_.getRawCamera() == null) chunkholder.addPlayer(p_183755_); // Paper - replace chunk loader system
                    this.m_183760_(p_183755_, p_183757_, levelchunk);
                 }
  
@@ -1128,7 +1128,7 @@
           if (!p_183759_ && p_183758_) {
 +            // Paper start - replace chunk loader system
 +            if (chunkholder != null) {
-+               chunkholder.removePlayer(p_183755_);
++               if (p_183755_.getRawCamera() == null) chunkholder.removePlayer(p_183755_);
 +            } else {
 +               f_140128_.warn("ChunkHolder at " + p_183756_ + " in world '" + this.f_140133_.getWorld().getName() + "' does not exist to untrack chunk for " + p_183755_, new Throwable());
 +            }
