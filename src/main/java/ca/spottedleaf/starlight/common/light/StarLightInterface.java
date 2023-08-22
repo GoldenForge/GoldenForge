@@ -16,6 +16,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.*;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
+import org.goldenforge.GoldenForge;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -509,7 +510,7 @@ public final class StarLightInterface {
     }
 
     public void scheduleChunkLight(final ChunkPos pos, final Runnable run) {
-        throw new UnsupportedOperationException("No longer implemented, use the new lightQueue field to queue tasks"); // Paper - replace light queue
+        GoldenForge.LOGGER.error("scheduleChunkLight No longer implemented, use the new lightQueue field to queue tasks");
     }
 
     public void removeChunkTasks(final ChunkPos pos) {
