@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/item/PrimedTnt.java
++++ b/net/minecraft/world/entity/item/PrimedTnt.java
+@@ -31,7 +_,7 @@
+    public PrimedTnt(Level p_32079_, double p_32080_, double p_32081_, double p_32082_, @Nullable LivingEntity p_32083_) {
+       this(EntityType.f_20515_, p_32079_);
+       this.m_6034_(p_32080_, p_32081_, p_32082_);
+-      double d0 = p_32079_.f_46441_.m_188500_() * (double)((float)Math.PI * 2F);
++      double d0 = this.f_19796_.m_188500_() * 6.2831854820251465D; // Paper - don't use world random in entity constructor
+       this.m_20334_(-Math.sin(d0) * 0.02D, (double)0.2F, -Math.cos(d0) * 0.02D);
+       this.m_32085_(80);
+       this.f_19854_ = p_32080_;

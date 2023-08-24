@@ -20,6 +20,21 @@
  
     public ItemEntity(EntityType<? extends ItemEntity> p_31991_, Level p_31992_) {
        super(p_31991_, p_31992_);
+@@ -51,7 +_,13 @@
+    }
+ 
+    public ItemEntity(Level p_32001_, double p_32002_, double p_32003_, double p_32004_, ItemStack p_32005_) {
+-      this(p_32001_, p_32002_, p_32003_, p_32004_, p_32005_, p_32001_.f_46441_.m_188500_() * 0.2D - 0.1D, 0.2D, p_32001_.f_46441_.m_188500_() * 0.2D - 0.1D);
++      //this(p_32001_, p_32002_, p_32003_, p_32004_, p_32005_, p_32001_.random.nextDouble() * 0.2D - 0.1D, 0.2D, p_32001_.random.nextDouble() * 0.2D - 0.1D);
++      // Paper start - don't use world random in entity constructor
++      this(EntityType.f_20461_, p_32001_);
++      this.m_6034_(p_32002_, p_32003_, p_32004_);
++      this.m_20334_(this.f_19796_.m_188500_() * 0.2D - 0.1D, 0.2D, this.f_19796_.m_188500_() * 0.2D - 0.1D);
++      this.m_32045_(p_32005_);
++      // Paper end
+    }
+ 
+    public ItemEntity(Level p_149663_, double p_149664_, double p_149665_, double p_149666_, ItemStack p_149667_, double p_149668_, double p_149669_, double p_149670_) {
 @@ -59,6 +_,7 @@
        this.m_6034_(p_149664_, p_149665_, p_149666_);
        this.m_20334_(p_149668_, p_149669_, p_149670_);

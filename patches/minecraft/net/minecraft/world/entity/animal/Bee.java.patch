@@ -64,3 +64,21 @@
           BlockEntity blockentity = Bee.this.f_19853_.m_7702_(Bee.this.f_27698_);
           if (blockentity instanceof BeehiveBlockEntity beehiveblockentity) {
              beehiveblockentity.m_58741_(Bee.this, Bee.this.m_27856_());
+@@ -712,7 +_,7 @@
+    @VisibleForDebug
+    public class BeeGoToHiveGoal extends Bee.BaseBeeGoal {
+       public static final int f_148804_ = 600;
+-      int f_27980_ = Bee.this.f_19853_.f_46441_.m_188503_(10);
++      int f_27980_ = Bee.this./* level(). */f_19796_.m_188503_(10); // Paper - use entity random
+       private static final int f_148805_ = 3;
+       final List<BlockPos> f_27981_ = Lists.newArrayList();
+       @Nullable
+@@ -824,7 +_,7 @@
+ 
+    public class BeeGoToKnownFlowerGoal extends Bee.BaseBeeGoal {
+       private static final int f_148807_ = 600;
+-      int f_28010_ = Bee.this.f_19853_.f_46441_.m_188503_(10);
++      int f_28010_ = Bee.this./* level(). */f_19796_.m_188503_(10); // Paper - use entity random
+ 
+       BeeGoToKnownFlowerGoal() {
+          this.m_7021_(EnumSet.of(Goal.Flag.MOVE));
