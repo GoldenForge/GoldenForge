@@ -9,11 +9,13 @@
     @Nullable
     BlockEntity m_7702_(BlockPos p_45570_);
  
-@@ -29,10 +_,12 @@
+@@ -29,10 +_,14 @@
  
     BlockState m_8055_(BlockPos p_45571_);
  
-+   @Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition);
++   default @Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++      return this.m_8055_(blockposition);
++   }
 +
     FluidState m_6425_(BlockPos p_45569_);
  
