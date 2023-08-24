@@ -20,6 +20,7 @@ public enum FMLPaths
     GAMEDIR(),
     MODSDIR("mods"),
     CONFIGDIR("config"),
+    GOLDENDIR("goldenforge"),
     FMLCONFIG(false, CONFIGDIR, "fml.toml");
 
     private static final Logger LOGGER = LogUtils.getLogger();

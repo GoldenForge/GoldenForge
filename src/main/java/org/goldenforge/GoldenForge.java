@@ -9,6 +9,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.goldenforge.config.GoldenForgeConfig;
+import me.wesley1808.servercore.Config;
 import org.goldenforgelauncher.GoldenForgeEntryPoint;
 
 import java.io.File;
@@ -27,6 +28,8 @@ public class GoldenForge {
         openConfig(config, configDir.toPath());
         final IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         modEventBus.register(GoldenForgeConfig.class);
+        Config.load(true);
+        Config.save(true);
     }
 
     private static void openConfig(final ModConfig config, final Path configBasePath) {

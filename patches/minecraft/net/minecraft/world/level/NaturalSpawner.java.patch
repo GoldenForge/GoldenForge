@@ -1,11 +1,10 @@
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -10,12 +_,15 @@
+@@ -10,12 +_,14 @@
  import java.util.function.Consumer;
  import java.util.stream.Stream;
  import javax.annotation.Nullable;
 +
-+import net.minecraft.client.multiplayer.ClientChunkCache;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.Direction;
  import net.minecraft.core.Holder;
@@ -16,11 +15,16 @@
  import net.minecraft.server.level.ServerLevel;
  import net.minecraft.tags.BiomeTags;
  import net.minecraft.tags.BlockTags;
-@@ -46,8 +_,10 @@
+@@ -42,12 +_,14 @@
+ import net.minecraft.world.level.levelgen.Heightmap;
+ import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
+ import net.minecraft.world.level.levelgen.structure.Structure;
+-import net.minecraft.world.level.levelgen.structure.structures.NetherFortressStructure;
  import net.minecraft.world.level.material.FluidState;
  import net.minecraft.world.level.pathfinder.PathComputationType;
  import net.minecraft.world.phys.Vec3;
 +import org.goldenforge.config.GoldenForgeConfig;
++import me.wesley1808.servercore.ChunkManager;
  import org.slf4j.Logger;
  
 +// TODO: ForgeHooks.canEntitySpawn
@@ -194,6 +198,15 @@
                             }
  
                             if (mob.m_7296_(l1)) {
+@@ -257,7 +_,7 @@
+    }
+ 
+    private static Optional<MobSpawnSettings.SpawnerData> m_220429_(ServerLevel p_220430_, StructureManager p_220431_, ChunkGenerator p_220432_, MobCategory p_220433_, RandomSource p_220434_, BlockPos p_220435_) {
+-      Holder<Biome> holder = p_220430_.m_204166_(p_220435_);
++      Holder<Biome> holder = ChunkManager.getRoughBiome(p_220430_, p_220435_);
+       return p_220433_ == MobCategory.WATER_AMBIENT && holder.m_203656_(BiomeTags.f_215811_) && p_220434_.m_188501_() < 0.98F ? Optional.empty() : m_220443_(p_220430_, p_220431_, p_220432_, p_220433_, p_220435_, holder).m_216829_(p_220434_);
+    }
+ 
 @@ -266,7 +_,8 @@
     }
  

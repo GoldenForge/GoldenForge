@@ -1,15 +1,32 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
-@@ -11,6 +_,8 @@
+@@ -2,15 +_,13 @@
+ 
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.Iterables;
+-import com.google.common.collect.Lists;
+-import com.google.common.collect.Queues;
+-import com.google.common.collect.Sets;
+ import com.google.gson.JsonElement;
+ import com.mojang.datafixers.DataFixer;
+ import com.mojang.datafixers.util.Either;
  import com.mojang.logging.LogUtils;
  import com.mojang.serialization.DataResult;
  import com.mojang.serialization.JsonOps;
-+import io.papermc.paper.ConfigTemp;
 +import io.papermc.paper.util.MCUtil;
  import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
  import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
  import it.unimi.dsi.fastutil.longs.Long2ByteMap;
-@@ -26,14 +_,7 @@
+@@ -18,36 +_,23 @@
+ import it.unimi.dsi.fastutil.longs.Long2LongMap;
+ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+ import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
+-import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+-import it.unimi.dsi.fastutil.longs.LongIterator;
+-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+-import it.unimi.dsi.fastutil.longs.LongSet;
+-import it.unimi.dsi.fastutil.objects.ObjectIterator;
++
  import java.io.IOException;
  import java.io.Writer;
  import java.nio.file.Path;
@@ -25,38 +42,71 @@
  import java.util.concurrent.CancellationException;
  import java.util.concurrent.CompletableFuture;
  import java.util.concurrent.CompletionException;
-@@ -46,6 +_,9 @@
+ import java.util.concurrent.Executor;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import java.util.function.BooleanSupplier;
+-import java.util.function.Consumer;
+ import java.util.function.IntFunction;
+ import java.util.function.IntSupplier;
  import java.util.function.Supplier;
- import java.util.stream.Collectors;
+-import java.util.stream.Collectors;
  import javax.annotation.Nullable;
+-import net.minecraft.CrashReport;
+-import net.minecraft.CrashReportCategory;
 +
-+import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
 +import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
- import net.minecraft.CrashReport;
- import net.minecraft.CrashReportCategory;
  import net.minecraft.ReportedException;
-@@ -59,6 +_,8 @@
- import net.minecraft.network.protocol.game.ClientboundSetEntityLinkPacket;
- import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
+ import net.minecraft.Util;
+ import net.minecraft.core.Registry;
+@@ -55,29 +_,23 @@
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetEntityLinkPacket;
+-import net.minecraft.network.protocol.game.ClientboundSetPassengersPacket;
  import net.minecraft.network.protocol.game.DebugPackets;
 +import net.minecraft.server.MinecraftServer;
 +import net.minecraft.server.dedicated.DedicatedServer;
  import net.minecraft.server.level.progress.ChunkProgressListener;
  import net.minecraft.server.network.ServerPlayerConnection;
- import net.minecraft.util.CsvOutput;
-@@ -96,7 +_,12 @@
+-import net.minecraft.util.CsvOutput;
+ import net.minecraft.util.Mth;
+ import net.minecraft.util.profiling.ProfilerFiller;
+ import net.minecraft.util.thread.BlockableEventLoop;
+-import net.minecraft.util.thread.ProcessorHandle;
+-import net.minecraft.util.thread.ProcessorMailbox;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.EntityType;
+ import net.minecraft.world.entity.Mob;
+ import net.minecraft.world.entity.ai.village.poi.PoiManager;
+-import net.minecraft.world.entity.boss.EnderDragonPart;
+ import net.minecraft.world.level.ChunkPos;
+ import net.minecraft.world.level.GameRules;
+ import net.minecraft.world.level.chunk.ChunkAccess;
+ import net.minecraft.world.level.chunk.ChunkGenerator;
+ import net.minecraft.world.level.chunk.ChunkStatus;
+-import net.minecraft.world.level.chunk.ImposterProtoChunk;
+ import net.minecraft.world.level.chunk.LevelChunk;
+ import net.minecraft.world.level.chunk.LightChunkGetter;
+ import net.minecraft.world.level.chunk.ProtoChunk;
+@@ -89,13 +_,14 @@
+ import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+ import net.minecraft.world.level.levelgen.RandomState;
+ import net.minecraft.world.level.levelgen.blending.BlendingData;
+-import net.minecraft.world.level.levelgen.structure.StructureStart;
+ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+ import net.minecraft.world.level.storage.DimensionDataStorage;
+ import net.minecraft.world.level.storage.LevelStorageSource;
  import net.minecraft.world.phys.Vec3;
- import org.apache.commons.lang3.mutable.MutableBoolean;
+-import org.apache.commons.lang3.mutable.MutableBoolean;
  import org.apache.commons.lang3.mutable.MutableObject;
 +import org.goldenforge.GoldenConfig;
-+import org.goldenforge.GoldenForge;
 +import org.goldenforge.config.GoldenForgeConfig;
++import me.wesley1808.servercore.DynamicSetting;
  import org.slf4j.Logger;
-+import org.spongepowered.asm.mixin.injection.At;
-+import org.spongepowered.asm.mixin.injection.Inject;
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
-    private static final byte f_143034_ = -1;
 @@ -110,37 +_,197 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
@@ -1332,7 +1382,7 @@
     }
  
     public List<ServerPlayer> m_183888_(ChunkPos p_183889_) {
-@@ -960,6 +_,15 @@
+@@ -960,12 +_,21 @@
        }
     }
  
@@ -1348,6 +1398,13 @@
     private boolean m_183751_(ServerPlayer p_183752_, ChunkPos p_183753_) {
        if (p_183752_.m_5833_()) {
           return false;
+       } else {
+          double d0 = m_140226_(p_183753_, p_183752_);
+-         return d0 < 16384.0D;
++         return (d0 < 16384.0D) && p_183752_.m_146902_().m_45594_(p_183753_) <= DynamicSetting.CHUNK_TICK_DISTANCE.get(); // Goldenforge
+       }
+    }
+ 
 @@ -984,41 +_,36 @@
           if (!flag) {
              this.f_140145_.m_140802_(SectionPos.m_235861_(p_140193_), p_140193_);

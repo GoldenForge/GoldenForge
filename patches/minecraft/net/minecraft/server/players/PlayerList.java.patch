@@ -1,27 +1,28 @@
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
-@@ -20,16 +_,20 @@
+@@ -9,7 +_,6 @@
+ import io.netty.buffer.Unpooled;
+ import java.io.File;
+ import java.net.SocketAddress;
+-import java.nio.file.Path;
+ import java.text.SimpleDateFormat;
+ import java.time.Instant;
+ import java.util.List;
+@@ -20,10 +_,12 @@
  import java.util.function.Function;
  import java.util.function.Predicate;
  import javax.annotation.Nullable;
 +
 +import io.papermc.paper.util.MCUtil;
  import net.minecraft.ChatFormatting;
- import net.minecraft.FileUtil;
+-import net.minecraft.FileUtil;
  import net.minecraft.commands.CommandSourceStack;
  import net.minecraft.core.BlockPos;
 +import net.minecraft.core.Registry;
  import net.minecraft.core.RegistryAccess;
  import net.minecraft.core.UUIDUtil;
  import net.minecraft.nbt.CompoundTag;
- import net.minecraft.nbt.NbtOps;
- import net.minecraft.network.Connection;
- import net.minecraft.network.FriendlyByteBuf;
-+import net.minecraft.network.PacketSendListener;
- import net.minecraft.network.chat.ChatSender;
- import net.minecraft.network.chat.ChatType;
- import net.minecraft.network.chat.Component;
-@@ -37,37 +_,14 @@
+@@ -37,31 +_,7 @@
  import net.minecraft.network.chat.OutgoingPlayerChatMessage;
  import net.minecraft.network.chat.PlayerChatMessage;
  import net.minecraft.network.protocol.Packet;
@@ -54,21 +55,14 @@
  import net.minecraft.resources.ResourceKey;
  import net.minecraft.server.MinecraftServer;
  import net.minecraft.server.PlayerAdvancements;
- import net.minecraft.server.ServerScoreboard;
- import net.minecraft.server.level.ServerLevel;
- import net.minecraft.server.level.ServerPlayer;
-+import net.minecraft.server.level.TicketType;
- import net.minecraft.server.network.ServerGamePacketListenerImpl;
- import net.minecraft.sounds.SoundEvents;
- import net.minecraft.sounds.SoundSource;
-@@ -84,6 +_,7 @@
- import net.minecraft.world.level.GameRules;
- import net.minecraft.world.level.Level;
- import net.minecraft.world.level.biome.BiomeManager;
-+import net.minecraft.world.level.block.Block;
- import net.minecraft.world.level.block.Blocks;
- import net.minecraft.world.level.block.state.BlockState;
- import net.minecraft.world.level.border.BorderChangeListener;
+@@ -96,6 +_,7 @@
+ import net.minecraft.world.scores.Objective;
+ import net.minecraft.world.scores.PlayerTeam;
+ import net.minecraft.world.scores.Team;
++import me.wesley1808.servercore.DynamicSetting;
+ import org.slf4j.Logger;
+ 
+ public abstract class PlayerList {
 @@ -114,6 +_,7 @@
     private final IpBanList f_11199_ = new IpBanList(f_11190_);
     private final ServerOpList f_11200_ = new ServerOpList(f_11191_);
@@ -433,7 +427,7 @@
  
           serverstatscounter = new ServerStatsCounter(this.f_11195_, file2);
           this.f_11202_.put(uuid, serverstatscounter);
-@@ -809,13 +_,15 @@
+@@ -809,13 +_,16 @@
           this.f_11203_.put(uuid, playeradvancements);
        }
  
@@ -446,15 +440,17 @@
     public void m_11217_(int p_11218_) {
        this.f_11207_ = p_11218_;
 -      this.m_11268_(new ClientboundSetChunkCacheRadiusPacket(p_11218_));
++      DynamicSetting.VIEW_DISTANCE.set(p_11218_, null);
 +      //this.broadcastAll(new ClientboundSetChunkCacheRadiusPacket(p_11218_));
  
        for(ServerLevel serverlevel : this.f_11195_.m_129785_()) {
           if (serverlevel != null) {
-@@ -827,7 +_,7 @@
+@@ -827,7 +_,8 @@
  
     public void m_184211_(int p_184212_) {
        this.f_184208_ = p_184212_;
 -      this.m_11268_(new ClientboundSetSimulationDistancePacket(p_184212_));
++      DynamicSetting.SIMULATION_DISTANCE.set(p_184212_, null);
 +     // this.broadcastAll(new ClientboundSetSimulationDistancePacket(p_184212_));
  
        for(ServerLevel serverlevel : this.f_11195_.m_129785_()) {

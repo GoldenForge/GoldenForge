@@ -29,7 +29,8 @@
  
  public class ServerChunkCache extends ChunkSource {
     private static final List<ChunkStatus> f_8326_ = ChunkStatus.m_62349_();
-    private final DistanceManager f_8327_;
+-   private final DistanceManager f_8327_;
++   public final DistanceManager f_8327_;
     public final ServerLevel f_8329_;
 -   final Thread f_8330_;
 +   public Thread f_8330_;
@@ -419,7 +420,7 @@
 +      // Paper end - replace player chunk loader system
 +   }
 +
-+   boolean m_8489_() {
++   public boolean m_8489_() {
 +      return this.f_8329_.chunkTaskScheduler.chunkHolderManager.processTicketUpdates(); // Paper - rewrite chunk system
     }
  

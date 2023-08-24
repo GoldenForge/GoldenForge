@@ -19,6 +19,38 @@
     private final int f_21586_;
     private final boolean f_21587_;
     private final boolean f_21588_;
+@@ -21,12 +_,19 @@
+    private final int f_21590_ = 32;
+    private final int f_21591_;
+ 
++   private int capacity;
++
+    private MobCategory(String p_21597_, int p_21598_, boolean p_21599_, boolean p_21600_, int p_21601_) {
+       this.f_21589_ = p_21597_;
+       this.f_21586_ = p_21598_;
+       this.f_21587_ = p_21599_;
+       this.f_21588_ = p_21600_;
+       this.f_21591_ = p_21601_;
++      this.capacity = f_21586_;
++   }
++
++   public void servercore$modifyCapacity(double modifier) {
++      this.capacity = (int) (this.f_21586_ * modifier);
+    }
+ 
+    public String m_21607_() {
+@@ -38,7 +_,10 @@
+    }
+ 
+    public int m_21608_() {
+-      return this.f_21586_;
++      if (this.capacity != this.f_21586_) {
++         return capacity;
++      }
++      return f_21586_;
+    }
+ 
+    public boolean m_21609_() {
 @@ -47,6 +_,21 @@
  
     public boolean m_21610_() {
