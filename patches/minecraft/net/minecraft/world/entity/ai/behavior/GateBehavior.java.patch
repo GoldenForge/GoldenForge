@@ -9,3 +9,82 @@
  
     public GateBehavior(Map<MemoryModuleType<?>, MemoryStatus> p_22873_, Set<MemoryModuleType<?>> p_22874_, GateBehavior.OrderPolicy p_22875_, GateBehavior.RunningPolicy p_22876_, List<Pair<Behavior<? super E>, Integer>> p_22877_) {
        super(p_22873_);
+@@ -42,24 +_,28 @@
+ 
+    protected void m_6735_(ServerLevel p_22881_, E p_22882_, long p_22883_) {
+       this.f_22869_.m_147527_(this.f_22871_);
+-      this.f_22870_.m_142144_(this.f_22871_.m_147932_(), p_22881_, p_22882_, p_22883_);
++      this.f_22870_.apply(this.f_22871_.f_147917_, p_22881_, p_22882_, p_22883_);
+    }
+ 
+    protected void m_6725_(ServerLevel p_22916_, E p_22917_, long p_22918_) {
+-      this.f_22871_.m_147932_().filter((p_22914_) -> {
+-         return p_22914_.m_22536_() == Behavior.Status.RUNNING;
+-      }).forEach((p_22901_) -> {
+-         p_22901_.m_22558_(p_22916_, p_22917_, p_22918_);
+-      });
++      // Paper start
++      for (Behavior<? super E> task : this.f_22871_) {
++         if (task.m_22536_() == Behavior.Status.RUNNING) {
++            task.m_22558_(p_22916_, p_22917_, p_22918_);
++         }
++      }
++      // Paper end
+    }
+ 
+    protected void m_6732_(ServerLevel p_22905_, E p_22906_, long p_22907_) {
+-      this.f_22871_.m_147932_().filter((p_22903_) -> {
+-         return p_22903_.m_22536_() == Behavior.Status.RUNNING;
+-      }).forEach((p_22888_) -> {
+-         p_22888_.m_22562_(p_22905_, p_22906_, p_22907_);
+-      });
++      // Paper start
++      for (Behavior<? super E> behavior : this.f_22871_) {
++         if (behavior.m_22536_() == Behavior.Status.RUNNING) {
++            behavior.m_22562_(p_22905_, p_22906_, p_22907_);
++         }
++      }
+       this.f_22868_.forEach(p_22906_.m_6274_()::m_21936_);
++      // Paper end
+    }
+ 
+    public String toString() {
+@@ -94,6 +_,17 @@
+                return p_22963_.m_22554_(p_147538_, p_147539_, p_147540_);
+             }).findFirst();
+          }
++
++         // Paper start - remove streams
++         public <E extends LivingEntity> void apply(List<ShufflingList.WeightedEntry<Behavior<? super E>>> tasks, ServerLevel world, E entity, long time) {
++            for (ShufflingList.WeightedEntry<Behavior<? super E>> task : tasks) {
++               final Behavior<? super E> behavior = task.m_147940_();
++               if (behavior.m_22536_() == Behavior.Status.STOPPED && behavior.m_22554_(world, entity, time)) {
++                  break;
++               }
++            }
++            // Paper end - remove streams
++         }
+       },
+       TRY_ALL {
+          public <E extends LivingEntity> void m_142144_(Stream<Behavior<? super E>> p_147542_, ServerLevel p_147543_, E p_147544_, long p_147545_) {
+@@ -103,8 +_,19 @@
+                p_22978_.m_22554_(p_147543_, p_147544_, p_147545_);
+             });
+          }
++         // Paper start - remove streams
++         public <E extends LivingEntity> void apply(List<ShufflingList.WeightedEntry<Behavior<? super E>>> tasks, ServerLevel world, E entity, long time) {
++            for (ShufflingList.WeightedEntry<Behavior<? super E>> task : tasks) {
++               final Behavior<? super E> behavior = task.m_147940_();
++               if (behavior.m_22536_() == Behavior.Status.STOPPED) {
++                  behavior.m_22554_(world, entity, time);
++               }
++            }
++            // Paper end - remove streams
++         }
+       };
+ 
+-      public abstract <E extends LivingEntity> void m_142144_(Stream<Behavior<? super E>> p_147532_, ServerLevel p_147533_, E p_147534_, long p_147535_);
++      public abstract <E extends LivingEntity> void m_142144_(Stream<Behavior<? super E>> p_147532_, ServerLevel p_147533_, E p_147534_, long p_147535_); // Goldenforge keep old impl if mods use it.
++      public abstract <E extends LivingEntity> void apply(List<ShufflingList.WeightedEntry<Behavior<? super E>>> tasks, ServerLevel p_147533_, E p_147534_, long p_147535_);
+    }
+ }

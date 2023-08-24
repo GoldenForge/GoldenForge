@@ -1,15 +1,20 @@
 --- a/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
 +++ b/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
-@@ -26,11 +_,17 @@
-          return true;
+@@ -23,14 +_,20 @@
+    protected void m_5578_(ServerLevel p_26697_, Mob p_26698_) {
+       Brain<?> brain = p_26698_.m_6274_();
+       List<ItemEntity> list = p_26697_.m_6443_(ItemEntity.class, p_26698_.m_20191_().m_82377_(32.0D, 16.0D, 32.0D), (p_26703_) -> {
+-         return true;
++         return p_26703_.m_19950_(p_26698_, f_148282_) && p_26698_.m_7243_(p_26703_.m_32055_()); // Paper - move predicate into getEntities
        });
-       list.sort(Comparator.comparingDouble(p_26698_::m_20280_));
+-      list.sort(Comparator.comparingDouble(p_26698_::m_20280_));
 -      Optional<ItemEntity> optional = list.stream().filter((p_26706_) -> {
 -         return p_26698_.m_7243_(p_26706_.m_32055_());
 -      }).filter((p_26701_) -> {
 -         return p_26701_.m_19950_(p_26698_, 32.0D);
 -      }).filter(p_26698_::m_142582_).findFirst();
 -      brain.m_21886_(MemoryModuleType.f_26332_, optional);
++      list.sort((e1, e2) -> Double.compare(p_26698_.m_20280_(e1), p_26698_.m_20280_(e2))); // better to take the sort perf hit than using line of sight more than we need to.
 +      // Paper start - remove streams in favour of lists
 +      ItemEntity nearest = null;
 +      for (int i = 0; i < list.size(); i++) {

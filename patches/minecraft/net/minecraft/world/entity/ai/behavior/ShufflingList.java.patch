@@ -1,7 +1,23 @@
 --- a/net/minecraft/world/entity/ai/behavior/ShufflingList.java
 +++ b/net/minecraft/world/entity/ai/behavior/ShufflingList.java
-@@ -14,13 +_,26 @@
- public class ShufflingList<U> {
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.entity.ai.behavior;
+ 
++import com.google.common.collect.Iterators;
+ import com.google.common.collect.Lists;
+ import com.mojang.datafixers.util.Pair;
+ import com.mojang.serialization.Codec;
+@@ -7,20 +_,34 @@
+ import com.mojang.serialization.Dynamic;
+ import com.mojang.serialization.DynamicOps;
+ import java.util.Comparator;
++import java.util.Iterator;
+ import java.util.List;
+ import java.util.stream.Stream;
+ import net.minecraft.util.RandomSource;
+ 
+-public class ShufflingList<U> {
++public class ShufflingList<U> implements Iterable<U> {
     protected final List<ShufflingList.WeightedEntry<U>> f_147917_;
     private final RandomSource f_147918_ = RandomSource.m_216327_();
 +   private final boolean isUnsafe; // Paper
@@ -28,7 +44,7 @@
     }
  
     public static <U> Codec<ShufflingList<U>> m_147927_(Codec<U> p_147928_) {
-@@ -35,11 +_,12 @@
+@@ -35,15 +_,20 @@
     }
  
     public ShufflingList<U> m_147922_() {
@@ -46,3 +62,11 @@
     }
  
     public Stream<U> m_147932_() {
+       return this.f_147917_.stream().map(ShufflingList.WeightedEntry::m_147940_);
++   }
++
++   public Iterator<U> iterator() {
++      return Iterators.transform(this.f_147917_.iterator(), ShufflingList.WeightedEntry::m_147940_);
+    }
+ 
+    public String toString() {
