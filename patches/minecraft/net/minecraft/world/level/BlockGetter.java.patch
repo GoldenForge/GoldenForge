@@ -23,3 +23,50 @@
     }
  
     default int m_7469_() {
+@@ -53,20 +_,35 @@
+          return BlockHitResult.m_82426_(p_151370_.m_151404_(), Direction.m_122366_(vec3.f_82479_, vec3.f_82480_, vec3.f_82481_), new BlockPos(p_151370_.m_151404_()));
+       });
+    }
++   // CraftBukkit start - moved block handling into separate method for use by Block#rayTrace
++   default BlockHitResult clip(ClipContext raytrace1, BlockPos blockposition) {
++      // Paper start - Prevent raytrace from loading chunks
++      BlockState iblockdata = this.getBlockStateIfLoaded(blockposition);
++      if (iblockdata == null) {
++         // copied the last function parameter (listed below)
++         Vec3 vec3d = raytrace1.m_45702_().m_82546_(raytrace1.m_45693_());
++
++         return BlockHitResult.m_82426_(raytrace1.m_45693_(), Direction.m_122366_(vec3d.f_82479_, vec3d.f_82480_, vec3d.f_82481_), BlockPos.containing(raytrace1.m_45693_()));
++      }
++      // Paper end
++      if (iblockdata.m_60795_()) return null; // Paper - optimise air cases
++      FluidState fluid = iblockdata.m_60819_(); // Paper - don't need to go to world state again
++      Vec3 vec3d = raytrace1.m_45702_();
++      Vec3 vec3d1 = raytrace1.m_45693_();
++      VoxelShape voxelshape = raytrace1.m_45694_(iblockdata, this, blockposition);
++      BlockHitResult movingobjectpositionblock = this.m_45558_(vec3d, vec3d1, blockposition, voxelshape, iblockdata);
++      VoxelShape voxelshape1 = raytrace1.m_45698_(fluid, this, blockposition);
++      BlockHitResult movingobjectpositionblock1 = voxelshape1.m_83220_(vec3d, vec3d1, blockposition);
++      double d0 = movingobjectpositionblock == null ? Double.MAX_VALUE : raytrace1.m_45702_().m_82557_(movingobjectpositionblock.m_82450_());
++      double d1 = movingobjectpositionblock1 == null ? Double.MAX_VALUE : raytrace1.m_45702_().m_82557_(movingobjectpositionblock1.m_82450_());
++
++      return d0 <= d1 ? movingobjectpositionblock : movingobjectpositionblock1;
++   }
++   // CraftBukkit end
+ 
+    default BlockHitResult m_45547_(ClipContext p_45548_) {
+       return m_151361_(p_45548_.m_45702_(), p_45548_.m_45693_(), p_45548_, (p_151359_, p_151360_) -> {
+-         BlockState blockstate = this.m_8055_(p_151360_);
+-         FluidState fluidstate = this.m_6425_(p_151360_);
+-         Vec3 vec3 = p_151359_.m_45702_();
+-         Vec3 vec31 = p_151359_.m_45693_();
+-         VoxelShape voxelshape = p_151359_.m_45694_(blockstate, this, p_151360_);
+-         BlockHitResult blockhitresult = this.m_45558_(vec3, vec31, p_151360_, voxelshape, blockstate);
+-         VoxelShape voxelshape1 = p_151359_.m_45698_(fluidstate, this, p_151360_);
+-         BlockHitResult blockhitresult1 = voxelshape1.m_83220_(vec3, vec31, p_151360_);
+-         double d0 = blockhitresult == null ? Double.MAX_VALUE : p_151359_.m_45702_().m_82557_(blockhitresult.m_82450_());
+-         double d1 = blockhitresult1 == null ? Double.MAX_VALUE : p_151359_.m_45702_().m_82557_(blockhitresult1.m_82450_());
+-         return d0 <= d1 ? blockhitresult : blockhitresult1;
++         return this.clip(p_151359_, p_151360_); // CraftBukkit - moved into separate method
+       }, (p_151372_) -> {
+          Vec3 vec3 = p_151372_.m_45702_().m_82546_(p_151372_.m_45693_());
+          return BlockHitResult.m_82426_(p_151372_.m_45693_(), Direction.m_122366_(vec3.f_82479_, vec3.f_82480_, vec3.f_82481_), new BlockPos(p_151372_.m_45693_()));
