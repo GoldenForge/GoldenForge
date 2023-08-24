@@ -16,6 +16,7 @@ import java.nio.file.StandardCopyOption;
 public class GoldenForgeEntryPoint {
 
     public static boolean AUTOUPDATE = Boolean.getBoolean("goldenforge.autoupdate");
+    public static boolean NO_UPDATE = Boolean.getBoolean("goldenforge.noupdate");
 
     public static void init() {
         System.out.println("   ___      _     _              ___                    ");
@@ -26,15 +27,16 @@ public class GoldenForgeEntryPoint {
         System.out.println();
         System.out.println("         Your minecraft server is now optimized ! (THIS IS AN ALPHA BUILD DON'T USE IN PRODUCTION (unless you're crazy))");
         System.out.println("         Report issues here : https://github.com/GoldenForge/GoldenForge/issues");
-        if (!AUTOUPDATE)
-            System.out.println("         To enable auto update, launch your server with -Dgoldenforge.autoupdate=true");
-        System.out.println("");
-        System.out.println("Checking for update...");
-        String remoteVersion = getLatestVersion();
-        String currentVersion = getVersion();
-        System.out.println("Current version : " + currentVersion);
-        System.out.println("Latest version : " + remoteVersion);
-        if (!remoteVersion.equals(currentVersion)) {
+        if (!NO_UPDATE) {
+            if (!AUTOUPDATE)
+                System.out.println("         To enable auto update, launch your server with -Dgoldenforge.autoupdate=true");
+            System.out.println("");
+            System.out.println("Checking for update...");
+            String remoteVersion = getLatestVersion();
+            String currentVersion = getVersion();
+            System.out.println("Current version : " + currentVersion);
+            System.out.println("Latest version : " + remoteVersion);
+            if (!remoteVersion.equals(currentVersion)) {
                 System.out.println("A new version of goldenforge is available ! https://github.com/GoldenForge/GoldenForge/releases");
 
                 if (AUTOUPDATE) {
@@ -43,6 +45,7 @@ public class GoldenForgeEntryPoint {
                     System.out.println("New version downloaded! relaunch the installer and start the server.");
                     System.exit(0);
                 }
+            }
         }
     }
 
