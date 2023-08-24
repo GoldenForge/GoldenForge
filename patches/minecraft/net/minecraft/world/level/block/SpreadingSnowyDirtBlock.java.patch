@@ -1,13 +1,67 @@
 --- a/net/minecraft/world/level/block/SpreadingSnowyDirtBlock.java
 +++ b/net/minecraft/world/level/block/SpreadingSnowyDirtBlock.java
-@@ -35,8 +_,10 @@
+@@ -16,8 +_,13 @@
+    }
+ 
+    private static boolean m_56823_(BlockState p_56824_, LevelReader p_56825_, BlockPos p_56826_) {
++      // Paper start
++      return canBeGrass(p_56825_.m_46865_(p_56826_), p_56824_, p_56825_, p_56826_);
++   }
++      private static boolean canBeGrass(net.minecraft.world.level.chunk.ChunkAccess chunk, BlockState p_56824_, LevelReader p_56825_, BlockPos p_56826_) {
++      // Paper end
+       BlockPos blockpos = p_56826_.m_7494_();
+-      BlockState blockstate = p_56825_.m_8055_(blockpos);
++      BlockState blockstate = chunk.m_8055_(blockpos); // Paper
+       if (blockstate.m_60713_(Blocks.f_50125_) && blockstate.m_61143_(SnowLayerBlock.f_56581_) == 1) {
+          return true;
+       } else if (blockstate.m_60819_().m_76186_() == 8) {
+@@ -29,22 +_,46 @@
+    }
+ 
+    private static boolean m_56827_(BlockState p_56828_, LevelReader p_56829_, BlockPos p_56830_) {
++      // Paper start
++      return canPropagate(p_56829_.m_46865_(p_56830_), p_56828_, p_56829_, p_56830_);
++   }
++      private static boolean canPropagate(net.minecraft.world.level.chunk.ChunkAccess chunk, BlockState p_56828_, LevelReader p_56829_, BlockPos p_56830_) {
++      // Paper end
+       BlockPos blockpos = p_56830_.m_7494_();
+-      return m_56823_(p_56828_, p_56829_, p_56830_) && !p_56829_.m_6425_(blockpos).m_205070_(FluidTags.f_13131_);
++      return canBeGrass(chunk, p_56828_, p_56829_, p_56830_) && !chunk.m_6425_(blockpos).m_205070_(FluidTags.f_13131_); // Paper
+    }
  
     public void m_213898_(BlockState p_222508_, ServerLevel p_222509_, BlockPos p_222510_, RandomSource p_222511_) {
-       if (!m_56823_(p_222508_, p_222509_, p_222510_)) {
+-      if (!m_56823_(p_222508_, p_222509_, p_222510_)) {
++      // Paper start
++      net.minecraft.world.level.chunk.ChunkAccess cachedBlockChunk = p_222509_.getChunkIfLoaded(p_222510_);
++      if (cachedBlockChunk == null) { // Is this needed?
++         return;
++      }
++      if (!canBeGrass(cachedBlockChunk, p_222508_, p_222509_, p_222510_)) {
++         // Paper end
 +         if (!p_222509_.isAreaLoaded(p_222510_, 1)) return; // Forge: prevent loading unloaded chunks when checking neighbor's light and spreading
           p_222509_.m_46597_(p_222510_, Blocks.f_50493_.m_49966_());
        } else {
 +         if (!p_222509_.isAreaLoaded(p_222510_, 3)) return; // Forge: prevent loading unloaded chunks when checking neighbor's light and spreading
           if (p_222509_.m_46803_(p_222510_.m_7494_()) >= 9) {
              BlockState blockstate = this.m_49966_();
+ 
+             for(int i = 0; i < 4; ++i) {
+                BlockPos blockpos = p_222510_.m_7918_(p_222511_.m_188503_(3) - 1, p_222511_.m_188503_(5) - 3, p_222511_.m_188503_(3) - 1);
+-               if (p_222509_.m_8055_(blockpos).m_60713_(Blocks.f_50493_) && m_56827_(blockstate, p_222509_, blockpos)) {
++               // Paper start
++               if (p_222510_.m_123341_() == blockpos.m_123341_() && p_222510_.m_123342_() == blockpos.m_123342_() && p_222510_.m_123343_() == blockpos.m_123343_()) {
++                  continue;
++               }
++               net.minecraft.world.level.chunk.ChunkAccess access;
++               if (cachedBlockChunk.locX == blockpos.m_123341_() >> 4 && cachedBlockChunk.locZ == blockpos.m_123343_() >> 4) {
++                  access = cachedBlockChunk;
++               } else {
++                  access = p_222509_.m_46745_(blockpos);
++               }
++               if (access.m_8055_(blockpos).m_60713_(Blocks.f_50493_) && canPropagate(access, blockstate, p_222509_, blockpos)) {
+                   p_222509_.m_46597_(blockpos, blockstate.m_61124_(f_56637_, Boolean.valueOf(p_222509_.m_8055_(blockpos.m_7494_()).m_60713_(Blocks.f_50125_))));
+                }
++               // Paper end
+             }
+          }
  
