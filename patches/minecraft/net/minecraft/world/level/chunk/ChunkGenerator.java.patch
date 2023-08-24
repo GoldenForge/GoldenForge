@@ -9,6 +9,25 @@
     }
  
     public abstract void m_213679_(WorldGenRegion p_223043_, long p_223044_, RandomState p_223045_, BiomeManager p_223046_, StructureManager p_223047_, ChunkAccess p_223048_, GenerationStep.Carving p_223049_);
+@@ -308,11 +_,14 @@
+       int i = p_223197_.m_205003_();
+ 
+       for(int j = -p_223194_; j <= p_223194_; ++j) {
+-         boolean flag = j == -p_223194_ || j == p_223194_;
++         // Paper start - iterate over border chunks instead of entire square chunk area
++         //boolean flag = j == -p_223194_ || j == p_223194_;
++         boolean flag = j == -p_223194_ || j == p_223194_; final boolean onBorderAlongZAxis = flag; // Paper - OBFHELPER
+ 
+-         for(int k = -p_223194_; k <= p_223194_; ++k) {
+-            boolean flag1 = k == -p_223194_ || k == p_223194_;
+-            if (flag || flag1) {
++         for (int k = -p_223194_; k <= p_223194_; k += onBorderAlongZAxis ? 1 : p_223194_ * 2) {
++            //boolean flag1 = k == -p_223194_ || k == p_223194_;
++            if (true) {
++               // Paper end
+                int l = p_223192_ + i * j;
+                int i1 = p_223193_ + i * k;
+                ChunkPos chunkpos = p_223197_.m_227008_(p_223196_, l, i1);
 @@ -336,7 +_,7 @@
                 return Pair.of(p_223203_.m_227039_(p_223204_), holder);
              }
