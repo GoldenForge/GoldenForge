@@ -39,6 +39,7 @@ public class GoldenForgeConfig {
         public static ConfigValue<Boolean> preventMovingIntoUnloadedChunks;
         public static ConfigValue<Boolean> enableAsyncMobSpawning;
         public static ConfigValue<Boolean> perPlayerMobSpawns;
+        public static ConfigValue<Boolean> onlyPlayersCollide;
 
         public static ConfigValue<Integer> autoSaveInterval;
         public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
@@ -155,6 +156,10 @@ public class GoldenForgeConfig {
             nettyThreads = builder
                     .worldRestart()
                     .define("nettyThreads", 4);
+
+            onlyPlayersCollide = builder
+                    .worldRestart()
+                    .define("onlyPlayersCollide", false);
 
             builder.pop();
 
