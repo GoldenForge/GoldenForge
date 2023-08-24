@@ -1,5 +1,80 @@
 --- a/net/minecraft/core/BlockPos.java
 +++ b/net/minecraft/core/BlockPos.java
+@@ -30,15 +_,16 @@
+    }).stable();
+    private static final Logger f_121854_ = LogUtils.getLogger();
+    public static final BlockPos f_121853_ = new BlockPos(0, 0, 0);
+-   private static final int f_121855_ = 1 + Mth.m_14173_(Mth.m_14125_(30000000));
+-   private static final int f_121856_ = f_121855_;
+-   public static final int f_121857_ = 64 - f_121855_ - f_121856_;
+-   private static final long f_121858_ = (1L << f_121855_) - 1L;
+-   private static final long f_121859_ = (1L << f_121857_) - 1L;
+-   private static final long f_121860_ = (1L << f_121856_) - 1L;
+-   private static final int f_175261_ = 0;
+-   private static final int f_121861_ = f_121857_;
+-   private static final int f_121862_ = f_121857_ + f_121856_;
++   // Paper start - static constants
++   private static final int f_121855_ = 26;
++   private static final int f_121856_ = 26;
++   public static final int f_121857_ = 12;
++   private static final long f_121858_ = 67108863;
++   private static final long f_121859_ = 4095;
++   private static final long f_121860_ = 67108863;
++   private static final int f_121861_ = 12;
++   private static final int f_121862_ = 38;
++   // Paper end
+ 
+    public BlockPos(int p_121869_, int p_121870_, int p_121871_) {
+       super(p_121869_, p_121870_, p_121871_);
+@@ -65,23 +_,31 @@
+    }
+ 
+    public static long m_121910_(long p_121911_, int p_121912_, int p_121913_, int p_121914_) {
+-      return m_121882_(m_121983_(p_121911_) + p_121912_, m_122008_(p_121911_) + p_121913_, m_122015_(p_121911_) + p_121914_);
++      return m_121882_((int) (p_121911_ >> 38) + p_121912_, (int) ((p_121911_ << 52) >> 52) + p_121913_, (int) ((p_121911_ << 26) >> 38) + p_121914_); // Paper - simplify/inline
+    }
+ 
+    public static int m_121983_(long p_121984_) {
+-      return (int)(p_121984_ << 64 - f_121862_ - f_121855_ >> 64 - f_121855_);
++      return (int) (p_121984_ >> 38); // Paper - simplify/inline
+    }
+ 
+    public static int m_122008_(long p_122009_) {
+-      return (int)(p_122009_ << 64 - f_121857_ >> 64 - f_121857_);
++      return (int) ((p_122009_ << 52) >> 52); // Paper - simplify/inline
+    }
+ 
+    public static int m_122015_(long p_122016_) {
+-      return (int)(p_122016_ << 64 - f_121861_ - f_121856_ >> 64 - f_121856_);
++      return (int) ((p_122016_ << 26) >> 38);  // Paper - simplify/inline
+    }
+ 
+    public static BlockPos m_122022_(long p_122023_) {
+-      return new BlockPos(m_121983_(p_122023_), m_122008_(p_122023_), m_122015_(p_122023_));
++      return new BlockPos((int) (p_122023_ >> 38), (int) ((p_122023_ << 52) >> 52), (int) ((p_122023_ << 26) >> 38)); // Paper - simplify/inline
++   }
++
++   public static BlockPos containing(double x, double y, double z) {
++      return new BlockPos(Mth.m_14107_(x), Mth.m_14107_(y), Mth.m_14107_(z));
++   }
++
++   public static BlockPos containing(Position pos) {
++      return containing(pos.m_7096_(), pos.m_7098_(), pos.m_7094_());
+    }
+ 
+    public long m_121878_() {
+@@ -89,10 +_,7 @@
+    }
+ 
+    public static long m_121882_(int p_121883_, int p_121884_, int p_121885_) {
+-      long i = 0L;
+-      i |= ((long)p_121883_ & f_121858_) << f_121862_;
+-      i |= ((long)p_121884_ & f_121859_) << 0;
+-      return i | ((long)p_121885_ & f_121860_) << f_121861_;
++      return (((long) p_121883_ & (long) 67108863) << 38) | (((long) p_121884_ & (long) 4095)) | (((long) p_121885_ & (long) 67108863) << 12); // Paper - inline constants and simplify
+    }
+ 
+    public static long m_122027_(long p_122028_) {
 @@ -123,56 +_,85 @@
        }
     }

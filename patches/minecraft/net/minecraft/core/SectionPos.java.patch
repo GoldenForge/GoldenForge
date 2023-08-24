@@ -1,0 +1,115 @@
+--- a/net/minecraft/core/SectionPos.java
++++ b/net/minecraft/core/SectionPos.java
+@@ -38,7 +_,7 @@
+    }
+ 
+    public static SectionPos m_123199_(BlockPos p_123200_) {
+-      return new SectionPos(m_123171_(p_123200_.m_123341_()), m_123171_(p_123200_.m_123342_()), m_123171_(p_123200_.m_123343_()));
++      return new SectionPos(p_123200_.m_123341_() >> 4, p_123200_.m_123342_() >> 4, p_123200_.m_123343_() >> 4); // Paper
+    }
+ 
+    public static SectionPos m_123196_(ChunkPos p_123197_, int p_123198_) {
+@@ -54,7 +_,7 @@
+    }
+ 
+    public static SectionPos m_123184_(long p_123185_) {
+-      return new SectionPos(m_123213_(p_123185_), m_123225_(p_123185_), m_123230_(p_123185_));
++      return new SectionPos((int) (p_123185_ >> 42), (int) (p_123185_ << 44 >> 44), (int) (p_123185_ << 22 >> 42)); // Paper
+    }
+ 
+    public static SectionPos m_175562_(ChunkAccess p_175563_) {
+@@ -66,7 +_,8 @@
+    }
+ 
+    public static long m_123186_(long p_123187_, int p_123188_, int p_123189_, int p_123190_) {
+-      return m_123209_(m_123213_(p_123187_) + p_123188_, m_123225_(p_123187_) + p_123189_, m_123230_(p_123187_) + p_123190_);
++      return (((long) ((int) (p_123187_ >> 42) + p_123188_) & 4194303L) << 42) | (((long) ((int) (p_123187_ << 44 >> 44) + p_123189_) & 1048575L)) | (((long) ((int) (p_123187_ << 22 >> 42) + p_123190_) & 4194303L) << 20); // Simplify to reduce instruction count
++
+    }
+ 
+    public static int m_175552_(double p_175553_) {
+@@ -86,10 +_,7 @@
+    }
+ 
+    public static short m_123218_(BlockPos p_123219_) {
+-      int i = m_123207_(p_123219_.m_123341_());
+-      int j = m_123207_(p_123219_.m_123342_());
+-      int k = m_123207_(p_123219_.m_123343_());
+-      return (short)(i << 8 | k << 4 | j << 0);
++      return (short) ((p_123219_.m_123341_() & 15) << 8 | (p_123219_.m_123343_() & 15) << 4 | p_123219_.m_123342_() & 15); // Paper - simplify/inline
+    }
+ 
+    public static int m_123204_(short p_123205_) {
+@@ -152,16 +_,16 @@
+       return this.m_123343_();
+    }
+ 
+-   public int m_123229_() {
+-      return m_123223_(this.m_123170_());
+-   }
+-
+-   public int m_123234_() {
+-      return m_123223_(this.m_123206_());
+-   }
+-
+-   public int m_123239_() {
+-      return m_123223_(this.m_123222_());
++   public final int m_123229_() { // Paper - make final
++      return this.m_123341_() << 4; // Paper - inline
++   }
++
++   public final int m_123234_() { // Paper - make final
++      return this.m_123342_() << 4; // Paper - inline
++   }
++
++   public int m_123239_() { // Paper - make final
++      return this.m_123343_() << 4; // Paper - inline
+    }
+ 
+    public int m_123244_() {
+@@ -177,7 +_,7 @@
+    }
+ 
+    public static long m_123235_(long p_123236_) {
+-      return m_123209_(m_123171_(BlockPos.m_121983_(p_123236_)), m_123171_(BlockPos.m_122008_(p_123236_)), m_123171_(BlockPos.m_122015_(p_123236_)));
++      return (((long) (int) (p_123236_ >> 42) & 4194303L) << 42) | (((long) (int) ((p_123236_ << 52) >> 56) & 1048575L)) | (((long) (int) ((p_123236_ << 26) >> 42) & 4194303L) << 20); // Simplify to reduce instruction count
+    }
+ 
+    public static long m_123240_(long p_123241_) {
+@@ -202,14 +_,12 @@
+    }
+ 
+    public static long m_123209_(int p_123210_, int p_123211_, int p_123212_) {
+-      long i = 0L;
+-      i |= ((long)p_123210_ & 4194303L) << 42;
+-      i |= ((long)p_123211_ & 1048575L) << 0;
+-      return i | ((long)p_123212_ & 4194303L) << 20;
++      return (((long) p_123210_ & 4194303L) << 42) | (((long) p_123211_ & 1048575L)) | (((long) p_123212_ & 4194303L) << 20); // Paper - Simplify to reduce instruction count
++
+    }
+ 
+    public long m_123252_() {
+-      return m_123209_(this.m_123170_(), this.m_123206_(), this.m_123222_());
++      return (((long) m_123341_() & 4194303L) << 42) | (((long) m_123342_() & 1048575L)) | (((long) m_123343_() & 4194303L) << 20); // Paper - Simplify to reduce instruction count
+    }
+ 
+    public SectionPos m_7918_(int p_175571_, int p_175572_, int p_175573_) {
+@@ -221,16 +_,11 @@
+    }
+ 
+    public static Stream<SectionPos> m_123201_(SectionPos p_123202_, int p_123203_) {
+-      int i = p_123202_.m_123170_();
+-      int j = p_123202_.m_123206_();
+-      int k = p_123202_.m_123222_();
+-      return m_123177_(i - p_123203_, j - p_123203_, k - p_123203_, i + p_123203_, j + p_123203_, k + p_123203_);
++      return m_123177_(p_123202_.m_123341_() - p_123203_, p_123202_.m_123342_() - p_123203_, p_123202_.m_123343_() - p_123203_, p_123202_.m_123341_() + p_123203_, p_123202_.m_123342_() + p_123203_, p_123202_.m_123343_() + p_123203_); // Paper - simplify/inline
+    }
+ 
+    public static Stream<SectionPos> m_175557_(ChunkPos p_175558_, int p_175559_, int p_175560_, int p_175561_) {
+-      int i = p_175558_.f_45578_;
+-      int j = p_175558_.f_45579_;
+-      return m_123177_(i - p_175559_, p_175560_, j - p_175559_, i + p_175559_, p_175561_ - 1, j + p_175559_);
++      return m_123177_(p_175558_.f_45578_ - p_175559_, 0, p_175558_.f_45579_ - p_175559_, p_175558_.f_45578_ + p_175559_, 15, p_175558_.f_45579_ + p_175559_); // Paper - simplify/inline
+    }
+ 
+    public static Stream<SectionPos> m_123177_(final int p_123178_, final int p_123179_, final int p_123180_, final int p_123181_, final int p_123182_, final int p_123183_) {
