@@ -351,7 +351,7 @@
     }
  
     public String m_130009_() {
-@@ -602,23 +_,93 @@
+@@ -602,44 +_,139 @@
     }
  
     public void m_7570_(boolean p_129884_) {
@@ -451,8 +451,9 @@
 +         new TpsMonitorManager();
           this.f_129726_ = Util.m_137550_();
           this.f_129757_.m_134908_(Component.m_237113_(this.f_129709_));
-          this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
-@@ -626,20 +_,45 @@
+-         this.f_129757_.m_134912_(new ServerStatus.Version(SharedConstants.m_183709_().getName(), SharedConstants.m_183709_().getProtocolVersion()));
++         this.f_129757_.m_134912_(new ServerStatus.Version(this.m_130001_(), SharedConstants.m_183709_().getProtocolVersion())); // Goldenforge
+          this.f_129757_.m_238078_(this.m_214000_());
           this.f_129757_.m_242958_(this.m_214005_());
           this.m_129878_(this.f_129757_);
  

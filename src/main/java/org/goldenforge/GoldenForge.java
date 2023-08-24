@@ -18,7 +18,7 @@ public class GoldenForge {
     public static Logger LOGGER = LogManager.getLogger("GoldenForge");
 
     public static String getBranding() {
-        return "Goldenforge " + GoldenForgeEntryPoint.getVersion();
+        return "Goldenforge 1.19.2 " + GoldenForgeEntryPoint.getVersion();
     }
 
     public static void init() {
