@@ -198,15 +198,6 @@
                             }
  
                             if (mob.m_7296_(l1)) {
-@@ -257,7 +_,7 @@
-    }
- 
-    private static Optional<MobSpawnSettings.SpawnerData> m_220429_(ServerLevel p_220430_, StructureManager p_220431_, ChunkGenerator p_220432_, MobCategory p_220433_, RandomSource p_220434_, BlockPos p_220435_) {
--      Holder<Biome> holder = p_220430_.m_204166_(p_220435_);
-+      Holder<Biome> holder = ChunkManager.getRoughBiome(p_220430_, p_220435_);
-       return p_220433_ == MobCategory.WATER_AMBIENT && holder.m_203656_(BiomeTags.f_215811_) && p_220434_.m_188501_() < 0.98F ? Optional.empty() : m_220443_(p_220430_, p_220431_, p_220432_, p_220433_, p_220435_, holder).m_216829_(p_220434_);
-    }
- 
 @@ -266,7 +_,8 @@
     }
  
