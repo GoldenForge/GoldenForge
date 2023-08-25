@@ -242,7 +242,7 @@
     }
  
 +   @Override
-+   public final boolean m_46805_(BlockPos pos) {
++   public boolean m_46805_(BlockPos pos) {
 +      return getChunkIfLoaded(pos.m_123341_() >> 4, pos.m_123343_() >> 4) != null; // Paper
 +   }
 +
