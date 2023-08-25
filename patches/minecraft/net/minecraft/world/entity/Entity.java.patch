@@ -24,11 +24,12 @@
  import net.minecraft.world.level.block.HoneyBlock;
  import net.minecraft.world.level.block.Mirror;
  import net.minecraft.world.level.block.RenderShape;
-@@ -116,9 +_,11 @@
+@@ -116,9 +_,12 @@
  import net.minecraft.world.phys.shapes.VoxelShape;
  import net.minecraft.world.scores.PlayerTeam;
  import net.minecraft.world.scores.Team;
 +import org.goldenforge.GoldenConfig;
++import org.goldenforge.GoldenForge;
 +import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
@@ -1162,27 +1163,41 @@
     }
  
     public void m_6043_() {
-@@ -3048,6 +_,13 @@
+@@ -3048,19 +_,30 @@
     }
  
     public final void m_142467_(Entity.RemovalReason p_146876_) {
-+      // Paper start - rewrite chunk system
-+      io.papermc.paper.util.TickThread.ensureTickThread(this, "Cannot remove entity off-main");
-+      if (!((ServerLevel)this.f_19853_).getEntityLookup().canRemoveEntity(this)) {
-+         f_19849_.warn("Entity " + this + " is currently prevented from being removed from the world since it is processing section status updates", new Throwable());
-+         return;
-+      }
-+      // Paper end - rewrite chunk system
-       if (this.f_146795_ == null) {
-          this.f_146795_ = p_146876_;
-       }
-@@ -3056,11 +_,11 @@
-          this.m_8127_();
-       }
- 
+-      if (this.f_146795_ == null) {
+-         this.f_146795_ = p_146876_;
+-      }
+-
+-      if (this.f_146795_.m_146965_()) {
+-         this.m_8127_();
+-      }
+-
 -      this.m_20197_().forEach(Entity::m_8127_);
-+      if (p_146876_ != RemovalReason.UNLOADED_TO_CHUNK) this.m_20197_().forEach(Entity::m_8127_); // Paper - chunk system - don't adjust passenger state when unloading, it's just not safe (and messes with our logic in entity chunk unload)
-       this.f_146801_.m_142472_(p_146876_);
+-      this.f_146801_.m_142472_(p_146876_);
++      if (!io.papermc.paper.util.TickThread.isTickThread()) {
++         this.m_20194_().execute(() -> this.m_142467_(p_146876_));
++      } else {
++         // Paper start - rewrite chunk system
++         io.papermc.paper.util.TickThread.ensureTickThread(this, "Cannot remove entity off-main");
++         if (!((ServerLevel)this.f_19853_).getEntityLookup().canRemoveEntity(this)) {
++            f_19849_.warn("Entity " + this + " is currently prevented from being removed from the world since it is processing section status updates", new Throwable());
++            return;
++         }
++         // Paper end - rewrite chunk system
++         if (this.f_146795_ == null) {
++            this.f_146795_ = p_146876_;
++         }
++
++         if (this.f_146795_.m_146965_()) {
++            this.m_8127_();
++         }
++
++         if (p_146876_ != RemovalReason.UNLOADED_TO_CHUNK) this.m_20197_().forEach(Entity::m_8127_); // Paper - chunk system - don't adjust passenger state when unloading, it's just not safe (and messes with our logic in entity chunk unload)
++         this.f_146801_.m_142472_(p_146876_);
++      }
     }
  
 -   protected void m_146912_() {
