@@ -235,7 +235,7 @@
        serverplayer.f_8906_ = p_11237_.f_8906_;
        serverplayer.m_9015_(p_11237_, p_11238_);
        serverplayer.m_20234_(p_11237_.m_19879_());
-@@ -426,32 +_,81 @@
+@@ -426,32 +_,82 @@
        }
  
        boolean flag2 = false;
@@ -327,25 +327,28 @@
  
 -      LevelData leveldata = serverplayer.f_19853_.m_6106_();
 -      serverplayer.f_8906_.m_9829_(new ClientboundRespawnPacket(serverplayer.f_19853_.m_220362_(), serverplayer.f_19853_.m_46472_(), BiomeManager.m_47877_(serverplayer.m_9236_().m_7328_()), serverplayer.f_8941_.m_9290_(), serverplayer.f_8941_.m_9293_(), serverplayer.m_9236_().m_46659_(), serverplayer.m_9236_().m_8584_(), p_11238_, serverplayer.m_219759_()));
--      serverplayer.f_8906_.m_9774_(serverplayer.m_20185_(), serverplayer.m_20186_(), serverplayer.m_20189_(), serverplayer.m_146908_(), serverplayer.m_146909_());
 +      LevelData leveldata = serverlevel1.m_6106_();
 +      serverplayer.f_8906_.m_9829_(new ClientboundRespawnPacket(serverlevel1.m_220362_(), serverlevel1.m_46472_(), BiomeManager.m_47877_(serverlevel1.m_7328_()), serverplayer.f_8941_.m_9290_(), serverplayer.f_8941_.m_9293_(), serverlevel1.m_46659_(), serverlevel1.m_8584_(), p_11238_, serverplayer.m_219759_()));
 +      serverplayer.f_8906_.m_9829_(new ClientboundSetChunkCacheRadiusPacket(serverlevel1.playerChunkLoader.getAPISendViewDistance())); // Spigot // Paper - replace old player chunk management
 +      serverplayer.f_8906_.m_9829_(new ClientboundSetSimulationDistancePacket(serverlevel1.playerChunkLoader.getAPITickDistance())); // Spigot // Paper - replace old player chunk management
 +      serverplayer.spawnIn(serverlevel1);
-+      serverplayer.m_146912_();
 +      serverplayer.revive();
-+      //serverplayer.connection.teleport(serverplayer.getX(), serverplayer.getY(), serverplayer.getZ(), serverplayer.getYRot(), serverplayer.getXRot());
+       serverplayer.f_8906_.m_9774_(serverplayer.m_20185_(), serverplayer.m_20186_(), serverplayer.m_20189_(), serverplayer.m_146908_(), serverplayer.m_146909_());
++      serverplayer.m_20260_(false);
++
        serverplayer.f_8906_.m_9829_(new ClientboundSetDefaultSpawnPositionPacket(serverlevel1.m_220360_(), serverlevel1.m_220361_()));
        serverplayer.f_8906_.m_9829_(new ClientboundChangeDifficultyPacket(leveldata.m_5472_(), leveldata.m_5474_()));
        serverplayer.f_8906_.m_9829_(new ClientboundSetExperiencePacket(serverplayer.f_36080_, serverplayer.f_36079_, serverplayer.f_36078_));
-@@ -460,12 +_,33 @@
+@@ -460,11 +_,29 @@
        serverlevel1.m_8845_(serverplayer);
        this.f_11196_.add(serverplayer);
        this.f_11197_.put(serverplayer.m_20148_(), serverplayer);
 -      serverplayer.m_143429_();
 +      //serverplayer.initInventoryMenu();
        serverplayer.m_21153_(serverplayer.m_21223_());
+-      if (flag2) {
+-         serverplayer.f_8906_.m_9829_(new ClientboundSoundPacket(SoundEvents.f_12377_, SoundSource.BLOCKS, (double)blockpos.m_123341_(), (double)blockpos.m_123342_(), (double)blockpos.m_123343_(), 1.0F, 1.0F, serverlevel1.m_213780_().m_188505_()));
+-      }
 +      // Paper start - Fix SPIGOT-5989
 +      if (flag2 && !isLocAltered) {
 +         if (!flag) {
@@ -356,10 +359,7 @@
 +         // Paper end
 +      }
 +      net.minecraftforge.event.ForgeEventFactory.firePlayerRespawnEvent(serverplayer, p_11238_);
-       if (flag2) {
-          serverplayer.f_8906_.m_9829_(new ClientboundSoundPacket(SoundEvents.f_12377_, SoundSource.BLOCKS, (double)blockpos.m_123341_(), (double)blockpos.m_123342_(), (double)blockpos.m_123343_(), 1.0F, 1.0F, serverlevel1.m_213780_().m_188505_()));
-       }
- 
++
 +      // Added from changeDimension
 +      this.m_11292_(serverplayer); // Update health, etc...
 +      serverplayer.m_6885_();
@@ -370,10 +370,9 @@
 +      // Fire advancement trigger
 +      serverplayer.m_9209_(serverlevel1);
 +
-+
+ 
        return serverplayer;
     }
- 
 @@ -546,6 +_,7 @@
     }
  

@@ -226,7 +226,7 @@
 +   public void spawnIn(ServerLevel world) {
 +      this.m_143425_(world);
 +      if (world == null) {
-+         this.m_146912_();
++         this.revive();
 +         Vec3 position = null;
 +         if (this.f_8935_ != null) {
 +            world = this.f_8924_.m_129880_(this.f_8935_);
