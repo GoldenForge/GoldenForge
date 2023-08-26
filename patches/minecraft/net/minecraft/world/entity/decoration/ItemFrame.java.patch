@@ -1,0 +1,18 @@
+--- a/net/minecraft/world/entity/decoration/ItemFrame.java
++++ b/net/minecraft/world/entity/decoration/ItemFrame.java
+@@ -45,6 +_,7 @@
+    public static final int f_149619_ = 8;
+    private float f_31754_ = 1.0F;
+    private boolean f_31755_;
++   public Integer cachedMapId; // Paper
+ 
+    public ItemFrame(EntityType<? extends ItemFrame> p_31761_, Level p_31762_) {
+       super(p_31761_, p_31762_);
+@@ -312,6 +_,7 @@
+    }
+ 
+    private void m_218865_(ItemStack p_218866_) {
++      this.cachedMapId = MapItem.m_151131_(p_218866_); // Paper
+       if (!p_218866_.m_41619_() && p_218866_.m_41795_() != this) {
+          p_218866_.m_41636_(this);
+       }
