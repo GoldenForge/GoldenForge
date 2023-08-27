@@ -11,6 +11,8 @@ Goldenforge is an unofficial fork of [Forge](https://github.com/minecraftforge/m
 ### Is it stable ?
 
 Goldenforge is currently in an alpha stage. Expect stuff to break. It's not ready for production. Please do not report issues to mod authors or forge.
+  
+  Nightly builds can be found [here](https://github.com/GoldenForge/GoldenForge/actions)
 
 ### Optimizations mods
 
