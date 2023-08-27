@@ -62,7 +62,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -97,15 +_,164 @@
+@@ -97,15 +_,154 @@
     private final RandomSource f_220348_ = RandomSource.m_216337_();
     private final ResourceKey<DimensionType> f_220349_;
     private final Holder<DimensionType> f_204147_;
@@ -104,20 +104,10 @@
 +      return ((ServerLevel)this).f_8547_.getChunkAtIfLoadedImmediately(x, z);
 +   }
 +
-+   public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
-+      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(x, z);
-+   }
-+
 +   public final @Nullable LevelChunk getChunkIfLoaded(BlockPos blockposition) {
 +      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4);
 +   }
 +
-+   // Paper start
-+   @Override
-+   public boolean m_7232_(int chunkX, int chunkZ) {
-+      return this.getChunkIfLoaded(chunkX, chunkZ) != null;
-+   }
-+   // Paper end
 +   // Paper start - optimise checkDespawn
 +   public final List<net.minecraft.server.level.ServerPlayer> getNearbyPlayers(@Nullable Entity source, double sourceX, double sourceY,
 +                                                                               double sourceZ, double maxRange, @Nullable Predicate<Entity> predicate) {
@@ -237,30 +227,27 @@
     }
  
     public static boolean m_46741_(BlockPos p_46742_) {
-@@ -164,12 +_,30 @@
+@@ -164,12 +_,27 @@
        return this.m_6325_(SectionPos.m_123171_(p_46746_.m_123341_()), SectionPos.m_123171_(p_46746_.m_123343_()));
     }
  
-+   @Override
-+   public boolean m_46805_(BlockPos pos) {
-+      return getChunkIfLoaded(pos.m_123341_() >> 4, pos.m_123343_() >> 4) != null; // Paper
-+   }
-+
 +   public final @Nullable BlockState getBlockStateIfLoadedAndInBounds(BlockPos blockposition) {
 +      return m_6857_().m_61937_(blockposition) ? getBlockStateIfLoaded(blockposition) : null;
 +   }
 +
     public LevelChunk m_6325_(int p_46727_, int p_46728_) {
 -      return (LevelChunk)this.m_46819_(p_46727_, p_46728_, ChunkStatus.f_62326_);
-+      // Paper start - make sure loaded chunks get the inlined variant of this function
-+      net.minecraft.server.level.ServerChunkCache cps = ((ServerLevel)this).m_7726_();
-+      if (cps.f_8330_ == Thread.currentThread()) {
-+         LevelChunk ifLoaded = cps.getChunkAtIfLoadedMainThread(p_46727_, p_46728_);
-+         if (ifLoaded != null) {
-+            return ifLoaded;
++      if (this instanceof ServerLevel serverLevel) {
++         // Paper start - make sure loaded chunks get the inlined variant of this function
++         net.minecraft.server.level.ServerChunkCache cps = serverLevel.m_7726_();
++         if (cps.f_8330_ == Thread.currentThread()) {
++            LevelChunk ifLoaded = cps.getChunkAtIfLoadedMainThread(p_46727_, p_46728_);
++            if (ifLoaded != null) {
++               return ifLoaded;
++            }
 +         }
++         // Paper end - make sure loaded chunks get the inlined variant of this function
 +      }
-+      // Paper end - make sure loaded chunks get the inlined variant of this function
 +      return (LevelChunk)this.m_6522_(p_46727_, p_46728_, ChunkStatus.f_62326_, true); // Paper - avoid a method jump
     }
  
