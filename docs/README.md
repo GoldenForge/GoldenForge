@@ -21,6 +21,7 @@ Using optimizations mods with goldenforge can result in undefined behaviour.
 Recommended mods :
 - canary (require custom config [here](https://github.com/GoldenForge/GoldenForge/tree/1.19.2/docs/configs/canary.properties))
 - modernfix (require custom config [here](https://github.com/GoldenForge/GoldenForge/tree/1.19.2/docs/configs/modernfix-mixins.properties))
+- chunky (require [goldenforge-fixes](https://github.com/GoldenForge/GoldenForge-Fixes/releases) mod)
 
 Incompatible mods :
 - servercore (activation range and dynamic mobcaps already implemented)
