@@ -737,6 +737,41 @@
        this.f_9743_.f_8906_.m_9829_(new ClientboundPlayerPositionPacket(p_143618_ - d0, p_143619_ - d1, p_143620_ - d2, p_143621_ - f, p_143622_ - f1, p_143623_, this.f_9767_, p_143624_));
     }
  
+@@ -1013,8 +_,34 @@
+          case START_DESTROY_BLOCK:
+          case ABORT_DESTROY_BLOCK:
+          case STOP_DESTROY_BLOCK:
++            // Paper start - Don't allow digging in unloaded chunks
++            if (this.f_9743_.m_9236_().getChunkIfLoadedImmediately(blockpos.m_123341_() >> 4, blockpos.m_123343_() >> 4) == null) {
++               this.f_9743_.f_8906_.m_215201_(p_9889_.m_237987_());
++               return;
++            }
++            // Paper end - Don't allow digging in unloaded chunks
++            // Paper start - send block entities after prediction
++            this.f_9743_.f_8941_.capturedBlockEntity = false;
++            this.f_9743_.f_8941_.captureSentBlockEntities = true;
++            // Paper end - send block entities after prediction
+             this.f_9743_.f_8941_.m_214168_(blockpos, serverboundplayeractionpacket$action, p_9889_.m_134284_(), this.f_9743_.f_19853_.m_151558_(), p_9889_.m_237987_());
+             this.f_9743_.f_8906_.m_215201_(p_9889_.m_237987_());
++            // Paper start - send block entities after prediction
++            this.f_9743_.f_8941_.captureSentBlockEntities = false;
++            // If a block entity was modified speedup the block change ack to avoid the block entity
++            // being overriden.
++            if (this.f_9743_.f_8941_.capturedBlockEntity) {
++               // manually tick
++               this.m_9829_(new ClientboundBlockChangedAckPacket(this.f_215200_));
++               this.f_9743_.f_8906_.f_215200_ = -1;
++
++               this.f_9743_.f_8941_.capturedBlockEntity = false;
++               BlockEntity tileentity = this.f_9743_.m_9236_().m_7702_(blockpos);
++               if (tileentity != null) {
++                  this.f_9743_.f_8906_.m_9829_(tileentity.m_58483_());
++               }
++            }
++            // Paper end - send block entities after prediction
+             return;
+          default:
+             throw new IllegalArgumentException("Invalid player action");
 @@ -1040,7 +_,7 @@
        Vec3 vec3 = blockhitresult.m_82450_();
        BlockPos blockpos = blockhitresult.m_82425_();

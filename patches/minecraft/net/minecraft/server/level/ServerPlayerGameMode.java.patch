@@ -1,5 +1,62 @@
 --- a/net/minecraft/server/level/ServerPlayerGameMode.java
 +++ b/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -9,6 +_,7 @@
+ import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
+ import net.minecraft.network.protocol.game.ClientboundPlayerInfoPacket;
+ import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.network.ServerGamePacketListenerImpl;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.InteractionResult;
+@@ -42,6 +_,9 @@
+    private int f_9255_;
+    private int f_9256_ = -1;
+ 
++   public boolean captureSentBlockEntities = false; // Paper
++   public boolean capturedBlockEntity = false; // Paper
++
+    public ServerPlayerGameMode(ServerPlayer p_143472_) {
+       this.f_9245_ = p_143472_;
+       this.f_9244_ = p_143472_.m_9236_();
+@@ -83,10 +_,12 @@
+    }
+ 
+    public void m_7712_() {
+-      ++this.f_9252_;
++      this.f_9252_ = MinecraftServer.currentTick; // CraftBukkit;
++      BlockState blockstate;
++
+       if (this.f_9253_) {
+-         BlockState blockstate = this.f_9244_.m_8055_(this.f_9254_);
+-         if (blockstate.m_60795_()) {
++         blockstate = this.f_9244_.getBlockStateIfLoaded(this.f_9254_); // Paper
++         if (blockstate == null || blockstate.m_60795_()) { // Paper
+             this.f_9253_ = false;
+          } else {
+             float f = this.m_9276_(blockstate, this.f_9254_, this.f_9255_);
+@@ -96,13 +_,19 @@
+             }
+          }
+       } else if (this.f_9249_) {
+-         BlockState blockstate1 = this.f_9244_.m_8055_(this.f_9251_);
+-         if (blockstate1.m_60795_()) {
++         // Paper start - don't want to do same logic as above, return instead
++         blockstate = this.f_9244_.getBlockStateIfLoaded(this.f_9251_);
++         if (blockstate == null) {
++            this.f_9249_ = false;
++            return;
++         }
++         // Paper end
++         if (blockstate.m_60795_()) {
+             this.f_9244_.m_6801_(this.f_9245_.m_19879_(), this.f_9251_, -1);
+             this.f_9256_ = -1;
+             this.f_9249_ = false;
+          } else {
+-            this.m_9276_(blockstate1, this.f_9251_, this.f_9250_);
++            this.m_9276_(blockstate, this.f_9251_, this.f_9250_);
+          }
+       }
+ 
 @@ -124,7 +_,11 @@
     }
  
@@ -13,6 +70,14 @@
           this.m_215125_(p_215120_, false, p_215124_, "too far");
        } else if (p_215120_.m_123342_() >= p_215123_) {
           this.f_9245_.f_8906_.m_9829_(new ClientboundBlockUpdatePacket(p_215120_, this.f_9244_.m_8055_(p_215120_)));
+@@ -134,6 +_,7 @@
+             if (!this.f_9244_.m_7966_(this.f_9245_, p_215120_)) {
+                this.f_9245_.f_8906_.m_9829_(new ClientboundBlockUpdatePacket(p_215120_, this.f_9244_.m_8055_(p_215120_)));
+                this.m_215125_(p_215120_, false, p_215124_, "may not interact");
++               capturedBlockEntity = true; // Paper - send block entity after predicting
+                return;
+             }
+ 
 @@ -152,6 +_,7 @@
              float f = 1.0F;
              BlockState blockstate = this.f_9244_.m_8055_(p_215120_);
@@ -21,6 +86,23 @@
                 blockstate.m_60686_(this.f_9244_, p_215120_, this.f_9245_);
                 f = blockstate.m_60625_(this.f_9245_, this.f_9245_.f_19853_, p_215120_);
              }
+@@ -196,10 +_,12 @@
+             this.m_215125_(p_215120_, true, p_215124_, "stopped destroying");
+          } else if (p_215121_ == ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK) {
+             this.f_9249_ = false;
+-            if (!Objects.equals(this.f_9251_, p_215120_)) {
+-               f_9246_.warn("Mismatch in destroy block pos: {} {}", this.f_9251_, p_215120_);
+-               this.f_9244_.m_6801_(this.f_9245_.m_19879_(), this.f_9251_, -1);
+-               this.m_215125_(p_215120_, true, p_215124_, "aborted mismatched destroying");
++            if (!Objects.equals(this.f_9251_, p_215120_) && !BlockPos.f_121853_.equals(this.f_9251_)) { // Paper
++               f_9246_.debug("Mismatch in destroy block pos: {} {}", this.f_9251_, p_215120_);
++               BlockState type = this.f_9244_.getBlockStateIfLoaded(this.f_9251_); // Paper - don't load unloaded chunks for stale records here
++               if (type != null) this.f_9244_.m_6801_(this.f_9245_.m_19879_(), this.f_9251_, -1);
++               if (type != null) this.m_215125_(p_215120_, true, p_215124_, "aborted mismatched destroying");
++               this.f_9251_ = BlockPos.f_121853_; // Paper
+             }
+ 
+             this.f_9244_.m_6801_(this.f_9245_.m_19879_(), p_215120_, -1);
 @@ -221,7 +_,8 @@
  
     public boolean m_9280_(BlockPos p_9281_) {
