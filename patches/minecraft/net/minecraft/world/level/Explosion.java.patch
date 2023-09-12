@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/level/Explosion.java
 +++ b/net/minecraft/world/level/Explosion.java
+@@ -20,6 +_,8 @@
+ import net.minecraft.world.damagesource.DamageSource;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.LivingEntity;
++import net.minecraft.world.entity.boss.EnderDragonPart;
++import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+ import net.minecraft.world.entity.item.ItemEntity;
+ import net.minecraft.world.entity.item.PrimedTnt;
+ import net.minecraft.world.entity.player.Player;
 @@ -38,6 +_,7 @@
  import net.minecraft.world.phys.AABB;
  import net.minecraft.world.phys.HitResult;
@@ -16,42 +25,523 @@
  
     public Explosion(Level p_151471_, @Nullable Entity p_151472_, double p_151473_, double p_151474_, double p_151475_, float p_151476_) {
        this(p_151471_, p_151472_, p_151473_, p_151474_, p_151475_, p_151476_, false, Explosion.BlockInteraction.DESTROY);
-@@ -85,6 +_,7 @@
+@@ -85,7 +_,273 @@
        this.f_46010_ = p_46060_;
        this.f_46018_ = p_46053_ == null ? DamageSource.m_19358_(this) : p_46053_;
        this.f_46019_ = p_46054_ == null ? this.m_46062_(p_46052_) : p_46054_;
+-   }
 +      this.position = new Vec3(this.f_46013_, this.f_46014_, this.f_46015_);
-    }
++   }
++
++   // Paper start - optimise collisions
++   private static final double[] CACHED_RAYS;
++   static {
++      final it.unimi.dsi.fastutil.doubles.DoubleArrayList rayCoords = new it.unimi.dsi.fastutil.doubles.DoubleArrayList();
++
++      for (int x = 0; x <= 15; ++x) {
++         for (int y = 0; y <= 15; ++y) {
++            for (int z = 0; z <= 15; ++z) {
++               if ((x == 0 || x == 15) || (y == 0 || y == 15) || (z == 0 || z == 15)) {
++                  double xDir = (double)((float)x / 15.0F * 2.0F - 1.0F);
++                  double yDir = (double)((float)y / 15.0F * 2.0F - 1.0F);
++                  double zDir = (double)((float)z / 15.0F * 2.0F - 1.0F);
++
++                  double mag = Math.sqrt(
++                          xDir * xDir + yDir * yDir + zDir * zDir
++                  );
++
++                  rayCoords.add((xDir / mag) * (double)0.3F);
++                  rayCoords.add((yDir / mag) * (double)0.3F);
++                  rayCoords.add((zDir / mag) * (double)0.3F);
++               }
++            }
++         }
++      }
++
++      CACHED_RAYS = rayCoords.toDoubleArray();
++   }
++
++   private static final int CHUNK_CACHE_SHIFT = 2;
++   private static final int CHUNK_CACHE_MASK = (1 << CHUNK_CACHE_SHIFT) - 1;
++   private static final int CHUNK_CACHE_WIDTH = 1 << CHUNK_CACHE_SHIFT;
++
++   private static final int BLOCK_EXPLOSION_CACHE_SHIFT = 3;
++   private static final int BLOCK_EXPLOSION_CACHE_MASK = (1 << BLOCK_EXPLOSION_CACHE_SHIFT) - 1;
++   private static final int BLOCK_EXPLOSION_CACHE_WIDTH = 1 << BLOCK_EXPLOSION_CACHE_SHIFT;
++
++   // resistance = (res + 0.3F) * 0.3F;
++   // so for resistance = 0, we need res = -0.3F
++   private static final Float ZERO_RESISTANCE = Float.valueOf(-0.3f);
++   private it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<ExplosionBlockCache> blockCache = null;
++
++   public static final class ExplosionBlockCache {
++
++      public final long key;
++      public final BlockPos immutablePos;
++      public final BlockState blockState;
++      public final FluidState fluidState;
++      public final float resistance;
++      public final boolean outOfWorld;
++      public Boolean shouldExplode; // null -> not called yet
++      public net.minecraft.world.phys.shapes.VoxelShape cachedCollisionShape;
++
++      public ExplosionBlockCache(long key, BlockPos immutablePos, BlockState blockState, FluidState fluidState, float resistance,
++                                 boolean outOfWorld) {
++         this.key = key;
++         this.immutablePos = immutablePos;
++         this.blockState = blockState;
++         this.fluidState = fluidState;
++         this.resistance = resistance;
++         this.outOfWorld = outOfWorld;
++      }
++   }
++
++   private long[] chunkPosCache = null;
++   private net.minecraft.world.level.chunk.LevelChunk[] chunkCache = null;
++
++   private ExplosionBlockCache getOrCacheExplosionBlock(final int x, final int y, final int z,
++                                                        final long key, final boolean calculateResistance) {
++      ExplosionBlockCache ret = this.blockCache.get(key);
++      if (ret != null) {
++         return ret;
++      }
++
++      BlockPos pos = new BlockPos(x, y, z);
++
++      if (!this.f_46012_.m_46739_(pos)) {
++         ret = new ExplosionBlockCache(key, pos, null, null, 0.0f, true);
++      } else {
++         net.minecraft.world.level.chunk.LevelChunk chunk;
++         long chunkKey = io.papermc.paper.util.CoordinateUtils.getChunkKey(x >> 4, z >> 4);
++         int chunkCacheKey = ((x >> 4) & CHUNK_CACHE_MASK) | (((z >> 4) << CHUNK_CACHE_SHIFT) & (CHUNK_CACHE_MASK << CHUNK_CACHE_SHIFT));
++         if (this.chunkPosCache[chunkCacheKey] == chunkKey) {
++            chunk = this.chunkCache[chunkCacheKey];
++         } else {
++            this.chunkPosCache[chunkCacheKey] = chunkKey;
++            this.chunkCache[chunkCacheKey] = chunk = this.f_46012_.m_6325_(x >> 4, z >> 4);
++         }
++
++         BlockState blockState = chunk.getBlockStateFinal(x, y, z);
++         FluidState fluidState = blockState.m_60819_();
++
++         Optional<Float> resistance = !calculateResistance ? Optional.empty() : this.f_46019_.m_6617_((Explosion)(Object)this, this.f_46012_, pos, blockState, fluidState);
++
++         ret = new ExplosionBlockCache(
++                 key, pos, blockState, fluidState,
++                 (resistance.orElse(ZERO_RESISTANCE).floatValue() + 0.3f) * 0.3f,
++                 false
++         );
++      }
++
++      this.blockCache.put(key, ret);
++
++      return ret;
++   }
++
++   private boolean clipsAnything(final Vec3 from, final Vec3 to,
++                                 final io.papermc.paper.util.CollisionUtil.LazyEntityCollisionContext context,
++                                 final ExplosionBlockCache[] blockCache,
++                                 final BlockPos.MutableBlockPos currPos) {
++      // assume that context.delegated = false
++      final double adjX = io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON * (from.f_82479_ - to.f_82479_);
++      final double adjY = io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON * (from.f_82480_ - to.f_82480_);
++      final double adjZ = io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON * (from.f_82481_ - to.f_82481_);
++
++      if (adjX == 0.0 && adjY == 0.0 && adjZ == 0.0) {
++         return false;
++      }
++
++      final double toXAdj = to.f_82479_ - adjX;
++      final double toYAdj = to.f_82480_ - adjY;
++      final double toZAdj = to.f_82481_ - adjZ;
++      final double fromXAdj = from.f_82479_ + adjX;
++      final double fromYAdj = from.f_82480_ + adjY;
++      final double fromZAdj = from.f_82481_ + adjZ;
++
++      int currX = Mth.m_14107_(fromXAdj);
++      int currY = Mth.m_14107_(fromYAdj);
++      int currZ = Mth.m_14107_(fromZAdj);
++
++      final double diffX = toXAdj - fromXAdj;
++      final double diffY = toYAdj - fromYAdj;
++      final double diffZ = toZAdj - fromZAdj;
++
++      final double dxDouble = Math.signum(diffX);
++      final double dyDouble = Math.signum(diffY);
++      final double dzDouble = Math.signum(diffZ);
++
++      final int dx = (int)dxDouble;
++      final int dy = (int)dyDouble;
++      final int dz = (int)dzDouble;
++
++      final double normalizedDiffX = diffX == 0.0 ? Double.MAX_VALUE : dxDouble / diffX;
++      final double normalizedDiffY = diffY == 0.0 ? Double.MAX_VALUE : dyDouble / diffY;
++      final double normalizedDiffZ = diffZ == 0.0 ? Double.MAX_VALUE : dzDouble / diffZ;
++
++      double normalizedCurrX = normalizedDiffX * (diffX > 0.0 ? (1.0 - Mth.m_14185_(fromXAdj)) : Mth.m_14185_(fromXAdj));
++      double normalizedCurrY = normalizedDiffY * (diffY > 0.0 ? (1.0 - Mth.m_14185_(fromYAdj)) : Mth.m_14185_(fromYAdj));
++      double normalizedCurrZ = normalizedDiffZ * (diffZ > 0.0 ? (1.0 - Mth.m_14185_(fromZAdj)) : Mth.m_14185_(fromZAdj));
++
++      for (;;) {
++         currPos.m_122178_(currX, currY, currZ);
++
++         // ClipContext.Block.COLLIDER -> BlockBehaviour.BlockStateBase::getCollisionShape
++         // ClipContext.Fluid.NONE -> ignore fluids
++
++         // read block from cache
++         final long key = BlockPos.m_121882_(currX, currY, currZ);
++
++         final int cacheKey =
++                 (currX & BLOCK_EXPLOSION_CACHE_MASK) |
++                         (currY & BLOCK_EXPLOSION_CACHE_MASK) << (BLOCK_EXPLOSION_CACHE_SHIFT) |
++                         (currZ & BLOCK_EXPLOSION_CACHE_MASK) << (BLOCK_EXPLOSION_CACHE_SHIFT + BLOCK_EXPLOSION_CACHE_SHIFT);
++         ExplosionBlockCache cachedBlock = blockCache[cacheKey];
++         if (cachedBlock == null || cachedBlock.key != key) {
++            blockCache[cacheKey] = cachedBlock = this.getOrCacheExplosionBlock(currX, currY, currZ, key, false);
++         }
++
++         final BlockState blockState = cachedBlock.blockState;
++         if (!blockState.emptyCollisionShape()) {
++            net.minecraft.world.phys.shapes.VoxelShape collision = cachedBlock.cachedCollisionShape;
++            if (collision == null) {
++               collision = blockState.getConstantCollisionShape();
++               if (collision == null) {
++                  collision = blockState.m_60742_(this.f_46012_, currPos, context);
++                  if (!context.isDelegated()) {
++                     // if it was not delegated during this call, assume that for any future ones it will not be delegated
++                     // again, and cache the result
++                     cachedBlock.cachedCollisionShape = collision;
++                  }
++               } else {
++                  cachedBlock.cachedCollisionShape = collision;
++               }
++            }
++
++            if (!collision.m_83281_() && collision.m_83220_(from, to, currPos) != null) {
++               return true;
++            }
++         }
++
++         if (normalizedCurrX > 1.0 && normalizedCurrY > 1.0 && normalizedCurrZ > 1.0) {
++            return false;
++         }
++
++         // inc the smallest normalized coordinate
++
++         if (normalizedCurrX < normalizedCurrY) {
++            if (normalizedCurrX < normalizedCurrZ) {
++               currX += dx;
++               normalizedCurrX += normalizedDiffX;
++            } else {
++               // x < y && x >= z <--> z < y && z <= x
++               currZ += dz;
++               normalizedCurrZ += normalizedDiffZ;
++            }
++         } else if (normalizedCurrY < normalizedCurrZ) {
++            // y <= x && y < z
++            currY += dy;
++            normalizedCurrY += normalizedDiffY;
++         } else {
++            // y <= x && z <= y <--> z <= y && z <= x
++            currZ += dz;
++            normalizedCurrZ += normalizedDiffZ;
++         }
++      }
++   }
++
++   private double getSeenFraction(final Vec3 source, final Entity target,
++                                  final ExplosionBlockCache[] blockCache,
++                                  final BlockPos.MutableBlockPos blockPos) {
++      final AABB boundingBox = target.m_20191_();
++      final double diffX = boundingBox.f_82291_ - boundingBox.f_82288_;
++      final double diffY = boundingBox.f_82292_ - boundingBox.f_82289_;
++      final double diffZ = boundingBox.f_82293_ - boundingBox.f_82290_;
++
++      final double incX = 1.0 / (diffX * 2.0 + 1.0);
++      final double incY = 1.0 / (diffY * 2.0 + 1.0);
++      final double incZ = 1.0 / (diffZ * 2.0 + 1.0);
++
++      if (incX < 0.0 || incY < 0.0 || incZ < 0.0) {
++         return 0.0;
++      }
++
++      final double offX = (1.0 - Math.floor(1.0 / incX) * incX) * 0.5 + boundingBox.f_82288_;
++      final double offY = boundingBox.f_82289_;
++      final double offZ = (1.0 - Math.floor(1.0 / incZ) * incZ) * 0.5 + boundingBox.f_82290_;
++
++      final io.papermc.paper.util.CollisionUtil.LazyEntityCollisionContext context = new io.papermc.paper.util.CollisionUtil.LazyEntityCollisionContext(target);
++
++      int totalRays = 0;
++      int missedRays = 0;
++
++      for (double dx = 0.0; dx <= 1.0; dx += incX) {
++         final double fromX = Math.fma(dx, diffX, offX);
++         for (double dy = 0.0; dy <= 1.0; dy += incY) {
++            final double fromY = Math.fma(dy, diffY, offY);
++            for (double dz = 0.0; dz <= 1.0; dz += incZ) {
++               ++totalRays;
++
++               final Vec3 from = new Vec3(
++                       fromX,
++                       fromY,
++                       Math.fma(dz, diffZ, offZ)
++               );
++
++               if (!this.clipsAnything(from, source, context, blockCache, blockPos)) {
++                  ++missedRays;
++               }
++            }
++         }
++      }
++
++      return (double)missedRays / (double)totalRays;
++   }
++   // Paper end - optimise collisions
  
     private ExplosionDamageCalculator m_46062_(@Nullable Entity p_46063_) {
-@@ -148,7 +_,7 @@
-                   for(float f1 = 0.3F; f > 0.0F; f -= 0.22500001F) {
-                      BlockPos blockpos = new BlockPos(d4, d6, d8);
-                      BlockState blockstate = this.f_46012_.m_8055_(blockpos);
+       return (ExplosionDamageCalculator)(p_46063_ == null ? f_46008_ : new EntityBasedExplosionDamageCalculator(p_46063_));
+@@ -125,46 +_,109 @@
+    }
+ 
+    public void m_46061_() {
++      // CraftBukkit start
++      if (this.f_46017_ < 0.1F) {
++         return;
++      }
++      // CraftBukkit end
+       this.f_46012_.m_220400_(this.f_46016_, GameEvent.f_157812_, new Vec3(this.f_46013_, this.f_46014_, this.f_46015_));
+       Set<BlockPos> set = Sets.newHashSet();
+-      int i = 16;
+-
+-      for(int j = 0; j < 16; ++j) {
+-         for(int k = 0; k < 16; ++k) {
+-            for(int l = 0; l < 16; ++l) {
+-               if (j == 0 || j == 15 || k == 0 || k == 15 || l == 0 || l == 15) {
+-                  double d0 = (double)((float)j / 15.0F * 2.0F - 1.0F);
+-                  double d1 = (double)((float)k / 15.0F * 2.0F - 1.0F);
+-                  double d2 = (double)((float)l / 15.0F * 2.0F - 1.0F);
+-                  double d3 = Math.sqrt(d0 * d0 + d1 * d1 + d2 * d2);
+-                  d0 /= d3;
+-                  d1 /= d3;
+-                  d2 /= d3;
++      boolean flag = true;
++
++      int i;
++      int j;
++
++      // Paper start - optimise explosions
++      this.blockCache = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
++
++      this.chunkPosCache = new long[CHUNK_CACHE_WIDTH * CHUNK_CACHE_WIDTH];
++      java.util.Arrays.fill(this.chunkPosCache, ChunkPos.f_45577_);
++
++      this.chunkCache = new net.minecraft.world.level.chunk.LevelChunk[CHUNK_CACHE_WIDTH * CHUNK_CACHE_WIDTH];
++
++      final ExplosionBlockCache[] blockCache = new ExplosionBlockCache[BLOCK_EXPLOSION_CACHE_WIDTH * BLOCK_EXPLOSION_CACHE_WIDTH * BLOCK_EXPLOSION_CACHE_WIDTH];
++      // use initial cache value that is most likely to be used: the source position
++      final ExplosionBlockCache initialCache;
++      {
++         final int blockX = Mth.m_14107_(this.f_46013_);
++         final int blockY = Mth.m_14107_(this.f_46014_);
++         final int blockZ = Mth.m_14107_(this.f_46015_);
++
++         final long key = BlockPos.m_121882_(blockX, blockY, blockZ);
++
++         initialCache = this.getOrCacheExplosionBlock(blockX, blockY, blockZ, key, true);
++      }
++      // only ~1/3rd of the loop iterations in vanilla will result in a ray, as it is iterating the perimeter of
++      // a 16x16x16 cube
++      // we can cache the rays and their normals as well, so that we eliminate the excess iterations / checks and
++      // calculations in one go
++      // additional aggressive caching of block retrieval is very significant, as at low power (i.e tnt) most
++      // block retrievals are not unique
++      for (int ray = 0, len = CACHED_RAYS.length; ray < len;) {
++         {
++            {
++               {
++                  ExplosionBlockCache cachedBlock = initialCache;
++
++                  double d0 = CACHED_RAYS[ray];
++                  double d1 = CACHED_RAYS[ray + 1];
++                  double d2 = CACHED_RAYS[ray + 2];
++                  ray += 3;
++                  // Paper end - optimise explosions
+                   float f = this.f_46017_ * (0.7F + this.f_46012_.f_46441_.m_188501_() * 0.6F);
+                   double d4 = this.f_46013_;
+-                  double d6 = this.f_46014_;
+-                  double d8 = this.f_46015_;
+-
+-                  for(float f1 = 0.3F; f > 0.0F; f -= 0.22500001F) {
+-                     BlockPos blockpos = new BlockPos(d4, d6, d8);
+-                     BlockState blockstate = this.f_46012_.m_8055_(blockpos);
 -                     FluidState fluidstate = this.f_46012_.m_6425_(blockpos);
-+                     FluidState fluidstate = blockstate.m_60819_(); // Paper
-                      if (!this.f_46012_.m_46739_(blockpos)) {
+-                     if (!this.f_46012_.m_46739_(blockpos)) {
++                  double d5 = this.f_46014_;
++                  double d6 = this.f_46015_;
++
++                  for (float f1 = 0.3F; f > 0.0F; f -= 0.22500001F) {
++                     // Paper start - optimise explosions
++                     final int blockX = Mth.m_14107_(d4);
++                     final int blockY = Mth.m_14107_(d5);
++                     final int blockZ = Mth.m_14107_(d6);
++
++                     final long key = BlockPos.m_121882_(blockX, blockY, blockZ);
++
++                     if (cachedBlock.key != key) {
++                        final int cacheKey =
++                                (blockX & BLOCK_EXPLOSION_CACHE_MASK) |
++                                        (blockY & BLOCK_EXPLOSION_CACHE_MASK) << (BLOCK_EXPLOSION_CACHE_SHIFT) |
++                                        (blockZ & BLOCK_EXPLOSION_CACHE_MASK) << (BLOCK_EXPLOSION_CACHE_SHIFT + BLOCK_EXPLOSION_CACHE_SHIFT);
++                        cachedBlock = blockCache[cacheKey];
++                        if (cachedBlock == null || cachedBlock.key != key) {
++                           blockCache[cacheKey] = cachedBlock = this.getOrCacheExplosionBlock(blockX, blockY, blockZ, key, true);
++                        }
++                     }
++
++                     if (cachedBlock.outOfWorld) {
                          break;
                       }
-@@ -179,7 +_,8 @@
-       int i1 = Mth.m_14107_(this.f_46014_ + (double)f2 + 1.0D);
-       int j2 = Mth.m_14107_(this.f_46015_ - (double)f2 - 1.0D);
-       int j1 = Mth.m_14107_(this.f_46015_ + (double)f2 + 1.0D);
--      List<Entity> list = this.f_46012_.m_45933_(this.f_46016_, new AABB((double)k1, (double)i2, (double)j2, (double)l1, (double)i1, (double)j1));
-+      List<Entity> list = this.f_46012_.m_6249_(this.f_46016_, new AABB((double)k1, (double)i2, (double)j2, (double)l1, (double)i1, (double)j1), (com.google.common.base.Predicate<Entity>) entity -> entity.m_6084_() && !entity.m_5833_()); // Paper - Fix lag from explosions processing dead entities
-+      net.minecraftforge.event.ForgeEventFactory.onExplosionDetonate(this.f_46012_, this, list, f2);
-       Vec3 vec3 = new Vec3(this.f_46013_, this.f_46014_, this.f_46015_);
  
-       for(int k2 = 0; k2 < list.size(); ++k2) {
-@@ -195,7 +_,7 @@
-                   d5 /= d13;
-                   d7 /= d13;
-                   d9 /= d13;
+-                     Optional<Float> optional = this.f_46019_.m_6617_(this, this.f_46012_, blockpos, blockstate, fluidstate);
+-                     if (optional.isPresent()) {
+-                        f -= (optional.get() + 0.3F) * 0.3F;
+-                     }
+-
+-                     if (f > 0.0F && this.f_46019_.m_6714_(this, this.f_46012_, blockpos, blockstate, f)) {
+-                        set.add(blockpos);
+-                     }
+-
+-                     d4 += d0 * (double)0.3F;
+-                     d6 += d1 * (double)0.3F;
+-                     d8 += d2 * (double)0.3F;
++                     BlockPos blockposition = cachedBlock.immutablePos;
++                     BlockState iblockdata = cachedBlock.blockState;
++                     // Paper end - optimise explosions
++
++                     //if (!iblockdata.isDestroyable()) continue; // Paper
++                     // Paper - optimise explosions
++
++                     // Paper - optimise explosions
++
++                     f -= cachedBlock.resistance; // Paper - optimise explosions
++
++                     if (f > 0.0F && cachedBlock.shouldExplode == null) { // Paper - optimise explosions
++                        // Paper start - optimise explosions
++                        // note: we expect shouldBlockExplode to be pure with respect to power, as Vanilla currently is.
++                        // basically, it is unused, which allows us to cache the result
++                        final boolean shouldExplode = this.f_46019_.m_6714_(this, this.f_46012_, cachedBlock.immutablePos, cachedBlock.blockState, f);
++                        cachedBlock.shouldExplode = shouldExplode ? Boolean.TRUE : Boolean.FALSE;
++                        if (shouldExplode && (this.f_46009_ || !cachedBlock.blockState.m_60795_())) {
++                           // Paper end - optimise explosions
++                           set.add(blockposition);
++                        } // Paper - optimise explosions
++                     }
++
++                     d4 += d0; // Paper - optimise explosions
++                     d5 += d1; // Paper - optimise explosions
++                     d6 += d2; // Paper - optimise explosions
+                   }
+                }
+             }
+@@ -173,47 +_,68 @@
+ 
+       this.f_46020_.addAll(set);
+       float f2 = this.f_46017_ * 2.0F;
+-      int k1 = Mth.m_14107_(this.f_46013_ - (double)f2 - 1.0D);
+-      int l1 = Mth.m_14107_(this.f_46013_ + (double)f2 + 1.0D);
+-      int i2 = Mth.m_14107_(this.f_46014_ - (double)f2 - 1.0D);
+-      int i1 = Mth.m_14107_(this.f_46014_ + (double)f2 + 1.0D);
+-      int j2 = Mth.m_14107_(this.f_46015_ - (double)f2 - 1.0D);
+-      int j1 = Mth.m_14107_(this.f_46015_ + (double)f2 + 1.0D);
+-      List<Entity> list = this.f_46012_.m_45933_(this.f_46016_, new AABB((double)k1, (double)i2, (double)j2, (double)l1, (double)i1, (double)j1));
+-      Vec3 vec3 = new Vec3(this.f_46013_, this.f_46014_, this.f_46015_);
+-
+-      for(int k2 = 0; k2 < list.size(); ++k2) {
+-         Entity entity = list.get(k2);
++
++      i = Mth.m_14107_(this.f_46013_ - (double) f2 - 1.0D);
++      j = Mth.m_14107_(this.f_46013_ + (double) f2 + 1.0D);
++      int l = Mth.m_14107_(this.f_46014_ - (double) f2 - 1.0D);
++      int i1 = Mth.m_14107_(this.f_46014_ + (double) f2 + 1.0D);
++      int j1 = Mth.m_14107_(this.f_46015_ - (double) f2 - 1.0D);
++      int k1 = Mth.m_14107_(this.f_46015_ + (double) f2 + 1.0D);
++      List<Entity> list = this.f_46012_.m_6249_(this.f_46016_, new AABB((double) i, (double) l, (double) j1, (double) j, (double) i1, (double) k1), (com.google.common.base.Predicate<Entity>) entity -> entity.m_6084_() && !entity.m_5833_()); // Paper - Fix lag from explosions processing dead entities
++      Vec3 vec3d = new Vec3(this.f_46013_, this.f_46014_, this.f_46015_);
++
++      final BlockPos.MutableBlockPos blockPos = new BlockPos.MutableBlockPos(); // Paper - optimise explosions
++
++      for (int l1 = 0; l1 < list.size(); ++l1) {
++         Entity entity = (Entity) list.get(l1);
++
+          if (!entity.m_6128_()) {
+-            double d12 = Math.sqrt(entity.m_20238_(vec3)) / (double)f2;
+-            if (d12 <= 1.0D) {
+-               double d5 = entity.m_20185_() - this.f_46013_;
+-               double d7 = (entity instanceof PrimedTnt ? entity.m_20186_() : entity.m_20188_()) - this.f_46014_;
+-               double d9 = entity.m_20189_() - this.f_46015_;
+-               double d13 = Math.sqrt(d5 * d5 + d7 * d7 + d9 * d9);
+-               if (d13 != 0.0D) {
+-                  d5 /= d13;
+-                  d7 /= d13;
+-                  d9 /= d13;
 -                  double d14 = (double)m_46064_(vec3, entity);
-+                  double d14 = (double)getBlockDensity(vec3, entity); // Paper - Optimize explosions
-                   double d10 = (1.0D - d12) * d14;
-                   entity.m_6469_(this.m_46077_(), (float)((int)((d10 * d10 + d10) / 2.0D * 7.0D * (double)f2 + 1.0D)));
-                   double d11 = d10;
+-                  double d10 = (1.0D - d12) * d14;
+-                  entity.m_6469_(this.m_46077_(), (float)((int)((d10 * d10 + d10) / 2.0D * 7.0D * (double)f2 + 1.0D)));
+-                  double d11 = d10;
++            double d7 = Math.sqrt(entity.m_20238_(vec3d)) / (double) f2;
++
++            if (d7 <= 1.0D) {
++               double d8 = entity.m_20185_() - this.f_46013_;
++               double d9 = (entity instanceof PrimedTnt ? entity.m_20186_() : entity.m_20188_()) - this.f_46014_;
++               double d10 = entity.m_20189_() - this.f_46015_;
++               double d11 = Math.sqrt(d8 * d8 + d9 * d9 + d10 * d10);
++
++               if (d11 != 0.0D) {
++                  d8 /= d11;
++                  d9 /= d11;
++                  d10 /= d11;
++                  double d12 = this.getSeenFraction(vec3d, entity, blockCache, blockPos); // Paper - Optimize explosions // Paper - optimise explosions
++                  double d13 = (1.0D - d7) * d12;
++                  entity.m_6469_(this.m_46077_(), (float) ((int) ((d13 * d13 + d13) / 2.0D * 7.0D * (double) f2 + 1.0D)));
++                  double d14;
++
+                   if (entity instanceof LivingEntity) {
+-                     d11 = ProtectionEnchantment.m_45135_((LivingEntity)entity, d10);
++                     LivingEntity entityliving = (LivingEntity) entity;
++
++                     d14 = ProtectionEnchantment.m_45135_((LivingEntity)entity, d10);
++                  } else {
++                     d14 = d13;
+                   }
+ 
+-                  entity.m_20256_(entity.m_20184_().m_82520_(d5 * d11, d7 * d11, d9 * d11));
++                  d8 *= d14;
++                  d9 *= d14;
++                  d10 *= d14;
++                  Vec3 vec3d1 = new Vec3(d8, d9, d10);
++
++                  entity.m_20256_(entity.m_20184_().m_82549_(vec3d1));
+                   if (entity instanceof Player) {
+-                     Player player = (Player)entity;
+-                     if (!player.m_5833_() && (!player.m_7500_() || !player.m_150110_().f_35935_)) {
+-                        this.f_46021_.put(player, new Vec3(d5 * d10, d7 * d10, d9 * d10));
++                     Player entityhuman = (Player) entity;
++
++                     if (!entityhuman.m_5833_() && (!entityhuman.m_7500_() || !entityhuman.m_150110_().f_35935_)) {
++                        this.f_46021_.put(entityhuman, vec3d1);
+                      }
+                   }
+                }
+             }
+          }
+       }
++
++      this.blockCache = null; // Paper - optimise explosions
++      this.chunkPosCache = null; // Paper - optimise explosions
++      this.chunkCache = null; // Paper - optimise explosions
+ 
+    }
+ 
 @@ -242,7 +_,7 @@
              if (!blockstate.m_60795_()) {
                 BlockPos blockpos1 = blockpos.m_7949_();
