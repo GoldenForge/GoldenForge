@@ -79,7 +79,7 @@ public final class LightQueue {
         }
     }
 
-    public CompletableFuture<Void> queueBlockChange(final BlockPos pos) {
+    public ChunkTasks queueBlockChange(final BlockPos pos) {
         final ChunkTasks tasks;
         synchronized (this) {
             tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), (final long keyInMap) -> {
@@ -90,10 +90,10 @@ public final class LightQueue {
 
         tasks.schedule();
 
-        return tasks.onComplete;
+        return tasks;
     }
 
-    public CompletableFuture<Void> queueSectionChange(final SectionPos pos, final boolean newEmptyValue) {
+    public ChunkTasks queueSectionChange(final SectionPos pos, final boolean newEmptyValue) {
         final ChunkTasks tasks;
         synchronized (this) {
             tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), (final long keyInMap) -> {
@@ -108,10 +108,10 @@ public final class LightQueue {
 
         tasks.schedule();
 
-        return tasks.onComplete;
+        return tasks;
     }
 
-    public CompletableFuture<Void> queueChunkLightTask(final ChunkPos pos, final BooleanSupplier lightTask, final PrioritisedExecutor.Priority priority) {
+    public ChunkTasks queueChunkLightTask(final ChunkPos pos, final BooleanSupplier lightTask, final PrioritisedExecutor.Priority priority) {
         final ChunkTasks tasks;
         synchronized (this) {
             tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), (final long keyInMap) -> {
@@ -125,10 +125,10 @@ public final class LightQueue {
 
         tasks.schedule();
 
-        return tasks.onComplete;
+        return tasks;
     }
 
-    public CompletableFuture<Void> queueChunkSkylightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
+    public ChunkTasks queueChunkSkylightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
         final ChunkTasks tasks;
         synchronized (this) {
             tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), (final long keyInMap) -> {
@@ -144,10 +144,10 @@ public final class LightQueue {
 
         tasks.schedule();
 
-        return tasks.onComplete;
+        return tasks;
     }
 
-    public CompletableFuture<Void> queueChunkBlocklightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
+    public ChunkTasks queueChunkBlocklightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
         final ChunkTasks tasks;
 
         synchronized (this) {
@@ -164,7 +164,7 @@ public final class LightQueue {
 
         tasks.schedule();
 
-        return tasks.onComplete;
+        return tasks;
     }
 
     public void removeChunk(final ChunkPos pos) {
@@ -177,20 +177,20 @@ public final class LightQueue {
         }
     }
 
-    protected static final class ChunkTasks implements Runnable {
+    public static final class ChunkTasks implements Runnable {
 
-        final Set<BlockPos> changedPositions = new HashSet<>();
-        Boolean[] changedSectionSet;
-        ShortOpenHashSet queuedEdgeChecksSky;
-        ShortOpenHashSet queuedEdgeChecksBlock;
-        List<BooleanSupplier> lightTasks;
-
-        final CompletableFuture<Void> onComplete = new CompletableFuture<>();
-
+        public final CompletableFuture<Void> onComplete = new CompletableFuture<>();
+        public boolean isTicketAdded;
         public final long chunkCoordinate;
+
         private final StarLightInterface lightEngine;
         private final LightQueue queue;
         private final PrioritisedExecutor.PrioritisedTask task;
+        private final Set<BlockPos> changedPositions = new HashSet<>();
+        private Boolean[] changedSectionSet;
+        private ShortOpenHashSet queuedEdgeChecksSky;
+        private ShortOpenHashSet queuedEdgeChecksBlock;
+        private List<BooleanSupplier> lightTasks;
 
         public ChunkTasks(final long chunkCoordinate, final StarLightInterface lightEngine, final LightQueue queue) {
             this(chunkCoordinate, lightEngine, queue, PrioritisedExecutor.Priority.NORMAL);

@@ -3,9 +3,9 @@ package ca.spottedleaf.starlight.common.light;
 import ca.spottedleaf.starlight.common.util.CoordinateUtils;
 import ca.spottedleaf.starlight.common.util.WorldUtil;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import it.unimi.dsi.fastutil.shorts.ShortCollection;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerChunkCache;
@@ -13,11 +13,13 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.*;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.DataLayer;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LightChunkGetter;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import org.goldenforge.GoldenForge;
-
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
@@ -183,7 +185,15 @@ public final class StarLightInterface {
         this.lightQueue = new io.papermc.paper.chunk.system.light.LightQueue(this); // Paper - replace light queue
     }
 
-    protected int getSkyLightValue(final BlockPos blockPos, final ChunkAccess chunk) {
+    public boolean hasSkyLight() {
+        return this.hasSkyLight;
+    }
+
+    public boolean hasBlockLight() {
+        return this.hasBlockLight;
+    }
+
+    public int getSkyLightValue(final BlockPos blockPos, final ChunkAccess chunk) {
         if (!this.hasSkyLight) {
             return 0;
         }
@@ -253,7 +263,7 @@ public final class StarLightInterface {
         return 15;
     }
 
-    protected int getBlockLightValue(final BlockPos blockPos, final ChunkAccess chunk) {
+    public int getBlockLightValue(final BlockPos blockPos, final ChunkAccess chunk) {
         if (!this.hasBlockLight) {
             return 0;
         }
@@ -372,7 +382,7 @@ public final class StarLightInterface {
         }
     }
 
-    public CompletableFuture<Void> blockChange(final BlockPos pos) {
+    public io.papermc.paper.chunk.system.light.LightQueue.ChunkTasks blockChange(final BlockPos pos) { // Paper - rewrite chunk system
         if (this.world == null || pos.getY() < WorldUtil.getMinBlockY(this.world) || pos.getY() > WorldUtil.getMaxBlockY(this.world)) { // empty world
             return null;
         }
@@ -380,7 +390,7 @@ public final class StarLightInterface {
         return this.lightQueue.queueBlockChange(pos);
     }
 
-    public CompletableFuture<Void> sectionChange(final SectionPos pos, final boolean newEmptyValue) {
+    public io.papermc.paper.chunk.system.light.LightQueue.ChunkTasks sectionChange(final SectionPos pos, final boolean newEmptyValue) { // Paper - rewrite chunk system
         if (this.world == null) { // empty world
             return null;
         }
@@ -510,7 +520,7 @@ public final class StarLightInterface {
     }
 
     public void scheduleChunkLight(final ChunkPos pos, final Runnable run) {
-        GoldenForge.LOGGER.error("scheduleChunkLight No longer implemented, use the new lightQueue field to queue tasks");
+        throw new UnsupportedOperationException("No longer implemented, use the new lightQueue field to queue tasks"); // Paper - replace light queue
     }
 
     public void removeChunkTasks(final ChunkPos pos) {
@@ -521,7 +531,7 @@ public final class StarLightInterface {
         throw new UnsupportedOperationException("No longer implemented, task draining is now performed by the light thread"); // Paper - replace light queue
     }
 
-    protected static final class LightQueue {
+    public static final class LightQueue {
 
         protected final Long2ObjectLinkedOpenHashMap<ChunkTasks> chunkTasks = new Long2ObjectLinkedOpenHashMap<>();
         protected final StarLightInterface manager;
@@ -534,13 +544,13 @@ public final class StarLightInterface {
             return this.chunkTasks.isEmpty();
         }
 
-        public synchronized CompletableFuture<Void> queueBlockChange(final BlockPos pos) {
+        public synchronized LightQueue.ChunkTasks queueBlockChange(final BlockPos pos) {
             final ChunkTasks tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), ChunkTasks::new);
             tasks.changedPositions.add(pos.immutable());
-            return tasks.onComplete;
+            return tasks;
         }
 
-        public synchronized CompletableFuture<Void> queueSectionChange(final SectionPos pos, final boolean newEmptyValue) {
+        public synchronized LightQueue.ChunkTasks queueSectionChange(final SectionPos pos, final boolean newEmptyValue) {
             final ChunkTasks tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), ChunkTasks::new);
 
             if (tasks.changedSectionSet == null) {
@@ -548,20 +558,20 @@ public final class StarLightInterface {
             }
             tasks.changedSectionSet[pos.getY() - this.manager.minSection] = Boolean.valueOf(newEmptyValue);
 
-            return tasks.onComplete;
+            return tasks;
         }
 
-        public synchronized CompletableFuture<Void> queueChunkLighting(final ChunkPos pos, final Runnable lightTask) {
+        public synchronized LightQueue.ChunkTasks queueChunkLighting(final ChunkPos pos, final Runnable lightTask) {
             final ChunkTasks tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), ChunkTasks::new);
             if (tasks.lightTasks == null) {
                 tasks.lightTasks = new ArrayList<>();
             }
             tasks.lightTasks.add(lightTask);
 
-            return tasks.onComplete;
+            return tasks;
         }
 
-        public synchronized CompletableFuture<Void> queueChunkSkylightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
+        public synchronized LightQueue.ChunkTasks queueChunkSkylightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
             final ChunkTasks tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), ChunkTasks::new);
 
             ShortOpenHashSet queuedEdges = tasks.queuedEdgeChecksSky;
@@ -570,10 +580,10 @@ public final class StarLightInterface {
             }
             queuedEdges.addAll(sections);
 
-            return tasks.onComplete;
+            return tasks;
         }
 
-        public synchronized CompletableFuture<Void> queueChunkBlocklightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
+        public synchronized LightQueue.ChunkTasks queueChunkBlocklightEdgeCheck(final SectionPos pos, final ShortCollection sections) {
             final ChunkTasks tasks = this.chunkTasks.computeIfAbsent(CoordinateUtils.getChunkKey(pos), ChunkTasks::new);
 
             ShortOpenHashSet queuedEdges = tasks.queuedEdgeChecksBlock;
@@ -582,7 +592,7 @@ public final class StarLightInterface {
             }
             queuedEdges.addAll(sections);
 
-            return tasks.onComplete;
+            return tasks;
         }
 
         public void removeChunk(final ChunkPos pos) {
@@ -602,7 +612,7 @@ public final class StarLightInterface {
             return this.chunkTasks.removeFirst();
         }
 
-        protected static final class ChunkTasks {
+        public static final class ChunkTasks {
 
             public final Set<BlockPos> changedPositions = new ObjectOpenHashSet<>();
             public Boolean[] changedSectionSet;
@@ -610,6 +620,7 @@ public final class StarLightInterface {
             public ShortOpenHashSet queuedEdgeChecksBlock;
             public List<Runnable> lightTasks;
 
+            public boolean isTicketAdded = false;
             public final CompletableFuture<Void> onComplete = new CompletableFuture<>();
 
             public final long chunkCoordinate;

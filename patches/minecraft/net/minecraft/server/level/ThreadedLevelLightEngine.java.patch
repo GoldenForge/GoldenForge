@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ThreadedLevelLightEngine.java
 +++ b/net/minecraft/server/level/ThreadedLevelLightEngine.java
-@@ -1,65 +_,213 @@
+@@ -1,65 +_,220 @@
  package net.minecraft.server.level;
  
 -import com.mojang.datafixers.util.Pair;
@@ -126,7 +126,8 @@
 +
 +   private final Long2IntOpenHashMap chunksBeingWorkedOn = new Long2IntOpenHashMap();
 +
-+   private void queueTaskForSection(final int chunkX, final int chunkY, final int chunkZ, final Supplier<CompletableFuture<Void>> runnable) {
++   private void queueTaskForSection(final int chunkX, final int chunkY, final int chunkZ,
++                                    final Supplier<io.papermc.paper.chunk.system.light.LightQueue.ChunkTasks> runnable) { // Paper - rewrite chunk system
 +      final ServerLevel world = (ServerLevel)this.theLightEngine.getWorld();
 +
 +      final ChunkAccess center = this.theLightEngine.getAnyChunkNow(chunkX, chunkZ);
@@ -153,12 +154,18 @@
 +
 +      final long key = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 +
-+      final CompletableFuture<Void> updateFuture = runnable.get();
++      final io.papermc.paper.chunk.system.light.LightQueue.ChunkTasks updateFuture = runnable.get(); // Paper - rewrite chunk system
 +
 +      if (updateFuture == null) {
 +         // not scheduled
 +         return;
 +      }
++
++      if (updateFuture.isTicketAdded) {
++         // ticket already added
++         return;
++      }
++      updateFuture.isTicketAdded = true;
 +
 +      final int references = this.chunksBeingWorkedOn.addTo(key, 1);
 +      if (references == 0) {
@@ -166,7 +173,7 @@
 +         world.m_7726_().m_8387_(ca.spottedleaf.starlight.common.light.StarLightInterface.CHUNK_WORK_TICKET, pos, 0, pos);
 +      }
 +
-+      updateFuture.thenAcceptAsync((final Void ignore) -> {
++      updateFuture.onComplete.thenAcceptAsync((final Void ignore) -> {
 +         final int newReferences = this.chunksBeingWorkedOn.get(key);
 +         if (newReferences == 1) {
 +            this.chunksBeingWorkedOn.remove(key);
