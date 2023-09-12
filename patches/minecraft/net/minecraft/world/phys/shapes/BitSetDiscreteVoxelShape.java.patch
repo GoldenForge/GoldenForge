@@ -1,0 +1,166 @@
+--- a/net/minecraft/world/phys/shapes/BitSetDiscreteVoxelShape.java
++++ b/net/minecraft/world/phys/shapes/BitSetDiscreteVoxelShape.java
+@@ -4,13 +_,13 @@
+ import net.minecraft.core.Direction;
+ 
+ public final class BitSetDiscreteVoxelShape extends DiscreteVoxelShape {
+-   private final BitSet f_82580_;
+-   private int f_82581_;
+-   private int f_82582_;
+-   private int f_82583_;
+-   private int f_82584_;
+-   private int f_82585_;
+-   private int f_82586_;
++   public final BitSet f_82580_; // Paper - optimise collisions - public
++   public int f_82581_; // Paper - optimise collisions - public
++   public int f_82582_; // Paper - optimise collisions - public
++   public int f_82583_; // Paper - optimise collisions - public
++   public int f_82584_; // Paper - optimise collisions - public
++   public int f_82585_; // Paper - optimise collisions - public
++   public int f_82586_; // Paper - optimise collisions - public
+ 
+    public BitSetDiscreteVoxelShape(int p_82588_, int p_82589_, int p_82590_) {
+       super(p_82588_, p_82589_, p_82590_);
+@@ -145,46 +_,106 @@
+    }
+ 
+    protected static void m_165963_(DiscreteVoxelShape p_165964_, DiscreteVoxelShape.IntLineConsumer p_165965_, boolean p_165966_) {
+-      BitSetDiscreteVoxelShape bitsetdiscretevoxelshape = new BitSetDiscreteVoxelShape(p_165964_);
+-
+-      for(int i = 0; i < bitsetdiscretevoxelshape.f_82782_; ++i) {
+-         for(int j = 0; j < bitsetdiscretevoxelshape.f_82781_; ++j) {
+-            int k = -1;
+-
+-            for(int l = 0; l <= bitsetdiscretevoxelshape.f_82783_; ++l) {
+-               if (bitsetdiscretevoxelshape.m_82846_(j, i, l)) {
+-                  if (p_165966_) {
+-                     if (k == -1) {
+-                        k = l;
+-                     }
+-                  } else {
+-                     p_165965_.m_82858_(j, i, l, j + 1, i + 1, l + 1);
+-                  }
+-               } else if (k != -1) {
+-                  int i1 = j;
+-                  int j1 = i;
+-                  bitsetdiscretevoxelshape.m_165981_(k, l, j, i);
+-
+-                  while(bitsetdiscretevoxelshape.m_82608_(k, l, i1 + 1, i)) {
+-                     bitsetdiscretevoxelshape.m_165981_(k, l, i1 + 1, i);
+-                     ++i1;
+-                  }
+-
+-                  while(bitsetdiscretevoxelshape.m_165926_(j, i1 + 1, k, l, j1 + 1)) {
+-                     for(int k1 = j; k1 <= i1; ++k1) {
+-                        bitsetdiscretevoxelshape.m_165981_(k, l, k1, j1 + 1);
+-                     }
+-
+-                     ++j1;
+-                  }
+-
+-                  p_165965_.m_82858_(j, i, k, i1 + 1, j1 + 1, l);
+-                  k = -1;
++      // Paper start - optimise collisions
++      // called with the shape of a VoxelShape, so we can expect the cache to exist
++      final io.papermc.paper.util.collisions.CachedShapeData cache = p_165964_.getOrCreateCachedShapeData();
++
++      final int sizeX = cache.sizeX();
++      final int sizeY = cache.sizeY();
++      final int sizeZ = cache.sizeZ();
++
++      int indexX;
++      int indexY = 0;
++      int indexZ;
++
++      int incY = sizeZ;
++      int incX = sizeZ*sizeY;
++
++      long[] bitset = cache.voxelSet();
++
++      // index = z + y*size_z + x*(size_z*size_y)
++
++      if (!p_165966_) {
++         // due to the odd selection of loop order (which does affect behavior, unfortunately) we can't simply
++         // increment an index in the Z loop, and have to perform this trash (keeping track of 3 counters) to avoid
++         // the multiplication
++         for (int y = 0; y < sizeY; ++y, indexY += incY) {
++            indexX = indexY;
++            for (int x = 0; x < sizeX; ++x, indexX += incX) {
++               indexZ = indexX;
++               for (int z = 0; z < sizeZ; ++z, ++indexZ) {
++                  if ((bitset[indexZ >>> 6] & (1L << indexZ)) != 0L) {
++                     p_165965_.m_82858_(x, y, z, x + 1, y + 1, z + 1);
++                  }
++               }
++            }
++         }
++      } else {
++         // same notes about loop order as the above
++         // this branch is actually important to optimise, as it affects uncached toAabbs() (which affects optimize())
++
++         // only clone when we may write to it
++         bitset = bitset.clone();
++
++         for (int y = 0; y < sizeY; ++y, indexY += incY) {
++            indexX = indexY;
++            for (int x = 0; x < sizeX; ++x, indexX += incX) {
++               for (int zIdx = indexX, endIndex = indexX + sizeZ; zIdx < endIndex;) {
++                  final int firstSetZ = io.papermc.paper.util.collisions.FlatBitsetUtil.firstSet(bitset, zIdx, endIndex);
++
++                  if (firstSetZ == -1) {
++                     break;
++                  }
++
++                  int lastSetZ = io.papermc.paper.util.collisions.FlatBitsetUtil.firstClear(bitset, firstSetZ, endIndex);
++                  if (lastSetZ == -1) {
++                     lastSetZ = endIndex;
++                  }
++
++                  io.papermc.paper.util.collisions.FlatBitsetUtil.clearRange(bitset, firstSetZ, lastSetZ);
++
++                  // try to merge neighbouring on the X axis
++                  int endX = x + 1; // exclusive
++                  for (int neighbourIdxStart = firstSetZ + incX, neighbourIdxEnd = lastSetZ + incX;
++                       endX < sizeX && io.papermc.paper.util.collisions.FlatBitsetUtil.isRangeSet(bitset, neighbourIdxStart, neighbourIdxEnd);
++                       neighbourIdxStart += incX, neighbourIdxEnd += incX) {
++
++                     ++endX;
++                     io.papermc.paper.util.collisions.FlatBitsetUtil.clearRange(bitset, neighbourIdxStart, neighbourIdxEnd);
++                  }
++
++                  // try to merge neighbouring on the Y axis
++
++                  int endY; // exclusive
++                  int firstSetZY, lastSetZY;
++                  y_merge:
++                  for (endY = y + 1, firstSetZY = firstSetZ + incY, lastSetZY = lastSetZ + incY; endY < sizeY;
++                       firstSetZY += incY, lastSetZY += incY) {
++
++                     // test the whole XZ range
++                     for (int testX = x, start = firstSetZY, end = lastSetZY; testX < endX;
++                          ++testX, start += incX, end += incX) {
++                        if (!io.papermc.paper.util.collisions.FlatBitsetUtil.isRangeSet(bitset, start, end)) {
++                           break y_merge;
++                        }
++                     }
++
++                     ++endY;
++
++                     // passed, so we can clear it
++                     for (int testX = x, start = firstSetZY, end = lastSetZY; testX < endX;
++                          ++testX, start += incX, end += incX) {
++                        io.papermc.paper.util.collisions.FlatBitsetUtil.clearRange(bitset, start, end);
++                     }
++                  }
++
++                  p_165965_.m_82858_(x, y, firstSetZ - indexX, endX, endY, lastSetZ - indexX);
++                  zIdx = lastSetZ;
+                }
+             }
+          }
+       }
+-
++      // Paper end - optimise collisions
+    }
+ 
+    private boolean m_82608_(int p_82609_, int p_82610_, int p_82611_, int p_82612_) {

@@ -1,26 +1,59 @@
 --- a/net/minecraft/world/phys/shapes/Shapes.java
 +++ b/net/minecraft/world/phys/shapes/Shapes.java
-@@ -19,16 +_,16 @@
-       DiscreteVoxelShape discretevoxelshape = new BitSetDiscreteVoxelShape(1, 1, 1);
-       discretevoxelshape.m_142703_(0, 0, 0);
-       return new CubeVoxelShape(discretevoxelshape);
--   });
-+   }); public static VoxelShape getFullUnoptimisedCube() { return f_83037_; } // Paper - OBFHELPER
+@@ -16,19 +_,47 @@
+    public static final double f_166025_ = 1.0E-7D;
+    public static final double f_166026_ = 1.0E-6D;
+    private static final VoxelShape f_83037_ = Util.m_137537_(() -> {
+-      DiscreteVoxelShape discretevoxelshape = new BitSetDiscreteVoxelShape(1, 1, 1);
+-      discretevoxelshape.m_142703_(0, 0, 0);
+-      return new CubeVoxelShape(discretevoxelshape);
++      // Paper start - optimise collisions - force arrayvoxelshape
++      final DiscreteVoxelShape shape = new BitSetDiscreteVoxelShape(1, 1, 1);
++      shape.m_142703_(0, 0, 0);
++
++      return new ArrayVoxelShape(
++              shape,
++              io.papermc.paper.util.CollisionUtil.ZERO_ONE, io.papermc.paper.util.CollisionUtil.ZERO_ONE, io.papermc.paper.util.CollisionUtil.ZERO_ONE
++      );
++      // Paper end - optimise collisions - force arrayvoxelshape
+    });
     public static final VoxelShape f_83036_ = m_83048_(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
     private static final VoxelShape f_83038_ = new ArrayVoxelShape(new BitSetDiscreteVoxelShape(0, 0, 0), (DoubleList)(new DoubleArrayList(new double[]{0.0D})), (DoubleList)(new DoubleArrayList(new double[]{0.0D})), (DoubleList)(new DoubleArrayList(new double[]{0.0D})));
 -
-+   public static final io.papermc.paper.voxel.AABBVoxelShape BLOCK_OPTIMISED = new io.papermc.paper.voxel.AABBVoxelShape(new AABB(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)); // Paper
++   // Paper start - optimise collisions - force arrayvoxelshape
++   private static final DoubleArrayList[] PARTS_BY_BITS = new DoubleArrayList[] {
++           DoubleArrayList.wrap(generateCubeParts(1 << 0)),
++           DoubleArrayList.wrap(generateCubeParts(1 << 1)),
++           DoubleArrayList.wrap(generateCubeParts(1 << 2)),
++           DoubleArrayList.wrap(generateCubeParts(1 << 3))
++   };
++
++   private static double[] generateCubeParts(final int parts) {
++      // note: parts is a power of two, so we do not need to worry about loss of precision here
++      // note: parts is from [2^0, 2^3]
++      final double inc = 1.0 / (double)parts;
++
++      final double[] ret = new double[parts + 1];
++      double val = 0.0;
++      for (int i = 0; i <= parts; ++i) {
++         ret[i] = val;
++         val += inc;
++      }
++
++      return ret;
++   }
++   // Paper end - optimise collisions - force arrayvoxelshape
     public static VoxelShape m_83040_() {
        return f_83038_;
     }
  
     public static VoxelShape m_83144_() {
 -      return f_83037_;
-+      return BLOCK_OPTIMISED; // Paper
++      return f_83037_; // Paper
     }
  
     public static VoxelShape m_83048_(double p_83049_, double p_83050_, double p_83051_, double p_83052_, double p_83053_, double p_83054_) {
-@@ -41,29 +_,14 @@
+@@ -41,22 +_,39 @@
  
     public static VoxelShape m_166049_(double p_166050_, double p_166051_, double p_166052_, double p_166053_, double p_166054_, double p_166055_) {
        if (!(p_166053_ - p_166050_ < 1.0E-7D) && !(p_166054_ - p_166051_ < 1.0E-7D) && !(p_166055_ - p_166052_ < 1.0E-7D)) {
@@ -30,153 +63,375 @@
 -         if (i >= 0 && j >= 0 && k >= 0) {
 -            if (i == 0 && j == 0 && k == 0) {
 -               return m_83144_();
--            } else {
++         // Paper start - optimise collisions
++         // force ArrayVoxelShape in every case
++         final int bitsX = m_83041_(p_166050_, p_166053_);
++         final int bitsY = m_83041_(p_166051_, p_166054_);
++         final int bitsZ = m_83041_(p_166052_, p_166055_);
++         if (bitsX >= 0 && bitsY >= 0 && bitsZ >= 0) {
++            if (bitsX == 0 && bitsY == 0 && bitsZ == 0) {
++               return f_83037_;
+             } else {
 -               int l = 1 << i;
 -               int i1 = 1 << j;
 -               int j1 = 1 << k;
 -               BitSetDiscreteVoxelShape bitsetdiscretevoxelshape = BitSetDiscreteVoxelShape.m_165932_(l, i1, j1, (int)Math.round(p_166050_ * (double)l), (int)Math.round(p_166051_ * (double)i1), (int)Math.round(p_166052_ * (double)j1), (int)Math.round(p_166053_ * (double)l), (int)Math.round(p_166054_ * (double)i1), (int)Math.round(p_166055_ * (double)j1));
 -               return new CubeVoxelShape(bitsetdiscretevoxelshape);
--            }
--         } else {
++               final int sizeX = 1 << bitsX;
++               final int sizeY = 1 << bitsY;
++               final int sizeZ = 1 << bitsZ;
++               final BitSetDiscreteVoxelShape shape = BitSetDiscreteVoxelShape.m_165932_(
++                       sizeX, sizeY, sizeZ,
++                       (int)Math.round(p_166050_ * (double)sizeX), (int)Math.round(p_166051_ * (double)sizeY), (int)Math.round(p_166052_ * (double)sizeZ),
++                       (int)Math.round(p_166053_ * (double)sizeX), (int)Math.round(p_166054_ * (double)sizeY), (int)Math.round(p_166055_ * (double)sizeZ)
++               );
++               return new ArrayVoxelShape(
++                       shape,
++                       PARTS_BY_BITS[bitsX],
++                       PARTS_BY_BITS[bitsY],
++                       PARTS_BY_BITS[bitsZ]
++               );
+             }
+          } else {
 -            return new ArrayVoxelShape(f_83037_.f_83211_, (DoubleList)DoubleArrayList.wrap(new double[]{p_166050_, p_166053_}), (DoubleList)DoubleArrayList.wrap(new double[]{p_166051_, p_166054_}), (DoubleList)DoubleArrayList.wrap(new double[]{p_166052_, p_166055_}));
--         }
-+         return new io.papermc.paper.voxel.AABBVoxelShape(new AABB(p_166050_, p_166051_, p_166052_, p_166053_, p_166054_, p_166055_)); // Paper
++            return new ArrayVoxelShape(
++                    f_83037_.f_83211_,
++                    p_166050_ == 0.0 && p_166053_ == 1.0 ? io.papermc.paper.util.CollisionUtil.ZERO_ONE : DoubleArrayList.wrap(new double[] { p_166050_, p_166053_ }),
++                    p_166051_ == 0.0 && p_166054_ == 1.0 ? io.papermc.paper.util.CollisionUtil.ZERO_ONE : DoubleArrayList.wrap(new double[] { p_166051_, p_166054_ }),
++                    p_166052_ == 0.0 && p_166055_ == 1.0 ? io.papermc.paper.util.CollisionUtil.ZERO_ONE : DoubleArrayList.wrap(new double[] { p_166052_, p_166055_ })
++            );
+          }
++         // Paper end - optimise collisions
        } else {
           return m_83040_();
        }
+@@ -95,67 +_,53 @@
     }
  
-    public static VoxelShape m_83064_(AABB p_83065_) {
--      return m_166049_(p_83065_.f_82288_, p_83065_.f_82289_, p_83065_.f_82290_, p_83065_.f_82291_, p_83065_.f_82292_, p_83065_.f_82293_);
-+      return new io.papermc.paper.voxel.AABBVoxelShape(p_83065_); // Paper
+    public static VoxelShape m_83124_(VoxelShape p_83125_, VoxelShape... p_83126_) {
+-      return Arrays.stream(p_83126_).reduce(p_83125_, Shapes::m_83110_);
++      // Paper start - optimise collisions
++      int size = p_83126_.length;
++      if (size == 0) {
++         return p_83125_;
++      }
++
++      // reduce complexity of joins by splitting the merges
++
++      // add extra slot for first shape
++      ++size;
++      final VoxelShape[] tmp = Arrays.copyOf(p_83126_, size);
++      // insert first shape
++      tmp[size - 1] = p_83125_;
++
++      while (size > 1) {
++         int newSize = 0;
++         for (int i = 0; i < size; i += 2) {
++            final int next = i + 1;
++            if (next >= size) {
++               // nothing to merge with, so leave it for next iteration
++               tmp[newSize++] = tmp[i];
++               break;
++            } else {
++               // merge with adjacent
++               final VoxelShape one = tmp[i];
++               final VoxelShape second = tmp[next];
++
++               tmp[newSize++] = Shapes.m_83110_(one, second);
++            }
++         }
++         size = newSize;
++      }
++
++      return tmp[0];
++      // Paper end - optimise collisions
     }
  
-    @VisibleForTesting
-@@ -125,6 +_,20 @@
+    public static VoxelShape m_83113_(VoxelShape p_83114_, VoxelShape p_83115_, BooleanOp p_83116_) {
+-      return m_83148_(p_83114_, p_83115_, p_83116_).m_83296_();
++      return io.papermc.paper.util.CollisionUtil.joinOptimized(p_83114_, p_83115_, p_83116_); // Paper - optimise collisions
+    }
+ 
+    public static VoxelShape m_83148_(VoxelShape p_83149_, VoxelShape p_83150_, BooleanOp p_83151_) {
+-      if (p_83151_.m_82701_(false, false)) {
+-         throw (IllegalArgumentException)Util.m_137570_(new IllegalArgumentException());
+-      } else if (p_83149_ == p_83150_) {
+-         return p_83151_.m_82701_(true, true) ? p_83149_ : m_83040_();
+-      } else {
+-         boolean flag = p_83151_.m_82701_(true, false);
+-         boolean flag1 = p_83151_.m_82701_(false, true);
+-         if (p_83149_.m_83281_()) {
+-            return flag1 ? p_83150_ : m_83040_();
+-         } else if (p_83150_.m_83281_()) {
+-            return flag ? p_83149_ : m_83040_();
+-         } else {
+-            IndexMerger indexmerger = m_83058_(1, p_83149_.m_7700_(Direction.Axis.X), p_83150_.m_7700_(Direction.Axis.X), flag, flag1);
+-            IndexMerger indexmerger1 = m_83058_(indexmerger.size() - 1, p_83149_.m_7700_(Direction.Axis.Y), p_83150_.m_7700_(Direction.Axis.Y), flag, flag1);
+-            IndexMerger indexmerger2 = m_83058_((indexmerger.size() - 1) * (indexmerger1.size() - 1), p_83149_.m_7700_(Direction.Axis.Z), p_83150_.m_7700_(Direction.Axis.Z), flag, flag1);
+-            BitSetDiscreteVoxelShape bitsetdiscretevoxelshape = BitSetDiscreteVoxelShape.m_82641_(p_83149_.f_83211_, p_83150_.f_83211_, indexmerger, indexmerger1, indexmerger2, p_83151_);
+-            return (VoxelShape)(indexmerger instanceof DiscreteCubeMerger && indexmerger1 instanceof DiscreteCubeMerger && indexmerger2 instanceof DiscreteCubeMerger ? new CubeVoxelShape(bitsetdiscretevoxelshape) : new ArrayVoxelShape(bitsetdiscretevoxelshape, indexmerger.m_6241_(), indexmerger1.m_6241_(), indexmerger2.m_6241_()));
+-         }
+-      }
++      return io.papermc.paper.util.CollisionUtil.joinUnoptimized(p_83149_, p_83150_, p_83151_); // Paper - optimise collisions
     }
  
     public static boolean m_83157_(VoxelShape p_83158_, VoxelShape p_83159_, BooleanOp p_83160_) {
-+      // Paper start - optimise voxelshape
-+      if (p_83160_ == BooleanOp.f_82689_) {
-+         if (p_83158_ instanceof io.papermc.paper.voxel.AABBVoxelShape && p_83159_ instanceof io.papermc.paper.voxel.AABBVoxelShape) {
-+            return io.papermc.paper.util.CollisionUtil.voxelShapeIntersect(((io.papermc.paper.voxel.AABBVoxelShape)p_83158_).aabb, ((io.papermc.paper.voxel.AABBVoxelShape)p_83159_).aabb);
-+         } else if (p_83158_ instanceof io.papermc.paper.voxel.AABBVoxelShape && p_83159_ instanceof ArrayVoxelShape) {
-+            return ((ArrayVoxelShape)p_83159_).intersects(((io.papermc.paper.voxel.AABBVoxelShape)p_83158_).aabb);
-+         } else if (p_83159_ instanceof io.papermc.paper.voxel.AABBVoxelShape && p_83158_ instanceof ArrayVoxelShape) {
-+            return ((ArrayVoxelShape)p_83158_).intersects(((io.papermc.paper.voxel.AABBVoxelShape)p_83159_).aabb);
-+         }
+-      if (p_83160_.m_82701_(false, false)) {
+-         throw (IllegalArgumentException)Util.m_137570_(new IllegalArgumentException());
+-      } else {
+-         boolean flag = p_83158_.m_83281_();
+-         boolean flag1 = p_83159_.m_83281_();
+-         if (!flag && !flag1) {
+-            if (p_83158_ == p_83159_) {
+-               return p_83160_.m_82701_(true, true);
+-            } else {
+-               boolean flag2 = p_83160_.m_82701_(true, false);
+-               boolean flag3 = p_83160_.m_82701_(false, true);
+-
+-               for(Direction.Axis direction$axis : AxisCycle.f_121783_) {
+-                  if (p_83158_.m_83297_(direction$axis) < p_83159_.m_83288_(direction$axis) - 1.0E-7D) {
+-                     return flag2 || flag3;
+-                  }
+-
+-                  if (p_83159_.m_83297_(direction$axis) < p_83158_.m_83288_(direction$axis) - 1.0E-7D) {
+-                     return flag2 || flag3;
+-                  }
+-               }
+-
+-               IndexMerger indexmerger = m_83058_(1, p_83158_.m_7700_(Direction.Axis.X), p_83159_.m_7700_(Direction.Axis.X), flag2, flag3);
+-               IndexMerger indexmerger1 = m_83058_(indexmerger.size() - 1, p_83158_.m_7700_(Direction.Axis.Y), p_83159_.m_7700_(Direction.Axis.Y), flag2, flag3);
+-               IndexMerger indexmerger2 = m_83058_((indexmerger.size() - 1) * (indexmerger1.size() - 1), p_83158_.m_7700_(Direction.Axis.Z), p_83159_.m_7700_(Direction.Axis.Z), flag2, flag3);
+-               return m_83103_(indexmerger, indexmerger1, indexmerger2, p_83158_.f_83211_, p_83159_.f_83211_, p_83160_);
+-            }
+-         } else {
+-            return p_83160_.m_82701_(!flag, !flag1);
+-         }
+-      }
++      return io.papermc.paper.util.CollisionUtil.isJoinNonEmpty(p_83158_, p_83159_, p_83160_); // Paper - optimise collisions
+    }
+ 
+    private static boolean m_83103_(IndexMerger p_83104_, IndexMerger p_83105_, IndexMerger p_83106_, DiscreteVoxelShape p_83107_, DiscreteVoxelShape p_83108_, BooleanOp p_83109_) {
+@@ -181,89 +_,160 @@
+    }
+ 
+    public static boolean m_83117_(VoxelShape p_83118_, VoxelShape p_83119_, Direction p_83120_) {
+-      if (p_83118_ == m_83144_() && p_83119_ == m_83144_()) {
++      // Paper start - optimise collisions
++      final boolean firstBlock = p_83118_ == f_83037_;
++      final boolean secondBlock = p_83119_ == f_83037_;
++
++      if (firstBlock & secondBlock) {
+          return true;
+-      } else if (p_83119_.m_83281_()) {
+-         return false;
+-      } else {
+-         Direction.Axis direction$axis = p_83120_.m_122434_();
+-         Direction.AxisDirection direction$axisdirection = p_83120_.m_122421_();
+-         VoxelShape voxelshape = direction$axisdirection == Direction.AxisDirection.POSITIVE ? p_83118_ : p_83119_;
+-         VoxelShape voxelshape1 = direction$axisdirection == Direction.AxisDirection.POSITIVE ? p_83119_ : p_83118_;
+-         BooleanOp booleanop = direction$axisdirection == Direction.AxisDirection.POSITIVE ? BooleanOp.f_82685_ : BooleanOp.f_82683_;
+-         return DoubleMath.fuzzyEquals(voxelshape.m_83297_(direction$axis), 1.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(voxelshape1.m_83288_(direction$axis), 0.0D, 1.0E-7D) && !m_83157_(new SliceShape(voxelshape, direction$axis, voxelshape.f_83211_.m_82850_(direction$axis) - 1), new SliceShape(voxelshape1, direction$axis, 0), booleanop);
+-      }
 +      }
-+      return joinIsNotEmptyVanilla(p_83158_, p_83159_, p_83160_);
-+   }
-+   public static boolean joinIsNotEmptyVanilla(VoxelShape p_83158_, VoxelShape p_83159_, BooleanOp p_83160_) {
-+      // Paper end - optimise voxelshape
-       if (p_83160_.m_82701_(false, false)) {
-          throw (IllegalArgumentException)Util.m_137570_(new IllegalArgumentException());
-       } else {
-@@ -196,6 +_,43 @@
++
++      if (p_83118_.m_83281_() | p_83119_.m_83281_()) {
++         return false;
++      }
++
++      // we optimise getOpposite, so we can use it
++      // secondly, use our cache to retrieve sliced shape
++      final VoxelShape newFirst = p_83118_.getFaceShapeClamped(p_83120_);
++      if (newFirst.m_83281_()) {
++         return false;
++      }
++      final VoxelShape newSecond = p_83119_.getFaceShapeClamped(p_83120_.m_122424_());
++      if (newSecond.m_83281_()) {
++         return false;
++      }
++
++      return !m_83157_(newFirst, newSecond, BooleanOp.f_82685_);
++      // Paper end - optimise collisions
     }
  
     public static VoxelShape m_83121_(VoxelShape p_83122_, Direction p_83123_) {
-+      // Paper start - optimise shape creation here for lighting, as this shape is going to be used
-+      // for transparency checks
-+      if (p_83122_ == f_83037_ || p_83122_ == BLOCK_OPTIMISED) {
-+         return BLOCK_OPTIMISED;
-+      } else if (p_83122_ == m_83040_()) {
-+         return m_83040_();
-+      }
-+
-+      if (p_83122_ instanceof io.papermc.paper.voxel.AABBVoxelShape) {
-+         final AABB box = ((io.papermc.paper.voxel.AABBVoxelShape)p_83122_).aabb;
-+         switch (p_83123_) {
-+            case WEST: // -X
-+            case EAST: { // +X
-+               final boolean useEmpty = p_83123_ == Direction.EAST ? !DoubleMath.fuzzyEquals(box.f_82291_, 1.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON) :
-+                       !DoubleMath.fuzzyEquals(box.f_82288_, 0.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON);
-+               return useEmpty ? m_83040_() : new io.papermc.paper.voxel.AABBVoxelShape(new AABB(0.0, box.f_82289_, box.f_82290_, 1.0, box.f_82292_, box.f_82293_)).m_83296_();
-+            }
-+            case DOWN: // -Y
-+            case UP: { // +Y
-+               final boolean useEmpty = p_83123_ == Direction.UP ? !DoubleMath.fuzzyEquals(box.f_82292_, 1.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON) :
-+                       !DoubleMath.fuzzyEquals(box.f_82289_, 0.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON);
-+               return useEmpty ? m_83040_() : new io.papermc.paper.voxel.AABBVoxelShape(new AABB(box.f_82288_, 0.0, box.f_82290_, box.f_82291_, 1.0, box.f_82293_)).m_83296_();
-+            }
-+            case NORTH: // -Z
-+            case SOUTH: { // +Z
-+               final boolean useEmpty = p_83123_ == Direction.SOUTH ? !DoubleMath.fuzzyEquals(box.f_82293_, 1.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON) :
-+                       !DoubleMath.fuzzyEquals(box.f_82290_,0.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON);
-+               return useEmpty ? m_83040_() : new io.papermc.paper.voxel.AABBVoxelShape(new AABB(box.f_82288_, box.f_82289_, 0.0, box.f_82291_, box.f_82292_, 1.0)).m_83296_();
-+            }
-+         }
-+      }
-+
-+      // fall back to vanilla
-+      return getFaceShapeVanilla(p_83122_, p_83123_);
-+   }
-+   public static VoxelShape getFaceShapeVanilla(VoxelShape p_83122_, Direction p_83123_) {
-+      // Paper end
-       if (p_83122_ == m_83144_()) {
-          return m_83144_();
-       } else {
-@@ -210,7 +_,7 @@
-             i = 0;
-          }
- 
+-      if (p_83122_ == m_83144_()) {
+-         return m_83144_();
+-      } else {
+-         Direction.Axis direction$axis = p_83123_.m_122434_();
+-         boolean flag;
+-         int i;
+-         if (p_83123_.m_122421_() == Direction.AxisDirection.POSITIVE) {
+-            flag = DoubleMath.fuzzyEquals(p_83122_.m_83297_(direction$axis), 1.0D, 1.0E-7D);
+-            i = p_83122_.f_83211_.m_82850_(direction$axis) - 1;
+-         } else {
+-            flag = DoubleMath.fuzzyEquals(p_83122_.m_83288_(direction$axis), 0.0D, 1.0E-7D);
+-            i = 0;
+-         }
+-
 -         return (VoxelShape)(!flag ? m_83040_() : new SliceShape(p_83122_, direction$axis, i));
-+         return (VoxelShape)(!flag ? m_83040_() : new SliceShape(p_83122_, direction$axis, i).m_83296_().m_83296_()); // Paper - first optimize converts to ArrayVoxelShape, second optimize could convert to AABBVoxelShape
-       }
-    }
+-      }
+-   }
++      return p_83122_.getFaceShapeClamped(p_83123_); // Paper - optimise collisions
++   }
++
++   // Paper start - optimise collisions
++   private static boolean mergedMayOccludeBlock(final VoxelShape shape1, final VoxelShape shape2) {
++      // if the combined bounds of the two shapes cannot occlude, then neither can the merged
++      final AABB bounds1 = shape1.m_83215_();
++      final AABB bounds2 = shape2.m_83215_();
++
++      final double minX = Math.min(bounds1.f_82288_, bounds2.f_82288_);
++      final double minY = Math.min(bounds1.f_82289_, bounds2.f_82289_);
++      final double minZ = Math.min(bounds1.f_82290_, bounds2.f_82290_);
++
++      final double maxX = Math.max(bounds1.f_82291_, bounds2.f_82291_);
++      final double maxY = Math.max(bounds1.f_82292_, bounds2.f_82292_);
++      final double maxZ = Math.max(bounds1.f_82293_, bounds2.f_82293_);
++
++      return (minX <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && maxX >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) &&
++              (minY <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && maxY >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) &&
++              (minZ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && maxZ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON));
++   }
++   // Paper end - optimise collisions
  
-@@ -235,6 +_,53 @@
+    public static boolean m_83152_(VoxelShape p_83153_, VoxelShape p_83154_, Direction p_83155_) {
+-      if (p_83153_ != m_83144_() && p_83154_ != m_83144_()) {
+-         Direction.Axis direction$axis = p_83155_.m_122434_();
+-         Direction.AxisDirection direction$axisdirection = p_83155_.m_122421_();
+-         VoxelShape voxelshape = direction$axisdirection == Direction.AxisDirection.POSITIVE ? p_83153_ : p_83154_;
+-         VoxelShape voxelshape1 = direction$axisdirection == Direction.AxisDirection.POSITIVE ? p_83154_ : p_83153_;
+-         if (!DoubleMath.fuzzyEquals(voxelshape.m_83297_(direction$axis), 1.0D, 1.0E-7D)) {
+-            voxelshape = m_83040_();
+-         }
+-
+-         if (!DoubleMath.fuzzyEquals(voxelshape1.m_83288_(direction$axis), 0.0D, 1.0E-7D)) {
+-            voxelshape1 = m_83040_();
+-         }
+-
+-         return !m_83157_(m_83144_(), m_83148_(new SliceShape(voxelshape, direction$axis, voxelshape.f_83211_.m_82850_(direction$axis) - 1), new SliceShape(voxelshape1, direction$axis, 0), BooleanOp.f_82695_), BooleanOp.f_82685_);
+-      } else {
+-         return true;
+-      }
++      // Paper start - optimise collisions
++      // see if any of the shapes on their own occludes, only if cached
++      if (p_83153_.occludesFullBlockIfCached() || p_83154_.occludesFullBlockIfCached()) {
++         return true;
++      }
++
++      if (p_83153_.m_83281_() & p_83154_.m_83281_()) {
++         return false;
++      }
++
++      // we optimise getOpposite, so we can use it
++      // secondly, use our cache to retrieve sliced shape
++      final VoxelShape newFirst = p_83153_.getFaceShapeClamped(p_83155_);
++      final VoxelShape newSecond = p_83154_.getFaceShapeClamped(p_83155_.m_122424_());
++
++      // see if any of the shapes on their own occludes, only if cached
++      if (newFirst.occludesFullBlockIfCached() || newSecond.occludesFullBlockIfCached()) {
++         return true;
++      }
++
++      final boolean firstEmpty = newFirst.m_83281_();
++      final boolean secondEmpty = newSecond.m_83281_();
++
++      if (firstEmpty & secondEmpty) {
++         return false;
++      }
++
++      if (firstEmpty | secondEmpty) {
++         return secondEmpty ? newFirst.occludesFullBlock() : newSecond.occludesFullBlock();
++      }
++
++      if (newFirst == newSecond) {
++         return newFirst.occludesFullBlock();
++      }
++
++      return mergedMayOccludeBlock(newFirst, newSecond) && newFirst.orUnoptimized(newSecond).occludesFullBlock();
++      // Paper end - optimise collisions
     }
  
     public static boolean m_83145_(VoxelShape p_83146_, VoxelShape p_83147_) {
-+      // Paper start - try to optimise for the case where the shapes do _not_ occlude
-+      // which is _most_ of the time in lighting
-+      if (p_83146_ == getFullUnoptimisedCube() || p_83146_ == BLOCK_OPTIMISED
-+              || p_83147_ == getFullUnoptimisedCube() || p_83147_ == BLOCK_OPTIMISED) {
-+         return true;
-+      }
-+      boolean v1Empty = p_83146_ == m_83040_();
-+      boolean v2Empty = p_83147_ == m_83040_();
-+      if (v1Empty && v2Empty) {
+-      if (p_83146_ != m_83144_() && p_83147_ != m_83144_()) {
+-         if (p_83146_.m_83281_() && p_83147_.m_83281_()) {
+-            return false;
+-         } else {
+-            return !m_83157_(m_83144_(), m_83148_(p_83146_, p_83147_, BooleanOp.f_82695_), BooleanOp.f_82685_);
+-         }
+-      } else {
++      // Paper start - optimise collisions
++      if (p_83146_.occludesFullBlockIfCached() || p_83147_.occludesFullBlockIfCached()) {
+          return true;
+       }
++
++      final boolean s1Empty = p_83146_.m_83281_();
++      final boolean s2Empty = p_83147_.m_83281_();
++      if (s1Empty & s2Empty) {
 +         return false;
 +      }
-+      if ((p_83146_ instanceof io.papermc.paper.voxel.AABBVoxelShape || v1Empty)
-+              && (p_83147_ instanceof io.papermc.paper.voxel.AABBVoxelShape || v2Empty)) {
-+         if (!v1Empty && !v2Empty && (p_83146_ != p_83147_)) {
-+            AABB boundingBox1 = ((io.papermc.paper.voxel.AABBVoxelShape)p_83146_).aabb;
-+            AABB boundingBox2 = ((io.papermc.paper.voxel.AABBVoxelShape)p_83147_).aabb;
-+            // can call it here in some cases
 +
-+            // check overall bounding box
-+            double minY = Math.min(boundingBox1.f_82289_, boundingBox2.f_82289_);
-+            double maxY = Math.max(boundingBox1.f_82292_, boundingBox2.f_82292_);
-+            if (minY > io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON || maxY < (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) {
-+               return false;
-+            }
-+            double minX = Math.min(boundingBox1.f_82288_, boundingBox2.f_82288_);
-+            double maxX = Math.max(boundingBox1.f_82291_, boundingBox2.f_82291_);
-+            if (minX > io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON || maxX < (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) {
-+               return false;
-+            }
-+            double minZ = Math.min(boundingBox1.f_82290_, boundingBox2.f_82290_);
-+            double maxZ = Math.max(boundingBox1.f_82293_, boundingBox2.f_82293_);
-+            if (minZ > io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON || maxZ < (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) {
-+               return false;
-+            }
-+            // fall through to full merge check
-+         } else {
-+            AABB boundingBox = v1Empty ? ((io.papermc.paper.voxel.AABBVoxelShape)p_83147_).aabb : ((io.papermc.paper.voxel.AABBVoxelShape)p_83146_).aabb;
-+            // check if the bounding box encloses the full cube
-+            return (boundingBox.f_82289_ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && boundingBox.f_82292_ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) &&
-+                    (boundingBox.f_82288_ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && boundingBox.f_82291_ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) &&
-+                    (boundingBox.f_82290_ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && boundingBox.f_82293_ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON));
-+         }
++      if (s1Empty | s2Empty) {
++         return s2Empty ? p_83146_.occludesFullBlock() : p_83147_.occludesFullBlock();
 +      }
-+      return faceShapeOccludesVanilla(p_83146_, p_83147_);
++
++      if (p_83146_ == p_83147_) {
++         return p_83146_.occludesFullBlock();
++      }
++
++      return mergedMayOccludeBlock(p_83146_, p_83147_) && (p_83146_.orUnoptimized(p_83147_)).occludesFullBlock();
++      // Paper end - optimise collisions
+    }
+ 
+    @VisibleForTesting
+-   protected static IndexMerger m_83058_(int p_83059_, DoubleList p_83060_, DoubleList p_83061_, boolean p_83062_, boolean p_83063_) {
+-      int i = p_83060_.size() - 1;
+-      int j = p_83061_.size() - 1;
+-      if (p_83060_ instanceof CubePointRange && p_83061_ instanceof CubePointRange) {
+-         long k = m_83055_(i, j);
+-         if ((long)p_83059_ * k <= 256L) {
++   private static IndexMerger m_83058_(int p_83059_, DoubleList p_83060_, DoubleList p_83061_, boolean p_83062_, boolean p_83063_) { // Paper - private
++      // Paper start - fast track the most common scenario
++      // doublelist is usually a DoubleArrayList with Infinite head/tails that falls to the final else clause
++      // This is actually the most common path, so jump to it straight away
++      if (p_83060_.getDouble(0) == Double.NEGATIVE_INFINITY && p_83060_.getDouble(p_83060_.size() - 1) == Double.POSITIVE_INFINITY) {
++         return new IndirectMerger(p_83060_, p_83061_, p_83062_, p_83063_);
++      }
++      // Split out rest to hopefully inline the above
++      return lessCommonMerge(p_83059_, p_83060_, p_83061_, p_83062_, p_83063_);
 +   }
-+   public static boolean faceShapeOccludesVanilla(VoxelShape p_83146_, VoxelShape p_83147_) {
++
++   private static IndexMerger lessCommonMerge(int size, DoubleList first, DoubleList second, boolean includeFirst, boolean includeSecond) {
++      int i = first.size() - 1;
++      int j = second.size() - 1;
++      // Paper note - Rewrite below as optimized order if instead of nasty ternary
++      if (first instanceof CubePointRange && second instanceof CubePointRange) {
++         long l = m_83055_(i, j);
++         if ((long)size * l <= 256L) {
+             return new DiscreteCubeMerger(i, j);
+          }
+       }
+ 
+-      if (p_83060_.getDouble(i) < p_83061_.getDouble(0) - 1.0E-7D) {
+-         return new NonOverlappingMerger(p_83060_, p_83061_, false);
+-      } else if (p_83061_.getDouble(j) < p_83060_.getDouble(0) - 1.0E-7D) {
+-         return new NonOverlappingMerger(p_83061_, p_83060_, true);
++      // Paper start - Identical happens more often than Disjoint
++      if (i == j && Objects.equals(first, second)) {
++         if (first instanceof IdenticalMerger) {
++            return (IndexMerger) first;
++         } else if (second instanceof IdenticalMerger) {
++            return (IndexMerger) second;
++         }
++         return new IdenticalMerger(first);
++      } else if (first.getDouble(i) < second.getDouble(0) - 1.0E-7D) {
++         return new NonOverlappingMerger(first, second, false);
++      } else if (second.getDouble(j) < first.getDouble(0) - 1.0E-7D) {
++         return new NonOverlappingMerger(second, first, true);
+       } else {
+-         return (IndexMerger)(i == j && Objects.equals(p_83060_, p_83061_) ? new IdenticalMerger(p_83060_) : new IndirectMerger(p_83060_, p_83061_, p_83062_, p_83063_));
++         return new IndirectMerger(first, second, includeFirst, includeSecond);
+       }
 +      // Paper end
-       if (p_83146_ != m_83144_() && p_83147_ != m_83144_()) {
-          if (p_83146_.m_83281_() && p_83147_.m_83281_()) {
-             return false;
+    }
+ 
+    public interface DoubleLineConsumer {

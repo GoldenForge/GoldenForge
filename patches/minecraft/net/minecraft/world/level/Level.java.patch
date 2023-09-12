@@ -37,9 +37,11 @@
  import net.minecraft.world.entity.player.Player;
  import net.minecraft.world.item.ItemStack;
  import net.minecraft.world.item.crafting.RecipeManager;
-@@ -64,8 +_,9 @@
+@@ -63,9 +_,11 @@
+ import net.minecraft.world.level.storage.LevelData;
  import net.minecraft.world.level.storage.WritableLevelData;
  import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.Vec3;
  import net.minecraft.world.scores.Scoreboard;
 +import org.goldenforge.bukkit.Bukkit;
  
@@ -218,6 +220,284 @@
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
+@@ -133,7 +_,276 @@
+       this.f_46420_ = new BiomeManager(this, p_220358_);
+       this.f_46424_ = p_220357_;
+       this.f_220350_ = new CollectingNeighborUpdater(this, p_220359_);
+-   }
++      // Paper start - optimise collisions
++      this.minSection = io.papermc.paper.util.WorldUtil.getMinSection(this);
++      this.maxSection = io.papermc.paper.util.WorldUtil.getMaxSection(this);
++      // Paper end - optimise collisions
++   }
++
++   // Paper start - optimise collisions
++   public final int minSection;
++   public final int maxSection;
++
++   @Override
++   public final boolean m_45784_(final Entity entity) {
++      final AABB boundingBox = entity.m_20191_();
++      if (io.papermc.paper.util.CollisionUtil.isEmpty(boundingBox)) {
++         return false;
++      }
++
++      final List<Entity> entities = this.m_6249_(
++              entity,
++              boundingBox.m_82377_(-io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON, -io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON, -io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON),
++              null
++      );
++
++      for (int i = 0, len = entities.size(); i < len; ++i) {
++         final Entity otherEntity = entities.get(i);
++
++         if (otherEntity.m_5833_() || otherEntity.m_213877_() || !otherEntity.f_19850_ || otherEntity.m_20365_(entity)) {
++            continue;
++         }
++
++         return false;
++      }
++
++      return true;
++   }
++
++   private static net.minecraft.world.phys.BlockHitResult miss(final ClipContext clipContext) {
++      final Vec3 to = clipContext.m_45693_();
++      final Vec3 from = clipContext.m_45702_();
++
++      return net.minecraft.world.phys.BlockHitResult.m_82426_(to, Direction.m_122366_(from.f_82479_ - to.f_82479_, from.f_82480_ - to.f_82480_, from.f_82481_ - to.f_82481_), BlockPos.containing(to.f_82479_, to.f_82480_, to.f_82481_));
++   }
++
++   private static final FluidState AIR_FLUIDSTATE = Fluids.f_76191_.m_76145_();
++
++   private static net.minecraft.world.phys.BlockHitResult fastClip(final Vec3 from, final Vec3 to, final Level level,
++                                                                   final ClipContext clipContext) {
++      final double adjX = io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON * (from.f_82479_ - to.f_82479_);
++      final double adjY = io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON * (from.f_82480_ - to.f_82480_);
++      final double adjZ = io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON * (from.f_82481_ - to.f_82481_);
++
++      if (adjX == 0.0 && adjY == 0.0 && adjZ == 0.0) {
++         return miss(clipContext);
++      }
++
++      final double toXAdj = to.f_82479_ - adjX;
++      final double toYAdj = to.f_82480_ - adjY;
++      final double toZAdj = to.f_82481_ - adjZ;
++      final double fromXAdj = from.f_82479_ + adjX;
++      final double fromYAdj = from.f_82480_ + adjY;
++      final double fromZAdj = from.f_82481_ + adjZ;
++
++      int currX = Mth.m_14107_(fromXAdj);
++      int currY = Mth.m_14107_(fromYAdj);
++      int currZ = Mth.m_14107_(fromZAdj);
++
++      final BlockPos.MutableBlockPos currPos = new BlockPos.MutableBlockPos();
++
++      final double diffX = toXAdj - fromXAdj;
++      final double diffY = toYAdj - fromYAdj;
++      final double diffZ = toZAdj - fromZAdj;
++
++      final double dxDouble = Math.signum(diffX);
++      final double dyDouble = Math.signum(diffY);
++      final double dzDouble = Math.signum(diffZ);
++
++      final int dx = (int)dxDouble;
++      final int dy = (int)dyDouble;
++      final int dz = (int)dzDouble;
++
++      final double normalizedDiffX = diffX == 0.0 ? Double.MAX_VALUE : dxDouble / diffX;
++      final double normalizedDiffY = diffY == 0.0 ? Double.MAX_VALUE : dyDouble / diffY;
++      final double normalizedDiffZ = diffZ == 0.0 ? Double.MAX_VALUE : dzDouble / diffZ;
++
++      double normalizedCurrX = normalizedDiffX * (diffX > 0.0 ? (1.0 - Mth.m_14185_(fromXAdj)) : Mth.m_14185_(fromXAdj));
++      double normalizedCurrY = normalizedDiffY * (diffY > 0.0 ? (1.0 - Mth.m_14185_(fromYAdj)) : Mth.m_14185_(fromYAdj));
++      double normalizedCurrZ = normalizedDiffZ * (diffZ > 0.0 ? (1.0 - Mth.m_14185_(fromZAdj)) : Mth.m_14185_(fromZAdj));
++
++      net.minecraft.world.level.chunk.LevelChunkSection[] lastChunk = null;
++      net.minecraft.world.level.chunk.PalettedContainer<BlockState> lastSection = null;
++      int lastChunkX = Integer.MIN_VALUE;
++      int lastChunkY = Integer.MIN_VALUE;
++      int lastChunkZ = Integer.MIN_VALUE;
++
++      final int minSection = level.minSection;
++      final net.minecraft.server.level.ServerChunkCache chunkProvider = (net.minecraft.server.level.ServerChunkCache)level.m_7726_();
++
++      for (;;) {
++         currPos.m_122178_(currX, currY, currZ);
++
++         final int newChunkX = currX >> 4;
++         final int newChunkY = currY >> 4;
++         final int newChunkZ = currZ >> 4;
++
++         final int chunkDiff = ((newChunkX ^ lastChunkX) | (newChunkZ ^ lastChunkZ));
++         final int chunkYDiff = newChunkY ^ lastChunkY;
++
++         if ((chunkDiff | chunkYDiff) != 0) {
++            if (chunkDiff != 0) {
++               LevelChunk chunk = chunkProvider.getChunkAtIfLoadedImmediately(newChunkX, newChunkZ);
++               lastChunk = chunk == null ? null : chunk.m_7103_(); // diff: don't load chunks for this
++            }
++            final int sectionY = newChunkY - minSection;
++            lastSection = lastChunk != null && sectionY >= 0 && sectionY < lastChunk.length ? lastChunk[sectionY].f_62972_ : null;
++
++            lastChunkX = newChunkX;
++            lastChunkY = newChunkY;
++            lastChunkZ = newChunkZ;
++         }
++
++         final BlockState blockState;
++         if (lastSection != null && !(blockState = lastSection.m_63085_((currX & 15) | ((currZ & 15) << 4) | ((currY & 15) << (4+4)))).m_60795_()) {
++            final net.minecraft.world.phys.shapes.VoxelShape blockCollision = clipContext.m_45694_(blockState, level, currPos);
++
++            final net.minecraft.world.phys.BlockHitResult blockHit = blockCollision.m_83281_() ? null : level.m_45558_(from, to, currPos, blockCollision, blockState);
++
++            final net.minecraft.world.phys.shapes.VoxelShape fluidCollision;
++            final FluidState fluidState;
++            if (clipContext.f_45685_ != ClipContext.Fluid.NONE && (fluidState = blockState.m_60819_()) != AIR_FLUIDSTATE) {
++               fluidCollision = clipContext.m_45698_(fluidState, level, currPos);
++
++               final net.minecraft.world.phys.BlockHitResult fluidHit = fluidCollision.m_83220_(from, to, currPos);
++
++               if (fluidHit != null) {
++                  if (blockHit == null) {
++                     return fluidHit;
++                  }
++
++                  return from.m_82557_(blockHit.m_82450_()) <= from.m_82557_(fluidHit.m_82450_()) ? blockHit : fluidHit;
++               }
++            }
++
++            if (blockHit != null) {
++               return blockHit;
++            }
++         } // else: usually fall here
++
++         if (normalizedCurrX > 1.0 && normalizedCurrY > 1.0 && normalizedCurrZ > 1.0) {
++            return miss(clipContext);
++         }
++
++         // inc the smallest normalized coordinate
++
++         if (normalizedCurrX < normalizedCurrY) {
++            if (normalizedCurrX < normalizedCurrZ) {
++               currX += dx;
++               normalizedCurrX += normalizedDiffX;
++            } else {
++               // x < y && x >= z <--> z < y && z <= x
++               currZ += dz;
++               normalizedCurrZ += normalizedDiffZ;
++            }
++         } else if (normalizedCurrY < normalizedCurrZ) {
++            // y <= x && y < z
++            currY += dy;
++            normalizedCurrY += normalizedDiffY;
++         } else {
++            // y <= x && z <= y <--> z <= y && z <= x
++            currZ += dz;
++            normalizedCurrZ += normalizedDiffZ;
++         }
++      }
++   }
++
++   /**
++    * @reason Route to optimized call
++    * @author Spottedleaf
++    */
++   @Override
++   public final net.minecraft.world.phys.BlockHitResult m_45547_(final ClipContext clipContext) {
++      // can only do this in this class, as not everything that implements BlockGetter can retrieve chunks
++      return fastClip(clipContext.m_45702_(), clipContext.m_45693_(), this, clipContext);
++   }
++
++   @Override
++   public final boolean noCollision(final Entity entity, final AABB box, final boolean loadChunks) {
++      int flags = io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_CHECK_ONLY;
++      if (entity != null) {
++         flags |= io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_CHECK_BORDER;
++      }
++      if (loadChunks) {
++         flags |= io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_LOAD_CHUNKS;
++      }
++      if (io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, entity, box, null, null, flags, null)) {
++         return false;
++      }
++
++      return !io.papermc.paper.util.CollisionUtil.getEntityHardCollisions(this, entity, box, null, flags, null);
++   }
++
++   @Override
++   public final boolean m_186437_(final Entity entity, final AABB box) {
++      return io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, entity, box, null, null,
++              io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_CHECK_ONLY,
++              (final BlockState state, final BlockPos pos) -> {
++                 return state.m_60828_(Level.this, pos);
++              }
++      );
++   }
++
++   private static net.minecraft.world.phys.shapes.VoxelShape inflateAABBToVoxel(final AABB aabb, final double x, final double y, final double z) {
++      return net.minecraft.world.phys.shapes.Shapes.m_166049_(
++              aabb.f_82288_ - x,
++              aabb.f_82289_ - y,
++              aabb.f_82290_ - z,
++
++              aabb.f_82291_ + x,
++              aabb.f_82292_ + y,
++              aabb.f_82293_ + z
++      );
++   }
++
++   @Override
++   public final java.util.Optional<Vec3> m_151418_(final Entity entity, final net.minecraft.world.phys.shapes.VoxelShape boundsShape, final Vec3 fromPosition,
++                                                          final double rangeX, final double rangeY, final double rangeZ) {
++      if (boundsShape.m_83281_()) {
++         return java.util.Optional.empty();
++      }
++
++      final double expandByX = rangeX * 0.5;
++      final double expandByY = rangeY * 0.5;
++      final double expandByZ = rangeZ * 0.5;
++
++      // note: it is useless to look at shapes outside of range / 2.0
++      final AABB collectionVolume = boundsShape.m_83215_().m_82377_(expandByX, expandByY, expandByZ);
++
++      final List<AABB> aabbs = new java.util.ArrayList<>();
++      final List<net.minecraft.world.phys.shapes.VoxelShape> voxels = new java.util.ArrayList<>();
++
++      io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(
++              this, entity, collectionVolume, voxels, aabbs,
++              io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_CHECK_BORDER,
++              null
++      );
++
++      // push voxels into aabbs
++      for (int i = 0, len = voxels.size(); i < len; ++i) {
++         aabbs.addAll(voxels.get(i).m_83299_());
++      }
++
++      // expand AABBs
++      final net.minecraft.world.phys.shapes.VoxelShape first = aabbs.isEmpty() ? net.minecraft.world.phys.shapes.Shapes.m_83040_() : inflateAABBToVoxel(aabbs.get(0), expandByX, expandByY, expandByZ);
++      final net.minecraft.world.phys.shapes.VoxelShape[] rest = new net.minecraft.world.phys.shapes.VoxelShape[Math.max(0, aabbs.size() - 1)];
++
++      for (int i = 1, len = aabbs.size(); i < len; ++i) {
++         rest[i - 1] = inflateAABBToVoxel(aabbs.get(i), expandByX, expandByY, expandByZ);
++      }
++
++      // use optimized implementation of ORing the shapes together
++      final net.minecraft.world.phys.shapes.VoxelShape joined = net.minecraft.world.phys.shapes.Shapes.m_83124_(first, rest);
++
++      // find free space
++      // can use unoptimized join here (instead of join()), as closestPointTo uses toAabbs()
++      final net.minecraft.world.phys.shapes.VoxelShape freeSpace = net.minecraft.world.phys.shapes.Shapes.m_83148_(
++              boundsShape, joined, net.minecraft.world.phys.shapes.BooleanOp.f_82685_
++      );
++
++      return freeSpace.m_166067_(fromPosition);
++   }
++   // Paper end - optimise collisions
+ 
+    public boolean m_5776_() {
+       return this.f_46443_;
 @@ -145,7 +_,7 @@
     }
  
@@ -335,7 +615,7 @@
     }
  
     public void m_46590_(BlockPos p_46591_, Block p_46592_, Direction p_46593_) {
-@@ -311,11 +_,33 @@
+@@ -311,11 +_,41 @@
        return this.m_7726_().m_7827_();
     }
  
@@ -345,10 +625,18 @@
 +   }
 +
 +   @Override
-+   public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {
-+      ((ServerLevel)this).getEntityLookup().getHardCollidingEntities(except, box, into, predicate);
++   public List<Entity> getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate) {
++      List<Entity> ret = new java.util.ArrayList<>();
++      ((ServerLevel)this).getEntityLookup().getHardCollidingEntities(except, box, ret, predicate);
++      return ret;
 +   }
 +
++   @Override
++   public <T extends Entity> List<T> m_6443_(Class<T> entityClass, AABB box, Predicate<? super T> predicate) {
++      List<T> ret = new java.util.ArrayList<>();
++      ((ServerLevel)this).getEntityLookup().getEntities(entityClass, null, box, ret, predicate);
++      return ret;
++   }
 +   @Override
 +   @Nullable
 +   public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
@@ -369,7 +657,7 @@
           return levelchunk.m_8055_(p_46732_);
        }
     }
-@@ -377,38 +_,69 @@
+@@ -377,40 +_,89 @@
        (this.f_151504_ ? this.f_151503_ : this.f_151512_).add(p_151526_);
     }
  
@@ -443,11 +731,33 @@
 +            p_46655_.m_146870_();
 +         } else
           throw new ReportedException(crashreport);
+-      }
+-   }
 +      } finally {
 +         net.minecraftforge.server.timings.TimeTracker.ENTITY_UPDATE.trackEnd(p_46655_);
-       }
-    }
++      }
++   }
++
++   // Paper start - Prevent armor stands from doing entity lookups
++   @Override
++   public boolean m_45756_(@Nullable Entity entity, AABB box) {
++      // Paper start - optimise collisions
++      int flags = io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_CHECK_ONLY;
++      if (entity != null) {
++         flags |= io.papermc.paper.util.CollisionUtil.COLLISION_FLAG_CHECK_BORDER;
++      }
++      if (io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, entity, box, null, null, flags, null)) {
++         return false;
++      }
++
++      return !io.papermc.paper.util.CollisionUtil.getEntityHardCollisions(this, entity, box, null, flags, null);
++      // Paper end - optimise collisions
++   }
++   // Paper end
++
  
+    public boolean m_183599_(Entity p_186458_) {
+       return true;
 @@ -434,6 +_,7 @@
  
     public Explosion m_7703_(@Nullable Entity p_46526_, @Nullable DamageSource p_46527_, @Nullable ExplosionDamageCalculator p_46528_, double p_46529_, double p_46530_, double p_46531_, float p_46532_, boolean p_46533_, Explosion.BlockInteraction p_46534_) {

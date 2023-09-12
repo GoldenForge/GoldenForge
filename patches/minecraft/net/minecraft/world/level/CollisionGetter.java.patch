@@ -1,52 +1,51 @@
 --- a/net/minecraft/world/level/CollisionGetter.java
 +++ b/net/minecraft/world/level/CollisionGetter.java
-@@ -35,29 +_,33 @@
+@@ -35,6 +_,12 @@
        return this.m_5450_(p_45785_, Shapes.m_83064_(p_45785_.m_20191_()));
     }
  
 +   // Paper start - optimise collisions
 +   default boolean noCollision(Entity entity, AABB box, boolean loadChunks) {
-+      return !io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, entity, box, null, loadChunks, false, entity != null, true, null)
-+              && !io.papermc.paper.util.CollisionUtil.getEntityHardCollisions(this, entity, box, null, true, null);
++      return this.m_45756_(entity, box);
 +   }
 +   // Paper end - optimise collisions
 +
     default boolean m_45772_(AABB p_45773_) {
--      return this.m_45756_((Entity)null, p_45773_);
-+      // Paper start - optimise collisions
-+      return !io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, null, p_45773_, null, false, false, false, true, null)
-+              && !io.papermc.paper.util.CollisionUtil.getEntityHardCollisions(this, null, p_45773_, null, true, null);
-+      // Paper end - optimise collisions
+       return this.m_45756_((Entity)null, p_45773_);
     }
- 
-    default boolean m_45786_(Entity p_45787_) {
--      return this.m_45756_(p_45787_, p_45787_.m_20191_());
-+      // Paper start - optimise collisions
-+      AABB box = p_45787_.m_20191_();
-+      return !io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, p_45787_, box, null, false, false, p_45787_ != null, true, null)
-+              && !io.papermc.paper.util.CollisionUtil.getEntityHardCollisions(this, p_45787_, box, null, true, null);
-+      // Paper end - optimise collisions
+@@ -44,19 +_,21 @@
     }
  
     default boolean m_45756_(@Nullable Entity p_45757_, AABB p_45758_) {
 -      for(VoxelShape voxelshape : this.m_186434_(p_45757_, p_45758_)) {
 -         if (!voxelshape.m_83281_()) {
 -            return false;
--         }
++      try { if (p_45757_ != null) p_45757_.collisionLoadChunks = true; // Paper
++         for(VoxelShape voxelShape : this.m_186434_(p_45757_, p_45758_)) {
++            if (!voxelShape.m_83281_()) {
++               return false;
++            }
+          }
 -      }
--
--      if (!this.m_183134_(p_45757_, p_45758_).isEmpty()) {
--         return false;
--      } else if (p_45757_ == null) {
--         return true;
--      } else {
++      } finally { if (p_45757_ != null) p_45757_.collisionLoadChunks = false; } // Paper
+ 
+       if (!this.m_183134_(p_45757_, p_45758_).isEmpty()) {
+          return false;
+       } else if (p_45757_ == null) {
+          return true;
+       } else {
 -         VoxelShape voxelshape1 = this.m_186440_(p_45757_, p_45758_);
 -         return voxelshape1 == null || !Shapes.m_83157_(voxelshape1, Shapes.m_83064_(p_45758_), BooleanOp.f_82689_);
--      }
-+      // Paper start - optimise collisions
-+      return !io.papermc.paper.util.CollisionUtil.getCollisionsForBlocksOrWorldBorder(this, p_45757_, p_45758_, null, false, false, p_45757_ != null, true, null)
-+              && !io.papermc.paper.util.CollisionUtil.getEntityHardCollisions(this, p_45757_, p_45758_, null, true, null);
-+      // Paper end - optimise collisions
++         VoxelShape voxelShape2 = this.m_186440_(p_45757_, p_45758_);
++         return voxelShape2 == null || !Shapes.m_83157_(voxelShape2, Shapes.m_83064_(p_45758_), BooleanOp.f_82689_);
+       }
     }
  
-    List<VoxelShape> m_183134_(@Nullable Entity p_186427_, AABB p_186428_);
+@@ -91,6 +_,7 @@
+ 
+       return false;
+    }
++
+ 
+    default Optional<Vec3> m_151418_(@Nullable Entity p_151419_, VoxelShape p_151420_, Vec3 p_151421_, double p_151422_, double p_151423_, double p_151424_) {
+       if (p_151420_.m_83281_()) {

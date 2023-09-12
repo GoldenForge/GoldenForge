@@ -1,7 +1,13 @@
 --- a/net/minecraft/world/level/ClipContext.java
 +++ b/net/minecraft/world/level/ClipContext.java
-@@ -20,12 +_,12 @@
-    private final ClipContext.Fluid f_45685_;
+@@ -16,16 +_,16 @@
+ public class ClipContext {
+    private final Vec3 f_45682_;
+    private final Vec3 f_45683_;
+-   private final ClipContext.Block f_45684_;
+-   private final ClipContext.Fluid f_45685_;
++   public final ClipContext.Block f_45684_; // Paper - optimise collisions - public
++   public final ClipContext.Fluid f_45685_; // Paper - optimise collisions - public
     private final CollisionContext f_45686_;
  
 -   public ClipContext(Vec3 p_45688_, Vec3 p_45689_, ClipContext.Block p_45690_, ClipContext.Fluid p_45691_, Entity p_45692_) {

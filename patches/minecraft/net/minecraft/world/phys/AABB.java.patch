@@ -18,3 +18,12 @@
     public AABB(BlockPos p_82305_) {
        this((double)p_82305_.m_123341_(), (double)p_82305_.m_123342_(), (double)p_82305_.m_123343_(), (double)(p_82305_.m_123341_() + 1), (double)(p_82305_.m_123342_() + 1), (double)(p_82305_.m_123343_() + 1));
     }
+@@ -303,7 +_,7 @@
+    }
+ 
+    @Nullable
+-   private static Direction m_82325_(AABB p_82326_, Vec3 p_82327_, double[] p_82328_, @Nullable Direction p_82329_, double p_82330_, double p_82331_, double p_82332_) {
++   public static Direction m_82325_(AABB p_82326_, Vec3 p_82327_, double[] p_82328_, @Nullable Direction p_82329_, double p_82330_, double p_82331_, double p_82332_) {
+       if (p_82330_ > 1.0E-7D) {
+          p_82329_ = m_82347_(p_82328_, p_82329_, p_82330_, p_82331_, p_82332_, p_82326_.f_82288_, p_82326_.f_82289_, p_82326_.f_82292_, p_82326_.f_82290_, p_82326_.f_82293_, Direction.WEST, p_82327_.f_82479_, p_82327_.f_82480_, p_82327_.f_82481_);
+       } else if (p_82330_ < -1.0E-7D) {

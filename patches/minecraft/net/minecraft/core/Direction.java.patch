@@ -1,6 +1,6 @@
 --- a/net/minecraft/core/Direction.java
 +++ b/net/minecraft/core/Direction.java
-@@ -61,6 +_,11 @@
+@@ -61,6 +_,26 @@
     }, (p_235670_, p_235671_) -> {
        throw new IllegalArgumentException("Duplicate keys");
     }, Long2ObjectOpenHashMap::new));
@@ -9,6 +9,21 @@
 +   private final int adjY;
 +   private final int adjZ;
 +   // Paper end
++   // Paper start - optimise collisions
++   private static final int RANDOM_OFFSET = 2017601568;
++   private Direction opposite;
++   static {
++      for (final Direction direction : f_122346_) {
++         direction.opposite = m_122376_(direction.f_122340_);;
++      }
++   }
++
++   private final int id = it.unimi.dsi.fastutil.HashCommon.murmurHash3(it.unimi.dsi.fastutil.HashCommon.murmurHash3(this.ordinal() + RANDOM_OFFSET) + RANDOM_OFFSET);
++
++   public final int uniqueId() {
++      return this.id;
++   }
++   // Paper end - optimise collisions
  
     private Direction(int p_122356_, int p_122357_, int p_122358_, String p_122359_, Direction.AxisDirection p_122360_, Direction.Axis p_122361_, Vec3i p_122362_) {
        this.f_122339_ = p_122356_;

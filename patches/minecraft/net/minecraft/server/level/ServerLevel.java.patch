@@ -55,7 +55,7 @@
     public boolean f_8564_;
     private final SleepStatus f_143245_;
     private int f_8551_;
-@@ -184,10 +_,321 @@
+@@ -184,10 +_,323 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
     private final EndDragonFight f_8559_;
@@ -375,10 +375,16 @@
 +      return this.m_7726_().getChunkAtIfLoadedImmediately(chunkX, chunkZ) != null;
 +   }
 +   // Paper end
++
++   public final LevelStorageSource.LevelStorageAccess convertable;
  
     public ServerLevel(MinecraftServer p_214999_, Executor p_215000_, LevelStorageSource.LevelStorageAccess p_215001_, ServerLevelData p_215002_, ResourceKey<Level> p_215003_, LevelStem p_215004_, ChunkProgressListener p_215005_, boolean p_215006_, long p_215007_, List<CustomSpawner> p_215008_, boolean p_215009_) {
        super(p_215002_, p_215003_, p_215004_.m_204521_(), p_214999_::m_129905_, false, p_215006_, p_215007_, p_214999_.m_213994_());
-@@ -198,9 +_,12 @@
+@@ -195,12 +_,16 @@
+       this.f_8548_ = p_214999_;
+       this.f_8558_ = p_215008_;
+       this.f_8549_ = p_215002_;
++      this.convertable = p_215001_;
        ChunkGenerator chunkgenerator = p_215004_.m_63990_();
        boolean flag = p_214999_.m_6365_();
        DataFixer datafixer = p_214999_.m_129933_();

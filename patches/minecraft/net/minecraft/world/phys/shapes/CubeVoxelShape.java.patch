@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/phys/shapes/CubeVoxelShape.java
++++ b/net/minecraft/world/phys/shapes/CubeVoxelShape.java
+@@ -7,6 +_,7 @@
+ public final class CubeVoxelShape extends VoxelShape {
+    protected CubeVoxelShape(DiscreteVoxelShape p_82765_) {
+       super(p_82765_);
++      this.initCache(); // Paper - optimise collisions
+    }
+ 
+    protected DoubleList m_7700_(Direction.Axis p_82767_) {

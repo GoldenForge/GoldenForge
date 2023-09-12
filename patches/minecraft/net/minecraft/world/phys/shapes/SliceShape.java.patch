@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/phys/shapes/SliceShape.java
++++ b/net/minecraft/world/phys/shapes/SliceShape.java
+@@ -12,6 +_,7 @@
+       super(m_83176_(p_83173_.f_83211_, p_83174_, p_83175_));
+       this.f_83168_ = p_83173_;
+       this.f_83169_ = p_83174_;
++      this.initCache(); // Paper - optimise collisions
+    }
+ 
+    private static DiscreteVoxelShape m_83176_(DiscreteVoxelShape p_83177_, Direction.Axis p_83178_, int p_83179_) {

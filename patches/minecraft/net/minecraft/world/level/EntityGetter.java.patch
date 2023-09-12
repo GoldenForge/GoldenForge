@@ -1,35 +1,120 @@
 --- a/net/minecraft/world/level/EntityGetter.java
 +++ b/net/minecraft/world/level/EntityGetter.java
-@@ -18,6 +_,11 @@
+@@ -18,6 +_,13 @@
  import net.minecraft.world.phys.shapes.VoxelShape;
  
  public interface EntityGetter {
 +
-+   void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++   // Paper start
++   List<Entity> getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate);
 +
-+   void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++   void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++   // Paper end
 +
     List<Entity> m_6249_(@Nullable Entity p_45936_, AABB p_45937_, Predicate<? super Entity> p_45938_);
  
     <T extends Entity> List<T> m_142425_(EntityTypeTest<Entity, T> p_151464_, AABB p_151465_, Predicate<? super T> p_151466_);
-@@ -37,7 +_,7 @@
-          return true;
-       } else {
-          for(Entity entity : this.m_45933_(p_45939_, p_45940_.m_83215_())) {
+@@ -33,17 +_,36 @@
+    }
+ 
+    default boolean m_5450_(@Nullable Entity p_45939_, VoxelShape p_45940_) {
++      // Paper start - optimise collisions
+       if (p_45940_.m_83281_()) {
+-         return true;
+-      } else {
+-         for(Entity entity : this.m_45933_(p_45939_, p_45940_.m_83215_())) {
 -            if (!entity.m_213877_() && entity.f_19850_ && (p_45939_ == null || !entity.m_20365_(p_45939_)) && Shapes.m_83157_(p_45940_, Shapes.m_83064_(entity.m_20191_()), BooleanOp.f_82689_)) {
-+            if (!entity.m_213877_() && entity.f_19850_ && (p_45939_ == null || !entity.m_20365_(p_45939_)) && p_45940_.intersects(entity.m_20191_())) { // Paper
-                return false;
+-               return false;
++         return false;
++      }
++
++      final AABB singleAABB = p_45940_.getSingleAABBRepresentation();
++      final List<Entity> entities = this.m_45933_(
++              p_45939_,
++              singleAABB == null ? p_45940_.m_83215_() : singleAABB.m_82377_(-io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON, -io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON, -io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)
++      );
++
++      for (int i = 0, len = entities.size(); i < len; ++i) {
++         final Entity otherEntity = entities.get(i);
++
++         if (otherEntity.m_213877_() || !otherEntity.f_19850_ || (p_45939_ != null && otherEntity.m_20365_(p_45939_))) {
++            continue;
++         }
++
++         if (singleAABB == null) {
++            final AABB entityBB = otherEntity.m_20191_();
++            if (io.papermc.paper.util.CollisionUtil.isEmpty(entityBB) || !io.papermc.paper.util.CollisionUtil.voxelShapeIntersectNoEmpty(p_45940_, entityBB)) {
++               continue;
              }
           }
-@@ -55,7 +_,7 @@
-          return List.of();
+ 
+-         return true;
++         return false;
+       }
++
++      return true;
++      // Paper end - optimise collisions
+    }
+ 
+    default <T extends Entity> List<T> m_45976_(Class<T> p_45977_, AABB p_45978_) {
+@@ -51,23 +_,41 @@
+    }
+ 
+    default List<VoxelShape> m_183134_(@Nullable Entity p_186451_, AABB p_186452_) {
+-      if (p_186452_.m_82309_() < 1.0E-7D) {
+-         return List.of();
++      // Paper start - optimise collisions
++      // first behavior change is to correctly check for empty AABB
++      if (io.papermc.paper.util.CollisionUtil.isEmpty(p_186452_)) {
++         // reduce indirection by always returning type with same class
++         return new java.util.ArrayList<>();
++      }
++
++      // to comply with vanilla intersection rules, expand by -epsilon so that we only get stuff we definitely collide with.
++      // Vanilla for hard collisions has this backwards, and they expand by +epsilon but this causes terrible problems
++      // specifically with boat collisions.
++      p_186452_ = p_186452_.m_82377_(-io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON, -io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON, -io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON);
++
++      final List<Entity> entities;
++      if (p_186451_ != null && p_186451_.hardCollides()) {
++         entities = this.m_6249_(p_186451_, p_186452_, null);
        } else {
-          Predicate<Entity> predicate = p_186451_ == null ? EntitySelector.f_185987_ : EntitySelector.f_20408_.and(p_186451_::m_7337_);
+-         Predicate<Entity> predicate = p_186451_ == null ? EntitySelector.f_185987_ : EntitySelector.f_20408_.and(p_186451_::m_7337_);
 -         List<Entity> list = this.m_6249_(p_186451_, p_186452_.m_82400_(1.0E-7D), predicate);
-+         List<Entity> list = this.m_6249_(p_186451_, p_186452_.m_82400_(-1.0E-7D), predicate); // Paper - needs to be negated, or else we get things we don't collide with
-          if (list.isEmpty()) {
-             return List.of();
-          } else {
+-         if (list.isEmpty()) {
+-            return List.of();
+-         } else {
+-            ImmutableList.Builder<VoxelShape> builder = ImmutableList.builderWithExpectedSize(list.size());
+-
+-            for(Entity entity : list) {
+-               builder.add(Shapes.m_83064_(entity.m_20191_()));
+-            }
+-
+-            return builder.build();
+-         }
+-      }
++         entities = this.getHardCollidingEntities(p_186451_, p_186452_, null);
++      }
++
++      final List<VoxelShape> ret = new java.util.ArrayList<>(Math.min(25, entities.size()));
++
++      for (int i = 0, len = entities.size(); i < len; ++i) {
++         final Entity otherEntity = entities.get(i);
++
++         if (otherEntity.m_5833_()) {
++            continue;
++         }
++
++         if ((p_186451_ == null && otherEntity.m_5829_()) || (p_186451_ != null && p_186451_.m_7337_(otherEntity))) {
++            ret.add(Shapes.m_83064_(otherEntity.m_20191_()));
++         }
++      }
++
++      return ret;
++      // Paper end - optimise collisions
+    }
+ 
+    @Nullable
 @@ -126,6 +_,12 @@
     default Player m_45941_(TargetingConditions p_45942_, double p_45943_, double p_45944_, double p_45945_) {
        return this.m_45982_(this.m_6907_(), p_45942_, (LivingEntity)null, p_45943_, p_45944_, p_45945_);

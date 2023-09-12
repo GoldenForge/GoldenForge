@@ -82,15 +82,17 @@
              BlockEntity blockentity = blockstate.m_155947_() ? this.m_7702_(p_9550_) : null;
              Block.m_49881_(blockstate, this.f_9479_, p_9550_, blockentity, p_9552_, ItemStack.f_41583_);
           }
-@@ -416,4 +_,11 @@
+@@ -415,5 +_,13 @@
+ 
     public long m_183596_() {
        return this.f_184182_.getAndIncrement();
-    }
++   }
 +
 +   @Override
 +   public void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {}
 +
 +   @Override
-+   public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {}
-+
++   public List<Entity> getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate) {
++      return Collections.emptyList();
+    }
  }

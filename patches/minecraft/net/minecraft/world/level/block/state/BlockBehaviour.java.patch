@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/block/state/BlockBehaviour.java
 +++ b/net/minecraft/world/level/block/state/BlockBehaviour.java
+@@ -62,6 +_,7 @@
+ import net.minecraft.world.level.storage.loot.LootTable;
+ import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
+ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
++import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.Vec3;
+ import net.minecraft.world.phys.shapes.CollisionContext;
 @@ -95,6 +_,17 @@
        this.f_60449_ = p_60452_.f_60893_;
        this.f_60438_ = p_60452_.f_60903_;
@@ -72,11 +80,16 @@
     public abstract static class BlockStateBase extends StateHolder<Block, BlockState> {
        private final int f_60594_;
        private final boolean f_60595_;
-@@ -443,6 +_,33 @@
+@@ -443,13 +_,121 @@
           this.f_60605_ = blockbehaviour$properties.f_60901_;
           this.f_60606_ = blockbehaviour$properties.f_60902_;
           this.f_222962_ = blockbehaviour$properties.f_222978_.apply(this.m_7160_());
+-      }
 +         this.conditionallyFullOpaque = this.f_60601_ & this.f_60595_; // Paper
++         // Paper start - optimise collisions
++         this.id1 = it.unimi.dsi.fastutil.HashCommon.murmurHash3(it.unimi.dsi.fastutil.HashCommon.murmurHash3(ID_GENERATOR.getAndIncrement() + RANDOM_OFFSET) + RANDOM_OFFSET);
++         this.id2 = it.unimi.dsi.fastutil.HashCommon.murmurHash3(it.unimi.dsi.fastutil.HashCommon.murmurHash3(ID_GENERATOR.getAndIncrement() + RANDOM_OFFSET) + RANDOM_OFFSET);
++         // Paper end - optimise collisions
 +
 +      }
 +
@@ -98,50 +111,94 @@
 +         return this.conditionallyFullOpaque;
 +      }
 +      // Paper end - starlight
++      // Paper start - optimise collisions
++      private static final int RANDOM_OFFSET = 704237939;
++      private static final Direction[] DIRECTIONS_CACHED = Direction.values();
++      private static final java.util.concurrent.atomic.AtomicInteger ID_GENERATOR = new java.util.concurrent.atomic.AtomicInteger();
++      private final int id1, id2;
++      private boolean occludesFullBlock;
++      private boolean emptyCollisionShape;
++      private VoxelShape constantCollisionShape;
++      private AABB constantAABBCollision;
++      private static void initCaches(final VoxelShape shape) {
++         shape.isFullBlock();
++         shape.occludesFullBlock();
++         shape.m_83299_();
++         if (!shape.m_83281_()) {
++            shape.m_83215_();
++         }
++      }
 +
-+      private long blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_SPECIAL_BLOCK;
++      public final boolean hasCache() {
++         return this.f_60593_ != null;
++      }
 +
-+      public final long getBlockCollisionBehavior() {
-+         return this.blockCollisionBehavior;
-       }
++      public final boolean occludesFullBlock() {
++         return this.occludesFullBlock;
++      }
++
++      public final boolean emptyCollisionShape() {
++         return this.emptyCollisionShape;
++      }
++
++      public final int uniqueId1() {
++         return this.id1;
++      }
++
++      public final int uniqueId2() {
++         return this.id2;
++      }
++
++      public final VoxelShape getConstantCollisionShape() {
++         return this.constantCollisionShape;
++      }
++
++      public final AABB getConstantCollisionAABB() {
++         return this.constantAABBCollision;
++      }
++      // Paper end - optimise collisions
  
        public void m_60611_() {
-@@ -450,6 +_,39 @@
+          if (!this.m_60734_().m_49967_()) {
              this.f_60593_ = new BlockBehaviour.BlockStateBase.Cache(this.m_7160_());
           }
  
 +         this.shapeExceedsCube = this.f_60593_ == null || this.f_60593_.f_60843_; // Paper - moved from actual method to here
 +         this.opacityIfCached = this.f_60593_ == null || this.isConditionallyFullOpaque() ? -1 : this.f_60593_.f_60848_; // Paper - starlight - cache opacity for light
 +
-+         // Paper start
-+         if (io.papermc.paper.util.CollisionUtil.isSpecialCollidingBlock(this)) {
-+            this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_SPECIAL_BLOCK;
-+         } else {
++         // Paper start - optimise collisions
++         if (this.f_60593_ != null) {
++            final VoxelShape collisionShape = this.f_60593_.f_60842_;
 +            try {
-+               // There is NOTHING HACKY ABOUT THIS AT ALLLLLLLLLLLLLLL
-+               VoxelShape constantShape = this.m_60742_(null, null, null);
-+               if (constantShape == null) {
-+                  this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_UNKNOWN_BLOCK;
-+               } else {
-+                  constantShape = constantShape.m_83296_();
-+                  if (constantShape.m_83281_()) {
-+                     this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_EMPTY_BLOCK;
-+                  } else {
-+                     final List<net.minecraft.world.phys.AABB> boxes = constantShape.m_83299_();
-+                     if (constantShape == net.minecraft.world.phys.shapes.Shapes.getFullUnoptimisedCube() || (boxes.size() == 1 && boxes.get(0).equals(net.minecraft.world.phys.shapes.Shapes.BLOCK_OPTIMISED.aabb))) {
-+                        this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_FULL_BLOCK;
-+                     } else {
-+                        this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_UNKNOWN_BLOCK;
-+                     }
-+                  }
-+               }
-+            } catch (final Error error) {
-+               throw error;
++               this.constantCollisionShape = this.m_60742_(null, null, null);
++               this.constantAABBCollision = this.constantCollisionShape == null ? null : this.constantCollisionShape.getSingleAABBRepresentation();
 +            } catch (final Throwable throwable) {
-+               this.blockCollisionBehavior = io.papermc.paper.util.CollisionUtil.KNOWN_UNKNOWN_BLOCK;
++               this.constantCollisionShape = null;
++               this.constantAABBCollision = null;
 +            }
++            this.occludesFullBlock = collisionShape.occludesFullBlock();
++            this.emptyCollisionShape = collisionShape.m_83281_();
++            // init caches
++            initCaches(collisionShape);
++            if (collisionShape != Shapes.m_83040_() && collisionShape != Shapes.m_83144_()) {
++               for (final Direction direction : DIRECTIONS_CACHED) {
++                  // initialise the directional face shape cache as well
++                  final VoxelShape shape = Shapes.m_83121_(collisionShape, direction);
++                  initCaches(shape);
++               }
++            }
++            if (this.f_60593_.f_60849_ != null) {
++               for (final VoxelShape shape : this.f_60593_.f_60849_) {
++                  initCaches(shape);
++               }
++            }
++         } else {
++            this.occludesFullBlock = false;
++            this.emptyCollisionShape = false;
++            this.constantCollisionShape = null;
++            this.constantAABBCollision = null;
 +         }
-+         // Paper end
++         // Paper end - optimise collisions
 +
        }
  

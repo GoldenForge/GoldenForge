@@ -1,24 +1,692 @@
 --- a/net/minecraft/world/phys/shapes/VoxelShape.java
 +++ b/net/minecraft/world/phys/shapes/VoxelShape.java
-@@ -16,11 +_,16 @@
+@@ -16,30 +_,401 @@
  import net.minecraft.world.phys.Vec3;
  
  public abstract class VoxelShape {
 -   protected final DiscreteVoxelShape f_83211_;
-+   public final DiscreteVoxelShape f_83211_;
++   public final DiscreteVoxelShape f_83211_; // Paper - optimise collisions - public
     @Nullable
     private VoxelShape[] f_83212_;
  
 -   VoxelShape(DiscreteVoxelShape p_83214_) {
-+   // Paper start
-+   public boolean intersects(AABB shape) {
-+      return Shapes.m_83157_(this, new io.papermc.paper.voxel.AABBVoxelShape(shape), BooleanOp.f_82689_);
++   // Paper start - optimise collisions
++   private double offsetX;
++   private double offsetY;
++   private double offsetZ;
++   private AABB singleAABBRepresentation;
++   private double[] rootCoordinatesX;
++   private double[] rootCoordinatesY;
++   private double[] rootCoordinatesZ;
++
++   private io.papermc.paper.util.collisions.CachedShapeData cachedShapeData;
++   private boolean isEmpty;
++
++   private io.papermc.paper.util.collisions.CachedToAABBs cachedToAABBs;
++   private AABB cachedBounds;
++
++   private Boolean isFullBlock;
++
++   private Boolean occludesFullBlock;
++
++   // must be power of two
++   private static final int MERGED_CACHE_SIZE = 16;
++
++   private io.papermc.paper.util.collisions.MergedORCache[] mergedORCache;
++
++   public final double offsetX() {
++      return this.offsetX;
 +   }
-+   // Paper end
++
++   public final double offsetY() {
++      return this.offsetY;
++   }
++
++   public final double offsetZ() {
++      return this.offsetZ;
++   }
++
++   public final AABB getSingleAABBRepresentation() {
++      return this.singleAABBRepresentation;
++   }
++
++   public final double[] rootCoordinatesX() {
++      return this.rootCoordinatesX;
++   }
++
++   public final double[] rootCoordinatesY() {
++      return this.rootCoordinatesY;
++   }
++
++   public final double[] rootCoordinatesZ() {
++      return this.rootCoordinatesZ;
++   }
++
++   private static double[] extractRawArray(final DoubleList list) {
++      if (list instanceof it.unimi.dsi.fastutil.doubles.DoubleArrayList rawList) {
++         final double[] raw = rawList.elements();
++         final int expected = rawList.size();
++         if (raw.length == expected) {
++            return raw;
++         } else {
++            return java.util.Arrays.copyOf(raw, expected);
++         }
++      } else {
++         return list.toDoubleArray();
++      }
++   }
++
++   public final void initCache() {
++      this.cachedShapeData = this.f_83211_.getOrCreateCachedShapeData();
++      this.isEmpty = this.cachedShapeData.isEmpty();
++
++      final DoubleList xList = this.m_7700_(Direction.Axis.X);
++      final DoubleList yList = this.m_7700_(Direction.Axis.Y);
++      final DoubleList zList = this.m_7700_(Direction.Axis.Z);
++
++      if (xList instanceof OffsetDoubleList offsetDoubleList) {
++         this.offsetX = offsetDoubleList.f_83029_;
++         this.rootCoordinatesX = extractRawArray(offsetDoubleList.f_83028_);
++      } else {
++         this.rootCoordinatesX = extractRawArray(xList);
++      }
++
++      if (yList instanceof OffsetDoubleList offsetDoubleList) {
++         this.offsetY = offsetDoubleList.f_83029_;
++         this.rootCoordinatesY = extractRawArray(offsetDoubleList.f_83028_);
++      } else {
++         this.rootCoordinatesY = extractRawArray(yList);
++      }
++
++      if (zList instanceof OffsetDoubleList offsetDoubleList) {
++         this.offsetZ = offsetDoubleList.f_83029_;
++         this.rootCoordinatesZ = extractRawArray(offsetDoubleList.f_83028_);
++      } else {
++         this.rootCoordinatesZ = extractRawArray(zList);
++      }
++
++      if (this.cachedShapeData.hasSingleAABB()) {
++         this.singleAABBRepresentation = new AABB(
++                 this.rootCoordinatesX[0] + this.offsetX, this.rootCoordinatesY[0] + this.offsetY, this.rootCoordinatesZ[0] + this.offsetZ,
++                 this.rootCoordinatesX[1] + this.offsetX, this.rootCoordinatesY[1] + this.offsetY, this.rootCoordinatesZ[1] + this.offsetZ
++         );
++         this.cachedBounds = this.singleAABBRepresentation;
++      }
++   }
++
++   public final io.papermc.paper.util.collisions.CachedShapeData getCachedVoxelData() {
++      return this.cachedShapeData;
++   }
++
++   private VoxelShape[] faceShapeClampedCache;
++
++   public final VoxelShape getFaceShapeClamped(final Direction direction) {
++      if (this.isEmpty) {
++         return (VoxelShape)(Object)this;
++      }
++      if ((VoxelShape)(Object)this == Shapes.m_83144_()) {
++         return (VoxelShape)(Object)this;
++      }
++
++      VoxelShape[] cache = this.faceShapeClampedCache;
++      if (cache != null) {
++         final VoxelShape ret = cache[direction.ordinal()];
++         if (ret != null) {
++            return ret;
++         }
++      }
++
++
++      if (cache == null) {
++         this.faceShapeClampedCache = cache = new VoxelShape[6];
++      }
++
++      final Direction.Axis axis = direction.m_122434_();
++
++      final VoxelShape ret;
++
++      if (direction.m_122421_() == Direction.AxisDirection.POSITIVE) {
++         if (DoubleMath.fuzzyEquals(this.m_83297_(axis), 1.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) {
++            ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, this.f_83211_.m_82850_(axis) - 1));
++         } else {
++            ret = Shapes.m_83040_();
++         }
++      } else {
++         if (DoubleMath.fuzzyEquals(this.m_83288_(axis), 0.0, io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) {
++            ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, 0));
++         } else {
++            ret = Shapes.m_83040_();
++         }
++      }
++
++      cache[direction.ordinal()] = ret;
++
++      return ret;
++   }
++
++   private static VoxelShape tryForceBlock(final VoxelShape other) {
++      if (other == Shapes.m_83144_()) {
++         return other;
++      }
++
++      final AABB otherAABB = other.getSingleAABBRepresentation();
++      if (otherAABB == null) {
++         return other;
++      }
++
++      if (Shapes.m_83144_().getSingleAABBRepresentation().equals(otherAABB)) {
++         return Shapes.m_83144_();
++      }
++
++      return other;
++   }
++
++   private boolean computeOccludesFullBlock() {
++      if (this.isEmpty) {
++         this.occludesFullBlock = Boolean.FALSE;
++         return false;
++      }
++
++      if (this.isFullBlock()) {
++         this.occludesFullBlock = Boolean.TRUE;
++         return true;
++      }
++
++      final AABB singleAABB = this.singleAABBRepresentation;
++      if (singleAABB != null) {
++         // check if the bounding box encloses the full cube
++         final boolean ret =
++                 (singleAABB.f_82289_ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && singleAABB.f_82292_ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) &&
++                         (singleAABB.f_82288_ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && singleAABB.f_82291_ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON)) &&
++                         (singleAABB.f_82290_ <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON && singleAABB.f_82293_ >= (1 - io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON));
++         this.occludesFullBlock = Boolean.valueOf(ret);
++         return ret;
++      }
++
++      final boolean ret = !Shapes.m_83157_(Shapes.m_83144_(), ((VoxelShape)(Object)this), BooleanOp.f_82685_);
++      this.occludesFullBlock = Boolean.valueOf(ret);
++      return ret;
++   }
++
++   public final boolean occludesFullBlock() {
++      final Boolean ret = this.occludesFullBlock;
++      if (ret != null) {
++         return ret.booleanValue();
++      }
++
++      return this.computeOccludesFullBlock();
++   }
++
++   public final boolean occludesFullBlockIfCached() {
++      final Boolean ret = this.occludesFullBlock;
++      return ret != null ? ret.booleanValue() : false;
++   }
++
++   private static int hash(final VoxelShape key) {
++      return it.unimi.dsi.fastutil.HashCommon.mix(System.identityHashCode(key));
++   }
++
++   public final VoxelShape orUnoptimized(final VoxelShape other) {
++      // don't cache simple cases
++      if (((VoxelShape)(Object)this) == other) {
++         return other;
++      }
++
++      if (this.isEmpty) {
++         return other;
++      }
++
++      if (other.m_83281_()) {
++         return (VoxelShape)(Object)this;
++      }
++
++      // try this cache first
++      final int thisCacheKey = hash(other) & (MERGED_CACHE_SIZE - 1);
++      final io.papermc.paper.util.collisions.MergedORCache cached = this.mergedORCache == null ? null : this.mergedORCache[thisCacheKey];
++      if (cached != null && cached.key() == other) {
++         return cached.result();
++      }
++
++      // try other cache
++      final int otherCacheKey = hash(this) & (MERGED_CACHE_SIZE - 1);
++      final io.papermc.paper.util.collisions.MergedORCache otherCache = other.mergedORCache == null ? null : other.mergedORCache[otherCacheKey];
++      if (otherCache != null && otherCache.key() == this) {
++         return otherCache.result();
++      }
++
++      // note: unsure if joinUnoptimized(1, 2, OR) == joinUnoptimized(2, 1, OR) for all cases
++      final VoxelShape result = Shapes.m_83148_(this, other, BooleanOp.f_82695_);
++
++      if (cached != null && otherCache == null) {
++         // try to use second cache instead of replacing an entry in this cache
++         if (other.mergedORCache == null) {
++            other.mergedORCache = new io.papermc.paper.util.collisions.MergedORCache[MERGED_CACHE_SIZE];
++         }
++         other.mergedORCache[otherCacheKey] = new io.papermc.paper.util.collisions.MergedORCache(this, result);
++      } else {
++         // line is not occupied or other cache line is full
++         // always bias to replace this cache, as this cache is the first we check
++         if (this.mergedORCache == null) {
++            this.mergedORCache = new io.papermc.paper.util.collisions.MergedORCache[MERGED_CACHE_SIZE];
++         }
++         this.mergedORCache[thisCacheKey] = new io.papermc.paper.util.collisions.MergedORCache(other, result);
++      }
++
++      return result;
++   }
++
++   private boolean computeFullBlock() {
++      final Boolean ret;
++      if (this.isEmpty) {
++         ret = Boolean.FALSE;
++      } else if ((VoxelShape)(Object)this == Shapes.m_83144_()) {
++         ret = Boolean.TRUE;
++      } else {
++         final AABB singleAABB = this.singleAABBRepresentation;
++         if (singleAABB == null) {
++            // note: Shapes.join(BLOCK, this, NOT_SAME) cannot be empty when voxelSize > 2
++            ret = Boolean.FALSE;
++         } else {
++            ret = Boolean.valueOf(
++                    Math.abs(singleAABB.f_82288_) <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON &&
++                            Math.abs(singleAABB.f_82289_) <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON &&
++                            Math.abs(singleAABB.f_82290_) <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON &&
++
++                            Math.abs(1.0 - singleAABB.f_82291_) <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON &&
++                            Math.abs(1.0 - singleAABB.f_82292_) <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON &&
++                            Math.abs(1.0 - singleAABB.f_82293_) <= io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON
++            );
++         }
++      }
++
++      this.isFullBlock = ret;
++
++      return ret.booleanValue();
++   }
++
++   public boolean isFullBlock() {
++      final Boolean ret = this.isFullBlock;
++
++      if (ret != null) {
++         return ret.booleanValue();
++      }
++
++      return this.computeFullBlock();
++   }
++   // Paper end - optimise collisions
++
 +   protected VoxelShape(DiscreteVoxelShape p_83214_) {
        this.f_83211_ = p_83214_;
     }
  
+    public double m_83288_(Direction.Axis p_83289_) {
+-      int i = this.f_83211_.m_6538_(p_83289_);
+-      return i >= this.f_83211_.m_82850_(p_83289_) ? Double.POSITIVE_INFINITY : this.m_83256_(p_83289_, i);
++      // Paper start - optimise collisions
++      final io.papermc.paper.util.collisions.CachedShapeData shapeData = this.cachedShapeData;
++      switch (p_83289_) {
++         case X: {
++            final int idx = shapeData.minFullX();
++            return idx >= shapeData.sizeX() ? Double.POSITIVE_INFINITY : (this.rootCoordinatesX[idx] + this.offsetX);
++         }
++         case Y: {
++            final int idx = shapeData.minFullY();
++            return idx >= shapeData.sizeY() ? Double.POSITIVE_INFINITY : (this.rootCoordinatesY[idx] + this.offsetY);
++         }
++         case Z: {
++            final int idx = shapeData.minFullZ();
++            return idx >= shapeData.sizeZ() ? Double.POSITIVE_INFINITY : (this.rootCoordinatesZ[idx] + this.offsetZ);
++         }
++         default: {
++            // should never get here
++            return Double.POSITIVE_INFINITY;
++         }
++      }
++      // Paper end - optimise collisions
+    }
+ 
+    public double m_83297_(Direction.Axis p_83298_) {
+-      int i = this.f_83211_.m_6536_(p_83298_);
+-      return i <= 0 ? Double.NEGATIVE_INFINITY : this.m_83256_(p_83298_, i);
++      // Paper start - optimise collisions
++      final io.papermc.paper.util.collisions.CachedShapeData shapeData = this.cachedShapeData;
++      switch (p_83298_) {
++         case X: {
++            final int idx = shapeData.maxFullX();
++            return idx <= 0 ? Double.NEGATIVE_INFINITY : (this.rootCoordinatesX[idx] + this.offsetX);
++         }
++         case Y: {
++            final int idx = shapeData.maxFullY();
++            return idx <= 0 ? Double.NEGATIVE_INFINITY : (this.rootCoordinatesY[idx] + this.offsetY);
++         }
++         case Z: {
++            final int idx = shapeData.maxFullZ();
++            return idx <= 0 ? Double.NEGATIVE_INFINITY : (this.rootCoordinatesZ[idx] + this.offsetZ);
++         }
++         default: {
++            // should never get here
++            return Double.NEGATIVE_INFINITY;
++         }
++      }
++      // Paper end - optimise collisions
+    }
+ 
+    public AABB m_83215_() {
+-      if (this.m_83281_()) {
+-         throw (UnsupportedOperationException)Util.m_137570_(new UnsupportedOperationException("No bounds for empty shape."));
+-      } else {
+-         return new AABB(this.m_83288_(Direction.Axis.X), this.m_83288_(Direction.Axis.Y), this.m_83288_(Direction.Axis.Z), this.m_83297_(Direction.Axis.X), this.m_83297_(Direction.Axis.Y), this.m_83297_(Direction.Axis.Z));
+-      }
++      // Paper start - optimise collisions
++      if (this.isEmpty) {
++         throw Util.m_137570_(new UnsupportedOperationException("No bounds for empty shape."));
++      }
++      AABB cached = this.cachedBounds;
++      if (cached != null) {
++         return cached;
++      }
++
++      final io.papermc.paper.util.collisions.CachedShapeData shapeData = this.cachedShapeData;
++
++      final double[] coordsX = this.rootCoordinatesX;
++      final double[] coordsY = this.rootCoordinatesY;
++      final double[] coordsZ = this.rootCoordinatesZ;
++
++      final double offX = this.offsetX;
++      final double offY = this.offsetY;
++      final double offZ = this.offsetZ;
++
++      // note: if not empty, then there is one full AABB so no bounds checks are needed on the minFull/maxFull indices
++      cached = new AABB(
++              coordsX[shapeData.minFullX()] + offX,
++              coordsY[shapeData.minFullY()] + offY,
++              coordsZ[shapeData.minFullZ()] + offZ,
++
++              coordsX[shapeData.maxFullX()] + offX,
++              coordsY[shapeData.maxFullY()] + offY,
++              coordsZ[shapeData.maxFullZ()] + offZ
++      );
++
++      this.cachedBounds = cached;
++      return cached;
++      // Paper end - optimise collisions
+    }
+ 
+    protected double m_83256_(Direction.Axis p_83257_, int p_83258_) {
+@@ -49,19 +_,106 @@
+    protected abstract DoubleList m_7700_(Direction.Axis p_83249_);
+ 
+    public boolean m_83281_() {
+-      return this.f_83211_.m_6224_();
+-   }
++      return this.isEmpty; // Paper - optimise collisions
++   }
++
++   // Paper start - optimise collisions
++   private static DoubleList offsetList(final DoubleList src, final double by) {
++      if (src instanceof OffsetDoubleList offsetDoubleList) {
++         return new OffsetDoubleList(offsetDoubleList.f_83028_, by + offsetDoubleList.f_83029_);
++      }
++      return new OffsetDoubleList(src, by);
++   }
++   // Paper end - optimise collisions
+ 
+    public VoxelShape m_83216_(double p_83217_, double p_83218_, double p_83219_) {
+-      return (VoxelShape)(this.m_83281_() ? Shapes.m_83040_() : new ArrayVoxelShape(this.f_83211_, (DoubleList)(new OffsetDoubleList(this.m_7700_(Direction.Axis.X), p_83217_)), (DoubleList)(new OffsetDoubleList(this.m_7700_(Direction.Axis.Y), p_83218_)), (DoubleList)(new OffsetDoubleList(this.m_7700_(Direction.Axis.Z), p_83219_))));
++      // Paper start - optimise collisions
++      if (this.isEmpty) {
++         return Shapes.m_83040_();
++      }
++
++      final ArrayVoxelShape ret = new ArrayVoxelShape(
++              this.f_83211_,
++              offsetList(this.m_7700_(Direction.Axis.X), p_83217_),
++              offsetList(this.m_7700_(Direction.Axis.Y), p_83218_),
++              offsetList(this.m_7700_(Direction.Axis.Z), p_83219_)
++      );
++
++      final io.papermc.paper.util.collisions.CachedToAABBs cachedToAABBs = this.cachedToAABBs;
++      if (cachedToAABBs != null) {
++         ((VoxelShape)ret).cachedToAABBs = io.papermc.paper.util.collisions.CachedToAABBs.offset(cachedToAABBs, p_83217_, p_83218_, p_83219_);
++      }
++
++      return ret;
++      // Paper end - optimise collisions
+    }
+ 
+    public VoxelShape m_83296_() {
+-      VoxelShape[] avoxelshape = new VoxelShape[]{Shapes.m_83040_()};
+-      this.m_83286_((p_83275_, p_83276_, p_83277_, p_83278_, p_83279_, p_83280_) -> {
+-         avoxelshape[0] = Shapes.m_83148_(avoxelshape[0], Shapes.m_83048_(p_83275_, p_83276_, p_83277_, p_83278_, p_83279_, p_83280_), BooleanOp.f_82695_);
+-      });
+-      return avoxelshape[0];
++      // Paper start - optimise collisions
++      // Optimise merge strategy to increase the number of simple joins, and additionally forward the toAabbs cache
++      // to result
++      if (this.isEmpty) {
++         return Shapes.m_83040_();
++      }
++
++      if (this.singleAABBRepresentation != null) {
++         // note: the isFullBlock() is fuzzy, and Shapes.create() is also fuzzy which would return block()
++         return this.isFullBlock() ? Shapes.m_83144_() : this;
++      }
++
++      final List<AABB> aabbs = this.m_83299_();
++
++      if (aabbs.size() == 1) {
++         final AABB singleAABB = aabbs.get(0);
++         final VoxelShape ret = Shapes.m_83064_(singleAABB);
++
++         // forward AABB cache
++         if (ret.cachedToAABBs == null) {
++            ret.cachedToAABBs = this.cachedToAABBs;
++         }
++
++         return ret;
++      } else {
++         // reduce complexity of joins by splitting the merges (old complexity: n^2, new: nlogn)
++
++         // set up flat array so that this merge is done in-place
++         final VoxelShape[] tmp = new VoxelShape[aabbs.size()];
++
++         // initialise as unmerged
++         for (int i = 0, len = aabbs.size(); i < len; ++i) {
++            tmp[i] = Shapes.m_83064_(aabbs.get(i));
++         }
++
++         int size = aabbs.size();
++         while (size > 1) {
++            int newSize = 0;
++            for (int i = 0; i < size; i += 2) {
++               final int next = i + 1;
++               if (next >= size) {
++                  // nothing to merge with, so leave it for next iteration
++                  tmp[newSize++] = tmp[i];
++                  break;
++               } else {
++                  // merge with adjacent
++                  final VoxelShape first = tmp[i];
++                  final VoxelShape second = tmp[next];
++
++                  tmp[newSize++] = Shapes.m_83148_(first, second, BooleanOp.f_82695_);
++               }
++            }
++            size = newSize;
++         }
++
++         final VoxelShape ret = tmp[0];
++
++         // forward AABB cache
++         if (ret.cachedToAABBs == null) {
++            ret.cachedToAABBs = this.cachedToAABBs;
++         }
++
++         return ret;
++      }
++      // Paper end - optimise collisions
+    }
+ 
+    public void m_83224_(Shapes.DoubleLineConsumer p_83225_) {
+@@ -79,12 +_,43 @@
+       }, true);
+    }
+ 
++   // Paper start - optimise collisions
++   private List<AABB> toAabbsUncached() {
++      final List<AABB> ret = new java.util.ArrayList<>();
++      if (this.singleAABBRepresentation != null) {
++         ret.add(this.singleAABBRepresentation);
++      } else {
++         this.m_83286_((minX, minY, minZ, maxX, maxY, maxZ) -> {
++            ret.add(new AABB(minX, minY, minZ, maxX, maxY, maxZ));
++         });
++      }
++
++      // cache result
++      this.cachedToAABBs = new io.papermc.paper.util.collisions.CachedToAABBs(ret, false, 0.0, 0.0, 0.0);
++
++      return ret;
++   }
++   // Paper end - optimise collisions
++
+    public List<AABB> m_83299_() {
+-      List<AABB> list = Lists.newArrayList();
+-      this.m_83286_((p_83267_, p_83268_, p_83269_, p_83270_, p_83271_, p_83272_) -> {
+-         list.add(new AABB(p_83267_, p_83268_, p_83269_, p_83270_, p_83271_, p_83272_));
+-      });
+-      return list;
++      // Paper start - optimise collisions
++      io.papermc.paper.util.collisions.CachedToAABBs cachedToAABBs = this.cachedToAABBs;
++      if (cachedToAABBs != null) {
++         if (!cachedToAABBs.isOffset()) {
++            return cachedToAABBs.aabbs();
++         }
++
++         // all we need to do is offset the cache
++         cachedToAABBs = cachedToAABBs.removeOffset();
++         // update cache
++         this.cachedToAABBs = cachedToAABBs;
++
++         return cachedToAABBs.aabbs();
++      }
++
++      // make new cache
++      return this.toAabbsUncached();
++      // Paper end - optimise collisions
+    }
+ 
+    public double m_166078_(Direction.Axis p_166079_, double p_166080_, double p_166081_) {
+@@ -111,37 +_,85 @@
+       }) - 1;
+    }
+ 
++   // Paper start - optimise collisions
++   /**
++    * Copy of AABB#clip but for one AABB
++    */
++   private static BlockHitResult clip(final AABB aabb, final Vec3 from, final Vec3 to, final BlockPos offset) {
++      final double[] minDistanceArr = new double[] { 1.0 };
++      final double diffX = to.f_82479_ - from.f_82479_;
++      final double diffY = to.f_82480_ - from.f_82480_;
++      final double diffZ = to.f_82481_ - from.f_82481_;
++
++      final Direction direction = AABB.m_82325_(aabb.m_82338_(offset), from, minDistanceArr, null, diffX, diffY, diffZ);
++
++      if (direction == null) {
++         return null;
++      }
++
++      final double minDistance = minDistanceArr[0];
++      return new BlockHitResult(from.m_82520_(minDistance * diffX, minDistance * diffY, minDistance * diffZ), direction, offset, false);
++   }
++   // Paper end - optimise collisions
++
+    @Nullable
+    public BlockHitResult m_83220_(Vec3 p_83221_, Vec3 p_83222_, BlockPos p_83223_) {
+-      if (this.m_83281_()) {
+-         return null;
+-      } else {
+-         Vec3 vec3 = p_83222_.m_82546_(p_83221_);
+-         if (vec3.m_82556_() < 1.0E-7D) {
+-            return null;
+-         } else {
+-            Vec3 vec31 = p_83221_.m_82549_(vec3.m_82490_(0.001D));
+-            return this.f_83211_.m_82846_(this.m_6595_(Direction.Axis.X, vec31.f_82479_ - (double)p_83223_.m_123341_()), this.m_6595_(Direction.Axis.Y, vec31.f_82480_ - (double)p_83223_.m_123342_()), this.m_6595_(Direction.Axis.Z, vec31.f_82481_ - (double)p_83223_.m_123343_())) ? new BlockHitResult(vec31, Direction.m_122366_(vec3.f_82479_, vec3.f_82480_, vec3.f_82481_).m_122424_(), p_83223_, true) : AABB.m_82342_(this.m_83299_(), p_83221_, p_83222_, p_83223_);
++      // Paper start - optimise collisions
++      if (this.isEmpty) {
++         return null;
++      }
++
++      final Vec3 directionOpposite = p_83222_.m_82546_(p_83221_);
++      if (directionOpposite.m_82556_() < io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON) {
++         return null;
++      }
++
++      final Vec3 fromBehind = p_83221_.m_82549_(directionOpposite.m_82490_(0.001));
++      final double fromBehindOffsetX = fromBehind.f_82479_ - (double)p_83223_.m_123341_();
++      final double fromBehindOffsetY = fromBehind.f_82480_ - (double)p_83223_.m_123342_();
++      final double fromBehindOffsetZ = fromBehind.f_82481_ - (double)p_83223_.m_123343_();
++
++      final AABB singleAABB = this.singleAABBRepresentation;
++      if (singleAABB != null) {
++         if (singleAABB.m_82393_(fromBehindOffsetX, fromBehindOffsetY, fromBehindOffsetZ)) {
++            return new BlockHitResult(fromBehind, Direction.m_122366_(directionOpposite.f_82479_, directionOpposite.f_82480_, directionOpposite.f_82481_).m_122424_(), p_83223_, true);
+          }
+-      }
++         return clip(singleAABB, p_83221_, p_83222_, p_83223_);
++      }
++
++      if (io.papermc.paper.util.CollisionUtil.strictlyContains(this, fromBehindOffsetX, fromBehindOffsetY, fromBehindOffsetZ)) {
++         return new BlockHitResult(fromBehind, Direction.m_122366_(directionOpposite.f_82479_, directionOpposite.f_82480_, directionOpposite.f_82481_).m_122424_(), p_83223_, true);
++      }
++
++      return AABB.m_82342_(this.m_83299_(), p_83221_, p_83222_, p_83223_);
++      // Paper end - optimise collisions
+    }
+ 
+    public Optional<Vec3> m_166067_(Vec3 p_166068_) {
+-      if (this.m_83281_()) {
++      // Paper start - optimise collisions
++      if (this.isEmpty) {
+          return Optional.empty();
+-      } else {
+-         Vec3[] avec3 = new Vec3[1];
+-         this.m_83286_((p_166072_, p_166073_, p_166074_, p_166075_, p_166076_, p_166077_) -> {
+-            double d0 = Mth.m_14008_(p_166068_.m_7096_(), p_166072_, p_166075_);
+-            double d1 = Mth.m_14008_(p_166068_.m_7098_(), p_166073_, p_166076_);
+-            double d2 = Mth.m_14008_(p_166068_.m_7094_(), p_166074_, p_166077_);
+-            if (avec3[0] == null || p_166068_.m_82531_(d0, d1, d2) < p_166068_.m_82557_(avec3[0])) {
+-               avec3[0] = new Vec3(d0, d1, d2);
+-            }
+-
+-         });
+-         return Optional.of(avec3[0]);
+-      }
++      }
++
++      Vec3 ret = null;
++      double retDistance = Double.MAX_VALUE;
++
++      final List<AABB> aabbs = this.m_83299_();
++      for (int i = 0, len = aabbs.size(); i < len; ++i) {
++         final AABB aabb = aabbs.get(i);
++         final double x = Mth.m_14008_(p_166068_.f_82479_, aabb.f_82288_, aabb.f_82291_);
++         final double y = Mth.m_14008_(p_166068_.f_82480_, aabb.f_82289_, aabb.f_82292_);
++         final double z = Mth.m_14008_(p_166068_.f_82481_, aabb.f_82290_, aabb.f_82293_);
++
++         double dist = p_166068_.m_82531_(x, y, z);
++         if (dist < retDistance) {
++            ret = new Vec3(x, y, z);
++            retDistance = dist;
++         }
++      }
++
++      return Optional.ofNullable(ret);
++      // Paper end - optimise collisions
+    }
+ 
+    public VoxelShape m_83263_(Direction p_83264_) {
 @@ -163,7 +_,7 @@
        }
     }
@@ -28,3 +696,33 @@
        Direction.Axis direction$axis = p_83295_.m_122434_();
        DoubleList doublelist = this.m_7700_(direction$axis);
        if (doublelist.size() == 2 && DoubleMath.fuzzyEquals(doublelist.getDouble(0), 0.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(doublelist.getDouble(1), 1.0D, 1.0E-7D)) {
+@@ -176,7 +_,28 @@
+    }
+ 
+    public double m_83259_(Direction.Axis p_83260_, AABB p_83261_, double p_83262_) {
+-      return this.m_83245_(AxisCycle.m_121799_(p_83260_, Direction.Axis.X), p_83261_, p_83262_);
++      // Paper start - optimise collisions
++      if (this.isEmpty) {
++         return p_83262_;
++      }
++      if (Math.abs(p_83262_) < io.papermc.paper.util.CollisionUtil.COLLISION_EPSILON) {
++         return 0.0;
++      }
++      switch (p_83260_) {
++         case X: {
++            return io.papermc.paper.util.CollisionUtil.collideX(this, p_83261_, p_83262_);
++         }
++         case Y: {
++            return io.papermc.paper.util.CollisionUtil.collideY(this, p_83261_, p_83262_);
++         }
++         case Z: {
++            return io.papermc.paper.util.CollisionUtil.collideZ(this, p_83261_, p_83262_);
++         }
++         default: {
++            throw new RuntimeException("Unknown axis: " + p_83260_);
++         }
++      }
++      // Paper end - optimise collisions
+    }
+ 
+    protected double m_83245_(AxisCycle p_83246_, AABB p_83247_, double p_83248_) {

@@ -32,6 +32,15 @@
        } else if (blockstate.m_60815_()) {
           Block.BlockStatePairKey block$blockstatepairkey = new Block.BlockStatePairKey(p_152445_, blockstate, p_152448_);
           Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey> object2bytelinkedopenhashmap = f_49789_.get();
+@@ -236,7 +_,7 @@
+    }
+ 
+    public static boolean m_49916_(VoxelShape p_49917_) {
+-      return f_49785_.getUnchecked(p_49917_);
++      return p_49917_.isFullBlock(); // Paper - optimise collisions
+    }
+ 
+    public boolean m_7420_(BlockState p_49928_, BlockGetter p_49929_, BlockPos p_49930_) {
 @@ -326,7 +_,7 @@
     }
  

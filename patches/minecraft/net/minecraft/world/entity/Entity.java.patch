@@ -484,7 +484,7 @@
              return blockpos1;
           }
        }
-@@ -797,29 +_,78 @@
+@@ -797,29 +_,86 @@
     }
  
     private Vec3 m_20272_(Vec3 p_20273_) {
@@ -512,8 +512,10 @@
 -
 -      return vec3;
 +      // Paper start - optimise collisions
-+      // This is a copy of vanilla's except that it uses strictly AABB math
-+      if (p_20273_.f_82479_ == 0.0 && p_20273_.f_82480_ == 0.0 && p_20273_.f_82481_ == 0.0) {
++      final boolean xZero = p_20273_.f_82479_ == 0.0;
++      final boolean yZero = p_20273_.f_82480_ == 0.0;
++      final boolean zZero = p_20273_.f_82481_ == 0.0;
++      if (xZero & yZero & zZero) {
 +         return p_20273_;
 +      }
 +
@@ -524,63 +526,69 @@
 +         return p_20273_;
 +      }
 +
-+      final List<AABB> potentialCollisions = io.papermc.paper.util.CachedLists.getTempCollisionList();
-+      try {
-+         final double stepHeight = (double)this.f_19793_;
-+         final AABB collisionBox;
++      final List<AABB> potentialCollisionsBB = new java.util.ArrayList<>();
++      final List<VoxelShape> potentialCollisionsVoxel = new java.util.ArrayList<>();
++      final double stepHeight = (double)this.f_19793_;
++      final AABB collisionBox;
++      final boolean onGround = this.f_19861_;
 +
-+         if (p_20273_.f_82479_ == 0.0 && p_20273_.f_82481_ == 0.0 && p_20273_.f_82480_ != 0.0) {
-+            if (p_20273_.f_82480_ > 0.0) {
-+               collisionBox = io.papermc.paper.util.CollisionUtil.cutUpwards(currBoundingBox, p_20273_.f_82480_);
++      if (xZero & zZero) {
++         if (p_20273_.f_82480_ > 0.0) {
++            collisionBox = io.papermc.paper.util.CollisionUtil.cutUpwards(currBoundingBox, p_20273_.f_82480_);
++         } else {
++            collisionBox = io.papermc.paper.util.CollisionUtil.cutDownwards(currBoundingBox, p_20273_.f_82480_);
++         }
++      } else {
++         // note: xZero == false or zZero == false
++         if (stepHeight > 0.0 && (onGround || (p_20273_.f_82480_ < 0.0))) {
++            // don't bother getting the collisions if we don't need them.
++            if (p_20273_.f_82480_ <= 0.0) {
++               collisionBox = io.papermc.paper.util.CollisionUtil.expandUpwards(currBoundingBox.m_82363_(p_20273_.f_82479_, p_20273_.f_82480_, p_20273_.f_82481_), stepHeight);
 +            } else {
-+               collisionBox = io.papermc.paper.util.CollisionUtil.cutDownwards(currBoundingBox, p_20273_.f_82480_);
++               collisionBox = currBoundingBox.m_82363_(p_20273_.f_82479_, Math.max(stepHeight, p_20273_.f_82480_), p_20273_.f_82481_);
 +            }
 +         } else {
-+            if (stepHeight > 0.0 && (this.f_19861_ || (p_20273_.f_82480_ < 0.0)) && (p_20273_.f_82479_ != 0.0 || p_20273_.f_82481_ != 0.0)) {
-+               // don't bother getting the collisions if we don't need them.
-+               if (p_20273_.f_82480_ <= 0.0) {
-+                  collisionBox = io.papermc.paper.util.CollisionUtil.expandUpwards(currBoundingBox.m_82363_(p_20273_.f_82479_, p_20273_.f_82480_, p_20273_.f_82481_), stepHeight);
-+               } else {
-+                  collisionBox = currBoundingBox.m_82363_(p_20273_.f_82479_, Math.max(stepHeight, p_20273_.f_82480_), p_20273_.f_82481_);
-+               }
-+            } else {
-+               collisionBox = currBoundingBox.m_82363_(p_20273_.f_82479_, p_20273_.f_82480_, p_20273_.f_82481_);
++            collisionBox = currBoundingBox.m_82363_(p_20273_.f_82479_, p_20273_.f_82480_, p_20273_.f_82481_);
++         }
++      }
++
++      io.papermc.paper.util.CollisionUtil.getCollisions(
++              world, this, collisionBox, potentialCollisionsVoxel, potentialCollisionsBB,
++              (0),
++              null, null
++      );
++
++      if (io.papermc.paper.util.CollisionUtil.isCollidingWithBorderEdge(world.m_6857_(), collisionBox)) {
++         potentialCollisionsVoxel.add(world.m_6857_().m_61946_());
++      }
++
++      if (potentialCollisionsVoxel.isEmpty() && potentialCollisionsBB.isEmpty()) {
++         return p_20273_;
++      }
++
++      final Vec3 limitedMoveVector = io.papermc.paper.util.CollisionUtil.performCollisions(p_20273_, currBoundingBox, potentialCollisionsVoxel, potentialCollisionsBB);
++
++      if (stepHeight > 0.0
++              && (onGround || (limitedMoveVector.f_82480_ != p_20273_.f_82480_ && p_20273_.f_82480_ < 0.0))
++              && (limitedMoveVector.f_82479_ != p_20273_.f_82479_ || limitedMoveVector.f_82481_ != p_20273_.f_82481_)) {
++         Vec3 vec3d2 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(p_20273_.f_82479_, stepHeight, p_20273_.f_82481_), currBoundingBox, potentialCollisionsVoxel, potentialCollisionsBB);
++         final Vec3 vec3d3 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(0.0, stepHeight, 0.0), currBoundingBox.m_82363_(p_20273_.f_82479_, 0.0, p_20273_.f_82481_), potentialCollisionsVoxel, potentialCollisionsBB);
++
++         if (vec3d3.f_82480_ < stepHeight) {
++            final Vec3 vec3d4 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), currBoundingBox.m_82383_(vec3d3), potentialCollisionsVoxel, potentialCollisionsBB).m_82549_(vec3d3);
++
++            if (vec3d4.m_165925_() > vec3d2.m_165925_()) {
++               vec3d2 = vec3d4;
 +            }
 +         }
 +
-+         io.papermc.paper.util.CollisionUtil.getCollisions(world, this, collisionBox, potentialCollisions, false, GoldenForgeConfig.Server.preventMovingIntoUnloadedChunks.get(),
-+                 false, false, null, null);
-+
-+         if (collidingWithWorldBorder = io.papermc.paper.util.CollisionUtil.isCollidingWithBorderEdge(world.m_6857_(), collisionBox)) { // Paper - this line *is* correct, ignore the IDE warning about assignments being used as a condition
-+            io.papermc.paper.util.CollisionUtil.addBoxesToIfIntersects(world.m_6857_().m_61946_(), collisionBox, potentialCollisions);
++         if (vec3d2.m_165925_() > limitedMoveVector.m_165925_()) {
++            return vec3d2.m_82549_(io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(0.0D, -vec3d2.f_82480_ + p_20273_.f_82480_, 0.0D), currBoundingBox.m_82383_(vec3d2), potentialCollisionsVoxel, potentialCollisionsBB));
 +         }
 +
-+         final Vec3 limitedMoveVector = io.papermc.paper.util.CollisionUtil.performCollisions(p_20273_, currBoundingBox, potentialCollisions);
-+
-+         if (stepHeight > 0.0
-+                 && (this.f_19861_ || (limitedMoveVector.f_82480_ != p_20273_.f_82480_ && p_20273_.f_82480_ < 0.0))
-+                 && (limitedMoveVector.f_82479_ != p_20273_.f_82479_ || limitedMoveVector.f_82481_ != p_20273_.f_82481_)) {
-+            Vec3 vec3d2 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(p_20273_.f_82479_, stepHeight, p_20273_.f_82481_), currBoundingBox, potentialCollisions);
-+            final Vec3 vec3d3 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(0.0, stepHeight, 0.0), currBoundingBox.m_82363_(p_20273_.f_82479_, 0.0, p_20273_.f_82481_), potentialCollisions);
-+
-+            if (vec3d3.f_82480_ < stepHeight) {
-+               final Vec3 vec3d4 = io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(p_20273_.f_82479_, 0.0D, p_20273_.f_82481_), currBoundingBox.m_82383_(vec3d3), potentialCollisions).m_82549_(vec3d3);
-+
-+               if (vec3d4.m_165925_() > vec3d2.m_165925_()) {
-+                  vec3d2 = vec3d4;
-+               }
-+            }
-+
-+            if (vec3d2.m_165925_() > limitedMoveVector.m_165925_()) {
-+               return vec3d2.m_82549_(io.papermc.paper.util.CollisionUtil.performCollisions(new Vec3(0.0D, -vec3d2.f_82480_ + p_20273_.f_82480_, 0.0D), currBoundingBox.m_82383_(vec3d2), potentialCollisions));
-+            }
-+
-+            return limitedMoveVector;
-+         } else {
-+            return limitedMoveVector;
-+         }
-+      } finally {
-+         io.papermc.paper.util.CachedLists.returnTempCollisionList(potentialCollisions);
++         return limitedMoveVector;
++      } else {
++         return limitedMoveVector;
 +      }
 +      // Paper end - optimise collisions
     }
@@ -758,37 +766,79 @@
           this.f_19853_.m_7967_(itementity);
           return itementity;
        }
-@@ -1677,10 +_,30 @@
+@@ -1676,11 +_,71 @@
+          return false;
        } else {
           float f = this.f_19815_.f_20377_ * 0.8F;
-          AABB aabb = AABB.m_165882_(this.m_146892_(), (double)f, 1.0E-6D, (double)f);
+-         AABB aabb = AABB.m_165882_(this.m_146892_(), (double)f, 1.0E-6D, (double)f);
 -         return BlockPos.m_121921_(aabb).anyMatch((p_201942_) -> {
 -            BlockState blockstate = this.f_19853_.m_8055_(p_201942_);
 -            return !blockstate.m_60795_() && blockstate.m_60828_(this.f_19853_, p_201942_) && Shapes.m_83157_(blockstate.m_60812_(this.f_19853_, p_201942_).m_83216_((double)p_201942_.m_123341_(), (double)p_201942_.m_123342_(), (double)p_201942_.m_123343_()), Shapes.m_83064_(aabb), BooleanOp.f_82689_);
 -         });
-+         BlockPos.MutableBlockPos blockposition = new BlockPos.MutableBlockPos();
-+         int minX = Mth.m_14107_(aabb.f_82288_);
-+         int minY = Mth.m_14107_(aabb.f_82289_);
-+         int minZ = Mth.m_14107_(aabb.f_82290_);
-+         int maxX = Mth.m_14107_(aabb.f_82291_);
-+         int maxY = Mth.m_14107_(aabb.f_82292_);
-+         int maxZ = Mth.m_14107_(aabb.f_82293_);
++         AABB axisalignedbb = AABB.m_165882_(this.m_146892_(), (double)f, 1.0E-6D, (double)f);
++         // Paper start - optimise collisions
++         if (io.papermc.paper.util.CollisionUtil.isEmpty(axisalignedbb)) {
++            return false;
++         }
++
++         final BlockPos.MutableBlockPos tempPos = new BlockPos.MutableBlockPos();
++
++         final int minX = Mth.m_14107_(axisalignedbb.f_82288_);
++         final int minY = Mth.m_14107_(axisalignedbb.f_82289_);
++         final int minZ = Mth.m_14107_(axisalignedbb.f_82290_);
++         final int maxX = Mth.m_14107_(axisalignedbb.f_82291_);
++         final int maxY = Mth.m_14107_(axisalignedbb.f_82292_);
++         final int maxZ = Mth.m_14107_(axisalignedbb.f_82293_);
++
++         final net.minecraft.server.level.ServerChunkCache chunkProvider = (net.minecraft.server.level.ServerChunkCache)this.f_19853_.m_7726_();
++
++         long lastChunkKey = ChunkPos.f_45577_;
++         net.minecraft.world.level.chunk.LevelChunk lastChunk = null;
 +         for (int fz = minZ; fz <= maxZ; ++fz) {
++            tempPos.m_142443_(fz);
 +            for (int fx = minX; fx <= maxX; ++fx) {
++               final int newChunkX = fx >> 4;
++               final int newChunkZ = fz >> 4;
++               final net.minecraft.world.level.chunk.LevelChunk chunk = lastChunkKey == (lastChunkKey = io.papermc.paper.util.CoordinateUtils.getChunkKey(newChunkX, newChunkZ)) ?
++                       lastChunk : (lastChunk = chunkProvider.getChunkAtIfLoadedImmediately(fx >> 4, fz >> 4));
++               tempPos.m_142451_(fx);
++               if (chunk == null) {
++                  continue;
++               }
 +               for (int fy = minY; fy <= maxY; ++fy) {
-+                  net.minecraft.world.level.chunk.LevelChunk chunk = (net.minecraft.world.level.chunk.LevelChunk)this.f_19853_.getChunkIfLoadedImmediately(fx >> 4, fz >> 4);
-+                  if (chunk == null) {
++                  tempPos.m_142448_(fy);
++
++                  final BlockState state = chunk.m_8055_(tempPos);
++
++                  if (state.emptyCollisionShape() || !state.m_60828_(this.f_19853_, tempPos)) {
 +                     continue;
 +                  }
 +
-+                  BlockState iblockdata = chunk.getBlockStateFinal(fx, fy, fz);
-+                  blockposition.m_122178_(fx, fy, fz);
-+                  if (!iblockdata.m_60795_() && iblockdata.m_60828_(this.f_19853_, blockposition) && Shapes.m_83157_(iblockdata.m_60812_(this.f_19853_, blockposition).m_83216_((double) blockposition.m_123341_(), (double) blockposition.m_123342_(), (double) blockposition.m_123343_()), Shapes.m_83064_(aabb), BooleanOp.f_82689_)) {
++                  // Yes, it does not use the Entity context stuff.
++                  final VoxelShape collisionShape = state.m_60812_(this.f_19853_, tempPos);
++
++                  if (collisionShape.m_83281_()) {
++                     continue;
++                  }
++
++                  final AABB toCollide = axisalignedbb.m_82386_(-(double)fx, -(double)fy, -(double)fz);
++
++                  final AABB singleAABB = collisionShape.getSingleAABBRepresentation();
++                  if (singleAABB != null) {
++                     if (io.papermc.paper.util.CollisionUtil.voxelShapeIntersect(singleAABB, toCollide)) {
++                        return true;
++                     }
++                     continue;
++                  }
++
++                  if (io.papermc.paper.util.CollisionUtil.voxelShapeIntersectNoEmpty(collisionShape, axisalignedbb)) {
 +                     return true;
 +                  }
++                  continue;
 +               }
 +            }
 +         }
++         // Paper end - optimise collisions
 +         return false;
        }
     }

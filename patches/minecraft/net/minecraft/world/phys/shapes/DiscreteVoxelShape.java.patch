@@ -1,0 +1,74 @@
+--- a/net/minecraft/world/phys/shapes/DiscreteVoxelShape.java
++++ b/net/minecraft/world/phys/shapes/DiscreteVoxelShape.java
+@@ -9,6 +_,71 @@
+    protected final int f_82782_;
+    protected final int f_82783_;
+ 
++   // Paper start - optimise collisions
++   private io.papermc.paper.util.collisions.CachedShapeData cachedShapeData;
++
++   public final io.papermc.paper.util.collisions.CachedShapeData getOrCreateCachedShapeData() {
++      if (this.cachedShapeData != null) {
++         return this.cachedShapeData;
++      }
++
++      final DiscreteVoxelShape discreteVoxelShape = (DiscreteVoxelShape)(Object)this;
++
++      final int sizeX = discreteVoxelShape.m_82828_();
++      final int sizeY = discreteVoxelShape.m_82845_();
++      final int sizeZ = discreteVoxelShape.m_82852_();
++
++      final int maxIndex = sizeX * sizeY * sizeZ; // exclusive
++
++      final int longsRequired = (maxIndex + (Long.SIZE - 1)) >>> 6;
++      long[] voxelSet;
++
++      final boolean isEmpty = discreteVoxelShape.m_6224_();
++
++      if (discreteVoxelShape instanceof BitSetDiscreteVoxelShape bitsetShape) {
++         voxelSet = bitsetShape.f_82580_.toLongArray();
++         if (voxelSet.length < longsRequired) {
++            // happens when the later long values are 0L, so we need to resize
++            voxelSet = java.util.Arrays.copyOf(voxelSet, longsRequired);
++         }
++      } else {
++         voxelSet = new long[longsRequired];
++         if (!isEmpty) {
++            final int mulX = sizeZ * sizeY;
++            for (int x = 0; x < sizeX; ++x) {
++               for (int y = 0; y < sizeY; ++y) {
++                  for (int z = 0; z < sizeZ; ++z) {
++                     if (discreteVoxelShape.m_6696_(x, y, z)) {
++                        // index = z + y*size_z + x*(size_z*size_y)
++                        final int index = z + y * sizeZ + x * mulX;
++
++                        voxelSet[index >>> 6] |= 1L << index;
++                     }
++                  }
++               }
++            }
++         }
++      }
++
++      final boolean hasSingleAABB = sizeX == 1 && sizeY == 1 && sizeZ == 1 && !isEmpty && discreteVoxelShape.m_6696_(0, 0, 0);
++
++      final int minFullX = discreteVoxelShape.m_6538_(Direction.Axis.X);
++      final int minFullY = discreteVoxelShape.m_6538_(Direction.Axis.Y);
++      final int minFullZ = discreteVoxelShape.m_6538_(Direction.Axis.Z);
++
++      final int maxFullX = discreteVoxelShape.m_6536_(Direction.Axis.X);
++      final int maxFullY = discreteVoxelShape.m_6536_(Direction.Axis.Y);
++      final int maxFullZ = discreteVoxelShape.m_6536_(Direction.Axis.Z);
++
++      return this.cachedShapeData = new io.papermc.paper.util.collisions.CachedShapeData(
++              sizeX, sizeY, sizeZ, voxelSet,
++              minFullX, minFullY, minFullZ,
++              maxFullX, maxFullY, maxFullZ,
++              isEmpty, hasSingleAABB
++      );
++   }
++   // Paper end - optimise collisions
++
+    protected DiscreteVoxelShape(int p_82787_, int p_82788_, int p_82789_) {
+       if (p_82787_ >= 0 && p_82788_ >= 0 && p_82789_ >= 0) {
+          this.f_82781_ = p_82787_;

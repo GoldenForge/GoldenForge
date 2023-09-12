@@ -9,3 +9,12 @@
     };
     private final NonNullList<ItemStack> f_31538_ = NonNullList.m_122780_(2, ItemStack.f_41583_);
     private final NonNullList<ItemStack> f_31539_ = NonNullList.m_122780_(4, ItemStack.f_41583_);
+@@ -277,7 +_,7 @@
+    }
+ 
+    protected void m_6138_() {
+-      List<Entity> list = this.f_19853_.m_6249_(this, this.m_20191_(), f_31537_);
++      List<AbstractMinecart> list = this.f_19853_.m_6443_(AbstractMinecart.class, this.m_20191_(), ArmorStand.f_31537_); // Paper - optimise collisions
+ 
+       for(int i = 0; i < list.size(); ++i) {
+          Entity entity = list.get(i);

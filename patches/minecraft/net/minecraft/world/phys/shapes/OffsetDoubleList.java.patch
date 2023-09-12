@@ -1,0 +1,13 @@
+--- a/net/minecraft/world/phys/shapes/OffsetDoubleList.java
++++ b/net/minecraft/world/phys/shapes/OffsetDoubleList.java
+@@ -4,8 +_,8 @@
+ import it.unimi.dsi.fastutil.doubles.DoubleList;
+ 
+ public class OffsetDoubleList extends AbstractDoubleList {
+-   private final DoubleList f_83028_;
+-   private final double f_83029_;
++   public final DoubleList f_83028_; // Paper - optimise collisions - public
++   public final double f_83029_; // Paper - optimise collisions - public
+ 
+    public OffsetDoubleList(DoubleList p_83031_, double p_83032_) {
+       this.f_83028_ = p_83031_;
