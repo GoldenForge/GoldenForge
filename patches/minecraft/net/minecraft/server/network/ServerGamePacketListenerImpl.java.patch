@@ -20,7 +20,16 @@
     public static final double f_215198_ = Mth.m_144952_(6.0D);
     private static final int f_215199_ = -1;
     private static final int f_241635_ = 4096;
-@@ -227,6 +_,14 @@
+@@ -191,7 +_,7 @@
+    public ServerPlayer f_9743_;
+    private int f_9746_;
+    private int f_215200_ = -1;
+-   private long f_9747_;
++   private long f_9747_ = Util.m_137550_();
+    private boolean f_9748_;
+    private long f_9749_;
+    private int f_9750_;
+@@ -227,6 +_,15 @@
     private final LastSeenMessagesValidator f_241654_ = new LastSeenMessagesValidator();
     private final FutureChain f_241681_;
  
@@ -30,6 +39,7 @@
 +   private int allowedPlayerTicks = 1;
 +   private boolean justTeleported = false;
 +   private boolean hasMoved; // Spigot
++   private static final long KEEPALIVE_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000; // Paper - provide property to set keepalive limit
 +
 +
     public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_) {
@@ -44,6 +54,38 @@
     }
  
     public void m_9933_() {
+@@ -295,17 +_,25 @@
+       }
+ 
+       this.f_9745_.m_129905_().m_6180_("keepAlive");
+-      long i = Util.m_137550_();
+-      if (i - this.f_9747_ >= 15000L) {
+-         if (this.f_9748_) {
++      // Paper Start - give clients a longer time to respond to pings as per pre 1.12.2 timings
++      // This should effectively place the keepalive handling back to "as it was" before 1.12.2
++      long currentTime = Util.m_137550_();
++      long elapsedTime = currentTime - this.f_9747_;
++
++      if (this.f_9748_) {
++         if (!this.processedDisconnect && elapsedTime >= KEEPALIVE_LIMIT) { // check keepalive limit, don't fire if already disconnected
++            ServerGamePacketListenerImpl.f_9744_.warn("{} was kicked due to keepalive timeout!", this.f_9743_.m_6302_()); // more info
+             this.m_9942_(Component.m_237115_("disconnect.timeout"));
+-         } else {
++         }
++      } else {
++         if (elapsedTime >= 15000L) { // 15 seconds
+             this.f_9748_ = true;
+-            this.f_9747_ = i;
+-            this.f_9749_ = i;
++            this.f_9747_ = currentTime;
++            this.f_9749_ = currentTime;
+             this.m_9829_(new ClientboundKeepAlivePacket(this.f_9749_));
+          }
+       }
++      // Paper end
+ 
+       this.f_9745_.m_129905_().m_7238_();
+       if (this.f_9750_ > 0) {
 @@ -345,7 +_,7 @@
           this.f_9742_.m_129507_(p_9943_);
        }));
@@ -802,6 +844,16 @@
        f_9744_.info("{} lost connection: {}", this.f_9743_.m_7755_().getString(), p_9825_.getString());
        this.f_9745_.m_129929_();
        this.f_9745_.m_6846_().m_240416_(Component.m_237110_("multiplayer.player.left", this.f_9743_.m_5446_()).m_130940_(ChatFormatting.YELLOW), false);
+@@ -1148,6 +_,9 @@
+    }
+ 
+    public void m_243119_(Packet<?> p_243227_, @Nullable PacketSendListener p_243273_) {
++      if (this.processedDisconnect) { // Spigot
++         return;
++      }
+       try {
+          this.f_9742_.m_243124_(p_243227_, p_243273_);
+       } catch (Throwable throwable) {
 @@ -1179,20 +_,22 @@
           this.m_9942_(Component.m_237115_("multiplayer.disconnect.illegal_characters"));
        } else {
