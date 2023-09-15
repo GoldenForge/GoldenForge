@@ -800,7 +800,7 @@
 +               final int newChunkX = fx >> 4;
 +               final int newChunkZ = fz >> 4;
 +               final net.minecraft.world.level.chunk.LevelChunk chunk = lastChunkKey == (lastChunkKey = io.papermc.paper.util.CoordinateUtils.getChunkKey(newChunkX, newChunkZ)) ?
-+                       lastChunk : (lastChunk = chunkProvider.getChunkAtIfLoadedImmediately(fx >> 4, fz >> 4));
++                       lastChunk : (lastChunk = chunkProvider.getChunkAtIfLoadedImmediately(newChunkX, newChunkZ));
 +               tempPos.m_142451_(fx);
 +               if (chunk == null) {
 +                  continue;
@@ -831,7 +831,7 @@
 +                     continue;
 +                  }
 +
-+                  if (io.papermc.paper.util.CollisionUtil.voxelShapeIntersectNoEmpty(collisionShape, axisalignedbb)) {
++                  if (io.papermc.paper.util.CollisionUtil.voxelShapeIntersectNoEmpty(collisionShape, toCollide)) {
 +                     return true;
 +                  }
 +                  continue;

@@ -315,7 +315,7 @@
 +   }
 +   // Paper end - optimise collisions
 +
-+   protected VoxelShape(DiscreteVoxelShape p_83214_) {
++   protected VoxelShape(DiscreteVoxelShape p_83214_) { // Paper - protected
        this.f_83211_ = p_83214_;
     }
  
@@ -413,7 +413,7 @@
     }
  
     protected double m_83256_(Direction.Axis p_83257_, int p_83258_) {
-@@ -49,19 +_,106 @@
+@@ -49,134 +_,321 @@
     protected abstract DoubleList m_7700_(Direction.Axis p_83249_);
  
     public boolean m_83281_() {
@@ -528,10 +528,27 @@
     }
  
     public void m_83224_(Shapes.DoubleLineConsumer p_83225_) {
-@@ -79,12 +_,43 @@
+-      this.f_83211_.m_82819_((p_83228_, p_83229_, p_83230_, p_83231_, p_83232_, p_83233_) -> {
+-         p_83225_.m_83161_(this.m_83256_(Direction.Axis.X, p_83228_), this.m_83256_(Direction.Axis.Y, p_83229_), this.m_83256_(Direction.Axis.Z, p_83230_), this.m_83256_(Direction.Axis.X, p_83231_), this.m_83256_(Direction.Axis.Y, p_83232_), this.m_83256_(Direction.Axis.Z, p_83233_));
++      this.f_83211_.m_82819_((minX, minY, minZ, maxX, maxY, maxZ) -> {
++         p_83225_.m_83161_(this.m_83256_(Direction.Axis.X, minX), this.m_83256_(Direction.Axis.Y, minY), this.m_83256_(Direction.Axis.Z, minZ), this.m_83256_(Direction.Axis.X, maxX), this.m_83256_(Direction.Axis.Y, maxY), this.m_83256_(Direction.Axis.Z, maxZ));
        }, true);
     }
  
+    public void m_83286_(Shapes.DoubleLineConsumer p_83287_) {
+-      DoubleList doublelist = this.m_7700_(Direction.Axis.X);
+-      DoubleList doublelist1 = this.m_7700_(Direction.Axis.Y);
+-      DoubleList doublelist2 = this.m_7700_(Direction.Axis.Z);
+-      this.f_83211_.m_82832_((p_83239_, p_83240_, p_83241_, p_83242_, p_83243_, p_83244_) -> {
+-         p_83287_.m_83161_(doublelist.getDouble(p_83239_), doublelist1.getDouble(p_83240_), doublelist2.getDouble(p_83241_), doublelist.getDouble(p_83242_), doublelist1.getDouble(p_83243_), doublelist2.getDouble(p_83244_));
++      DoubleList doubleList = this.m_7700_(Direction.Axis.X);
++      DoubleList doubleList2 = this.m_7700_(Direction.Axis.Y);
++      DoubleList doubleList3 = this.m_7700_(Direction.Axis.Z);
++      this.f_83211_.m_82832_((minX, minY, minZ, maxX, maxY, maxZ) -> {
++         p_83287_.m_83161_(doubleList.getDouble(minX), doubleList2.getDouble(minY), doubleList3.getDouble(minZ), doubleList.getDouble(maxX), doubleList2.getDouble(maxY), doubleList3.getDouble(maxZ));
+       }, true);
+    }
++
 +   // Paper start - optimise collisions
 +   private List<AABB> toAabbsUncached() {
 +      final List<AABB> ret = new java.util.ArrayList<>();
@@ -549,7 +566,7 @@
 +      return ret;
 +   }
 +   // Paper end - optimise collisions
-+
+ 
     public List<AABB> m_83299_() {
 -      List<AABB> list = Lists.newArrayList();
 -      this.m_83286_((p_83267_, p_83268_, p_83269_, p_83270_, p_83271_, p_83272_) -> {
@@ -577,7 +594,36 @@
     }
  
     public double m_166078_(Direction.Axis p_166079_, double p_166080_, double p_166081_) {
-@@ -111,37 +_,85 @@
+-      Direction.Axis direction$axis = AxisCycle.FORWARD.m_7314_(p_166079_);
+-      Direction.Axis direction$axis1 = AxisCycle.BACKWARD.m_7314_(p_166079_);
+-      int i = this.m_6595_(direction$axis, p_166080_);
+-      int j = this.m_6595_(direction$axis1, p_166081_);
++      Direction.Axis axis2 = AxisCycle.FORWARD.m_7314_(p_166079_);
++      Direction.Axis axis3 = AxisCycle.BACKWARD.m_7314_(p_166079_);
++      int i = this.m_6595_(axis2, p_166080_);
++      int j = this.m_6595_(axis3, p_166081_);
+       int k = this.f_83211_.m_165994_(p_166079_, i, j);
+       return k >= this.f_83211_.m_82850_(p_166079_) ? Double.POSITIVE_INFINITY : this.m_83256_(p_166079_, k);
+    }
+ 
+    public double m_83290_(Direction.Axis p_83291_, double p_83292_, double p_83293_) {
+-      Direction.Axis direction$axis = AxisCycle.FORWARD.m_7314_(p_83291_);
+-      Direction.Axis direction$axis1 = AxisCycle.BACKWARD.m_7314_(p_83291_);
+-      int i = this.m_6595_(direction$axis, p_83292_);
+-      int j = this.m_6595_(direction$axis1, p_83293_);
++      Direction.Axis axis2 = AxisCycle.FORWARD.m_7314_(p_83291_);
++      Direction.Axis axis3 = AxisCycle.BACKWARD.m_7314_(p_83291_);
++      int i = this.m_6595_(axis2, p_83292_);
++      int j = this.m_6595_(axis3, p_83293_);
+       int k = this.f_83211_.m_82841_(p_83291_, i, j);
+       return k <= 0 ? Double.NEGATIVE_INFINITY : this.m_83256_(p_83291_, k);
+    }
+ 
+    protected int m_6595_(Direction.Axis p_83250_, double p_83251_) {
+-      return Mth.m_14049_(0, this.f_83211_.m_82850_(p_83250_) + 1, (p_166066_) -> {
+-         return p_83251_ < this.m_83256_(p_83250_, p_166066_);
++      return Mth.m_14049_(0, this.f_83211_.m_82850_(p_83250_) + 1, (i) -> {
++         return p_83251_ < this.m_83256_(p_83250_, i);
        }) - 1;
     }
  
@@ -687,16 +733,46 @@
     }
  
     public VoxelShape m_83263_(Direction p_83264_) {
-@@ -163,7 +_,7 @@
+       if (!this.m_83281_() && this != Shapes.m_83144_()) {
+          if (this.f_83212_ != null) {
+-            VoxelShape voxelshape = this.f_83212_[p_83264_.ordinal()];
+-            if (voxelshape != null) {
+-               return voxelshape;
++            VoxelShape voxelShape = this.f_83212_[p_83264_.ordinal()];
++            if (voxelShape != null) {
++               return voxelShape;
+             }
+          } else {
+             this.f_83212_ = new VoxelShape[6];
+          }
+ 
+-         VoxelShape voxelshape1 = this.m_83294_(p_83264_);
+-         this.f_83212_[p_83264_.ordinal()] = voxelshape1;
+-         return voxelshape1;
++         VoxelShape voxelShape2 = this.m_83294_(p_83264_);
++         this.f_83212_[p_83264_.ordinal()] = voxelShape2;
++         return voxelShape2;
+       } else {
+          return this;
        }
     }
  
--   private VoxelShape m_83294_(Direction p_83295_) {
-+   protected VoxelShape m_83294_(Direction p_83295_) {
-       Direction.Axis direction$axis = p_83295_.m_122434_();
-       DoubleList doublelist = this.m_7700_(direction$axis);
-       if (doublelist.size() == 2 && DoubleMath.fuzzyEquals(doublelist.getDouble(0), 0.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(doublelist.getDouble(1), 1.0D, 1.0E-7D)) {
-@@ -176,7 +_,28 @@
+    private VoxelShape m_83294_(Direction p_83295_) {
+-      Direction.Axis direction$axis = p_83295_.m_122434_();
+-      DoubleList doublelist = this.m_7700_(direction$axis);
+-      if (doublelist.size() == 2 && DoubleMath.fuzzyEquals(doublelist.getDouble(0), 0.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(doublelist.getDouble(1), 1.0D, 1.0E-7D)) {
++      Direction.Axis axis = p_83295_.m_122434_();
++      DoubleList doubleList = this.m_7700_(axis);
++      if (doubleList.size() == 2 && DoubleMath.fuzzyEquals(doubleList.getDouble(0), 0.0D, 1.0E-7D) && DoubleMath.fuzzyEquals(doubleList.getDouble(1), 1.0D, 1.0E-7D)) {
+          return this;
+       } else {
+-         Direction.AxisDirection direction$axisdirection = p_83295_.m_122421_();
+-         int i = this.m_6595_(direction$axis, direction$axisdirection == Direction.AxisDirection.POSITIVE ? 0.9999999D : 1.0E-7D);
+-         return new SliceShape(this, direction$axis, i);
++         Direction.AxisDirection axisDirection = p_83295_.m_122421_();
++         int i = this.m_6595_(axis, axisDirection == Direction.AxisDirection.POSITIVE ? 0.9999999D : 1.0E-7D);
++         return new SliceShape(this, axis, i);
+       }
     }
  
     public double m_83259_(Direction.Axis p_83260_, AABB p_83261_, double p_83262_) {
@@ -726,3 +802,80 @@
     }
  
     protected double m_83245_(AxisCycle p_83246_, AABB p_83247_, double p_83248_) {
+@@ -185,27 +_,27 @@
+       } else if (Math.abs(p_83248_) < 1.0E-7D) {
+          return 0.0D;
+       } else {
+-         AxisCycle axiscycle = p_83246_.m_7634_();
+-         Direction.Axis direction$axis = axiscycle.m_7314_(Direction.Axis.X);
+-         Direction.Axis direction$axis1 = axiscycle.m_7314_(Direction.Axis.Y);
+-         Direction.Axis direction$axis2 = axiscycle.m_7314_(Direction.Axis.Z);
+-         double d0 = p_83247_.m_82374_(direction$axis);
+-         double d1 = p_83247_.m_82340_(direction$axis);
+-         int i = this.m_6595_(direction$axis, d1 + 1.0E-7D);
+-         int j = this.m_6595_(direction$axis, d0 - 1.0E-7D);
+-         int k = Math.max(0, this.m_6595_(direction$axis1, p_83247_.m_82340_(direction$axis1) + 1.0E-7D));
+-         int l = Math.min(this.f_83211_.m_82850_(direction$axis1), this.m_6595_(direction$axis1, p_83247_.m_82374_(direction$axis1) - 1.0E-7D) + 1);
+-         int i1 = Math.max(0, this.m_6595_(direction$axis2, p_83247_.m_82340_(direction$axis2) + 1.0E-7D));
+-         int j1 = Math.min(this.f_83211_.m_82850_(direction$axis2), this.m_6595_(direction$axis2, p_83247_.m_82374_(direction$axis2) - 1.0E-7D) + 1);
+-         int k1 = this.f_83211_.m_82850_(direction$axis);
++         AxisCycle axisCycle2 = p_83246_.m_7634_();
++         Direction.Axis axis = axisCycle2.m_7314_(Direction.Axis.X);
++         Direction.Axis axis2 = axisCycle2.m_7314_(Direction.Axis.Y);
++         Direction.Axis axis3 = axisCycle2.m_7314_(Direction.Axis.Z);
++         double d = p_83247_.m_82374_(axis);
++         double e = p_83247_.m_82340_(axis);
++         int i = this.m_6595_(axis, e + 1.0E-7D);
++         int j = this.m_6595_(axis, d - 1.0E-7D);
++         int k = Math.max(0, this.m_6595_(axis2, p_83247_.m_82340_(axis2) + 1.0E-7D));
++         int l = Math.min(this.f_83211_.m_82850_(axis2), this.m_6595_(axis2, p_83247_.m_82374_(axis2) - 1.0E-7D) + 1);
++         int m = Math.max(0, this.m_6595_(axis3, p_83247_.m_82340_(axis3) + 1.0E-7D));
++         int n = Math.min(this.f_83211_.m_82850_(axis3), this.m_6595_(axis3, p_83247_.m_82374_(axis3) - 1.0E-7D) + 1);
++         int o = this.f_83211_.m_82850_(axis);
+          if (p_83248_ > 0.0D) {
+-            for(int l1 = j + 1; l1 < k1; ++l1) {
+-               for(int i2 = k; i2 < l; ++i2) {
+-                  for(int j2 = i1; j2 < j1; ++j2) {
+-                     if (this.f_83211_.m_82822_(axiscycle, l1, i2, j2)) {
+-                        double d2 = this.m_83256_(direction$axis, l1) - d0;
+-                        if (d2 >= -1.0E-7D) {
+-                           p_83248_ = Math.min(p_83248_, d2);
++            for(int p = j + 1; p < o; ++p) {
++               for(int q = k; q < l; ++q) {
++                  for(int r = m; r < n; ++r) {
++                     if (this.f_83211_.m_82822_(axisCycle2, p, q, r)) {
++                        double f = this.m_83256_(axis, p) - d;
++                        if (f >= -1.0E-7D) {
++                           p_83248_ = Math.min(p_83248_, f);
+                         }
+ 
+                         return p_83248_;
+@@ -214,13 +_,13 @@
+                }
+             }
+          } else if (p_83248_ < 0.0D) {
+-            for(int k2 = i - 1; k2 >= 0; --k2) {
+-               for(int l2 = k; l2 < l; ++l2) {
+-                  for(int i3 = i1; i3 < j1; ++i3) {
+-                     if (this.f_83211_.m_82822_(axiscycle, k2, l2, i3)) {
+-                        double d3 = this.m_83256_(direction$axis, k2 + 1) - d1;
+-                        if (d3 <= 1.0E-7D) {
+-                           p_83248_ = Math.max(p_83248_, d3);
++            for(int s = i - 1; s >= 0; --s) {
++               for(int t = k; t < l; ++t) {
++                  for(int u = m; u < n; ++u) {
++                     if (this.f_83211_.m_82822_(axisCycle2, s, t, u)) {
++                        double g = this.m_83256_(axis, s + 1) - e;
++                        if (g <= 1.0E-7D) {
++                           p_83248_ = Math.max(p_83248_, g);
+                         }
+ 
+                         return p_83248_;
+@@ -234,6 +_,7 @@
+       }
+    }
+ 
++   @Override
+    public String toString() {
+       return this.m_83281_() ? "EMPTY" : "VoxelShape[" + this.m_83215_() + "]";
+    }

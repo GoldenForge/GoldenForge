@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/phys/shapes/Shapes.java
 +++ b/net/minecraft/world/phys/shapes/Shapes.java
-@@ -16,19 +_,47 @@
+@@ -16,13 +_,43 @@
     public static final double f_166025_ = 1.0E-7D;
     public static final double f_166026_ = 1.0E-6D;
     private static final VoxelShape f_83037_ = Util.m_137537_(() -> {
@@ -19,7 +19,7 @@
     });
     public static final VoxelShape f_83036_ = m_83048_(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
     private static final VoxelShape f_83038_ = new ArrayVoxelShape(new BitSetDiscreteVoxelShape(0, 0, 0), (DoubleList)(new DoubleArrayList(new double[]{0.0D})), (DoubleList)(new DoubleArrayList(new double[]{0.0D})), (DoubleList)(new DoubleArrayList(new double[]{0.0D})));
--
+ 
 +   // Paper start - optimise collisions - force arrayvoxelshape
 +   private static final DoubleArrayList[] PARTS_BY_BITS = new DoubleArrayList[] {
 +           DoubleArrayList.wrap(generateCubeParts(1 << 0)),
@@ -43,16 +43,10 @@
 +      return ret;
 +   }
 +   // Paper end - optimise collisions - force arrayvoxelshape
++
     public static VoxelShape m_83040_() {
        return f_83038_;
     }
- 
-    public static VoxelShape m_83144_() {
--      return f_83037_;
-+      return f_83037_; // Paper
-    }
- 
-    public static VoxelShape m_83048_(double p_83049_, double p_83050_, double p_83051_, double p_83052_, double p_83053_, double p_83054_) {
 @@ -41,22 +_,39 @@
  
     public static VoxelShape m_166049_(double p_166050_, double p_166051_, double p_166052_, double p_166053_, double p_166054_, double p_166055_) {
@@ -105,7 +99,24 @@
        } else {
           return m_83040_();
        }
-@@ -95,67 +_,53 @@
+@@ -71,11 +_,11 @@
+       if (!(p_83042_ < -1.0E-7D) && !(p_83043_ > 1.0000001D)) {
+          for(int i = 0; i <= 3; ++i) {
+             int j = 1 << i;
+-            double d0 = p_83042_ * (double)j;
+-            double d1 = p_83043_ * (double)j;
+-            boolean flag = Math.abs(d0 - (double)Math.round(d0)) < 1.0E-7D * (double)j;
+-            boolean flag1 = Math.abs(d1 - (double)Math.round(d1)) < 1.0E-7D * (double)j;
+-            if (flag && flag1) {
++            double d = p_83042_ * (double)j;
++            double e = p_83043_ * (double)j;
++            boolean bl = Math.abs(d - (double)Math.round(d)) < 1.0E-7D * (double)j;
++            boolean bl2 = Math.abs(e - (double)Math.round(e)) < 1.0E-7D * (double)j;
++            if (bl && bl2) {
+                return i;
+             }
+          }
+@@ -95,175 +_,232 @@
     }
  
     public static VoxelShape m_83124_(VoxelShape p_83125_, VoxelShape... p_83126_) {
@@ -211,7 +222,31 @@
     }
  
     private static boolean m_83103_(IndexMerger p_83104_, IndexMerger p_83105_, IndexMerger p_83106_, DiscreteVoxelShape p_83107_, DiscreteVoxelShape p_83108_, BooleanOp p_83109_) {
-@@ -181,89 +_,160 @@
+-      return !p_83104_.m_6200_((p_83100_, p_83101_, p_83102_) -> {
+-         return p_83105_.m_6200_((p_166046_, p_166047_, p_166048_) -> {
+-            return p_83106_.m_6200_((p_166036_, p_166037_, p_166038_) -> {
+-               return !p_83109_.m_82701_(p_83107_.m_82846_(p_83100_, p_166046_, p_166036_), p_83108_.m_82846_(p_83101_, p_166047_, p_166037_));
++      return !p_83104_.m_6200_((x1, x2, index1) -> {
++         return p_83105_.m_6200_((y1, y2, index2) -> {
++            return p_83106_.m_6200_((z1, z2, index3) -> {
++               return !p_83109_.m_82701_(p_83107_.m_82846_(x1, y1, z1), p_83108_.m_82846_(x2, y2, z2));
+             });
+          });
+       });
+    }
+ 
+    public static double m_193135_(Direction.Axis p_193136_, AABB p_193137_, Iterable<VoxelShape> p_193138_, double p_193139_) {
+-      for(VoxelShape voxelshape : p_193138_) {
++      for(VoxelShape voxelShape : p_193138_) {
+          if (Math.abs(p_193139_) < 1.0E-7D) {
+             return 0.0D;
+          }
+ 
+-         p_193139_ = voxelshape.m_83259_(p_193136_, p_193137_, p_193139_);
++         p_193139_ = voxelShape.m_83259_(p_193136_, p_193137_, p_193139_);
+       }
+ 
+       return p_193139_;
     }
  
     public static boolean m_83117_(VoxelShape p_83118_, VoxelShape p_83119_, Direction p_83120_) {
