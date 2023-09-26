@@ -1,13 +1,219 @@
 --- a/net/minecraft/world/level/chunk/storage/ChunkSerializer.java
 +++ b/net/minecraft/world/level/chunk/storage/ChunkSerializer.java
-@@ -159,6 +_,7 @@
+@@ -3,14 +_,13 @@
+ import com.google.common.collect.Maps;
+ import com.mojang.logging.LogUtils;
+ import com.mojang.serialization.Codec;
++import com.mojang.serialization.DataResult;
+ import com.mojang.serialization.Dynamic;
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortList;
+-import java.util.Arrays;
+-import java.util.EnumSet;
+-import java.util.Map;
+-import java.util.Objects;
++
++import java.util.*;
+ import javax.annotation.Nullable;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+@@ -19,12 +_,7 @@
+ import net.minecraft.core.SectionPos;
+ import net.minecraft.core.registries.BuiltInRegistries;
+ import net.minecraft.core.registries.Registries;
+-import net.minecraft.nbt.CompoundTag;
+-import net.minecraft.nbt.ListTag;
+-import net.minecraft.nbt.LongArrayTag;
+-import net.minecraft.nbt.NbtOps;
+-import net.minecraft.nbt.NbtUtils;
+-import net.minecraft.nbt.ShortTag;
++import net.minecraft.nbt.*;
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.entity.EntityType;
+@@ -76,6 +_,73 @@
+    public static final String BLOCK_LIGHT_TAG = "BlockLight";
+    public static final String SKY_LIGHT_TAG = "SkyLight";
+ 
++   // Paper start - replace light engine impl
++   private static final int STARLIGHT_LIGHT_VERSION = 9;
++
++   private static final String BLOCKLIGHT_STATE_TAG = "starlight.blocklight_state";
++   private static final String SKYLIGHT_STATE_TAG = "starlight.skylight_state";
++   private static final String STARLIGHT_VERSION_TAG = "starlight.light_version";
++   // Paper end - replace light engine impl
++
++
++   // Paper start - async chunk save for unload
++   public record AsyncSaveData(
++           Tag blockTickList, // non-null if we had to go to the server's tick list
++           Tag fluidTickList, // non-null if we had to go to the server's tick list
++           ListTag blockEntities,
++           long worldTime
++   ) {}
++
++   // must be called sync
++   public static AsyncSaveData getAsyncSaveData(ServerLevel world, ChunkAccess chunk) {
++      //org.spigotmc.AsyncCatcher.catchOp("preparation of chunk data for async save");
++
++      final CompoundTag tickLists = new CompoundTag();
++      ChunkSerializer.saveTicks(world, tickLists, chunk.getTicksForSerialization());
++
++      ListTag blockEntitiesSerialized = new ListTag();
++      for (final BlockPos blockPos : chunk.getBlockEntitiesPos()) {
++         final CompoundTag blockEntityNbt = chunk.getBlockEntityNbtForSaving(blockPos);
++         if (blockEntityNbt != null) {
++            blockEntitiesSerialized.add(blockEntityNbt);
++         }
++      }
++
++      return new AsyncSaveData(
++              tickLists.get(BLOCK_TICKS_TAG),
++              tickLists.get(FLUID_TICKS_TAG),
++              blockEntitiesSerialized,
++              world.getGameTime()
++      );
++   }
++   // Paper end
++
++   // Paper start - guard against serializing mismatching coordinates
++   // TODO Note: This needs to be re-checked each update
++   public static ChunkPos getChunkCoordinate(CompoundTag chunkData) {
++      final int dataVersion = ChunkStorage.getVersion(chunkData);
++      if (dataVersion < 2842) { // Level tag is removed after this version
++         final CompoundTag levelData = chunkData.getCompound("Level");
++         return new ChunkPos(levelData.getInt("xPos"), levelData.getInt("zPos"));
++      } else {
++         return new ChunkPos(chunkData.getInt("xPos"), chunkData.getInt("zPos"));
++      }
++   }
++   // Paper end
++
++   // Paper start
++   // TODO: Check on update
++   public static long getLastWorldSaveTime(CompoundTag chunkData) {
++      final int dataVersion = ChunkStorage.getVersion(chunkData);
++      if (dataVersion < 2842) { // Level tag is removed after this version
++         final CompoundTag levelData = chunkData.getCompound("Level");
++         return levelData.getLong("LastUpdate");
++      } else {
++         return chunkData.getLong("LastUpdate");
++      }
++   }
++   // Paper end
++
+    public static ProtoChunk read(ServerLevel p_188231_, PoiManager p_188232_, ChunkPos p_188233_, CompoundTag p_188234_) {
+       ChunkPos chunkpos = new ChunkPos(p_188234_.getInt("xPos"), p_188234_.getInt("zPos"));
+       if (!Objects.equals(p_188233_, chunkpos)) {
+@@ -83,19 +_,26 @@
+       }
+ 
+       UpgradeData upgradedata = p_188234_.contains("UpgradeData", 10) ? new UpgradeData(p_188234_.getCompound("UpgradeData"), p_188231_) : UpgradeData.EMPTY;
+-      boolean flag = p_188234_.getBoolean("isLightOn");
++      boolean flag = getStatus(p_188234_) != null && getStatus(p_188234_).isOrAfter(ChunkStatus.LIGHT) && p_188234_.get("isLightOn") != null && p_188234_.getInt(STARLIGHT_VERSION_TAG) == STARLIGHT_LIGHT_VERSION; // Paper
+       ListTag listtag = p_188234_.getList("sections", 10);
+       int i = p_188231_.getSectionsCount();
+       LevelChunkSection[] alevelchunksection = new LevelChunkSection[i];
+       boolean flag1 = p_188231_.dimensionType().hasSkyLight();
+       ChunkSource chunksource = p_188231_.getChunkSource();
+       LevelLightEngine levellightengine = chunksource.getLightEngine();
++      // Paper start
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles = ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_188231_);
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles = ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_188231_);
++      final int minSection = io.papermc.paper.util.WorldUtil.getMinLightSection(p_188231_);
++      final int maxSection = io.papermc.paper.util.WorldUtil.getMaxLightSection(p_188231_);
++      boolean canReadSky = p_188231_.dimensionType().hasSkyLight();
++      // Paper end
+       Registry<Biome> registry = p_188231_.registryAccess().registryOrThrow(Registries.BIOME);
+       Codec<PalettedContainerRO<Holder<Biome>>> codec = makeBiomeCodec(registry);
+       boolean flag2 = false;
+ 
+       for(int j = 0; j < listtag.size(); ++j) {
+-         CompoundTag compoundtag = listtag.getCompound(j);
++         CompoundTag compoundtag = listtag.getCompound(j); CompoundTag sectionData = compoundtag; // Paper
+          int k = compoundtag.getByte("Y");
+          int l = p_188231_.getSectionIndexFromSectionY(k);
+          if (l >= 0 && l < alevelchunksection.length) {
+@@ -120,24 +_,44 @@
+             LevelChunkSection levelchunksection = new LevelChunkSection(palettedcontainer, palettedcontainerro);
+             alevelchunksection[l] = levelchunksection;
+             SectionPos sectionpos = SectionPos.of(p_188233_, k);
+-            p_188232_.checkConsistencyWithBlocks(sectionpos, levelchunksection);
++            //p_188232_.checkConsistencyWithBlocks(sectionpos, levelchunksection);
+          }
+ 
+          boolean flag3 = compoundtag.contains("BlockLight", 7);
+          boolean flag4 = flag1 && compoundtag.contains("SkyLight", 7);
+-         if (flag3 || flag4) {
+-            if (!flag2) {
+-               levellightengine.retainData(p_188233_, true);
+-               flag2 = true;
+-            }
+-
+-            if (flag3) {
+-               levellightengine.queueSectionData(LightLayer.BLOCK, SectionPos.of(p_188233_, k), new DataLayer(compoundtag.getByteArray("BlockLight")));
+-            }
+-
+-            if (flag4) {
+-               levellightengine.queueSectionData(LightLayer.SKY, SectionPos.of(p_188233_, k), new DataLayer(compoundtag.getByteArray("SkyLight")));
+-            }
++         // Paper start - rewrite the light engine
++         if (flag) {
++            try {
++               int y = sectionData.getByte("Y");
++               // Paper end - rewrite the light engine
++               if (flag3) {
++                  // Paper start - rewrite the light engine
++                  // this is where our diff is
++                  blockNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(sectionData.getByteArray("BlockLight").clone(), sectionData.getInt(BLOCKLIGHT_STATE_TAG)); // clone for data safety
++               } else {
++                  blockNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(null, sectionData.getInt(BLOCKLIGHT_STATE_TAG));
++                  // Paper end - rewrite the light engine
++               }
++
++               if (flag4) {
++                  // Paper start - rewrite the light engine
++                  // we store under the same key so mod programs editing nbt
++                  // can still read the data, hopefully.
++                  // however, for compatibility we store chunks as unlit so vanilla
++                  // is forced to re-light them if it encounters our data. It's too much of a burden
++                  // to try and maintain compatibility with a broken and inferior skylight management system.
++                  skyNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(sectionData.getByteArray("SkyLight").clone(), sectionData.getInt(SKYLIGHT_STATE_TAG)); // clone for data safety
++               } else if (flag1) {
++                  skyNibbles[y - minSection] = new ca.spottedleaf.starlight.common.light.SWMRNibbleArray(null, sectionData.getInt(SKYLIGHT_STATE_TAG));
++                  // Paper end - rewrite the light engine
++               }
++
++               // Paper start - rewrite the light engine
++            } catch (Exception ex) {
++               LOGGER.warn("Failed to load light data for chunk " + p_188233_ + " in world '" + p_188231_.dimension().location() + "', light will be regenerated", ex);
++               flag = false;
++            }
++            // Paper end - rewrite light engine
+          }
+       }
+ 
+@@ -159,6 +_,9 @@
              return BuiltInRegistries.FLUID.getOptional(ResourceLocation.tryParse(p_258990_));
           }, p_188233_);
           chunkaccess = new LevelChunk(p_188231_.getLevel(), p_188233_, upgradedata, levelchunkticks, levelchunkticks1, k1, alevelchunksection, postLoadChunk(p_188231_, p_188234_), blendingdata);
++         ((LevelChunk)chunkaccess).setBlockNibbles(blockNibbles); // Paper - replace light impl
++         ((LevelChunk)chunkaccess).setSkyNibbles(skyNibbles); // Paper - replace light impl
 +         if (p_188234_.contains("ForgeCaps")) ((LevelChunk)chunkaccess).readCapsFromNBT(p_188234_.getCompound("ForgeCaps"));
        } else {
           ProtoChunkTicks<Block> protochunkticks = ProtoChunkTicks.load(p_188234_.getList("block_ticks", 10), (p_258992_) -> {
              return BuiltInRegistries.BLOCK.getOptional(ResourceLocation.tryParse(p_258992_));
+@@ -167,6 +_,9 @@
+             return BuiltInRegistries.FLUID.getOptional(ResourceLocation.tryParse(p_258991_));
+          }, p_188233_);
+          ProtoChunk protochunk = new ProtoChunk(p_188233_, upgradedata, alevelchunksection, protochunkticks, protochunkticks1, p_188231_, registry, blendingdata);
++         protochunk.setBlockNibbles(blockNibbles); // Paper - replace light impl
++         protochunk.setSkyNibbles(skyNibbles); // Paper - replace light impl
++
+          chunkaccess = protochunk;
+          protochunk.setInhabitedTime(k1);
+          if (p_188234_.contains("below_zero_retrogen", 10)) {
 @@ -212,6 +_,7 @@
        }
  
@@ -24,11 +230,148 @@
           return protochunk1;
        }
     }
-@@ -340,6 +_,14 @@
+@@ -248,12 +_,19 @@
+    }
+ 
+    public static CompoundTag write(ServerLevel p_63455_, ChunkAccess p_63456_) {
++      // Paper start - rewrite light impl
++      final int minSection = io.papermc.paper.util.WorldUtil.getMinLightSection(p_63455_);
++      final int maxSection = io.papermc.paper.util.WorldUtil.getMaxLightSection(p_63455_);
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles = p_63456_.getBlockNibbles();
++      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles = p_63456_.getSkyNibbles();
++      // Paper end - rewrite light impl
++      AsyncSaveData asyncsavedata = p_63456_.asyncsavedata;
+       ChunkPos chunkpos = p_63456_.getPos();
+       CompoundTag compoundtag = NbtUtils.addCurrentDataVersion(new CompoundTag());
+       compoundtag.putInt("xPos", chunkpos.x);
+       compoundtag.putInt("yPos", p_63456_.getMinSection());
+       compoundtag.putInt("zPos", chunkpos.z);
+-      compoundtag.putLong("LastUpdate", p_63455_.getGameTime());
++      compoundtag.putLong("LastUpdate", asyncsavedata != null ? asyncsavedata.worldTime : p_63455_.getGameTime()); // Paper - async chunk unloading // Paper - diff on change
+       compoundtag.putLong("InhabitedTime", p_63456_.getInhabitedTime());
+       compoundtag.putString("Status", BuiltInRegistries.CHUNK_STATUS.getKey(p_63456_.getStatus()).toString());
+       BlendingData blendingdata = p_63456_.getBlendingData();
+@@ -285,46 +_,86 @@
+       for(int i = levellightengine.getMinLightSection(); i < levellightengine.getMaxLightSection(); ++i) {
+          int j = p_63456_.getSectionIndexFromSectionY(i);
+          boolean flag1 = j >= 0 && j < alevelchunksection.length;
+-         DataLayer datalayer = levellightengine.getLayerListener(LightLayer.BLOCK).getDataLayerData(SectionPos.of(chunkpos, i));
+-         DataLayer datalayer1 = levellightengine.getLayerListener(LightLayer.SKY).getDataLayerData(SectionPos.of(chunkpos, i));
+-         if (flag1 || datalayer != null || datalayer1 != null) {
+-            CompoundTag compoundtag1 = new CompoundTag();
++         // Paper - replace light engine
++         // Paper start - replace light engine
++         ca.spottedleaf.starlight.common.light.SWMRNibbleArray.SaveState blockNibble = blockNibbles[i - minSection].getSaveState();
++         ca.spottedleaf.starlight.common.light.SWMRNibbleArray.SaveState skyNibble = skyNibbles[i - minSection].getSaveState();
++         if (flag1 || blockNibble != null || skyNibble != null) {
++            // Paper end - replace light engine
++            CompoundTag nbttagcompound1 = new CompoundTag(); CompoundTag section = nbttagcompound1; // Paper
++
+             if (flag1) {
+-               LevelChunkSection levelchunksection = alevelchunksection[j];
+-               compoundtag1.put("block_states", BLOCK_STATE_CODEC.encodeStart(NbtOps.INSTANCE, levelchunksection.getStates()).getOrThrow(false, LOGGER::error));
+-               compoundtag1.put("biomes", codec.encodeStart(NbtOps.INSTANCE, levelchunksection.getBiomes()).getOrThrow(false, LOGGER::error));
+-            }
+-
+-            if (datalayer != null && !datalayer.isEmpty()) {
+-               compoundtag1.putByteArray("BlockLight", datalayer.getData());
+-            }
+-
+-            if (datalayer1 != null && !datalayer1.isEmpty()) {
+-               compoundtag1.putByteArray("SkyLight", datalayer1.getData());
+-            }
+-
+-            if (!compoundtag1.isEmpty()) {
+-               compoundtag1.putByte("Y", (byte)i);
+-               listtag.add(compoundtag1);
++               LevelChunkSection chunksection = alevelchunksection[j];
++               DataResult<Tag> dataresult1 = ChunkSerializer.BLOCK_STATE_CODEC.encodeStart(NbtOps.INSTANCE, chunksection.getStates()); // CraftBukkit - decompile error
++               Logger logger1 = ChunkSerializer.LOGGER;
++
++               Objects.requireNonNull(logger1);
++               nbttagcompound1.put("block_states", (Tag) dataresult1.getOrThrow(false, logger1::error));
++               dataresult1 = codec.encodeStart(NbtOps.INSTANCE, chunksection.getBiomes());
++               logger1 = ChunkSerializer.LOGGER;
++               Objects.requireNonNull(logger1);
++               nbttagcompound1.put("biomes", (Tag) dataresult1.getOrThrow(false, logger1::error));
++            }
++
++            // Paper start
++            // we store under the same key so mod programs editing nbt
++            // can still read the data, hopefully.
++            // however, for compatibility we store chunks as unlit so vanilla
++            // is forced to re-light them if it encounters our data. It's too much of a burden
++            // to try and maintain compatibility with a broken and inferior skylight management system.
++
++            if (blockNibble != null) {
++               if (blockNibble.data != null) {
++                  section.putByteArray("BlockLight", blockNibble.data);
++               }
++               section.putInt(BLOCKLIGHT_STATE_TAG, blockNibble.state);
++            }
++
++            if (skyNibble != null) {
++               if (skyNibble.data != null) {
++                  section.putByteArray("SkyLight", skyNibble.data);
++               }
++               section.putInt(SKYLIGHT_STATE_TAG, skyNibble.state);
++            }
++            // Paper end
++
++            if (!nbttagcompound1.isEmpty()) {
++               nbttagcompound1.putByte("Y", (byte)i);
++               listtag.add(nbttagcompound1);
+             }
           }
+       }
+ 
+       compoundtag.put("sections", listtag);
+       if (flag) {
+-         compoundtag.putBoolean("isLightOn", true);
+-      }
+-
+-      ListTag listtag1 = new ListTag();
+-
+-      for(BlockPos blockpos : p_63456_.getBlockEntitiesPos()) {
+-         CompoundTag compoundtag3 = p_63456_.getBlockEntityNbtForSaving(blockpos);
+-         if (compoundtag3 != null) {
+-            listtag1.add(compoundtag3);
++         compoundtag.putInt(STARLIGHT_VERSION_TAG, STARLIGHT_LIGHT_VERSION); // Paper
++         compoundtag.putBoolean("isLightOn", false); // Paper - set to false but still store, this allows us to detect --eraseCache (as eraseCache _removes_)
++      }
++
++      // Paper start
++      ListTag nbttaglist1;
++      Iterator<BlockPos> iterator;
++      if (asyncsavedata != null) {
++         nbttaglist1 = asyncsavedata.blockEntities;
++         iterator = java.util.Collections.emptyIterator();
++      } else {
++         nbttaglist1 = new ListTag();
++         iterator = p_63456_.getBlockEntitiesPos().iterator();
++      }
++      // Paper end
++
++      CompoundTag nbttagcompound2;
++
++      while (iterator.hasNext()) {
++         BlockPos blockposition = (BlockPos) iterator.next();
++
++         nbttagcompound2 = p_63456_.getBlockEntityNbtForSaving(blockposition);
++         if (nbttagcompound2 != null) {
++            nbttaglist1.add(nbttagcompound2);
+          }
+       }
+ 
+-      compoundtag.put("block_entities", listtag1);
++      compoundtag.put("block_entities", nbttaglist1);
+       if (p_63456_.getStatus().getChunkType() == ChunkStatus.ChunkType.PROTOCHUNK) {
+          ProtoChunk protochunk = (ProtoChunk)p_63456_;
+          ListTag listtag2 = new ListTag();
+@@ -341,8 +_,23 @@
  
           compoundtag.put("CarvingMasks", compoundtag4);
-+      }
+       }
 +      else if (p_63456_ instanceof LevelChunk levelChunk){
 +          try {
 +              final CompoundTag capTag = levelChunk.writeCapsToNBT();
@@ -36,6 +379,44 @@
 +          } catch (Exception exception) {
 +              LOGGER.error("A capability provider has thrown an exception trying to write state. It will not persist. Report this to the mod author", exception);
 +          }
-       }
++      }
  
-       saveTicks(p_63455_, compoundtag, p_63456_.getTicksForSerialization());
+-      saveTicks(p_63455_, compoundtag, p_63456_.getTicksForSerialization());
++      // Paper start
++      if (asyncsavedata != null) {
++         compoundtag.put(BLOCK_TICKS_TAG, asyncsavedata.blockTickList);
++         compoundtag.put(FLUID_TICKS_TAG, asyncsavedata.fluidTickList);
++      } else {
++         saveTicks(p_63455_, compoundtag, p_63456_.getTicksForSerialization());
++      }
++      // Paper end
+       compoundtag.put("PostProcessing", packOffsets(p_63456_.getPostProcessing()));
+       CompoundTag compoundtag2 = new CompoundTag();
+ 
+@@ -367,6 +_,17 @@
+       }));
+    }
+ 
++   // Paper start
++   public static @Nullable ChunkStatus getStatus(@Nullable CompoundTag compound) {
++      if (compound == null) {
++         return null;
++      }
++
++      // Note: Copied from below
++      return ChunkStatus.getStatus(compound.getString("Status"));
++   }
++   // Paper end
++
+    public static ChunkStatus.ChunkType getChunkTypeFromTag(@Nullable CompoundTag p_63486_) {
+       return p_63486_ != null ? ChunkStatus.byName(p_63486_.getString("Status")).getChunkType() : ChunkStatus.ChunkType.PROTOCHUNK;
+    }
+@@ -377,7 +_,7 @@
+       ListTag listtag1 = getListOfCompoundsOrNull(p_196892_, "block_entities");
+       return listtag == null && listtag1 == null ? null : (p_196904_) -> {
+          if (listtag != null) {
+-            p_196891_.addLegacyChunkEntities(EntityType.loadEntitiesRecursive(listtag, p_196891_));
++            p_196891_.addLegacyChunkEntities(EntityType.loadEntitiesRecursive(listtag, p_196891_), p_196904_.getPos()); // Paper - rewrite chunk system;
+          }
+ 
+          if (listtag1 != null) {

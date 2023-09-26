@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/level/chunk/ChunkGenerator.java
++++ b/net/minecraft/world/level/chunk/ChunkGenerator.java
+@@ -111,7 +_,7 @@
+       return CompletableFuture.supplyAsync(Util.wrapThreadWithTaskName("init_biomes", () -> {
+          p_223163_.fillBiomesFromNoise(this.biomeSource, p_223160_.sampler());
+          return p_223163_;
+-      }), Util.backgroundExecutor());
++      }), p_223159_); // Paper - run with supplied executor
+    }
+ 
+    public abstract void applyCarvers(WorldGenRegion p_223043_, long p_223044_, RandomState p_223045_, BiomeManager p_223046_, StructureManager p_223047_, ChunkAccess p_223048_, GenerationStep.Carving p_223049_);
+@@ -245,7 +_,7 @@
+                return Pair.of(p_223203_.getLocatePos(p_223204_), holder);
+             }
+ 
+-            ChunkAccess chunkaccess = p_223200_.getChunk(p_223204_.x, p_223204_.z, ChunkStatus.STRUCTURE_STARTS);
++            ChunkAccess chunkaccess = p_223200_.syncLoadNonFull(p_223204_.x, p_223204_.z, ChunkStatus.STRUCTURE_STARTS); // Paper - rewrite chunk system
+             StructureStart structurestart = p_223201_.getStartForStructure(SectionPos.bottomOf(chunkaccess), holder.value(), chunkaccess);
+             if (structurestart != null && structurestart.isValid() && (!p_223202_ || tryAddReference(p_223201_, structurestart))) {
+                return Pair.of(p_223203_.getLocatePos(structurestart.getChunkPos()), holder);

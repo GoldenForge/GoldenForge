@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/LevelChunkSection.java
++++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
+@@ -21,7 +_,7 @@
+    private short nonEmptyBlockCount;
+    private short tickingBlockCount;
+    private short tickingFluidCount;
+-   private final PalettedContainer<BlockState> states;
++   public final PalettedContainer<BlockState> states;
+    private PalettedContainerRO<Holder<Biome>> biomes;
+ 
+    public LevelChunkSection(PalettedContainer<BlockState> p_282846_, PalettedContainerRO<Holder<Biome>> p_281695_) {

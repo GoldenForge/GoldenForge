@@ -1,5 +1,77 @@
 --- a/net/minecraft/world/level/chunk/ChunkAccess.java
 +++ b/net/minecraft/world/level/chunk/ChunkAccess.java
+@@ -40,6 +_,7 @@
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.entity.BlockEntity;
+ import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.chunk.storage.ChunkSerializer;
+ import net.minecraft.world.level.gameevent.GameEventListenerRegistry;
+ import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
+ import net.minecraft.world.level.levelgen.Heightmap;
+@@ -60,7 +_,7 @@
+    protected final ShortList[] postProcessing;
+    protected volatile boolean unsaved;
+    private volatile boolean isLightCorrect;
+-   protected final ChunkPos chunkPos;
++   protected final ChunkPos chunkPos; public final long coordinateKey; public final int locX; public final int locZ; // Paper - cache coordinate key
+    private long inhabitedTime;
+    /** @deprecated */
+    @Nullable
+@@ -80,8 +_,53 @@
+    protected final LevelHeightAccessor levelHeightAccessor;
+    protected final LevelChunkSection[] sections;
+ 
++   // Paper start - rewrite light engine
++   private volatile ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles;
++
++   private volatile ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles;
++
++   private volatile boolean[] skyEmptinessMap;
++
++   private volatile boolean[] blockEmptinessMap;
++
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getBlockNibbles() {
++      return this.blockNibbles;
++   }
++
++   public void setBlockNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {
++      this.blockNibbles = nibbles;
++   }
++
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getSkyNibbles() {
++      return this.skyNibbles;
++   }
++
++   public void setSkyNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {
++      this.skyNibbles = nibbles;
++   }
++
++   public boolean[] getSkyEmptinessMap() {
++      return this.skyEmptinessMap;
++   }
++
++   public void setSkyEmptinessMap(final boolean[] emptinessMap) {
++      this.skyEmptinessMap = emptinessMap;
++   }
++
++   public boolean[] getBlockEmptinessMap() {
++      return this.blockEmptinessMap;
++   }
++
++   public void setBlockEmptinessMap(final boolean[] emptinessMap) {
++      this.blockEmptinessMap = emptinessMap;
++   }
++   // Paper end - rewrite light engine
++
++   public ChunkSerializer.AsyncSaveData asyncsavedata;
++
+    public ChunkAccess(ChunkPos p_187621_, UpgradeData p_187622_, LevelHeightAccessor p_187623_, Registry<Biome> p_187624_, long p_187625_, @Nullable LevelChunkSection[] p_187626_, @Nullable BlendingData p_187627_) {
+-      this.chunkPos = p_187621_;
++      this.locX = p_187621_.x; this.locZ = p_187621_.z; // Paper - reduce need for field lookups
++      this.chunkPos = p_187621_; this.coordinateKey = ChunkPos.asLong(locX, locZ); // Paper - cache long key
+       this.upgradeData = p_187622_;
+       this.levelHeightAccessor = p_187623_;
+       this.sections = new LevelChunkSection[p_187623_.getSectionsCount()];
 @@ -299,25 +_,30 @@
     public abstract CompoundTag getBlockEntityNbtForSaving(BlockPos p_62104_);
  

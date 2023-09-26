@@ -1,0 +1,12 @@
+--- a/net/minecraft/util/worldupdate/WorldUpgrader.java
++++ b/net/minecraft/util/worldupdate/WorldUpgrader.java
+@@ -164,6 +_,9 @@
+                      }
+ 
+                      LOGGER.error("Error upgrading chunk {}", chunkpos, throwable);
++                     // Paper start
++                  } catch (IOException e) {
++                     WorldUpgrader.LOGGER.error("Error upgrading chunk {}", chunkpos, e);
+                   }
+ 
+                   if (flag1) {

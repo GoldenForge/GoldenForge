@@ -71,12 +71,13 @@
                       WorldDimensions.Complete worlddimensions$complete = worlddimensions.bake(registry);
                       Lifecycle lifecycle = worlddimensions$complete.lifecycle().add(p_248079_.datapackWorldgen().allRegistriesLifecycle());
                       return new WorldLoader.DataLoadOutput<>(new PrimaryLevelData(levelsettings, worldoptions, worlddimensions$complete.specialWorldProperty(), lifecycle), worlddimensions$complete.dimensionsRegistryAccess());
-@@ -186,21 +_,32 @@
+@@ -186,21 +_,33 @@
  
           WorldData worlddata = worldstem.worldData();
           levelstoragesource$levelstorageaccess.saveDataTag(registryaccess$frozen, worlddata);
 -         final DedicatedServer dedicatedserver = MinecraftServer.spin((p_296433_) -> {
 -            DedicatedServer dedicatedserver1 = new DedicatedServer(p_296433_, levelstoragesource$levelstorageaccess, packrepository, worldstem, dedicatedserversettings, DataFixers.getDataFixer(), services, LoggerChunkProgressListener::new);
++         Class.forName(net.minecraft.world.entity.npc.VillagerTrades.class.getName());// Paper - load this sync so it won't fail later async
 +         final MinecraftServer dedicatedserver = MinecraftServer.spin((p_129697_) -> {
 +            MinecraftServer dedicatedserver1;
 +            if (gametestEnabled) {

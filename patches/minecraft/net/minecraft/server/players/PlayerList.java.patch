@@ -8,7 +8,20 @@
  
     public PlayerList(MinecraftServer p_203842_, LayeredRegistryAccess<RegistryLayer> p_251844_, PlayerDataStorage p_203844_, int p_203845_) {
        this.server = p_203842_;
-@@ -171,6 +_,7 @@
+@@ -135,6 +_,7 @@
+    }
+ 
+    public void placeNewPlayer(Connection p_11262_, ServerPlayer p_11263_, CommonListenerCookie p_297215_) {
++      p_11263_.isRealPlayer = true; // Paper
+       GameProfile gameprofile = p_11263_.getGameProfile();
+       GameProfileCache gameprofilecache = this.server.getProfileCache();
+       String s;
+@@ -167,10 +_,11 @@
+       boolean flag = gamerules.getBoolean(GameRules.RULE_DO_IMMEDIATE_RESPAWN);
+       boolean flag1 = gamerules.getBoolean(GameRules.RULE_REDUCEDDEBUGINFO);
+       boolean flag2 = gamerules.getBoolean(GameRules.RULE_LIMITED_CRAFTING);
+-      servergamepacketlistenerimpl.send(new ClientboundLoginPacket(p_11263_.getId(), leveldata.isHardcore(), this.server.levelKeys(), this.getMaxPlayers(), this.viewDistance, this.simulationDistance, flag1, !flag, flag2, p_11263_.createCommonSpawnInfo(serverlevel1)));
++      servergamepacketlistenerimpl.send(new ClientboundLoginPacket(p_11263_.getId(), leveldata.isHardcore(), this.server.levelKeys(), this.getMaxPlayers(), serverlevel1.getSendViewDistance(), serverlevel1.getSimulationDistance(), flag1, !flag, flag2, p_11263_.createCommonSpawnInfo(serverlevel1)));
        servergamepacketlistenerimpl.send(new ClientboundChangeDifficultyPacket(leveldata.getDifficulty(), leveldata.isDifficultyLocked()));
        servergamepacketlistenerimpl.send(new ClientboundPlayerAbilitiesPacket(p_11263_.getAbilities()));
        servergamepacketlistenerimpl.send(new ClientboundSetCarriedItemPacket(p_11263_.getInventory().selected));
@@ -72,6 +85,33 @@
        this.ops.remove(p_11281_);
        ServerPlayer serverplayer = this.getPlayer(p_11281_.getId());
        if (serverplayer != null) {
+@@ -619,10 +_,23 @@
+    }
+ 
+    public void saveAll() {
+-      for(int i = 0; i < this.players.size(); ++i) {
+-         this.save(this.players.get(i));
+-      }
++      // Paper start - incremental player saving
++      this.saveAll(-1);
++   }
+ 
++   public void saveAll(int interval) {
++      io.papermc.paper.util.MCUtil.ensureMain("Save Players" , () -> { // Paper - Ensure main
++         int numSaved = 0;
++         long now = MinecraftServer.currentTick;
++         for (int i = 0; i < this.players.size(); ++i) {
++            ServerPlayer entityplayer = this.players.get(i);
++            if (interval == -1 || now - entityplayer.lastSave >= interval) {
++               this.save(entityplayer);
++               if (interval != -1 && ++numSaved >= 10) { break; }
++            }
++            // Paper end
++         }
++         return null; }); // Paper - ensure main
+    }
+ 
+    public UserWhiteList getWhiteList() {
 @@ -773,13 +_,6 @@
        if (serverstatscounter == null) {
           File file1 = this.server.getWorldPath(LevelResource.PLAYER_STATS_DIR).toFile();
@@ -86,7 +126,7 @@
  
           serverstatscounter = new ServerStatsCounter(this.server, file2);
           this.stats.put(uuid, serverstatscounter);
-@@ -797,6 +_,8 @@
+@@ -797,13 +_,15 @@
           this.advancements.put(uuid, playeradvancements);
        }
  
@@ -95,6 +135,23 @@
        playeradvancements.setPlayer(p_11297_);
        return playeradvancements;
     }
+ 
+    public void setViewDistance(int p_11218_) {
+       this.viewDistance = p_11218_;
+-      this.broadcastAll(new ClientboundSetChunkCacheRadiusPacket(p_11218_));
++      //this.broadcastAll(new ClientboundSetChunkCacheRadiusPacket(p_11218_)); // Paper - move into setViewDistance
+ 
+       for(ServerLevel serverlevel : this.server.getAllLevels()) {
+          if (serverlevel != null) {
+@@ -815,7 +_,7 @@
+ 
+    public void setSimulationDistance(int p_184212_) {
+       this.simulationDistance = p_184212_;
+-      this.broadcastAll(new ClientboundSetSimulationDistancePacket(p_184212_));
++      //this.broadcastAll(new ClientboundSetSimulationDistancePacket(p_184212_)); // Paper - move into setViewDistance
+ 
+       for(ServerLevel serverlevel : this.server.getAllLevels()) {
+          if (serverlevel != null) {
 @@ -826,7 +_,7 @@
     }
  

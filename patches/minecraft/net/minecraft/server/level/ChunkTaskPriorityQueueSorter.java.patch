@@ -1,0 +1,16 @@
+--- a/net/minecraft/server/level/ChunkTaskPriorityQueueSorter.java
++++ b/net/minecraft/server/level/ChunkTaskPriorityQueueSorter.java
+@@ -55,11 +_,11 @@
+    }
+ 
+    public static ChunkTaskPriorityQueueSorter.Message<Runnable> message(ChunkHolder p_140643_, Runnable p_140644_) {
+-      return message(p_140644_, p_140643_.getPos().toLong(), p_140643_::getQueueLevel);
++      return message(p_140644_, p_140643_.getPos().toLong(), null);
+    }
+ 
+    public static <T> ChunkTaskPriorityQueueSorter.Message<T> message(ChunkHolder p_143157_, Function<ProcessorHandle<Unit>, T> p_143158_) {
+-      return message(p_143158_, p_143157_.getPos().toLong(), p_143157_::getQueueLevel);
++      return message(p_143158_, p_143157_.getPos().toLong(), null);
+    }
+ 
+    public static ChunkTaskPriorityQueueSorter.Release release(Runnable p_140629_, long p_140630_, boolean p_140631_) {

@@ -1,0 +1,316 @@
+--- a/net/minecraft/world/level/chunk/storage/SectionStorage.java
++++ b/net/minecraft/world/level/chunk/storage/SectionStorage.java
+@@ -34,33 +_,34 @@
+ import net.minecraft.world.level.LevelHeightAccessor;
+ import org.slf4j.Logger;
+ 
+-public class SectionStorage<R> implements AutoCloseable {
++public class SectionStorage<R> extends RegionFileStorage implements AutoCloseable { // Paper - nuke IOWorker
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final String SECTIONS_TAG = "Sections";
+-   private final IOWorker worker;
++   // Paper - remove mojang I/O thread
+    private final Long2ObjectMap<Optional<R>> storage = new Long2ObjectOpenHashMap<>();
+    private final LongLinkedOpenHashSet dirty = new LongLinkedOpenHashSet();
+    private final Function<Runnable, Codec<R>> codec;
+    private final Function<Runnable, R> factory;
+    private final DataFixer fixerUpper;
+    private final DataFixTypes type;
+-   private final RegistryAccess registryAccess;
++   public final RegistryAccess registryAccess; // Paper - rewrite chunk system
+    protected final LevelHeightAccessor levelHeightAccessor;
+ 
+-   public SectionStorage(Path p_223509_, Function<Runnable, Codec<R>> p_223510_, Function<Runnable, R> p_223511_, DataFixer p_223512_, DataFixTypes p_223513_, boolean p_223514_, RegistryAccess p_223515_, LevelHeightAccessor p_223516_) {
+-      this.codec = p_223510_;
+-      this.factory = p_223511_;
+-      this.fixerUpper = p_223512_;
+-      this.type = p_223513_;
+-      this.registryAccess = p_223515_;
+-      this.levelHeightAccessor = p_223516_;
+-      this.worker = new IOWorker(p_223509_, p_223514_, p_223509_.getFileName().toString());
++   public SectionStorage(Path path, Function<Runnable, Codec<R>> codecFactory, Function<Runnable, R> factory, DataFixer dataFixer, DataFixTypes dataFixTypes, boolean dsync, RegistryAccess dynamicRegistryManager, LevelHeightAccessor world) {
++      super(path, dsync); // Paper - remove mojang I/O thread
++      this.codec = codecFactory;
++      this.factory = factory;
++      this.fixerUpper = dataFixer;
++      this.type = dataFixTypes;
++      this.registryAccess = dynamicRegistryManager;
++      this.levelHeightAccessor = world;
++      // Paper - remove mojang I/O thread
+    }
+ 
+-   protected void tick(BooleanSupplier p_63812_) {
+-      while(this.hasWork() && p_63812_.getAsBoolean()) {
+-         ChunkPos chunkpos = SectionPos.of(this.dirty.firstLong()).chunk();
+-         this.writeColumn(chunkpos);
++   protected void tick(BooleanSupplier shouldKeepTicking) {
++      while(this.hasWork() && shouldKeepTicking.getAsBoolean()) {
++         ChunkPos chunkPos = SectionPos.of(this.dirty.firstLong()).chunk();
++         this.writeColumn(chunkPos);
+       }
+ 
+    }
+@@ -70,20 +_,20 @@
+    }
+ 
+    @Nullable
+-   protected Optional<R> get(long p_63819_) {
+-      return this.storage.get(p_63819_);
++   public Optional<R> get(long pos) { // Paper - public
++      return this.storage.get(pos);
+    }
+ 
+-   protected Optional<R> getOrLoad(long p_63824_) {
+-      if (this.outsideStoredRange(p_63824_)) {
++   public Optional<R> getOrLoad(long pos) { // Paper - public
++      if (this.outsideStoredRange(pos)) {
+          return Optional.empty();
+       } else {
+-         Optional<R> optional = this.get(p_63824_);
++         Optional<R> optional = this.get(pos);
+          if (optional != null) {
+             return optional;
+          } else {
+-            this.readColumn(SectionPos.of(p_63824_).chunk());
+-            optional = this.get(p_63824_);
++            this.readColumn(SectionPos.of(pos).chunk());
++            optional = this.get(pos);
+             if (optional == null) {
+                throw (IllegalStateException)Util.pauseInIde(new IllegalStateException());
+             } else {
+@@ -93,70 +_,75 @@
+       }
+    }
+ 
+-   protected boolean outsideStoredRange(long p_156631_) {
+-      int i = SectionPos.sectionToBlockCoord(SectionPos.y(p_156631_));
++   protected boolean outsideStoredRange(long pos) {
++      int i = SectionPos.sectionToBlockCoord(SectionPos.y(pos));
+       return this.levelHeightAccessor.isOutsideBuildHeight(i);
+    }
+ 
+-   protected R getOrCreate(long p_63828_) {
+-      if (this.outsideStoredRange(p_63828_)) {
++   protected R getOrCreate(long pos) {
++      if (this.outsideStoredRange(pos)) {
+          throw (IllegalArgumentException)Util.pauseInIde(new IllegalArgumentException("sectionPos out of bounds"));
+       } else {
+-         Optional<R> optional = this.getOrLoad(p_63828_);
++         Optional<R> optional = this.getOrLoad(pos);
+          if (optional.isPresent()) {
+             return optional.get();
+          } else {
+-            R r = this.factory.apply(() -> {
+-               this.setDirty(p_63828_);
++            R object = this.factory.apply(() -> {
++               this.setDirty(pos);
+             });
+-            this.storage.put(p_63828_, Optional.of(r));
+-            return r;
+-         }
+-      }
+-   }
+-
+-   private void readColumn(ChunkPos p_63815_) {
+-      Optional<CompoundTag> optional = this.tryRead(p_63815_).join();
+-      RegistryOps<Tag> registryops = RegistryOps.create(NbtOps.INSTANCE, this.registryAccess);
+-      this.readColumn(p_63815_, registryops, optional.orElse((CompoundTag)null));
+-   }
+-
+-   private CompletableFuture<Optional<CompoundTag>> tryRead(ChunkPos p_223533_) {
+-      return this.worker.loadAsync(p_223533_).exceptionally((p_223526_) -> {
+-         if (p_223526_ instanceof IOException ioexception) {
+-            LOGGER.error("Error reading chunk {} data from disk", p_223533_, ioexception);
+-            return Optional.empty();
+-         } else {
+-            throw new CompletionException(p_223526_);
+-         }
+-      });
+-   }
+-
+-   private <T> void readColumn(ChunkPos p_63802_, DynamicOps<T> p_63803_, @Nullable T p_63804_) {
+-      if (p_63804_ == null) {
++            this.storage.put(pos, Optional.of(object));
++            return object;
++         }
++      }
++   }
++
++   private void readColumn(ChunkPos pos) {
++      throw new IllegalStateException("Only chunk system can load in state, offending class:" + this.getClass().getName()); // Paper - rewrite chunk system
++   }
++
++   private CompletableFuture<Optional<CompoundTag>> tryRead(ChunkPos pos) {
++      // Paper start - rewrite chunk system
++      try {
++         return CompletableFuture.completedFuture(Optional.ofNullable(this.read(pos)));
++      } catch (Throwable thr) {
++         return CompletableFuture.failedFuture(thr);
++      }
++      // Paper end - rewrite chunk system
++   }
++
++   private <T> void readColumn(ChunkPos pos, DynamicOps<T> ops, @Nullable T data) {
++      if (true) throw new IllegalStateException("Only chunk system can load in state, offending class:" + this.getClass().getName()); // Paper - rewrite chunk system
++      if (data == null) {
+          for(int i = this.levelHeightAccessor.getMinSection(); i < this.levelHeightAccessor.getMaxSection(); ++i) {
+-            this.storage.put(getKey(p_63802_, i), Optional.empty());
++            this.storage.put(getKey(pos, i), Optional.empty());
+          }
+       } else {
+-         Dynamic<T> dynamic1 = new Dynamic<>(p_63803_, p_63804_);
+-         int j = getVersion(dynamic1);
++         Dynamic<T> dynamic = new Dynamic<>(ops, data);
++         int j = getVersion(dynamic);
+          int k = SharedConstants.getCurrentVersion().getDataVersion().getVersion();
+-         boolean flag = j != k;
+-         Dynamic<T> dynamic = this.type.update(this.fixerUpper, dynamic1, j, k);
+-         OptionalDynamic<T> optionaldynamic = dynamic.get("Sections");
++         boolean bl = j != k;
++         // Paper start - route to new converter system
++         Dynamic<T> dynamic2;
++         if (this.type == net.minecraft.util.datafix.DataFixTypes.POI_CHUNK) {
++            dynamic2 = new Dynamic<>(dynamic.getOps(), (T)ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.POI_CHUNK, (CompoundTag)dynamic.getValue(), j, k));
++         } else {
++            dynamic2 = this.type.update(this.fixerUpper, dynamic, j, k);
++         }
++         // Paper end - route to new converter system
++         OptionalDynamic<T> optionalDynamic = dynamic2.get("Sections");
+ 
+          for(int l = this.levelHeightAccessor.getMinSection(); l < this.levelHeightAccessor.getMaxSection(); ++l) {
+-            long i1 = getKey(p_63802_, l);
+-            Optional<R> optional = optionaldynamic.get(Integer.toString(l)).result().flatMap((p_223519_) -> {
++            long m = getKey(pos, l);
++            Optional<R> optional = optionalDynamic.get(Integer.toString(l)).result().flatMap((dynamicx) -> {
+                return this.codec.apply(() -> {
+-                  this.setDirty(i1);
+-               }).parse(p_223519_).resultOrPartial(LOGGER::error);
++                  this.setDirty(m);
++               }).parse(dynamicx).resultOrPartial(LOGGER::error);
+             });
+-            this.storage.put(i1, optional);
+-            optional.ifPresent((p_223523_) -> {
+-               this.onSectionLoad(i1);
+-               if (flag) {
+-                  this.setDirty(i1);
++            this.storage.put(m, optional);
++            optional.ifPresent((sections) -> {
++               this.onSectionLoad(m);
++               if (bl) {
++                  this.setDirty(m);
+                }
+ 
+             });
+@@ -165,65 +_,65 @@
+ 
+    }
+ 
+-   private void writeColumn(ChunkPos p_63826_) {
+-      RegistryOps<Tag> registryops = RegistryOps.create(NbtOps.INSTANCE, this.registryAccess);
+-      Dynamic<Tag> dynamic = this.writeColumn(p_63826_, registryops);
++   private void writeColumn(ChunkPos pos) {
++      RegistryOps<Tag> registryOps = RegistryOps.create(NbtOps.INSTANCE, this.registryAccess);
++      Dynamic<Tag> dynamic = this.writeColumn(pos, registryOps);
+       Tag tag = dynamic.getValue();
+       if (tag instanceof CompoundTag) {
+-         this.worker.store(p_63826_, (CompoundTag)tag);
++         try { this.write(pos, (CompoundTag)tag); } catch (IOException ioexception) { SectionStorage.LOGGER.error("Error writing data to disk", ioexception); } // Paper - nuke IOWorker
+       } else {
+          LOGGER.error("Expected compound tag, got {}", (Object)tag);
+       }
+ 
+    }
+ 
+-   private <T> Dynamic<T> writeColumn(ChunkPos p_63799_, DynamicOps<T> p_63800_) {
++   private <T> Dynamic<T> writeColumn(ChunkPos chunkPos, DynamicOps<T> ops) {
+       Map<T, T> map = Maps.newHashMap();
+ 
+       for(int i = this.levelHeightAccessor.getMinSection(); i < this.levelHeightAccessor.getMaxSection(); ++i) {
+-         long j = getKey(p_63799_, i);
+-         this.dirty.remove(j);
+-         Optional<R> optional = this.storage.get(j);
++         long l = getKey(chunkPos, i);
++         this.dirty.remove(l);
++         Optional<R> optional = this.storage.get(l);
+          if (optional != null && !optional.isEmpty()) {
+-            DataResult<T> dataresult = this.codec.apply(() -> {
+-               this.setDirty(j);
+-            }).encodeStart(p_63800_, optional.get());
+-            String s = Integer.toString(i);
+-            dataresult.resultOrPartial(LOGGER::error).ifPresent((p_223531_) -> {
+-               map.put(p_63800_.createString(s), p_223531_);
++            DataResult<T> dataResult = this.codec.apply(() -> {
++               this.setDirty(l);
++            }).encodeStart(ops, optional.get());
++            String string = Integer.toString(i);
++            dataResult.resultOrPartial(LOGGER::error).ifPresent((object) -> {
++               map.put(ops.createString(string), object);
+             });
+          }
+       }
+ 
+-      return new Dynamic<>(p_63800_, p_63800_.createMap(ImmutableMap.of(p_63800_.createString("Sections"), p_63800_.createMap(map), p_63800_.createString("DataVersion"), p_63800_.createInt(SharedConstants.getCurrentVersion().getDataVersion().getVersion()))));
+-   }
+-
+-   private static long getKey(ChunkPos p_156628_, int p_156629_) {
+-      return SectionPos.asLong(p_156628_.x, p_156629_, p_156628_.z);
+-   }
+-
+-   protected void onSectionLoad(long p_63813_) {
+-   }
+-
+-   protected void setDirty(long p_63788_) {
+-      Optional<R> optional = this.storage.get(p_63788_);
++      return new Dynamic<>(ops, ops.createMap(ImmutableMap.of(ops.createString("Sections"), ops.createMap(map), ops.createString("DataVersion"), ops.createInt(SharedConstants.getCurrentVersion().getDataVersion().getVersion()))));
++   }
++
++   private static long getKey(ChunkPos chunkPos, int y) {
++      return SectionPos.asLong(chunkPos.x, y, chunkPos.z);
++   }
++
++   protected void onSectionLoad(long pos) {
++   }
++
++   protected void setDirty(long pos) {
++      Optional<R> optional = this.storage.get(pos);
+       if (optional != null && !optional.isEmpty()) {
+-         this.dirty.add(p_63788_);
++         this.dirty.add(pos);
+       } else {
+-         LOGGER.warn("No data for position: {}", (Object)SectionPos.of(p_63788_));
++         LOGGER.warn("No data for position: {}", (Object)SectionPos.of(pos));
+       }
+    }
+ 
+-   private static int getVersion(Dynamic<?> p_63806_) {
+-      return p_63806_.get("DataVersion").asInt(1945);
++   private static int getVersion(Dynamic<?> dynamic) {
++      return dynamic.get("DataVersion").asInt(1945); // Paper - diff on change, constant used in ChunkLoadTask
+    }
+ 
+-   public void flush(ChunkPos p_63797_) {
++   public void flush(ChunkPos pos) {
+       if (this.hasWork()) {
+          for(int i = this.levelHeightAccessor.getMinSection(); i < this.levelHeightAccessor.getMaxSection(); ++i) {
+-            long j = getKey(p_63797_, i);
+-            if (this.dirty.contains(j)) {
+-               this.writeColumn(p_63797_);
++            long l = getKey(pos, i);
++            if (this.dirty.contains(l)) {
++               this.writeColumn(pos);
+                return;
+             }
+          }
+@@ -231,7 +_,11 @@
+ 
+    }
+ 
++   @Override
+    public void close() throws IOException {
+-      this.worker.close();
++      //this.worker.close(); // Paper - nuke I/O worker - don't call the worker
++      super.close(); // Paper - nuke I/O worker - call super.close method which is responsible for closing used files.
+    }
++
++   // Paper - rewrite chunk system
+ }

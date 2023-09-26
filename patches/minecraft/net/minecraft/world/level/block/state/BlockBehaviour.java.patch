@@ -55,7 +55,7 @@
        }
  
        return this.drops;
-@@ -413,6 +_,14 @@
+@@ -413,9 +_,17 @@
        return this.properties.destroyTime;
     }
  
@@ -68,8 +68,58 @@
 +   /* ========================================= FORGE END ====================================== */
 +
     public abstract static class BlockStateBase extends StateHolder<Block, BlockState> {
-       private final int lightEmission;
-       private final boolean useShapeForLightOcclusion;
+-      private final int lightEmission;
+-      private final boolean useShapeForLightOcclusion;
++      private final int lightEmission; public final int getEmittedLight() { return this.lightEmission; } // Paper - OBFHELPER
++      private final boolean useShapeForLightOcclusion; public final boolean isTransparentOnSomeFaces() { return this.useShapeForLightOcclusion; } // Paper - OBFHELPER
+       private final boolean isAir;
+       private final boolean ignitedByLava;
+       /** @deprecated */
+@@ -428,7 +_,7 @@
+       private final MapColor mapColor;
+       private final float destroySpeed;
+       private final boolean requiresCorrectToolForDrops;
+-      private final boolean canOcclude;
++      private final boolean canOcclude; public final boolean isOpaque() { return this.canOcclude; } // Paper - OBFHELPER
+       private final BlockBehaviour.StatePredicate isRedstoneConductor;
+       private final BlockBehaviour.StatePredicate isSuffocating;
+       private final BlockBehaviour.StatePredicate isViewBlocking;
+@@ -465,6 +_,7 @@
+          this.spawnTerrainParticles = blockbehaviour$properties.spawnTerrainParticles;
+          this.instrument = blockbehaviour$properties.instrument;
+          this.replaceable = blockbehaviour$properties.replaceable;
++         this.conditionallyFullOpaque = this.isOpaque() & this.isTransparentOnSomeFaces(); // Paper
+       }
+ 
+       private boolean calculateSolid() {
+@@ -489,6 +_,19 @@
+          }
+       }
+ 
++      // Paper start - starlight
++      protected int opacityIfCached = -1;
++      // ret -1 if opacity is dynamic, or -1 if the block is conditionally full opaque, else return opacity in [0, 15]
++      public final int getOpacityIfCached() {
++         return this.opacityIfCached;
++      }
++
++      protected final boolean conditionallyFullOpaque;
++      public final boolean isConditionallyFullOpaque() {
++         return this.conditionallyFullOpaque;
++      }
++      // Paper end - starlight
++
+       public void initCache() {
+          this.fluidState = this.owner.getFluidState(this.asState());
+          this.isRandomlyTicking = this.owner.isRandomlyTicking(this.asState());
+@@ -496,6 +_,7 @@
+             this.cache = new BlockBehaviour.BlockStateBase.Cache(this.asState());
+          }
+ 
++         this.opacityIfCached = this.cache == null || this.isConditionallyFullOpaque() ? -1 : this.cache.lightBlock; // Paper - starlight - cache opacity for light
+          this.legacySolid = this.calculateSolid();
+       }
+ 
 @@ -548,12 +_,14 @@
           return this.useShapeForLightOcclusion;
        }

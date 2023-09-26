@@ -35,6 +35,14 @@ public class ModConfig
         ConfigTracker.INSTANCE.trackConfig(this);
     }
 
+    public ModConfig(final Type type, final IConfigSpec<?> spec, final ModContainer container, final String fileName, boolean no) {
+        this.type = type;
+        this.spec = spec;
+        this.fileName = fileName;
+        this.container = container;
+        this.configHandler = ConfigFileTypeHandler.TOML;
+    }
+
     public ModConfig(final Type type, final IConfigSpec<?> spec, final ModContainer activeContainer) {
         this(type, spec, activeContainer, defaultConfigName(type, activeContainer.getModId()));
     }
@@ -68,12 +76,12 @@ public class ModConfig
         return this.configData;
     }
 
-    void setConfigData(final CommentedConfig configData) {
+    public void setConfigData(final CommentedConfig configData) {
         this.configData = configData;
         this.spec.acceptConfig(this.configData);
     }
 
-    void fireEvent(final IConfigEvent configEvent) {
+    public void fireEvent(final IConfigEvent configEvent) {
         this.container.dispatchConfigEvent(configEvent);
     }
 

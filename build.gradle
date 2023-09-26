@@ -981,7 +981,7 @@ project(':forge') {
     }
 
     CheckTask.registerTask(tasks, 'Patches', CheckPatches) {
-        dependsOn genPatches
+        //dependsOn genPatches
         patchDir = file("$rootDir/patches")
         patchesWithS2SArtifact = [
                 'minecraft/net/minecraft/client/renderer/ViewArea.java.patch',
@@ -995,7 +995,7 @@ project(':forge') {
     }
 
     genPatches {
-        finalizedBy checkAndFixPatches
+        //finalizedBy checkAndFixPatches
         autoHeader true
         lineEnding = '\n'
     }

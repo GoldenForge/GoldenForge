@@ -28,9 +28,62 @@
     private final Set<TagKey<Fluid>> fluidOnEyes = new HashSet<>();
     public int invulnerableTime;
     protected boolean firstTick = true;
-@@ -239,6 +_,7 @@
+@@ -238,7 +_,60 @@
+    @Nullable
     private BlockState feetBlockState = null;
  
++   // Paper start
++   /**
++    * Overriding this field will cause memory leaks.
++    */
++   private final boolean hardCollides;
++
++   private static final java.util.Map<Class<? extends Entity>, Boolean> cachedOverrides = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
++   {
++        /* // Goodbye, broken on reobf...
++        Boolean hardCollides = cachedOverrides.get(this.getClass());
++        if (hardCollides == null) {
++            try {
++                java.lang.reflect.Method getHardCollisionBoxEntityMethod = Entity.class.getMethod("canCollideWith", Entity.class);
++                java.lang.reflect.Method hasHardCollisionBoxMethod = Entity.class.getMethod("canBeCollidedWith");
++                if (!this.getClass().getMethod(hasHardCollisionBoxMethod.getName(), hasHardCollisionBoxMethod.getParameterTypes()).equals(hasHardCollisionBoxMethod)
++                        || !this.getClass().getMethod(getHardCollisionBoxEntityMethod.getName(), getHardCollisionBoxEntityMethod.getParameterTypes()).equals(getHardCollisionBoxEntityMethod)) {
++                    hardCollides = Boolean.TRUE;
++                } else {
++                    hardCollides = Boolean.FALSE;
++                }
++                cachedOverrides.put(this.getClass(), hardCollides);
++            }
++            catch (ThreadDeath thr) { throw thr; }
++            catch (Throwable thr) {
++                // shouldn't happen, just explode
++                throw new RuntimeException(thr);
++            }
++        } */
++      this.hardCollides = this instanceof Boat
++              || this instanceof net.minecraft.world.entity.monster.Shulker
++              || this instanceof net.minecraft.world.entity.vehicle.AbstractMinecart
++              || this.shouldHardCollide();
++   }
++
++   // plugins can override
++   protected boolean shouldHardCollide() {
++      return false;
++   }
++
++   public final boolean hardCollides() {
++      return this.hardCollides;
++   }
++
++   public net.minecraft.server.level.FullChunkStatus chunkStatus;
++
++   public int sectionX = Integer.MIN_VALUE;
++   public int sectionY = Integer.MIN_VALUE;
++   public int sectionZ = Integer.MIN_VALUE;
++
++   public boolean updatingSectionStatus = false;
++   // Paper end
++
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
        this.type = p_19870_;
@@ -395,6 +448,23 @@
     public boolean isPushedByFluid() {
        return true;
     }
+@@ -2899,6 +_,16 @@
+       };
+    }
+ 
++   // Paper start - rewrite chunk system
++   public boolean hasAnyPlayerPassengers() {
++      // copied from below
++      if (this.passengers.isEmpty()) { return false; }
++      return this.getIndirectPassengersStream().anyMatch((entity) -> {
++         return entity instanceof Player;
++      });
++   }
++   // Paper end - rewrite chunk system
++
+    public boolean hasExactlyOnePlayerPassenger() {
+       return this.getIndirectPassengersStream().filter((p_185943_) -> {
+          return p_185943_ instanceof Player;
 @@ -3010,9 +_,22 @@
        this.yRotO = this.getYRot();
     }
@@ -505,14 +575,53 @@
        return this.fluidHeight.getDouble(p_204037_);
     }
  
-@@ -3222,6 +_,7 @@
- 
-          this.levelCallback.onMove();
-       }
-+      if (this.isAddedToWorld() && !this.level.isClientSide && !this.isRemoved()) this.level.getChunk((int) Math.floor(p_20344_) >> 4, (int) Math.floor(p_20346_) >> 4); // Forge - ensure target chunk is loaded.
- 
+@@ -3206,7 +_,36 @@
+       return this.getZ((2.0D * this.random.nextDouble() - 1.0D) * p_20263_);
     }
  
++   // Paper start - block invalid positions
++   public static boolean checkPosition(Entity entity, double newX, double newY, double newZ) {
++      if (Double.isFinite(newX) && Double.isFinite(newY) && Double.isFinite(newZ)) {
++         return true;
++      }
++
++      String entityInfo = null;
++      try {
++         entityInfo = entity.toString();
++      } catch (Exception ex) {
++         entityInfo = "[Entity info unavailable] ";
++      }
++      LOGGER.error("New entity position is invalid! Tried to set invalid position (" + newX + "," + newY + "," + newZ + ") for entity " + entity.getClass().getName() + " located at " + entity.position + ", entity info: " + entityInfo, new Throwable());
++      return false;
++   }
++   // Paper end - block invalid positions
++
+    public final void setPosRaw(double p_20344_, double p_20345_, double p_20346_) {
++      // Paper start - block invalid positions
++      if (!checkPosition(this, p_20344_, p_20345_, p_20346_)) {
++         return;
++      }
++      // Paper end - block invalid positions
++      // Paper end
++      // Paper start - rewrite chunk system
++      if (this.updatingSectionStatus) {
++         LOGGER.error("Refusing to update position for entity " + this + " to position " + new Vec3(p_20344_, p_20345_, p_20346_) + " since it is processing a section status update", new Throwable());
++         return;
++      }
++      // Paper end - rewrite chunk system
+       if (this.position.x != p_20344_ || this.position.y != p_20345_ || this.position.z != p_20346_) {
+          this.position = new Vec3(p_20344_, p_20345_, p_20346_);
+          int i = Mth.floor(p_20344_);
+@@ -3223,6 +_,9 @@
+          this.levelCallback.onMove();
+       }
+ 
++
++      if (this.isAddedToWorld() && !this.level.isClientSide && !this.isRemoved()) this.level.getChunk((int) Math.floor(p_20344_) >> 4, (int) Math.floor(p_20346_) >> 4); // Forge - ensure target chunk is loaded.
++
+    }
+ 
+    public void checkDespawn() {
 @@ -3294,6 +_,7 @@
        return false;
     }
@@ -521,6 +630,44 @@
     public float maxUpStep() {
        return this.maxUpStep;
     }
+@@ -3312,6 +_,13 @@
+    }
+ 
+    public final void setRemoved(Entity.RemovalReason p_146876_) {
++      // Paper start - rewrite chunk system
++      io.papermc.paper.util.TickThread.ensureTickThread(this, "Cannot remove entity off-main");
++      if (!((ServerLevel)this.level).getEntityLookup().canRemoveEntity(this)) {
++         LOGGER.warn("Entity " + this + " is currently prevented from being removed from the world since it is processing section status updates", new Throwable());
++         return;
++      }
++      // Paper end - rewrite chunk system
+       if (this.removalReason == null) {
+          this.removalReason = p_146876_;
+       }
+@@ -3320,7 +_,7 @@
+          this.stopRiding();
+       }
+ 
+-      this.getPassengers().forEach(Entity::stopRiding);
++      if (p_146876_ != RemovalReason.UNLOADED_TO_CHUNK) this.getPassengers().forEach(Entity::stopRiding);// Paper - chunk system - don't adjust passenger state when unloading, it's just not safe (and messes with our logic in entity chunk unload)
+       this.levelCallback.onRemove(p_146876_);
+    }
+ 
+@@ -3333,13 +_,7 @@
+    }
+ 
+    public boolean shouldBeSaved() {
+-      if (this.removalReason != null && !this.removalReason.shouldSave()) {
+-         return false;
+-      } else if (this.isPassenger()) {
+-         return false;
+-      } else {
+-         return !this.isVehicle() || !this.hasExactlyOnePlayerPassenger();
+-      }
++      return this.removalReason != null && !this.removalReason.shouldSave() ? false : (this.isPassenger() ? false : !this.isVehicle() || !this.hasAnyPlayerPassengers()); // Paper - rewrite chunk system - it should check if the entity has ANY player passengers
+    }
+ 
+    public boolean isAlwaysTicking() {
 @@ -3349,6 +_,109 @@
     public boolean mayInteract(Level p_146843_, BlockPos p_146844_) {
        return true;

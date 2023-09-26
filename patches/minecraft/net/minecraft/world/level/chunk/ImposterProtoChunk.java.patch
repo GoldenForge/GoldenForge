@@ -1,14 +1,63 @@
 --- a/net/minecraft/world/level/chunk/ImposterProtoChunk.java
 +++ b/net/minecraft/world/level/chunk/ImposterProtoChunk.java
-@@ -181,6 +_,11 @@
-       this.wrapped.findBlocks(p_285465_, p_285061_);
+@@ -39,6 +_,48 @@
+       this.allowWrites = p_187921_;
     }
  
++   // Paper start - rewrite light engine
++   @Override
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getBlockNibbles() {
++      return this.wrapped.getBlockNibbles();
++   }
++
++   @Override
++   public void setBlockNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {
++      this.wrapped.setBlockNibbles(nibbles);
++   }
++
++   @Override
++   public ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] getSkyNibbles() {
++      return this.wrapped.getSkyNibbles();
++   }
++
++   @Override
++   public void setSkyNibbles(final ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] nibbles) {
++      this.wrapped.setSkyNibbles(nibbles);
++   }
++
++   @Override
++   public boolean[] getSkyEmptinessMap() {
++      return this.wrapped.getSkyEmptinessMap();
++   }
++
++   @Override
++   public void setSkyEmptinessMap(final boolean[] emptinessMap) {
++      this.wrapped.setSkyEmptinessMap(emptinessMap);
++   }
++
++   @Override
++   public boolean[] getBlockEmptinessMap() {
++      return this.wrapped.getBlockEmptinessMap();
++   }
++
++   @Override
++   public void setBlockEmptinessMap(final boolean[] emptinessMap) {
++      this.wrapped.setBlockEmptinessMap(emptinessMap);
++   }
++   // Paper end - rewrite light engine
++
+    @Nullable
+    public BlockEntity getBlockEntity(BlockPos p_62744_) {
+       return this.wrapped.getBlockEntity(p_62744_);
+@@ -179,6 +_,11 @@
+ 
+    public void findBlocks(Predicate<BlockState> p_285465_, BiConsumer<BlockPos, BlockState> p_285061_) {
+       this.wrapped.findBlocks(p_285465_, p_285061_);
++   }
++
 +   @Override
 +   public void findBlocks(java.util.function.BiPredicate<BlockState, BlockPos> p_285343_, BiConsumer<BlockPos, BlockState> p_285030_) {
 +      this.wrapped.findBlocks(p_285343_, p_285030_);
-+   }
-+
-    public TickContainerAccess<Block> getBlockTicks() {
-       return this.allowWrites ? this.wrapped.getBlockTicks() : BlackholeTickAccess.emptyContainer();
     }
+ 
+    public TickContainerAccess<Block> getBlockTicks() {

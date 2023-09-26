@@ -1,0 +1,170 @@
+--- a/net/minecraft/world/level/levelgen/structure/StructureCheck.java
++++ b/net/minecraft/world/level/levelgen/structure/StructureCheck.java
+@@ -50,8 +_,101 @@
+    private final BiomeSource biomeSource;
+    private final long seed;
+    private final DataFixer fixerUpper;
+-   private final Long2ObjectMap<Object2IntMap<Structure>> loadedChunks = new Long2ObjectOpenHashMap<>();
+-   private final Map<Structure, Long2BooleanMap> featureChecks = new HashMap<>();
++   // Paper start - rewrite chunk system - synchronise this class
++   // additionally, make sure to purge entries from the maps so it does not leak memory
++   private static final int CHUNK_TOTAL_LIMIT = 50 * (2 * 100 + 1) * (2 * 100 + 1); // cache 50 structure lookups
++   private static final int PER_FEATURE_CHECK_LIMIT = 50 * (2 * 100 + 1) * (2 * 100 + 1); // cache 50 structure lookups
++
++   private final SynchronisedLong2ObjectMap<Object2IntMap<Structure>> loadedChunksSafe = new SynchronisedLong2ObjectMap<>(CHUNK_TOTAL_LIMIT);
++   private final java.util.concurrent.ConcurrentHashMap<Structure, SynchronisedLong2BooleanMap> featureChecksSafe = new java.util.concurrent.ConcurrentHashMap<>();
++
++   private static final class SynchronisedLong2ObjectMap<V> {
++      private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<V> map = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
++      private final int limit;
++
++      public SynchronisedLong2ObjectMap(final int limit) {
++         this.limit = limit;
++      }
++
++      // must hold lock on map
++      private void purgeEntries() {
++         while (this.map.size() > this.limit) {
++            this.map.removeLast();
++         }
++      }
++
++      public V get(final long key) {
++         synchronized (this.map) {
++            return this.map.getAndMoveToFirst(key);
++         }
++      }
++
++      public V put(final long key, final V value) {
++         synchronized (this.map) {
++            final V ret = this.map.putAndMoveToFirst(key, value);
++            this.purgeEntries();
++            return ret;
++         }
++      }
++
++      public V compute(final long key, final java.util.function.BiFunction<? super Long, ? super V, ? extends V> remappingFunction) {
++         synchronized (this.map) {
++            // first, compute the value - if one is added, it will be at the last entry
++            this.map.compute(key, remappingFunction);
++            // move the entry to first, just in case it was added at last
++            final V ret = this.map.getAndMoveToFirst(key);
++            // now purge the last entries
++            this.purgeEntries();
++
++            return ret;
++         }
++      }
++   }
++
++   private static final class SynchronisedLong2BooleanMap {
++      private final it.unimi.dsi.fastutil.longs.Long2BooleanLinkedOpenHashMap map = new it.unimi.dsi.fastutil.longs.Long2BooleanLinkedOpenHashMap();
++      private final int limit;
++
++      public SynchronisedLong2BooleanMap(final int limit) {
++         this.limit = limit;
++      }
++
++      // must hold lock on map
++      private void purgeEntries() {
++         while (this.map.size() > this.limit) {
++            this.map.removeLastBoolean();
++         }
++      }
++
++      public boolean remove(final long key) {
++         synchronized (this.map) {
++            return this.map.remove(key);
++         }
++      }
++
++      // note:
++      public boolean getOrCompute(final long key, final it.unimi.dsi.fastutil.longs.Long2BooleanFunction ifAbsent) {
++         synchronized (this.map) {
++            if (this.map.containsKey(key)) {
++               return this.map.getAndMoveToFirst(key);
++            }
++         }
++
++         final boolean put = ifAbsent.get(key);
++
++         synchronized (this.map) {
++            if (this.map.containsKey(key)) {
++               return this.map.getAndMoveToFirst(key);
++            }
++            this.map.putAndMoveToFirst(key, put);
++
++            this.purgeEntries();
++
++            return put;
++         }
++      }
++   }
++   // Paper end - rewrite chunk system - synchronise this class
+ 
+    public StructureCheck(ChunkScanAccess p_226712_, RegistryAccess p_226713_, StructureTemplateManager p_226714_, ResourceKey<Level> p_226715_, ChunkGenerator p_226716_, RandomState p_226717_, LevelHeightAccessor p_226718_, BiomeSource p_226719_, long p_226720_, DataFixer p_226721_) {
+       this.storageAccess = p_226712_;
+@@ -70,7 +_,7 @@
+ 
+    public StructureCheckResult checkStart(ChunkPos p_226730_, Structure p_226731_, boolean p_226732_) {
+       long i = p_226730_.toLong();
+-      Object2IntMap<Structure> object2intmap = this.loadedChunks.get(i);
++      Object2IntMap<Structure> object2intmap = this.loadedChunksSafe.get(i); // Paper - rewrite chunk system - synchronise this class
+       if (object2intmap != null) {
+          return this.checkStructureInfo(object2intmap, p_226731_, p_226732_);
+       } else {
+@@ -78,9 +_,9 @@
+          if (structurecheckresult != null) {
+             return structurecheckresult;
+          } else {
+-            boolean flag = this.featureChecks.computeIfAbsent(p_226731_, (p_226739_) -> {
+-               return new Long2BooleanOpenHashMap();
+-            }).computeIfAbsent(i, (p_226728_) -> {
++            boolean flag = this.featureChecksSafe.computeIfAbsent(p_226731_, (p_226739_) -> { // Paper - rewrite chunk system - synchronise this class
++               return new SynchronisedLong2BooleanMap(PER_FEATURE_CHECK_LIMIT); // Paper - rewrite chunk system - synchronise this class
++            }).getOrCompute(i, (chunkPos) -> { // Paper - rewrite chunk system - synchronise this class
+                return this.canCreateStructure(p_226730_, p_226731_);
+             });
+             return !flag ? StructureCheckResult.START_NOT_PRESENT : StructureCheckResult.CHUNK_LOAD_NEEDED;
+@@ -193,22 +_,31 @@
+    }
+ 
+    private void storeFullResults(long p_197264_, Object2IntMap<Structure> p_197265_) {
+-      this.loadedChunks.put(p_197264_, deduplicateEmptyMap(p_197265_));
+-      this.featureChecks.values().forEach((p_209956_) -> {
+-         p_209956_.remove(p_197264_);
+-      });
++      // Paper start - rewrite chunk system - synchronise this class
++      this.loadedChunksSafe.put(p_197264_, deduplicateEmptyMap(p_197265_));
++      // once we insert into loadedChunks, we don't really need to be very careful about removing everything
++      // from this map, as everything that checks this map uses loadedChunks first
++      // so, one way or another it's a race condition that doesn't matter
++      for (SynchronisedLong2BooleanMap value : this.featureChecksSafe.values()) {
++         value.remove(p_197264_);
++      }
++      // Paper end - rewrite chunk system - synchronise this class
+    }
+ 
+    public void incrementReference(ChunkPos p_226723_, Structure p_226724_) {
+-      this.loadedChunks.compute(p_226723_.toLong(), (p_226745_, p_226746_) -> {
+-         if (p_226746_ == null || p_226746_.isEmpty()) {
+-            p_226746_ = new Object2IntOpenHashMap<>();
++      this.loadedChunksSafe.compute(p_226723_.toLong(), (posx, referencesByStructure) -> { // Paper start - rewrite chunk system - synchronise this class
++         // make this COW so that we do not mutate state that may be currently in use
++         if (referencesByStructure == null) {
++            referencesByStructure = new Object2IntOpenHashMap<>();
++         } else {
++            referencesByStructure = referencesByStructure instanceof Object2IntOpenHashMap<Structure> fastClone ? fastClone.clone() : new Object2IntOpenHashMap<>(referencesByStructure);
+          }
++         // Paper end - rewrite chunk system - synchronise this class
+ 
+-         p_226746_.computeInt(p_226724_, (p_226741_, p_226742_) -> {
+-            return p_226742_ == null ? 1 : p_226742_ + 1;
++         referencesByStructure.computeInt(p_226724_, (feature, references) -> {
++            return references == null ? 1 : references + 1;
+          });
+-         return p_226746_;
++         return referencesByStructure;
+       });
+    }
+ }

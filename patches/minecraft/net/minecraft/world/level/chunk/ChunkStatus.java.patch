@@ -1,0 +1,82 @@
+--- a/net/minecraft/world/level/chunk/ChunkStatus.java
++++ b/net/minecraft/world/level/chunk/ChunkStatus.java
+@@ -29,6 +_,31 @@
+ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
+ 
+ public class ChunkStatus {
++
++   // Paper start - rewrite chunk system
++   public boolean isParallelCapable; // Paper
++   public int writeRadius = -1;
++   public int loadRange = 0;
++
++   protected static final java.util.List<ChunkStatus> statuses = new java.util.ArrayList<>();
++
++   private ChunkStatus nextStatus;
++
++   public final ChunkStatus getNextStatus() {
++      return this.nextStatus;
++   }
++
++   public final boolean isEmptyLoadStatus() {
++      return this.loadingTask == PASSTHROUGH_LOAD_TASK;
++   }
++
++   public final boolean isEmptyGenStatus() {
++      return this == ChunkStatus.EMPTY;
++   }
++
++   public final java.util.concurrent.atomic.AtomicBoolean warnedAboutNoImmediateComplete = new java.util.concurrent.atomic.AtomicBoolean();
++   // Paper end - rewrite chunk system
++
+    public static final int MAX_STRUCTURE_DISTANCE = 8;
+    private static final EnumSet<Heightmap.Types> PRE_FEATURES = EnumSet.of(Heightmap.Types.OCEAN_FLOOR_WG, Heightmap.Types.WORLD_SURFACE_WG);
+    public static final EnumSet<Heightmap.Types> POST_FEATURES = EnumSet.of(Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE, Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
+@@ -139,12 +_,12 @@
+       p_282906_.initializeLightSources();
+       ((ProtoChunk)p_282906_).setLightEngine(p_282288_);
+       boolean flag = isLighted(p_282906_);
+-      return p_282288_.initializeLight(p_282906_, flag).thenApply(Either::left);
++      return CompletableFuture.completedFuture(Either.left(p_282906_)); // Paper - rewrite chunk system
+    }
+ 
+    private static CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> lightChunk(ThreadedLevelLightEngine p_285039_, ChunkAccess p_285316_) {
+       boolean flag = isLighted(p_285316_);
+-      return p_285039_.lightChunk(p_285316_, flag).thenApply(Either::left);
++      return CompletableFuture.completedFuture(Either.left(p_285316_)); // Paper - rewrite chunk system
+    }
+ 
+    private static ChunkStatus registerSimple(String p_62415_, @Nullable ChunkStatus p_62416_, int p_62417_, EnumSet<Heightmap.Types> p_62418_, ChunkStatus.ChunkType p_62419_, ChunkStatus.SimpleGenerationTask p_62420_) {
+@@ -201,6 +_,13 @@
+       this.chunkType = p_289652_;
+       this.heightmapsAfter = p_289662_;
+       this.index = p_289640_ == null ? 0 : p_289640_.getIndex() + 1;
++      // Paper start
++      this.nextStatus = this;
++      if (statuses.size() > 0) {
++         statuses.get(statuses.size() - 1).nextStatus = this;
++      }
++      statuses.add(this);
++      // Paper end
+    }
+ 
+    public int getIndex() {
+@@ -246,6 +_,18 @@
+    public ChunkStatus.ChunkType getChunkType() {
+       return this.chunkType;
+    }
++
++   // Paper start
++   public static ChunkStatus getStatus(String name) {
++      try {
++         // We need this otherwise we return EMPTY for invalid names
++         ResourceLocation key = new ResourceLocation(name);
++         return BuiltInRegistries.CHUNK_STATUS.getOptional(key).orElse(null);
++      } catch (Exception ex) {
++         return null; // invalid name
++      }
++   }
++   // Paper end
+ 
+    public static ChunkStatus byName(String p_62398_) {
+       return BuiltInRegistries.CHUNK_STATUS.get(ResourceLocation.tryParse(p_62398_));

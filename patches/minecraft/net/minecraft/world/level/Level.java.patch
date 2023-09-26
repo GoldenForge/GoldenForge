@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
+@@ -26,6 +_,7 @@
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.level.FullChunkStatus;
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.sounds.SoundEvent;
+ import net.minecraft.sounds.SoundSource;
+ import net.minecraft.util.AbortableIterationConsumer;
 @@ -70,7 +_,7 @@
  import net.minecraft.world.phys.Vec3;
  import net.minecraft.world.scores.Scoreboard;
@@ -9,7 +17,7 @@
     public static final Codec<ResourceKey<Level>> RESOURCE_KEY_CODEC = ResourceKey.codec(Registries.DIMENSION);
     public static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("overworld"));
     public static final ResourceKey<Level> NETHER = ResourceKey.create(Registries.DIMENSION, new ResourceLocation("the_nether"));
-@@ -110,8 +_,14 @@
+@@ -110,8 +_,38 @@
     private final RegistryAccess registryAccess;
     private final DamageSources damageSources;
     private long subTickCount;
@@ -18,13 +26,37 @@
 +   public java.util.ArrayList<net.minecraftforge.common.util.BlockSnapshot> capturedBlockSnapshots = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> freshBlockEntities = new java.util.ArrayList<>();
 +   private final java.util.ArrayList<BlockEntity> pendingFreshBlockEntities = new java.util.ArrayList<>();
++
++   public final ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
++      return ((ServerLevel)this).chunkSource.getChunkAtIfLoadedImmediately(x, z);
++   }
++
++   public WorldPaper getWorld() {
++      return worldPaper;
++   }
++
++   WorldPaper worldPaper = new WorldPaper();
++   public class WorldPaper {
++
++      public String getName() {
++         return Level.this.dimension().location().toString();
++      }
++   }
++
++   public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
++      return ((ServerLevel) this).getChunkSource().getChunkAtIfLoadedImmediately(x, z);
++   }
++   public final @Nullable LevelChunk getChunkIfLoaded(BlockPos blockposition) {
++      return ((ServerLevel) this).getChunkSource().getChunkAtIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
++   }
++
  
     protected Level(WritableLevelData p_270739_, ResourceKey<Level> p_270683_, RegistryAccess p_270200_, Holder<DimensionType> p_270240_, Supplier<ProfilerFiller> p_270692_, boolean p_270904_, boolean p_270470_, long p_270248_, int p_270466_) {
 +      super(Level.class);
        this.profiler = p_270692_;
        this.levelData = p_270739_;
        this.dimensionTypeRegistration = p_270240_;
-@@ -198,11 +_,40 @@
+@@ -198,18 +_,52 @@
        } else {
           LevelChunk levelchunk = this.getChunkAt(p_46605_);
           Block block = p_46606_.getBlock();
@@ -65,6 +97,19 @@
              if (blockstate1 == p_46606_) {
                 if (blockstate != blockstate1) {
                    this.setBlocksDirty(p_46605_, blockstate, blockstate1);
+                }
+ 
+-               if ((p_46607_ & 2) != 0 && (!this.isClientSide || (p_46607_ & 4) == 0) && (this.isClientSide || levelchunk.getFullStatus() != null && levelchunk.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING))) {
++               if ((p_46607_ & 2) != 0 && (!this.isClientSide || (p_46607_ & 4) == 0) && (this.isClientSide || levelchunk == null || (levelchunk.getFullStatus() != null && levelchunk.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING)))) { // allow chunk to be null here as chunk.isReady() is false when we send our notification during block placement
+                   this.sendBlockUpdated(p_46605_, blockstate, p_46606_, p_46607_);
++                  // Paper start - per player view distance - allow block updates for non-ticking chunks in player view distance
++                  // if copied from above
++               } else if ((p_46607_ & 2) != 0 && (!this.isClientSide || (p_46607_ & 4) == 0)) { // Paper - replace old player chunk management
++                  ((ServerLevel)this).getChunkSource().blockChanged(p_46605_);
++                  // Paper end - per player view distance
+                }
+ 
+                if ((p_46607_ & 1) != 0) {
 @@ -227,9 +_,8 @@
                 }
  
@@ -148,6 +193,15 @@
        explosion.explode();
        explosion.finalizeExplosion(p_256377_);
        return explosion;
+@@ -498,7 +_,7 @@
+       if (this.isOutsideBuildHeight(p_46716_)) {
+          return null;
+       } else {
+-         return !this.isClientSide && Thread.currentThread() != this.thread ? null : this.getChunkAt(p_46716_).getBlockEntity(p_46716_, LevelChunk.EntityCreationType.IMMEDIATE);
++         return !this.isClientSide && !io.papermc.paper.util.TickThread.isTickThread() ? null : this.getChunkAt(p_46716_).getBlockEntity(p_46716_, LevelChunk.EntityCreationType.IMMEDIATE);
+       }
+    }
+ 
 @@ -513,6 +_,7 @@
        if (!this.isOutsideBuildHeight(p_46748_)) {
           this.getChunkAt(p_46748_).removeBlockEntity(p_46748_);
@@ -156,48 +210,71 @@
     }
  
     public boolean isLoaded(BlockPos p_46750_) {
-@@ -583,6 +_,7 @@
-             list.add(p_151522_);
-          }
- 
-+         if (false)
-          if (p_151522_ instanceof EnderDragon) {
-             for(EnderDragonPart enderdragonpart : ((EnderDragon)p_151522_).getSubEntities()) {
-                if (p_151522_ != p_46536_ && p_46538_.test(enderdragonpart)) {
-@@ -592,6 +_,11 @@
-          }
- 
-       });
-+      for (net.minecraftforge.entity.PartEntity<?> p : this.getPartEntities()) {
-+         if (p != p_46536_ && p.getBoundingBox().intersects(p_46537_) && p_46538_.test(p)) {
-+            list.add(p);
-+         }
-+      }
+@@ -578,20 +_,7 @@
+    public List<Entity> getEntities(@Nullable Entity p_46536_, AABB p_46537_, Predicate<? super Entity> p_46538_) {
+       this.getProfiler().incrementCounter("getEntities");
+       List<Entity> list = Lists.newArrayList();
+-      this.getEntities().get(p_46537_, (p_151522_) -> {
+-         if (p_151522_ != p_46536_ && p_46538_.test(p_151522_)) {
+-            list.add(p_151522_);
+-         }
+-
+-         if (p_151522_ instanceof EnderDragon) {
+-            for(EnderDragonPart enderdragonpart : ((EnderDragon)p_151522_).getSubEntities()) {
+-               if (p_151522_ != p_46536_ && p_46538_.test(enderdragonpart)) {
+-                  list.add(enderdragonpart);
+-               }
+-            }
+-         }
+-
+-      });
++      ((ServerLevel)this).getEntityLookup().getEntities(p_46536_, p_46537_, list, p_46538_); // Paper - optimise this call
        return list;
     }
  
-@@ -615,6 +_,8 @@
-             }
-          }
+@@ -607,28 +_,23 @@
  
-+
-+         if (false)
-          if (p_261454_ instanceof EnderDragon enderdragon) {
-             for(EnderDragonPart enderdragonpart : enderdragon.getSubEntities()) {
-                T t = p_261885_.tryCast(enderdragonpart);
-@@ -629,6 +_,15 @@
- 
-          return AbortableIterationConsumer.Continuation.CONTINUE;
-       });
-+      for (net.minecraftforge.entity.PartEntity<?> p : this.getPartEntities()) {
-+         T t = p_261885_.tryCast(p);
-+         if (t != null && t.getBoundingBox().intersects(p_262086_) && p_261688_.test(t)) {
-+            p_262071_.add(t);
-+            if (p_262071_.size() >= p_261858_) {
-+               break;
-+            }
+    public <T extends Entity> void getEntities(EntityTypeTest<Entity, T> p_261885_, AABB p_262086_, Predicate<? super T> p_261688_, List<? super T> p_262071_, int p_261858_) {
+       this.getProfiler().incrementCounter("getEntities");
+-      this.getEntities().get(p_261885_, p_262086_, (p_261454_) -> {
+-         if (p_261688_.test(p_261454_)) {
+-            p_262071_.add(p_261454_);
+-            if (p_262071_.size() >= p_261858_) {
+-               return AbortableIterationConsumer.Continuation.ABORT;
+-            }
+-         }
+-
+-         if (p_261454_ instanceof EnderDragon enderdragon) {
+-            for(EnderDragonPart enderdragonpart : enderdragon.getSubEntities()) {
+-               T t = p_261885_.tryCast(enderdragonpart);
+-               if (t != null && p_261688_.test(t)) {
+-                  p_262071_.add(t);
+-                  if (p_262071_.size() >= p_261858_) {
+-                     return AbortableIterationConsumer.Continuation.ABORT;
+-                  }
+-               }
+-            }
+-         }
+-
+-         return AbortableIterationConsumer.Continuation.CONTINUE;
+-      });
++      // Paper start - optimise this call
++      //TODO use limit
++      if (p_261885_ instanceof net.minecraft.world.entity.EntityType entityTypeTest) {
++         ((ServerLevel) this).getEntityLookup().getEntities(entityTypeTest, p_262086_, p_262071_, p_261688_);
++      } else {
++         Predicate<? super T> test = (obj) -> {
++            return p_261885_.tryCast(obj) != null;
++         };
++         p_261688_ = p_261688_ == null ? test : test.and((Predicate) p_261688_);
++         Class base;
++         if (p_261885_ == null || (base = p_261885_.getBaseClass()) == null || base == Entity.class) {
++            ((ServerLevel) this).getEntityLookup().getEntities((Entity) null, p_262086_, (List) p_262071_, (Predicate)p_261688_);
++         } else {
++            ((ServerLevel) this).getEntityLookup().getEntities(base, null, p_262086_, (List) p_262071_, (Predicate)p_261688_); // Paper - optimise this call
 +         }
 +      }
++      // Paper end - optimise this call
     }
  
     @Nullable
