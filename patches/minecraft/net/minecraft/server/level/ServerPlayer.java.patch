@@ -1,7 +1,26 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
-@@ -147,8 +_,9 @@
+@@ -91,6 +_,7 @@
+ import net.minecraft.world.Container;
+ import net.minecraft.world.InteractionHand;
+ import net.minecraft.world.MenuProvider;
++import net.minecraft.world.damagesource.CombatTracker;
+ import net.minecraft.world.damagesource.DamageSource;
+ import net.minecraft.world.effect.MobEffectInstance;
+ import net.minecraft.world.effect.MobEffects;
+@@ -109,6 +_,7 @@
+ import net.minecraft.world.entity.player.Inventory;
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.entity.projectile.AbstractArrow;
++import net.minecraft.world.food.FoodData;
+ import net.minecraft.world.inventory.AbstractContainerMenu;
+ import net.minecraft.world.inventory.ContainerListener;
+ import net.minecraft.world.inventory.ContainerSynchronizer;
+@@ -145,10 +_,12 @@
+ import net.minecraft.world.scores.Score;
+ import net.minecraft.world.scores.Team;
  import net.minecraft.world.scores.criteria.ObjectiveCriteria;
++import org.goldenforge.GoldenForge;
  import org.slf4j.Logger;
  
 -public class ServerPlayer extends Player {
@@ -65,14 +84,132 @@
     public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_299301_) {
        super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
        this.textFilter = p_254143_.createTextFilterForPlayer(this);
-@@ -253,6 +_,7 @@
+@@ -253,7 +_,47 @@
        this.setMaxUpStep(1.0F);
        this.fudgeSpawnLocation(p_254435_);
        this.updateOptions(p_299301_);
+-   }
 +      this.cachedSingleHashSet = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<>(this); // Paper
-    }
++   }
++
++   // Yes, this doesn't match Vanilla, but it's the best we can do for now.
++   // If this is an issue, PRs are welcome
++   public final BlockPos getSpawnPoint(ServerLevel worldserver) {
++      BlockPos blockposition = worldserver.getSharedSpawnPos();
++
++      if (worldserver.dimensionType().hasSkyLight() && worldserver.serverLevelData.getGameType() != GameType.ADVENTURE) {
++         int i = Math.max(0, this.server.getSpawnRadius(worldserver));
++         int j = Mth.floor(worldserver.getWorldBorder().getDistanceToBorder((double) blockposition.getX(), (double) blockposition.getZ()));
++
++         if (j < i) {
++            i = j;
++         }
++
++         if (j <= 1) {
++            i = 1;
++         }
++
++         long k = (long) (i * 2 + 1);
++         long l = k * k;
++         int i1 = l > 2147483647L ? Integer.MAX_VALUE : (int) l;
++         int j1 = this.getCoprime(i1);
++         int k1 = RandomSource.create().nextInt(i1);
++
++         for (int l1 = 0; l1 < i1; ++l1) {
++            int i2 = (k1 + j1 * l1) % i1;
++            int j2 = i2 % (i * 2 + 1);
++            int k2 = i2 / (i * 2 + 1);
++            BlockPos blockposition1 = PlayerRespawnLogic.getOverworldRespawnPos(worldserver, blockposition.getX() + j2 - i, blockposition.getZ() + k2 - i);
++
++            if (blockposition1 != null) {
++               return blockposition1;
++            }
++         }
++      }
++
++      return blockposition;
++   }
++   // CraftBukkit end
  
     private void fudgeSpawnLocation(ServerLevel p_9202_) {
+       BlockPos blockpos = p_9202_.getSharedSpawnPos();
+@@ -374,6 +_,76 @@
+ 
+    }
+ 
++   public int newExp = 0;
++   public int newLevel = 0;
++   public int newTotalExp = 0;
++   public boolean keepLevel = false;
++
++   public void reset() {
++      float exp = 0;
++      boolean keepInventory = this.level().getGameRules().getBoolean(GameRules.RULE_KEEPINVENTORY);
++
++      if (this.keepLevel) { // CraftBukkit - SPIGOT-6687: Only use keepLevel (was pre-set with RULE_KEEPINVENTORY value in PlayerDeathEvent)
++         exp = this.experienceProgress;
++         this.newTotalExp = this.totalExperience;
++         this.newLevel = this.experienceLevel;
++      }
++
++      this.setHealth(this.getMaxHealth());
++      this.stopUsingItem(); // CraftBukkit - SPIGOT-6682: Clear active item on reset
++      this.setAirSupply(this.getMaxAirSupply()); // Paper
++      this.setRemainingFireTicks(0);
++      this.fallDistance = 0;
++      this.foodData = new FoodData();
++      this.experienceLevel = this.newLevel;
++      this.totalExperience = this.newTotalExp;
++      this.experienceProgress = 0;
++      this.deathTime = 0;
++      this.setArrowCount(0); // CraftBukkit - ArrowBodyCountChangeEvent
++      this.effectsDirty = true;
++      this.containerMenu = this.inventoryMenu;
++      this.lastHurtByPlayer = null;
++      this.lastHurtByMob = null;
++      this.combatTracker = new CombatTracker(this);
++      this.lastSentExp = -1;
++      if (this.keepLevel) { // CraftBukkit - SPIGOT-6687: Only use keepLevel (was pre-set with RULE_KEEPINVENTORY value in PlayerDeathEvent)
++         this.experienceProgress = exp;
++      } else {
++         this.giveExperiencePoints(this.newExp);
++      }
++      this.keepLevel = false;
++      this.setDeltaMovement(0, 0, 0); // CraftBukkit - SPIGOT-6948: Reset velocity on death
++   }
++
++   // SPIGOT-1903, MC-98153
++   public void forceSetPositionRotation(double x, double y, double z, float yaw, float pitch) {
++      this.moveTo(x, y, z, yaw, pitch);
++      this.connection.resetPosition();
++   }
++
++   // CraftBukkit start - World fallback code, either respawn location or global spawn
++   public void spawnIn(ServerLevel world) {
++      this.setLevel(world);
++      if (world == null) {
++         this.revive();
++         Vec3 position = null;
++         if (this.respawnDimension != null) {
++            world = this.server.getLevel(this.respawnDimension);
++            if (world != null && this.getRespawnPosition() != null) {
++               position = Player.findRespawnPositionAndUseSpawnBlock((ServerLevel) world, this.getRespawnPosition(), this.getRespawnAngle(), false, false).orElse(null);
++            }
++         }
++         if (world == null || position == null) {
++            world = MinecraftServer.getServer().overworld();
++            position = Vec3.atCenterOf(world.getSharedSpawnPos());
++         }
++         this.setLevel(world);
++         this.setPosRaw(position.x(), position.y(), position.z()); // Paper - don't register to chunks yet
++      }
++      this.gameMode.setLevel((ServerLevel) world);
++   }
++   // CraftBukkit end
++
+    public void setExperiencePoints(int p_8986_) {
+       float f = (float)this.getXpNeededForNextLevel();
+       float f1 = (f - 1.0F) / f;
 @@ -569,6 +_,7 @@
  
     public void die(DamageSource p_9035_) {
@@ -138,6 +275,15 @@
           }
  
           return this;
+@@ -801,7 +_,7 @@
+       }
+    }
+ 
+-   private void triggerDimensionChangeTriggers(ServerLevel p_9210_) {
++   public void triggerDimensionChangeTriggers(ServerLevel p_9210_) {
+       ResourceKey<Level> resourcekey = p_9210_.dimension();
+       ResourceKey<Level> resourcekey1 = this.level().dimension();
+       CriteriaTriggers.CHANGED_DIMENSION.trigger(this, resourcekey, resourcekey1);
 @@ -829,6 +_,9 @@
     }
  
@@ -189,7 +335,15 @@
        this.containerMenu = this.inventoryMenu;
     }
  
-@@ -1134,6 +_,15 @@
+@@ -1127,13 +_,22 @@
+       this.lastSentExp = -1;
+       this.lastSentHealth = -1.0F;
+       this.lastSentFood = -1;
+-      this.recipeBook.copyOverData(p_9016_.recipeBook);
++      //this.recipeBook.copyOverData(p_9016_.recipeBook);
+       this.seenCredits = p_9016_.seenCredits;
+       this.enteredNetherPosition = p_9016_.enteredNetherPosition;
+       this.chunkTrackingView = p_9016_.chunkTrackingView;
        this.setShoulderEntityLeft(p_9016_.getShoulderEntityLeft());
        this.setShoulderEntityRight(p_9016_.getShoulderEntityRight());
        this.setLastDeathLocation(p_9016_.getLastDeathLocation());

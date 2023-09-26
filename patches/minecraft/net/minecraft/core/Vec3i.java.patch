@@ -1,0 +1,13 @@
+--- a/net/minecraft/core/Vec3i.java
++++ b/net/minecraft/core/Vec3i.java
+@@ -37,6 +_,10 @@
+       this.z = p_123298_;
+    }
+ 
++   public Vec3i(double p_123292_, double p_123293_, double p_123294_) {
++      this(Mth.floor(p_123292_), Mth.floor(p_123293_), Mth.floor(p_123294_));
++   }
++
+    public boolean equals(Object p_123327_) {
+       if (this == p_123327_) {
+          return true;

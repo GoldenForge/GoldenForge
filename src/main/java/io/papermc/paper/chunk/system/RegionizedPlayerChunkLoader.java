@@ -873,7 +873,6 @@ public class RegionizedPlayerChunkLoader {
         }
 
         void add() {
-            GoldenForge.LOGGER.info("Adding player");
             TickThread.ensureTickThread(this.player, "Cannot add player asynchronously");
             if (this.removed) {
                 throw new IllegalStateException("Adding removed player chunk loader");

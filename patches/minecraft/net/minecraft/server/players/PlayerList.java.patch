@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
+@@ -83,6 +_,7 @@
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.level.GameRules;
+ import net.minecraft.world.level.Level;
++import net.minecraft.world.level.biome.BiomeManager;
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.border.BorderChangeListener;
 @@ -126,6 +_,7 @@
     private boolean allowCheatsForAllPlayers;
     private static final boolean ALLOW_LOGOUTIVATOR = false;
@@ -61,14 +69,175 @@
        ServerLevel serverlevel = p_11287_.serverLevel();
        p_11287_.awardStat(Stats.LEAVE_GAME);
        this.save(p_11287_);
-@@ -466,6 +_,7 @@
-       this.playersByUUID.put(serverplayer.getUUID(), serverplayer);
-       serverplayer.initInventoryMenu();
-       serverplayer.setHealth(serverplayer.getHealth());
-+      net.minecraftforge.event.ForgeEventFactory.firePlayerRespawnEvent(serverplayer, p_11238_);
-       if (flag2) {
-          serverplayer.connection.send(new ClientboundSoundPacket(SoundEvents.RESPAWN_ANCHOR_DEPLETE, SoundSource.BLOCKS, (double)blockpos.getX(), (double)blockpos.getY(), (double)blockpos.getZ(), 1.0F, 1.0F, serverlevel1.getRandom().nextLong()));
+@@ -403,21 +_,17 @@
+    }
+ 
+    public ServerPlayer respawn(ServerPlayer p_11237_, boolean p_11238_) {
++      p_11237_.stopRiding(); // CraftBukkit
+       this.players.remove(p_11237_);
+       p_11237_.serverLevel().removePlayerImmediately(p_11237_, Entity.RemovalReason.DISCARDED);
+       BlockPos blockpos = p_11237_.getRespawnPosition();
+       float f = p_11237_.getRespawnAngle();
+       boolean flag = p_11237_.isRespawnForced();
+-      ServerLevel serverlevel = this.server.getLevel(p_11237_.getRespawnDimension());
+-      Optional<Vec3> optional;
+-      if (serverlevel != null && blockpos != null) {
+-         optional = Player.findRespawnPositionAndUseSpawnBlock(serverlevel, blockpos, f, flag, p_11238_);
+-      } else {
+-         optional = Optional.empty();
+-      }
+-
+-      ServerLevel serverlevel1 = serverlevel != null && optional.isPresent() ? serverlevel : this.server.overworld();
+-      ServerPlayer serverplayer = new ServerPlayer(this.server, serverlevel1, p_11237_.getGameProfile(), p_11237_.clientInformation());
++      ServerPlayer serverplayer = p_11237_;
++      serverplayer.wonGame = false;
++
++      BlockPos location = null;
++
+       serverplayer.connection = p_11237_.connection;
+       serverplayer.restoreFrom(p_11237_, p_11238_);
+       serverplayer.setId(p_11237_.getId());
+@@ -428,34 +_,83 @@
        }
+ 
+       boolean flag2 = false;
+-      if (optional.isPresent()) {
+-         BlockState blockstate = serverlevel1.getBlockState(blockpos);
+-         boolean flag1 = blockstate.is(Blocks.RESPAWN_ANCHOR);
+-         Vec3 vec3 = optional.get();
+-         float f1;
+-         if (!blockstate.is(BlockTags.BEDS) && !flag1) {
+-            f1 = f;
++      // Paper start
++      boolean isBedSpawn = false;
++      boolean isAnchorSpawn = false;
++      boolean isRespawn = false;
++      boolean isLocAltered = false; // Paper - Fix SPIGOT-5989
++      // Paper end
++
++      // CraftBukkit start - fire PlayerRespawnEvent
++      // boolean isBedSpawn = false; // Paper - moved up
++      ServerLevel worldserver1 = this.server.getLevel(p_11237_.getRespawnDimension());
++      if (worldserver1 != null) {
++         Optional optional;
++
++         if (blockpos != null) {
++            optional = net.minecraft.world.entity.player.Player.findRespawnPositionAndUseSpawnBlock(worldserver1, blockpos, f, flag, true); // Paper - Fix SPIGOT-5989
+          } else {
+-            Vec3 vec31 = Vec3.atBottomCenterOf(blockpos).subtract(vec3).normalize();
+-            f1 = (float)Mth.wrapDegrees(Mth.atan2(vec31.z, vec31.x) * (double)(180F / (float)Math.PI) - 90.0D);
+-         }
+-
+-         serverplayer.moveTo(vec3.x, vec3.y, vec3.z, f1, 0.0F);
+-         serverplayer.setRespawnPosition(serverlevel1.dimension(), blockpos, f, flag, false);
+-         flag2 = !p_11238_ && flag1;
+-      } else if (blockpos != null) {
+-         serverplayer.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.NO_RESPAWN_BLOCK_AVAILABLE, 0.0F));
+-      }
+-
+-      while(!serverlevel1.noCollision(serverplayer) && serverplayer.getY() < (double)serverlevel1.getMaxBuildHeight()) {
++            optional = Optional.empty();
++         }
++
++         if (optional.isPresent()) {
++            BlockState iblockdata = worldserver1.getBlockState(blockpos);
++            boolean flag3 = iblockdata.is(Blocks.RESPAWN_ANCHOR);
++            isAnchorSpawn = flag3; // Paper - Fix anchor respawn acting as a bed respawn from the end portal
++            Vec3 vec3d = (Vec3) optional.get();
++            float f1;
++
++            if (!iblockdata.is(BlockTags.BEDS) && !flag3) {
++               f1 = f;
++            } else {
++               Vec3 vec3d1 = Vec3.atBottomCenterOf(blockpos).subtract(vec3d).normalize();
++
++               f1 = (float) Mth.wrapDegrees(Mth.atan2(vec3d1.z, vec3d1.x) * 57.2957763671875D - 90.0D);
++            }
++
++            // entityplayer1.setRespawnPosition(worldserver1.dimension(), blockposition, f, flag1, false); // CraftBukkit - not required, just copies old location into reused entity
++            flag2 = !flag && flag3;
++            isBedSpawn = true;
++            location = new BlockPos(vec3d);
++         } else if (blockpos != null) {
++            serverplayer.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.NO_RESPAWN_BLOCK_AVAILABLE, 0.0F));
++            serverplayer.setRespawnPosition(null, null, 0f, false, false); // CraftBukkit - SPIGOT-5988: Clear respawn location when obstructed // Paper - PlayerSetSpawnEvent
++         }
++      }
++
++      if (location == null) {
++         worldserver1 = this.server.getLevel(Level.OVERWORLD);
++         blockpos = serverplayer.getSpawnPoint(worldserver1);
++         location = blockpos;
++      }
++
++//      // Spigot Start
++//      if (serverplayer.connection.isDisconnected()) {
++//         return serverplayer;
++//      }
++//      // Spigot End
++
++      if (!p_11238_) serverplayer.reset(); // SPIGOT-4785
++      isRespawn = true; // Paper
++      serverplayer.forceSetPositionRotation(location.getX(), location.getY(), location.getZ(), f, 0.0F);
++      // CraftBukkit end
++      ServerLevel serverlevel1 = worldserver1;
++
++      serverlevel1.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.POST_TELEPORT, new net.minecraft.world.level.ChunkPos(serverplayer.getBlockX() >> 4, serverplayer.getBlockZ() >> 4), 1, serverplayer.getId()); // Paper
++      while(!serverlevel1.noCollision(serverplayer, serverplayer.getBoundingBox()) && serverplayer.getY() < (double)serverlevel1.getMaxBuildHeight()) {
+          serverplayer.setPos(serverplayer.getX(), serverplayer.getY() + 1.0D, serverplayer.getZ());
+       }
+ 
+-      byte b0 = (byte)(p_11238_ ? 1 : 0);
+-      ServerLevel serverlevel2 = serverplayer.serverLevel();
+-      LevelData leveldata = serverlevel2.getLevelData();
+-      serverplayer.connection.send(new ClientboundRespawnPacket(serverplayer.createCommonSpawnInfo(serverlevel2), b0));
++      int i = p_11238_ ? 1 : 0;
++      LevelData leveldata = serverlevel1.getLevelData();
++      serverplayer.connection.send(new ClientboundRespawnPacket(serverplayer.createCommonSpawnInfo(worldserver1), (byte)i));
++      serverplayer.connection.send(new ClientboundSetChunkCacheRadiusPacket(serverlevel1.playerChunkLoader.getAPISendViewDistance())); // Spigot // Paper - replace old player chunk management
++      serverplayer.connection.send(new ClientboundSetSimulationDistancePacket(serverlevel1.playerChunkLoader.getAPITickDistance())); // Spigot // Paper - replace old player chunk management
++      serverplayer.spawnIn(serverlevel1);
++      serverplayer.revive();
+       serverplayer.connection.teleport(serverplayer.getX(), serverplayer.getY(), serverplayer.getZ(), serverplayer.getYRot(), serverplayer.getXRot());
++      serverplayer.setShiftKeyDown(false);
++
+       serverplayer.connection.send(new ClientboundSetDefaultSpawnPositionPacket(serverlevel1.getSharedSpawnPos(), serverlevel1.getSharedSpawnAngle()));
+       serverplayer.connection.send(new ClientboundChangeDifficultyPacket(leveldata.getDifficulty(), leveldata.isDifficultyLocked()));
+       serverplayer.connection.send(new ClientboundSetExperiencePacket(serverplayer.experienceProgress, serverplayer.totalExperience, serverplayer.experienceLevel));
+@@ -464,11 +_,29 @@
+       serverlevel1.addRespawnedPlayer(serverplayer);
+       this.players.add(serverplayer);
+       this.playersByUUID.put(serverplayer.getUUID(), serverplayer);
+-      serverplayer.initInventoryMenu();
++      //serverplayer.initInventoryMenu();
+       serverplayer.setHealth(serverplayer.getHealth());
+-      if (flag2) {
+-         serverplayer.connection.send(new ClientboundSoundPacket(SoundEvents.RESPAWN_ANCHOR_DEPLETE, SoundSource.BLOCKS, (double)blockpos.getX(), (double)blockpos.getY(), (double)blockpos.getZ(), 1.0F, 1.0F, serverlevel1.getRandom().nextLong()));
+-      }
++      // Paper start - Fix SPIGOT-5989
++      if (flag2 && !isLocAltered) {
++         if (!flag) {
++            BlockState data = worldserver1.getBlockState(blockpos);
++            worldserver1.setBlock(blockpos, data.setValue(net.minecraft.world.level.block.RespawnAnchorBlock.CHARGE, data.getValue(net.minecraft.world.level.block.RespawnAnchorBlock.CHARGE) - 1), 3);
++         }
++         serverplayer.connection.send(new ClientboundSoundPacket(SoundEvents.RESPAWN_ANCHOR_DEPLETE, SoundSource.BLOCKS, (double) location.getX(), (double) location.getY(), (double) location.getZ(), 1.0F, 1.0F, worldserver1.getRandom().nextLong()));
++         // Paper end
++      }
++      net.minecraftforge.event.ForgeEventFactory.firePlayerRespawnEvent(serverplayer, p_11238_);
++
++      // Added from changeDimension
++      this.sendAllPlayerInfo(serverplayer); // Update health, etc...
++      serverplayer.onUpdateAbilities();
++      for (MobEffectInstance mobEffect : serverplayer.getActiveEffects()) {
++         serverplayer.connection.send(new ClientboundUpdateMobEffectPacket(serverplayer.getId(), mobEffect));
++      }
++
++      // Fire advancement trigger
++      serverplayer.triggerDimensionChangeTriggers(serverlevel1);
++
+ 
+       return serverplayer;
+    }
 @@ -550,6 +_,7 @@
     }
  

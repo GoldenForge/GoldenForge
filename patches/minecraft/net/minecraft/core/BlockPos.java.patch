@@ -1,0 +1,17 @@
+--- a/net/minecraft/core/BlockPos.java
++++ b/net/minecraft/core/BlockPos.java
+@@ -51,6 +_,14 @@
+       super(p_121869_, p_121870_, p_121871_);
+    }
+ 
++   public BlockPos(double p_121865_, double p_121866_, double p_121867_) {
++      super(p_121865_, p_121866_, p_121867_);
++   }
++
++   public BlockPos(Vec3 p_121873_) {
++      this(p_121873_.x, p_121873_.y, p_121873_.z);
++   }
++
+    public BlockPos(Vec3i p_121877_) {
+       this(p_121877_.getX(), p_121877_.getY(), p_121877_.getZ());
+    }

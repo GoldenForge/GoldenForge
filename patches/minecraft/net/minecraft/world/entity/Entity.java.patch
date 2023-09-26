@@ -1,6 +1,10 @@
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -122,7 +_,7 @@
+@@ -119,10 +_,11 @@
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ import net.minecraft.world.scores.PlayerTeam;
+ import net.minecraft.world.scores.Team;
++import org.goldenforge.GoldenForge;
  import org.joml.Vector3f;
  import org.slf4j.Logger;
  

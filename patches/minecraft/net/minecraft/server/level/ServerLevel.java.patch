@@ -7,7 +7,8 @@
 -   private final ServerChunkCache chunkSource;
 +   public final ServerChunkCache chunkSource;
     private final MinecraftServer server;
-    private final ServerLevelData serverLevelData;
+-   private final ServerLevelData serverLevelData;
++   public final ServerLevelData serverLevelData;
     final EntityTickList entityTickList = new EntityTickList();
 -   private final PersistentEntitySectionManager<Entity> entityManager;
 +   //private final PersistentEntitySectionManager<Entity> entityManager; // Paper - rewrite chunk system
