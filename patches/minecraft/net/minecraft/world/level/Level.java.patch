@@ -335,7 +335,7 @@
     }
  
     public void m_46590_(BlockPos p_46591_, Block p_46592_, Direction p_46593_) {
-@@ -311,11 +_,33 @@
+@@ -311,12 +_,33 @@
        return this.m_7726_().m_7827_();
     }
  
@@ -364,11 +364,13 @@
        if (this.m_151570_(p_46732_)) {
           return Blocks.f_50626_.m_49966_();
        } else {
-          LevelChunk levelchunk = this.m_6325_(SectionPos.m_123171_(p_46732_.m_123341_()), SectionPos.m_123171_(p_46732_.m_123343_()));
+-         LevelChunk levelchunk = this.m_6325_(SectionPos.m_123171_(p_46732_.m_123341_()), SectionPos.m_123171_(p_46732_.m_123343_()));
+-         return levelchunk.m_8055_(p_46732_);
 +         ChunkAccess chunk = this.m_6522_(p_46732_.m_123341_() >> 4, p_46732_.m_123343_() >> 4, ChunkStatus.f_62326_, true); // Paper - manually inline to reduce hops and avoid unnecessary null check to reduce total byte code size, this should never return null and if it does we will see it the next line but the real stack trace will matter in the chunk engine
-          return levelchunk.m_8055_(p_46732_);
++         return chunk.m_8055_(p_46732_);
        }
     }
+ 
 @@ -377,38 +_,69 @@
        (this.f_151504_ ? this.f_151503_ : this.f_151512_).add(p_151526_);
     }
