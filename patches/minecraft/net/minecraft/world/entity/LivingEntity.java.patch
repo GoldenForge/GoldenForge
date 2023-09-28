@@ -591,23 +591,13 @@
           if (itemstack.m_150930_(Items.f_42741_) && ElytraItem.m_41140_(itemstack)) {
              flag = true;
              int i = this.f_20937_ + 1;
-@@ -2668,12 +_,16 @@
-    }
- 
+@@ -2670,10 +_,9 @@
     public void m_8127_() {
--      Entity entity = this.m_20202_();
--      super.m_8127_();
+       Entity entity = this.m_20202_();
+       super.m_8127_();
 -      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_) {
--         this.m_21028_(entity);
-+      // Goldenforge: catchup bad mod behaviour
-+      if (!io.papermc.paper.util.TickThread.isTickThread()) {
-+         CompletableFuture.runAsync(this::m_8127_, this.m_20194_()).join();
-+      } else {
-+         Entity entity = this.m_20202_();
-+         super.m_8127_();
-+         if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_ && entity.isValid) { // Paper - don't process on world gen
-+            this.m_21028_(entity);
-+         }
++      if (entity != null && entity != this.m_20202_() && !this.f_19853_.f_46443_ && entity.isValid) { // Paper - don't process on world gen
+          this.m_21028_(entity);
        }
 -
     }

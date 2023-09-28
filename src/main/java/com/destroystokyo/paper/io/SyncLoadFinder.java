@@ -91,9 +91,9 @@ public class SyncLoadFinder {
 
                 final JsonArray traces = new JsonArray();
 
-//                for (StackTraceElement element : io.papermc.paper.util.StacktraceDeobfuscator.INSTANCE.deobfuscateStacktrace(pair.getFirst().stacktrace)) {
-//                    traces.add(String.valueOf(element));
-//                }
+                for (StackTraceElement element : pair.getFirst().stacktrace) {
+                    traces.add(String.valueOf(element));
+                }
 
                 stacktrace.add("stacktrace", traces);
 

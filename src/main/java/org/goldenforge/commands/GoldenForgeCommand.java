@@ -1,6 +1,10 @@
 package org.goldenforge.commands;
 
+import com.destroystokyo.paper.io.SyncLoadFinder;
 import com.google.common.collect.ImmutableMap;
+import com.google.gson.JsonObject;
+import com.google.gson.internal.Streams;
+import com.google.gson.stream.JsonWriter;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -11,6 +15,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,6 +26,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.goldenforge.GoldenForge;
 import org.goldenforge.tpsmonitor.TpsMonitorManager;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 public class GoldenForgeCommand {
@@ -41,7 +53,9 @@ public class GoldenForgeCommand {
 
         dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("goldenforge")
                 .executes(GoldenForgeCommand::main)
-                .then(Commands.literal("chunkinfo").then(Commands.argument("world", DimensionArgument.dimension()).executes(GoldenForgeCommand::chunkInfos))));
+                .then(Commands.literal("chunkinfo").then(Commands.argument("world", DimensionArgument.dimension()).executes(GoldenForgeCommand::chunkInfos)))
+                .then(Commands.literal("syncloadinfo").executes(GoldenForgeCommand::logSyncload)));
+
 
         dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("tpsmonitor")
                 .executes(GoldenForgeCommand::toggleTPSMonitor));
@@ -52,6 +66,44 @@ public class GoldenForgeCommand {
         dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("playermobcaps")
                 .executes(GoldenForgeCommand::toggleTPSMonitor));
 
+    }
+
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss");
+
+    private static int logSyncload(CommandContext<CommandSourceStack> ctx) {
+
+        if (!SyncLoadFinder.ENABLED) {
+            String systemFlag = "-Dpaper.debug-sync-loads=true";
+            ctx.getSource().sendSystemMessage(Component.literal("set -Dpaper.debug-sync-loads=true"));
+            return 1;
+        }
+
+        File file = new File(new File(new File("."), "debug"),
+                "sync-load-info-" + FORMATTER.format(LocalDateTime.now()) + ".txt");
+        file.getParentFile().mkdirs();
+        ctx.getSource().sendSystemMessage(Component.literal("Writing sync load info to " + file));
+
+        try {
+            final JsonObject data = SyncLoadFinder.serialize();
+
+            StringWriter stringWriter = new StringWriter();
+            JsonWriter jsonWriter = new JsonWriter(stringWriter);
+            jsonWriter.setIndent(" ");
+            jsonWriter.setLenient(false);
+            Streams.write(data, jsonWriter);
+
+            try (
+                    PrintStream out = new PrintStream(new FileOutputStream(file), false, StandardCharsets.UTF_8)
+            ) {
+                out.print(stringWriter);
+            }
+            ctx.getSource().sendSystemMessage(Component.literal("Successfully written sync load information!"));
+        } catch (Throwable thr) {
+            ctx.getSource().sendSystemMessage(Component.literal("Failed to write sync load information! See the console for more info."));
+            MinecraftServer.LOGGER.warn("Error occurred while dumping sync chunk load info", thr);
+        }
+
+        return 0;
     }
 
     private static int printMobcaps(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
