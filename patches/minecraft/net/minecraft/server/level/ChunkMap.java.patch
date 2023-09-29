@@ -1,10 +1,9 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
-@@ -2,15 +_,13 @@
- 
+@@ -3,14 +_,13 @@
  import com.google.common.collect.ImmutableList;
  import com.google.common.collect.Iterables;
--import com.google.common.collect.Lists;
+ import com.google.common.collect.Lists;
 -import com.google.common.collect.Queues;
 -import com.google.common.collect.Sets;
  import com.google.gson.JsonElement;
@@ -107,7 +106,7 @@
  import org.slf4j.Logger;
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
-@@ -110,37 +_,197 @@
+@@ -110,37 +_,145 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -169,16 +168,13 @@
 -   private final Queue<Runnable> f_140125_ = Queues.newConcurrentLinkedQueue();
 +   private final Queue<Runnable> f_140125_ = new com.destroystokyo.paper.utils.CachedSizeConcurrentLinkedQueue<>(); // Paper - need constant-time size()
     int f_140126_;
--
 +   private final com.destroystokyo.paper.util.misc.PooledLinkedHashSets<ServerPlayer> pooledLinkedPlayerHashSets = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets<>();
 +   public final ReferenceOpenHashSet<ChunkHolder> needsChangeBroadcasting = new ReferenceOpenHashSet<>();
-+   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerMobDistanceMap; // Paper
 +
 +   // Paper start - optimise checkDespawn
 +   public static final int GENERAL_AREA_MAP_SQUARE_RADIUS = 40;
 +   public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE = 16.0 * (GENERAL_AREA_MAP_SQUARE_RADIUS - 1);
 +   public static final double GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE_SQUARED = GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE * GENERAL_AREA_MAP_ACCEPTABLE_SEARCH_RANGE;
-+   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerGeneralAreaMap;
 +   // Paper end - optimise checkDespawn
 +
 +   // Paper start
@@ -236,93 +232,43 @@
 +   // obviously this means a spawn range > 8 cannot be implemented
 +
 +   // these maps are named after spigot's uses
-+   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerMobSpawnMap; // this map is absent from updateMaps since it's controlled at the start of the chunkproviderserver tick
-+   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerChunkTickRangeMap;
++   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerMobSpawnMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets);
 +   // Paper end - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-+   // Paper start - use distance map to optimise tracker
-+   // inlined EnumMap, TrackingRange.TrackingRangeType
-+   static final org.spigotmc.TrackingRange.TrackingRangeType[] TRACKING_RANGE_TYPES = org.spigotmc.TrackingRange.TrackingRangeType.values();
-+   public final com.destroystokyo.paper.util.misc.PlayerAreaMap[] playerEntityTrackerTrackMaps;
-+   final int[] entityTrackerTrackRanges;
-+   public final int getEntityTrackerRange(final int ordinal) {
-+      return this.entityTrackerTrackRanges[ordinal];
-+   }
-+
-+   private int convertSpigotRangeToVanilla(final int vanilla) {
-+      return MinecraftServer.getServer().m_7186_(vanilla);
-+   }
-+   // Paper end - use distance map to optimise tracker
 +
 +   void addPlayerToDistanceMaps(ServerPlayer player) {
++      int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20185_());
++      int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20189_());
++      // Note: players need to be explicitly added to distance maps before they can be updated
++      this.nearbyPlayers.addPlayer(player);
 +      this.f_140133_.playerChunkLoader.addPlayer(player); // Paper - replace chunk loader
-+      int chunkX = MCUtil.getChunkCoordinate(player.m_20185_());
-+      int chunkZ = MCUtil.getChunkCoordinate(player.m_20189_());
-+      this.playerChunkTickRangeMap.add(player, chunkX, chunkZ, net.minecraft.server.level.DistanceManager.MOB_SPAWN_RANGE); // Paper - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-+      // Paper start - per player mob spawning
-+      if (this.playerMobDistanceMap != null) {
-+         this.playerMobDistanceMap.add(player, chunkX, chunkZ, io.papermc.paper.chunk.system.ChunkSystem.getTickViewDistance(player));
-+      }
-+      // Paper end - per player mob spawning
-+      // Paper start - use distance map to optimise entity tracker
-+      for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
-+         com.destroystokyo.paper.util.misc.PlayerAreaMap trackMap = this.playerEntityTrackerTrackMaps[i];
-+         int trackRange = this.entityTrackerTrackRanges[i];
-+
-+         trackMap.add(player, chunkX, chunkZ, Math.min(trackRange, io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(player)));
-+      }
-+      // Paper end - use distance map to optimise entity tracker
-+      this.playerGeneralAreaMap.add(player, chunkX, chunkZ, GENERAL_AREA_MAP_SQUARE_RADIUS); // Paper - optimise checkDespawn
 +   }
 +
 +   void removePlayerFromDistanceMaps(ServerPlayer player) {
++      int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20185_());
++      int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20189_());
++      // Note: players need to be explicitly added to distance maps before they can be updated
++      this.nearbyPlayers.removePlayer(player);
 +      this.f_140133_.playerChunkLoader.removePlayer(player); // Paper - replace chunk loader
-+      // Paper start - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-+      this.playerMobSpawnMap.remove(player);
-+      this.playerChunkTickRangeMap.remove(player);
-+      // Paper end - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-+      this.playerGeneralAreaMap.remove(player); // Paper - optimise checkDespawns
-+      // Paper start - per player mob spawning
-+      if (this.playerMobDistanceMap != null) {
-+         this.playerMobDistanceMap.remove(player);
-+      }
-+      // Paper end - per player mob spawning
-+      // Paper start - use distance map to optimise tracker
-+      for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
-+         this.playerEntityTrackerTrackMaps[i].remove(player);
-+      }
-+      // Paper end - use distance map to optimise tracker
++      this.playerMobSpawnMap.remove(player); // Paper - optimise chunk tick iteration
 +   }
 +
 +   void updateMaps(ServerPlayer player) {
-+      int chunkX = MCUtil.getChunkCoordinate(player.m_20185_());
-+      int chunkZ = MCUtil.getChunkCoordinate(player.m_20189_());
++      int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20185_());
++      int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20189_());
++      // Note: players need to be explicitly added to distance maps before they can be updated
++      this.nearbyPlayers.tickPlayer(player);
 +      this.f_140133_.playerChunkLoader.updatePlayer(player); // Paper - replace chunk loader
-+      this.playerChunkTickRangeMap.update(player, chunkX, chunkZ, net.minecraft.server.level.DistanceManager.MOB_SPAWN_RANGE); // Paper - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-+      // Paper start - per player mob spawning
-+      if (this.playerMobDistanceMap != null) {
-+         this.playerMobDistanceMap.update(player, chunkX, chunkZ, io.papermc.paper.chunk.system.ChunkSystem.getTickViewDistance(player));
-+      }
-+      // Paper end - per player mob spawning
-+      // Paper start - use distance map to optimise entity tracker
-+      for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
-+         com.destroystokyo.paper.util.misc.PlayerAreaMap trackMap = this.playerEntityTrackerTrackMaps[i];
-+         int trackRange = this.entityTrackerTrackRanges[i];
-+
-+         trackMap.update(player, chunkX, chunkZ, Math.min(trackRange, io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(player)));
-+      }
-+      // Paper end - use distance map to optimise entity tracker
-+      this.playerGeneralAreaMap.update(player, chunkX, chunkZ, GENERAL_AREA_MAP_SQUARE_RADIUS); // Paper - optimise checkDespawn
 +   }
 +
-+
-+   boolean unloadingPlayerChunk = false; // Paper - do not allow ticket level changes while unloading chunks
++   public final io.papermc.paper.util.player.NearbyPlayers nearbyPlayers;
+ 
     public ChunkMap(ServerLevel p_214836_, LevelStorageSource.LevelStorageAccess p_214837_, DataFixer p_214838_, StructureTemplateManager p_214839_, Executor p_214840_, BlockableEventLoop<Runnable> p_214841_, LightChunkGetter p_214842_, ChunkGenerator p_214843_, ChunkProgressListener p_214844_, ChunkStatusUpdateListener p_214845_, Supplier<DimensionDataStorage> p_214846_, int p_214847_, boolean p_214848_) {
 -      super(p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
 +      super(GoldenForgeConfig.Server.regionFormat, GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get(), GoldenForgeConfig.Server.linearCrashOnBrokenSymlink.get(), p_214837_.m_197394_(p_214836_.m_46472_()).resolve("region"), p_214838_, p_214848_);
        this.f_214833_ = p_214839_;
        Path path = p_214837_.m_197394_(p_214836_.m_46472_());
        this.f_182284_ = path.getFileName().toString();
-@@ -153,19 +_,112 @@
+@@ -153,20 +_,33 @@
        }
  
        this.f_140135_ = p_214841_;
@@ -348,105 +294,28 @@
 -      this.f_140138_ = new PoiManager(path.resolve("poi"), p_214838_, p_214848_, p_214836_.m_5962_(), p_214836_);
 +      this.f_140138_ = new PoiManager(GoldenForgeConfig.Server.regionFormat, GoldenForgeConfig.Server.regionFormatLinearCompressionLevel.get(), GoldenForgeConfig.Server.linearCrashOnBrokenSymlink.get(), path.resolve("poi"), p_214838_, p_214848_, p_214836_.m_5962_(), p_214836_);
        this.m_140167_(p_214847_);
+-   }
 +      // Paper start
 +      this.dataRegionManager = new io.papermc.paper.chunk.SingleThreadChunkRegionManager(this.f_140133_, 2, (1.0 / 3.0), 1, 6, "Data", DataRegionData::new, DataRegionSectionData::new);
 +      this.regionManagers.add(this.dataRegionManager);
++      this.nearbyPlayers = new io.papermc.paper.util.player.NearbyPlayers(this.f_140133_);
 +      // Paper end
-+      this.playerMobDistanceMap = GoldenForgeConfig.Server.perPlayerMobSpawns.get() ? new gg.pufferfish.pufferfish.util.AsyncPlayerAreaMap(this.pooledLinkedPlayerHashSets) : null; // Paper
-+      // Paper start - use distance map to optimise entity tracker
-+      this.playerEntityTrackerTrackMaps = new com.destroystokyo.paper.util.misc.PlayerAreaMap[TRACKING_RANGE_TYPES.length];
-+      this.entityTrackerTrackRanges = new int[TRACKING_RANGE_TYPES.length];
++   }
 +
-+
-+      for (int ordinal = 0, len = TRACKING_RANGE_TYPES.length; ordinal < len; ++ordinal) {
-+         org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = TRACKING_RANGE_TYPES[ordinal];
-+         int configuredSpigotValue;
-+         switch (trackingRangeType) {
-+            case PLAYER:
-+               configuredSpigotValue = GoldenConfig.playerTrackingRange;
-+               break;
-+            case ANIMAL:
-+               configuredSpigotValue = GoldenConfig.animalTrackingRange;
-+               break;
-+            case MONSTER:
-+               configuredSpigotValue = GoldenConfig.monsterTrackingRange;
-+               break;
-+            case MISC:
-+               configuredSpigotValue = GoldenConfig.miscTrackingRange;
-+               break;
-+            case OTHER:
-+               configuredSpigotValue = GoldenConfig.otherTrackingRange;
-+               break;
-+            case ENDERDRAGON:
-+               configuredSpigotValue = EntityType.f_20565_.m_20681_() * 16;
-+               break;
-+            default:
-+               throw new IllegalStateException("Missing case for enum " + trackingRangeType);
-+         }
-+         configuredSpigotValue = convertSpigotRangeToVanilla(configuredSpigotValue);
-+
-+         int trackRange = (configuredSpigotValue >>> 4) + ((configuredSpigotValue & 15) != 0 ? 1 : 0);
-+         this.entityTrackerTrackRanges[ordinal] = trackRange;
-+
-+         this.playerEntityTrackerTrackMaps[ordinal] = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets);
-+      }
-+      // Paper end - use distance map to optimise entity tracker
-+      // Paper start - optimise checkDespawn
-+      this.playerGeneralAreaMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets,
-+              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-+               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
-+                 LevelChunk chunk = ChunkMap.this.f_140133_.m_7726_().getChunkAtIfCachedImmediately(rangeX, rangeZ);
-+                 if (chunk != null) {
-+                    chunk.updateGeneralAreaCache(newState);
-+                 }
-+              },
-+              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-+               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
-+                 LevelChunk chunk = ChunkMap.this.f_140133_.m_7726_().getChunkAtIfCachedImmediately(rangeX, rangeZ);
-+                 if (chunk != null) {
-+                    chunk.updateGeneralAreaCache(newState);
-+                 }
-+              });
-+      // Paper end - optimise checkDespawn
-+      // Paper start - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-+      this.playerChunkTickRangeMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets,
-+              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-+               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
-+                 ChunkHolder playerChunk = ChunkMap.this.m_140174_(MCUtil.getCoordinateKey(rangeX, rangeZ));
-+                 if (playerChunk != null) {
-+                    playerChunk.playersInChunkTickRange = newState;
-+                 }
-+              },
-+              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-+               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
-+                 ChunkHolder playerChunk = ChunkMap.this.m_140174_(MCUtil.getCoordinateKey(rangeX, rangeZ));
-+                 if (playerChunk != null) {
-+                    playerChunk.playersInChunkTickRange = newState;
-+                 }
-+              });
-+      this.playerMobSpawnMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets,
-+              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-+               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
-+                 ChunkHolder playerChunk = ChunkMap.this.m_140174_(MCUtil.getCoordinateKey(rangeX, rangeZ));
-+                 if (playerChunk != null) {
-+                    playerChunk.playersInMobSpawnRange = newState;
-+                 }
-+              },
-+              (ServerPlayer player, int rangeX, int rangeZ, int currPosX, int currPosZ, int prevPosX, int prevPosZ,
-+               com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> newState) -> {
-+                 ChunkHolder playerChunk = ChunkMap.this.m_140174_(MCUtil.getCoordinateKey(rangeX, rangeZ));
-+                 if (playerChunk != null) {
-+                    playerChunk.playersInMobSpawnRange = newState;
-+                 }
-+              });
-+      // Paper end - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
-    }
++   // Paper start
++   // always use accessor, so folia can override
++   public final io.papermc.paper.util.player.NearbyPlayers getNearbyPlayers() {
++      return this.nearbyPlayers;
++   }
++   // Paper end
  
     protected ChunkGenerator m_183719_() {
-@@ -186,6 +_,31 @@
+       return this.f_140136_;
+@@ -186,7 +_,30 @@
        });
     }
  
+-   private static double m_140226_(ChunkPos p_140227_, Entity p_140228_) {
 +   // Paper start
 +   public void updatePlayerMobTypeMap(Entity entity) {
 +      if (!GoldenForgeConfig.Server.perPlayerMobSpawns.get()) {
@@ -454,16 +323,14 @@
 +      }
 +      int index = entity.m_6095_().m_20674_().ordinal();
 +
-+      final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> inRange = this.playerMobDistanceMap.getObjectsInRange(entity.m_146902_());
++      final com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> inRange =
++              this.getNearbyPlayers().getPlayers(entity.m_146902_(), io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.TICK_VIEW_DISTANCE);
 +      if (inRange == null) {
 +         return;
 +      }
-+      final Object[] backingSet = inRange.getBackingSet();
-+      for (int i = 0; i < backingSet.length; i++) {
-+         if (!(backingSet[i] instanceof final ServerPlayer player)) {
-+            continue;
-+         }
-+         ++player.mobCounts[index];
++      final Object[] backingSet = inRange.getRawData();
++      for (int i = 0, len = inRange.size(); i < len; i++) {
++         ++((ServerPlayer)backingSet[i]).mobCounts[index];
 +      }
 +   }
 +
@@ -472,9 +339,10 @@
 +   }
 +   // Paper end
 +
-    private static double m_140226_(ChunkPos p_140227_, Entity p_140228_) {
++   public static double m_140226_(ChunkPos p_140227_, Entity p_140228_) {
        double d0 = (double)SectionPos.m_175554_(p_140227_.f_45578_, 8);
        double d1 = (double)SectionPos.m_175554_(p_140227_.f_45579_, 8);
+       double d2 = d0 - p_140228_.m_20185_();
 @@ -224,20 +_,23 @@
     }
  
@@ -1587,7 +1455,7 @@
                 ChunkMap.TrackedEntity chunkmap$trackedentity = new ChunkMap.TrackedEntity(p_140200_, i, j, entitytype.m_20683_());
                 this.f_140150_.put(p_140200_.m_19879_(), chunkmap$trackedentity);
 -               chunkmap$trackedentity.m_140487_(this.f_140133_.m_6907_());
-+               chunkmap$trackedentity.updatePlayers(p_140200_.getPlayersInTrackRange()); // Paper - don't search all players
++               chunkmap$trackedentity.m_140487_(this.f_140133_.m_6907_()); // Paper - don't search all players
                 if (p_140200_ instanceof ServerPlayer) {
                    ServerPlayer serverplayer = (ServerPlayer)p_140200_;
                    this.m_140192_(serverplayer, true);
@@ -1598,75 +1466,6 @@
 +      org.spigotmc.AsyncCatcher.catchOp("entity untrack"); // Spigot
        if (p_140332_ instanceof ServerPlayer serverplayer) {
           this.m_140192_(serverplayer, false);
- 
-@@ -1149,33 +_,41 @@
-    }
- 
-    protected void m_140421_() {
--      List<ServerPlayer> list = Lists.newArrayList();
--      List<ServerPlayer> list1 = this.f_140133_.m_6907_();
--
--      for(ChunkMap.TrackedEntity chunkmap$trackedentity : this.f_140150_.values()) {
--         SectionPos sectionpos = chunkmap$trackedentity.f_140474_;
--         SectionPos sectionpos1 = SectionPos.m_235861_(chunkmap$trackedentity.f_140472_);
--         boolean flag = !Objects.equals(sectionpos, sectionpos1);
--         if (flag) {
--            chunkmap$trackedentity.m_140487_(list1);
--            Entity entity = chunkmap$trackedentity.f_140472_;
--            if (entity instanceof ServerPlayer) {
--               list.add((ServerPlayer)entity);
--            }
--
--            chunkmap$trackedentity.f_140474_ = sectionpos1;
--         }
--
--         if (flag || this.f_140145_.m_183913_(sectionpos1.m_123251_().m_45588_())) {
--            chunkmap$trackedentity.f_140471_.m_8533_();
--         }
--      }
--
--      if (!list.isEmpty()) {
--         for(ChunkMap.TrackedEntity chunkmap$trackedentity1 : this.f_140150_.values()) {
--            chunkmap$trackedentity1.m_140487_(list);
--         }
--      }
-+      for (TrackedEntity tracker : this.f_140150_.values()) {
-+         // update tracker entry
-+         tracker.updatePlayers(tracker.f_140472_.getPlayersInTrackRange());
-+      }
-+
-+      for (TrackedEntity tracker : f_140150_.values()) {
-+         tracker.f_140471_.m_8533_();
-+      }
-+//      List<ServerPlayer> list = Lists.newArrayList();
-+//      List<ServerPlayer> list1 = this.level.players();
-+//
-+//      for(ChunkMap.TrackedEntity chunkmap$trackedentity : this.entityMap.values()) {
-+//         SectionPos sectionpos = chunkmap$trackedentity.lastSectionPos;
-+//         SectionPos sectionpos1 = SectionPos.of(chunkmap$trackedentity.entity);
-+//         boolean flag = !Objects.equals(sectionpos, sectionpos1);
-+//         if (flag) {
-+//            chunkmap$trackedentity.updatePlayers(list1);
-+//            Entity entity = chunkmap$trackedentity.entity;
-+//            if (entity instanceof ServerPlayer) {
-+//               list.add((ServerPlayer)entity);
-+//            }
-+//
-+//            chunkmap$trackedentity.lastSectionPos = sectionpos1;
-+//         }
-+//
-+//         if (flag || this.distanceManager.inEntityTickingRange(sectionpos1.chunk().toLong())) {
-+//            chunkmap$trackedentity.serverEntity.sendChanges();
-+//         }
-+//      }
-+//
-+//      if (!list.isEmpty()) {
-+//         for(ChunkMap.TrackedEntity chunkmap$trackedentity1 : this.entityMap.values()) {
-+//            chunkmap$trackedentity1.updatePlayers(list);
-+//         }
-+//      }
- 
-    }
  
 @@ -1202,38 +_,11 @@
  

@@ -30,16 +30,50 @@
           if (list.isEmpty()) {
              return List.of();
           } else {
-@@ -126,6 +_,12 @@
-    default Player m_45941_(TargetingConditions p_45942_, double p_45943_, double p_45944_, double p_45945_) {
+@@ -127,6 +_,12 @@
        return this.m_45982_(this.m_6907_(), p_45942_, (LivingEntity)null, p_45943_, p_45944_, p_45945_);
     }
-+
+ 
 +   // Paper start
 +   default @Nullable Player findNearbyPlayer(Entity entity, double maxDistance, @Nullable Predicate<Entity> predicate) {
 +      return this.m_5788_(entity.m_20185_(), entity.m_20186_(), entity.m_20189_(), maxDistance, predicate);
 +   }
 +   // Paper end
- 
++
     @Nullable
     default <T extends LivingEntity> T m_45963_(Class<? extends T> p_45964_, TargetingConditions p_45965_, @Nullable LivingEntity p_45966_, double p_45967_, double p_45968_, double p_45969_, AABB p_45970_) {
+       return this.m_45982_(this.m_6443_(p_45964_, p_45970_, (p_186454_) -> {
+@@ -136,20 +_,24 @@
+ 
+    @Nullable
+    default <T extends LivingEntity> T m_45982_(List<? extends T> p_45983_, TargetingConditions p_45984_, @Nullable LivingEntity p_45985_, double p_45986_, double p_45987_, double p_45988_) {
+-      double d0 = -1.0D;
+-      T t = null;
++      double d = -1.0D;
++      T livingEntity = null;
+ 
+-      for(T t1 : p_45983_) {
+-         if (p_45984_.m_26885_(p_45985_, t1)) {
+-            double d1 = t1.m_20275_(p_45986_, p_45987_, p_45988_);
+-            if (d0 == -1.0D || d1 < d0) {
+-               d0 = d1;
+-               t = t1;
++      for(T livingEntity2 : p_45983_) {
++         // Paper start - move up
++         // don't check entities outside closest range
++         double e = livingEntity2.m_20275_(p_45986_, p_45987_, p_45988_);
++         if (d == -1.0D || e < d) {
++            // Paper end - move up
++            if (p_45984_.m_26885_(p_45985_, livingEntity2)) {
++               // Paper - move up
++               d = e;
++               livingEntity = livingEntity2;
+             }
+          }
+       }
+ 
+-      return t;
++      return livingEntity;
+    }
+ 
+    default List<Player> m_45955_(TargetingConditions p_45956_, LivingEntity p_45957_, AABB p_45958_) {

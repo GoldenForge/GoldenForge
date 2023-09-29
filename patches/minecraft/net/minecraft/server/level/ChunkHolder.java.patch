@@ -58,7 +58,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,222 @@
+@@ -65,97 +_,201 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -120,40 +120,19 @@
 +   // Paper end - optimise anyPlayerCloseEnoughForSpawning
 +
 +   public void onChunkAdd() {
-+      // Paper start - optimise anyPlayerCloseEnoughForSpawning
-+      long key = io.papermc.paper.util.MCUtil.getCoordinateKey(this.f_140009_);
-+      this.playersInMobSpawnRange = this.chunkMap.playerMobSpawnMap.getObjectsInRange(key);
-+      this.playersInChunkTickRange = this.chunkMap.playerChunkTickRangeMap.getObjectsInRange(key);
-+      // Paper end - optimise anyPlayerCloseEnoughForSpawning
 +      // Paper start - optimise chunk tick iteration
 +      if (this.needsBroadcastChanges()) {
 +         this.chunkMap.needsChangeBroadcasting.add(this);
 +      }
 +      // Paper end - optimise chunk tick iteration
-+      // Paper start - optimise checkDespawn
-+      LevelChunk chunk = this.getFullChunkNowUnchecked();
-+      if (chunk != null) {
-+         chunk.updateGeneralAreaCache();
-+      }
-+      // Paper end - optimise checkDespawn
 +   }
 +
 +   public void onChunkRemove() {
-+      // Paper start - optimise anyPlayerCloseEnoughForSpawning
-+      this.playersInMobSpawnRange = null;
-+      this.playersInChunkTickRange = null;
-+      // Paper end - optimise anyPlayerCloseEnoughForSpawning
 +      // Paper start - optimise chunk tick iteration
 +      if (this.needsBroadcastChanges()) {
 +         this.chunkMap.needsChangeBroadcasting.remove(this);
 +      }
-+      // Paper end - optimise chunk tick iterationn
-+      // Paper start - optimise checkDespawn
-+      LevelChunk chunk = this.getFullChunkNowUnchecked();
-+      if (chunk != null) {
-+         chunk.removeGeneralAreaCache();
-+      }
-+      // Paper end - optimise checkDespaw
++      // Paper end - optimise chunk tick iteration
 +   }
 +
 +   private final com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> playersSentChunkTo = new com.destroystokyo.paper.util.maplist.ReferenceList<>();

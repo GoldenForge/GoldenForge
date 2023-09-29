@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
 +++ b/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
+@@ -10,7 +_,7 @@
+    public static final TargetingConditions f_26872_ = m_148352_();
+    private static final double f_148347_ = 2.0D;
+    private final boolean f_148348_;
+-   private double f_26873_ = -1.0D;
++   public double f_26873_ = -1.0D;
+    private boolean f_148349_ = true;
+    private boolean f_26878_ = true;
+    @Nullable
 @@ -75,12 +_,21 @@
              }
  

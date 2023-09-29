@@ -55,7 +55,7 @@
     public boolean f_8564_;
     private final SleepStatus f_143245_;
     private int f_8551_;
-@@ -184,10 +_,321 @@
+@@ -184,10 +_,356 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
     private final EndDragonFight f_8559_;
@@ -265,80 +265,115 @@
 +   // Paper start - optimise checkDespawn
 +   public final List<ServerPlayer> playersAffectingSpawning = new java.util.ArrayList<>();
 +   // Paper end - optimise checkDespawn
-+   // Paper start - optimise get nearest players for entity AI
++   // Paper start - optimise nearby player retrieval
 +   @Override
-+   public final ServerPlayer m_45949_(net.minecraft.world.entity.ai.targeting.TargetingConditions condition, @Nullable LivingEntity source,
-+                                              double centerX, double centerY, double centerZ) {
-+      com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> nearby;
-+      nearby = this.m_7726_().f_8325_.playerGeneralAreaMap.getObjectsInRange(Mth.m_14107_(centerX) >> 4, Mth.m_14107_(centerZ) >> 4);
-+
-+      if (nearby == null) {
-+         return null;
-+      }
-+
-+      Object[] backingSet = nearby.getBackingSet();
-+
-+      double closestDistanceSquared = Double.MAX_VALUE;
-+      ServerPlayer closest = null;
-+
-+      for (int i = 0, len = backingSet.length; i < len; ++i) {
-+         Object _player = backingSet[i];
-+         if (!(_player instanceof ServerPlayer)) {
-+            continue;
-+         }
-+         ServerPlayer player = (ServerPlayer)_player;
-+
-+         double distanceSquared = player.m_20275_(centerX, centerY, centerZ);
-+         if (distanceSquared < closestDistanceSquared && condition.m_26885_(source, player)) {
-+            closest = player;
-+            closestDistanceSquared = distanceSquared;
-+         }
-+      }
-+
-+      return closest;
++   public java.util.List<net.minecraft.world.entity.player.Player> m_45955_(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate,
++                                                                                    net.minecraft.world.entity.LivingEntity entity,
++                                                                                    net.minecraft.world.phys.AABB box) {
++      return this.m_45971_(Player.class, targetPredicate, entity, box);
 +   }
 +
 +   @Override
-+   public Player m_45946_(net.minecraft.world.entity.ai.targeting.TargetingConditions pathfindertargetcondition, LivingEntity entityliving) {
-+      return this.m_45949_(pathfindertargetcondition, entityliving, entityliving.m_20185_(), entityliving.m_20186_(), entityliving.m_20189_());
++   public Player m_5788_(double x, double y, double z, double maxDistance, @Nullable Predicate<Entity> targetPredicate) {
++      if (maxDistance > 0.0D) {
++         io.papermc.paper.util.player.NearbyPlayers players = this.f_8547_.f_8325_.getNearbyPlayers();
++
++         com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> nearby = players.getPlayersByBlock(
++                 io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(x),
++                 io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(z),
++                 io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.GENERAL
++         );
++
++         if (nearby == null) {
++            return null;
++         }
++
++         ServerPlayer nearest = null;
++         double nearestDist = maxDistance * maxDistance;
++         Object[] rawData = nearby.getRawData();
++         for (int i = 0, len = nearby.size(); i < len; ++i) {
++            ServerPlayer player = (ServerPlayer)rawData[i];
++            double dist = player.m_20275_(x, y, z);
++            if (dist >= nearestDist) {
++               continue;
++            }
++
++            if (targetPredicate == null || targetPredicate.test(player)) {
++               nearest = player;
++               nearestDist = dist;
++            }
++         }
++
++         return nearest;
++      } else {
++         ServerPlayer nearest = null;
++         double nearestDist = Double.MAX_VALUE;
++
++         for (ServerPlayer player : this.m_6907_()) {
++            double dist = player.m_20275_(x, y, z);
++            if (dist >= nearestDist) {
++               continue;
++            }
++
++            if (targetPredicate == null || targetPredicate.test(player)) {
++               nearest = player;
++               nearestDist = dist;
++            }
++         }
++
++         return nearest;
++      }
 +   }
 +
 +   @Override
-+   public Player m_45941_(net.minecraft.world.entity.ai.targeting.TargetingConditions pathfindertargetcondition,
-+                                  double d0, double d1, double d2) {
-+      return this.m_45949_(pathfindertargetcondition, null, d0, d1, d2);
++   public Player m_45946_(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate, LivingEntity entity) {
++      return this.m_45949_(targetPredicate, entity, entity.m_20185_(), entity.m_20186_(), entity.m_20189_());
 +   }
 +
 +   @Override
-+   public List<Player> m_45955_(net.minecraft.world.entity.ai.targeting.TargetingConditions condition, LivingEntity source, AABB axisalignedbb) {
-+      com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> nearby;
-+      double centerX = (axisalignedbb.f_82291_ + axisalignedbb.f_82288_) * 0.5;
-+      double centerZ = (axisalignedbb.f_82293_ + axisalignedbb.f_82290_) * 0.5;
-+      nearby = this.m_7726_().f_8325_.playerGeneralAreaMap.getObjectsInRange(Mth.m_14107_(centerX) >> 4, Mth.m_14107_(centerZ) >> 4);
++   public Player m_45949_(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate, LivingEntity entity,
++                                  double x, double y, double z) {
++      double range = targetPredicate.f_26873_;
++      if (range > 0.0D) {
++         io.papermc.paper.util.player.NearbyPlayers players = this.f_8547_.f_8325_.getNearbyPlayers();
 +
-+      List<Player> ret = new java.util.ArrayList<>();
++         com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> nearby = players.getPlayersByBlock(
++                 io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(x),
++                 io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(z),
++                 io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.GENERAL
++         );
 +
-+      if (nearby == null) {
-+         return ret;
-+      }
-+
-+      Object[] backingSet = nearby.getBackingSet();
-+
-+      for (int i = 0, len = backingSet.length; i < len; ++i) {
-+         Object _player = backingSet[i];
-+         if (!(_player instanceof ServerPlayer)) {
-+            continue;
++         if (nearby == null) {
++            return null;
 +         }
-+         ServerPlayer player = (ServerPlayer)_player;
 +
-+         if (axisalignedbb.m_82393_(player.m_20185_(), player.m_20186_(), player.m_20189_()) && condition.m_26885_(source, player)) {
-+            ret.add(player);
++         ServerPlayer nearest = null;
++         double nearestDist = Double.MAX_VALUE;
++         Object[] rawData = nearby.getRawData();
++         for (int i = 0, len = nearby.size(); i < len; ++i) {
++            ServerPlayer player = (ServerPlayer)rawData[i];
++            double dist = player.m_20275_(x, y, z);
++            if (dist >= nearestDist) {
++               continue;
++            }
++
++            if (targetPredicate.m_26885_(entity, player)) {
++               nearest = player;
++               nearestDist = dist;
++            }
 +         }
-+      }
 +
-+      return ret;
++         return nearest;
++      } else {
++         return this.m_45982_(this.m_6907_(), targetPredicate, entity, x, y, z);
++      }
 +   }
-+   // Paper end - optimise get nearest players for entity AI
++
++   @Nullable
++   public Player m_45941_(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate, double x, double y, double z) {
++      return this.m_45949_(targetPredicate, null, x, y, z);
++   }
++   // Paper end - optimise nearby player retrieval
 +
 +   public final boolean areChunksLoadedForMove(AABB axisalignedbb) {
 +      // copied code from collision methods, so that we can guarantee that they wont load chunks (we don't override

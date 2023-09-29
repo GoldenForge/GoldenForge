@@ -71,7 +71,7 @@
              });
           }
        }
-@@ -112,19 +_,47 @@
+@@ -112,19 +_,45 @@
        p_47030_.m_46473_().m_6180_("spawner");
  
        for(MobCategory mobcategory : f_46979_) {
@@ -86,14 +86,12 @@
 +
 +         if (GoldenForgeConfig.Server.perPlayerMobSpawns.get()) {
 +            int minDiff = Integer.MAX_VALUE;
-+            final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<net.minecraft.server.level.ServerPlayer> inRange = p_47030_.m_7726_().f_8325_.playerMobDistanceMap.getObjectsInRange(p_47031_.m_7697_());
++            final com.destroystokyo.paper.util.maplist.ReferenceList<net.minecraft.server.level.ServerPlayer> inRange =
++                    p_47030_.f_8547_.f_8325_.getNearbyPlayers().getPlayers(p_47031_.m_7697_(), io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.TICK_VIEW_DISTANCE);
 +            if (inRange != null) {
-+               final Object[] backingSet = inRange.getBackingSet();
-+               for (int k = 0; k < backingSet.length; k++) {
-+                  if (!(backingSet[k] instanceof final net.minecraft.server.level.ServerPlayer player)) {
-+                     continue;
-+                  }
-+                  minDiff = Math.min(limit - p_47030_.m_7726_().f_8325_.getMobCountNear(player, mobcategory), minDiff);
++               final Object[] backingSet = inRange.getRawData();
++               for (int k = 0, len = inRange.size(); k < len; k++) {
++                  minDiff = Math.min(limit - p_47030_.m_7726_().f_8325_.getMobCountNear((net.minecraft.server.level.ServerPlayer)backingSet[k], mobcategory), minDiff);
 +               }
 +            }
 +            difference = (minDiff == Integer.MAX_VALUE) ? 0 : minDiff;
@@ -149,7 +147,7 @@
                 double d0 = (double)l + 0.5D;
                 double d1 = (double)i1 + 0.5D;
 -               Player player = p_47040_.m_45924_(d0, (double)i, d1, -1.0D, false);
-+               Player player = (p_47041_ instanceof LevelChunk) ? ((LevelChunk)p_47041_).findNearestPlayer(d0, i, d1, 576.0D, net.minecraft.world.entity.EntitySelector.f_20408_) : p_47040_.m_45924_(d0, (double)i, d1, -1.0D, false); // Paper - use chunk's player cache to optimize search in range
++               Player player = p_47040_.m_45924_(d0, (double) i, d1, -1.0D, false);
 +
                 if (player != null) {
                    double d2 = player.m_20275_(d0, (double)i, d1);

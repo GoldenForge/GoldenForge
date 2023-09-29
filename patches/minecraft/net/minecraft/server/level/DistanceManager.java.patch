@@ -265,7 +265,7 @@
        }
  
     }
-@@ -225,176 +_,145 @@
+@@ -225,176 +_,139 @@
        this.f_140760_.computeIfAbsent(i, (p_183921_) -> {
           return new ObjectOpenHashSet();
        }).add(p_140804_);
@@ -353,19 +353,13 @@
     public int m_140816_() {
 -      this.f_140763_.m_6410_();
 -      return this.f_140763_.f_140886_.size();
-+      // Paper start - use distance map to implement
-+      // note: this is the spawn chunk count
-+      return this.chunkMap.playerChunkTickRangeMap.size();
-+      // Paper end - use distance map to implement
++      return this.chunkMap.playerMobSpawnMap.size(); // Paper - optimise chunk tick iteration
     }
  
     public boolean m_140847_(long p_140848_) {
 -      this.f_140763_.m_6410_();
 -      return this.f_140763_.f_140886_.containsKey(p_140848_);
-+      // Paper start - use distance map to implement
-+      // note: this is the is spawn chunk method
-+      return this.chunkMap.playerChunkTickRangeMap.getObjectsInRange(p_140848_) != null;
-+      // Paper end - use distance map to implement
++      return this.chunkMap.playerMobSpawnMap.getObjectsInRange(p_140848_) != null; // Paper - optimise chunk tick iteration
     }
  
     public String m_140837_() {
