@@ -611,7 +611,7 @@
 +   // Paper start - lag compensate eating
 +   protected long eatStartTime;
 +   protected int totalEatTimeTicks;
-+   // Paper end
++   // Paper end - lag compensate eating
     private void m_21329_() {
        if (this.m_6117_()) {
 -         if (ItemStack.m_41758_(this.m_21120_(this.m_7655_()), this.f_20935_)) {
@@ -712,7 +712,17 @@
           if (this.f_20935_.m_41781_()) {
              this.m_21329_();
           }
-@@ -2989,7 +_,7 @@
+@@ -2983,13 +_,16 @@
+       }
+ 
+       this.f_20935_ = ItemStack.f_41583_;
+-      this.f_20936_ = 0;
++      // Paper start - lag compensate eating
++      this.f_20936_ = this.totalEatTimeTicks = 0;
++      this.eatStartTime = -1L;
++      // Paper end
+    }
+ 
     public boolean m_21254_() {
        if (this.m_6117_() && !this.f_20935_.m_41619_()) {
           Item item = this.f_20935_.m_41720_();

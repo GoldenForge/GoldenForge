@@ -55,7 +55,7 @@
     public boolean f_8564_;
     private final SleepStatus f_143245_;
     private int f_8551_;
-@@ -184,10 +_,356 @@
+@@ -184,10 +_,368 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
     private final EndDragonFight f_8559_;
@@ -261,6 +261,18 @@
 +         return input.setSendViewDistance(distance);
 +      });
 +   }
++
++   // Paper start - lag compensation
++   private long lagCompensationTick = net.minecraft.server.MinecraftServer.SERVER_INIT;
++
++   public long getLagCompensationTick() {
++      return this.lagCompensationTick;
++   }
++
++   public void updateLagCompensationTick() {
++      this.lagCompensationTick = (System.nanoTime() - net.minecraft.server.MinecraftServer.SERVER_INIT) / (java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(50L));
++   }
++   // Paper end - lag compensation
 +
 +   // Paper start - optimise checkDespawn
 +   public final List<ServerPlayer> playersAffectingSpawning = new java.util.ArrayList<>();

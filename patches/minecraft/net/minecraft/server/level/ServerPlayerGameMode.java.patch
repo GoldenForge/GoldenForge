@@ -23,7 +23,7 @@
  
     public void m_7712_() {
 -      ++this.f_9252_;
-+      this.f_9252_ = MinecraftServer.currentTick; // CraftBukkit;
++      this.f_9252_ = (int)this.f_9244_.getLagCompensationTick(); // CraftBukkit; // Paper - lag compensation
 +      BlockState blockstate;
 +
        if (this.f_9253_) {
