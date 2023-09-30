@@ -62,7 +62,7 @@ public final class NearbyPlayers {
     public void removePlayer(final ServerPlayer player) {
         final TrackedPlayer[] players = this.players.remove(player);
         if (players == null) {
-            throw new IllegalStateException("Don't have player " + player);
+            return; // May be called during teleportation before the player is actually placed
         }
 
         for (final TrackedPlayer tracker : players) {
