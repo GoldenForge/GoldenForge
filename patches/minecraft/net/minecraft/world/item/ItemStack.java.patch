@@ -161,12 +161,22 @@
     }
  
     public InteractionResult m_41647_(Player p_41648_, LivingEntity p_41649_, InteractionHand p_41650_) {
-@@ -388,7 +_,7 @@
-       if (this.m_41619_()) {
+@@ -385,10 +_,16 @@
+    }
+ 
+    public ItemStack m_41777_() {
+-      if (this.m_41619_()) {
++      // Paper start
++      return this.copy(false);
++   }
++
++   public ItemStack copy(boolean originalItem) {
++      if (!originalItem && this.m_41619_()) {
++         // Paper end
           return f_41583_;
        } else {
 -         ItemStack itemstack = new ItemStack(this.m_41720_(), this.f_41587_);
-+         ItemStack itemstack = new ItemStack(this.m_41720_(), this.f_41587_, this.serializeCaps());
++         ItemStack itemstack = new ItemStack(originalItem? this.f_41589_ : this.m_41720_(), this.f_41587_, this.serializeCaps()); // Paper
           itemstack.m_41754_(this.m_41612_());
           if (this.f_41590_ != null) {
              itemstack.f_41590_ = this.f_41590_.m_6426_();

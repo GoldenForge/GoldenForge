@@ -1,25 +1,283 @@
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-@@ -102,7 +_,7 @@
+@@ -10,10 +_,7 @@
+ import net.minecraft.core.NonNullList;
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.network.chat.Component;
+-import net.minecraft.world.Container;
+-import net.minecraft.world.ContainerHelper;
+-import net.minecraft.world.WorldlyContainer;
+-import net.minecraft.world.WorldlyContainerHolder;
++import net.minecraft.world.*;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.EntitySelector;
+ import net.minecraft.world.entity.item.ItemEntity;
+@@ -95,17 +_,57 @@
+ 
+    }
+ 
++   // Paper start - optimize hoppers
++   private static final int HOPPER_EMPTY = 0;
++   private static final int HOPPER_HAS_ITEMS = 1;
++   private static final int HOPPER_IS_FULL = 2;
++
++   private static int getFullState(final HopperBlockEntity tileEntity) {
++      tileEntity.m_59640_(null);
++
++      final List<ItemStack> hopperItems = tileEntity.m_7086_();
++
++      boolean empty = true;
++      boolean full = true;
++
++      for (int i = 0, len = hopperItems.size(); i < len; ++i) {
++         final ItemStack stack = hopperItems.get(i);
++         if (stack.m_41619_()) {
++            full = false;
++            continue;
++         }
++
++         if (!full) {
++            // can't be full
++            return HOPPER_HAS_ITEMS;
++         }
++
++         empty = false;
++
++         if (stack.m_41613_() != stack.m_41741_()) {
++            // can't be full or empty
++            return HOPPER_HAS_ITEMS;
++         }
++      }
++
++      return empty ? HOPPER_EMPTY : (full ? HOPPER_IS_FULL : HOPPER_HAS_ITEMS);
++   }
++   // Paper end - optimize hoppers
++
+    private static boolean m_155578_(Level p_155579_, BlockPos p_155580_, BlockState p_155581_, HopperBlockEntity p_155582_, BooleanSupplier p_155583_) {
+       if (p_155579_.f_46443_) {
+          return false;
+       } else {
           if (!p_155582_.m_59407_() && p_155581_.m_61143_(HopperBlock.f_54022_)) {
              boolean flag = false;
-             if (!p_155582_.m_7983_()) {
+-            if (!p_155582_.m_7983_()) {
 -               flag = m_155562_(p_155579_, p_155580_, p_155581_, p_155582_);
++
++            int fullState = getFullState(p_155582_); // Paper - optimize hoppers
++
++            if (fullState != HOPPER_EMPTY) { // Paper - optimize hoppers
 +               flag = ejectItems(p_155579_, p_155580_, p_155581_, p_155582_);
              }
  
-             if (!p_155582_.m_59404_()) {
-@@ -130,7 +_,8 @@
+-            if (!p_155582_.m_59404_()) {
++            if (fullState != HOPPER_IS_FULL || flag) { // Paper - optimize hoppers
+                flag |= p_155583_.getAsBoolean();
+             }
+ 
+@@ -130,7 +_,124 @@
        return true;
     }
  
 -   private static boolean m_155562_(Level p_155563_, BlockPos p_155564_, BlockState p_155565_, Container p_155566_) {
++   // Paper start - Optimize Hoppers
++   public static boolean skipHopperEvents;
++
++   private static boolean hopperPush(final Level level, final Container destination, final Direction direction, final HopperBlockEntity hopper) {
++      boolean foundItem = false;
++      for (int i = 0; i < hopper.m_6643_(); ++i) {
++         final ItemStack item = hopper.m_8020_(i);
++         if (!item.m_41619_()) {
++            foundItem = true;
++            ItemStack origItemStack = item;
++            ItemStack movedItem = origItemStack;
++
++            final int originalItemCount = origItemStack.m_41613_();
++            final int movedItemCount = Math.min(/*level.spigotConfig.hopperAmount*/ 1, originalItemCount);
++            origItemStack.m_41764_(movedItemCount);
++
++            // We only need to fire the event once to give protection plugins a chance to cancel this event
++            // Because nothing uses getItem, every event call should end up the same result.
++
++            final ItemStack remainingItem = m_59326_(hopper, destination, movedItem, direction);
++            final int remainingItemCount = remainingItem.m_41613_();
++            if (remainingItemCount != movedItemCount) {
++               origItemStack = origItemStack.copy(true);
++               origItemStack.m_41764_(originalItemCount);
++               if (!origItemStack.m_41619_()) {
++                  origItemStack.m_41764_(originalItemCount - movedItemCount + remainingItemCount);
++               }
++               hopper.m_6836_(i, origItemStack);
++               destination.m_6596_();
++               return true;
++            }
++            origItemStack.m_41764_(originalItemCount);
++         }
++      }
++      if (foundItem && /*level.paperConfig().hopper.cooldownWhenFull*/ true) { // Inventory was full - cooldown
++         hopper.m_59395_(/*level.spigotConfig.hopperTransfer*/ 8);
++      }
++      return false;
++   }
++
++   private static boolean hopperPull(final Level level, final Hopper hopper, final Container container, ItemStack origItemStack, final int i) {
++      ItemStack movedItem = origItemStack;
++      final int originalItemCount = origItemStack.m_41613_();
++      final int movedItemCount = Math.min(/*level.spigotConfig.hopperAmount*/ 1, originalItemCount);
++      container.m_6596_(); // original logic always marks source inv as changed even if no move happens.
++      movedItem.m_41764_(movedItemCount);
++
++      final ItemStack remainingItem = m_59326_(container, hopper, movedItem, null);
++      final int remainingItemCount = remainingItem.m_41613_();
++      if (remainingItemCount != movedItemCount) {
++         origItemStack = origItemStack.copy(true);
++         origItemStack.m_41764_(originalItemCount);
++         if (!origItemStack.m_41619_()) {
++            origItemStack.m_41764_(originalItemCount - movedItemCount + remainingItemCount);
++         }
++
++         ignoreTileUpdates = true;
++         container.m_6836_(i, origItemStack);
++         ignoreTileUpdates = false;
++         container.m_6596_();
++         return true;
++      }
++      origItemStack.m_41764_(originalItemCount);
++
++      if (/*level.paperConfig().hopper.cooldownWhenFull*/ true) {
++         cooldownHopper(hopper);
++      }
++
++      return false;
++   }
++
++   private static void cooldownHopper(final Hopper hopper) {
++      if (hopper instanceof HopperBlockEntity blockEntity && blockEntity.m_58904_() != null) {
++         blockEntity.m_59395_(/*blockEntity.getLevel().spigotConfig.hopperTransfer*/ 8);
++      }
++   }
++
++   private static boolean allMatch(Container iinventory, Direction enumdirection, java.util.function.BiPredicate<ItemStack, Integer> test) {
++      if (iinventory instanceof WorldlyContainer) {
++         for (int i : ((WorldlyContainer) iinventory).m_7071_(enumdirection)) {
++            if (!test.test(iinventory.m_8020_(i), i)) {
++               return false;
++            }
++         }
++      } else {
++         int size = iinventory.m_6643_();
++         for (int i = 0; i < size; i++) {
++            if (!test.test(iinventory.m_8020_(i), i)) {
++               return false;
++            }
++         }
++      }
++      return true;
++   }
++
++   private static boolean anyMatch(Container iinventory, Direction enumdirection, java.util.function.BiPredicate<ItemStack, Integer> test) {
++      if (iinventory instanceof WorldlyContainer) {
++         for (int i : ((WorldlyContainer) iinventory).m_7071_(enumdirection)) {
++            if (test.test(iinventory.m_8020_(i), i)) {
++               return true;
++            }
++         }
++      } else {
++         int size = iinventory.m_6643_();
++         for (int i = 0; i < size; i++) {
++            if (test.test(iinventory.m_8020_(i), i)) {
++               return true;
++            }
++         }
++      }
++      return true;
++   }
++   private static final java.util.function.BiPredicate<ItemStack, Integer> STACK_SIZE_TEST = (itemstack, i) -> itemstack.m_41613_() >= itemstack.m_41741_();
++   private static final java.util.function.BiPredicate<ItemStack, Integer> IS_EMPTY_TEST = (itemstack, i) -> itemstack.m_41619_();
++   // Paper end
++
 +   private static boolean ejectItems(Level p_155563_, BlockPos p_155564_, BlockState p_155565_, HopperBlockEntity p_155566_) {
 +      if (net.minecraftforge.items.VanillaInventoryCodeHooks.insertHook(p_155566_)) return true;
        Container container = m_155592_(p_155563_, p_155564_, p_155565_);
        if (container == null) {
           return false;
-@@ -175,6 +_,8 @@
+@@ -139,20 +_,23 @@
+          if (m_59385_(container, direction)) {
+             return false;
+          } else {
+-            for(int i = 0; i < p_155566_.m_6643_(); ++i) {
+-               if (!p_155566_.m_8020_(i).m_41619_()) {
+-                  ItemStack itemstack = p_155566_.m_8020_(i).m_41777_();
+-                  ItemStack itemstack1 = m_59326_(p_155566_, container, p_155566_.m_7407_(i, 1), direction);
+-                  if (itemstack1.m_41619_()) {
+-                     container.m_6596_();
+-                     return true;
+-                  }
+-
+-                  p_155566_.m_6836_(i, itemstack);
+-               }
+-            }
+-
+-            return false;
++            // Paper start - replace logic; MAKE SURE TO CHECK FOR DIFFS ON UPDATES
++            return hopperPush(p_155563_, container, direction, p_155566_);
++//            for(int i = 0; i < p_155566_.getContainerSize(); ++i) {
++//               if (!p_155566_.getItem(i).isEmpty()) {
++//                  ItemStack itemstack = p_155566_.getItem(i).copy();
++//                  ItemStack itemstack1 = addItem(p_155566_, container, p_155566_.removeItem(i, 1), direction);
++//                  if (itemstack1.isEmpty()) {
++//                     container.setChanged();
++//                     return true;
++//                  }
++//
++//                  p_155566_.setItem(i, itemstack);
++//               }
++//            }
++//
++//            return false;
++            // Paper end
+          }
+       }
+    }
+@@ -162,25 +_,73 @@
+    }
+ 
+    private static boolean m_59385_(Container p_59386_, Direction p_59387_) {
+-      return m_59339_(p_59386_, p_59387_).allMatch((p_59379_) -> {
+-         ItemStack itemstack = p_59386_.m_8020_(p_59379_);
+-         return itemstack.m_41613_() >= itemstack.m_41741_();
+-      });
++      // Paper start - optimize hoppers
++      if (p_59386_ instanceof WorldlyContainer worldlyContainer) {
++         for (final int slot : worldlyContainer.m_7071_(p_59387_)) {
++            final ItemStack stack = p_59386_.m_8020_(slot);
++            if (stack.m_41613_() < stack.m_41741_()) {
++               return false;
++            }
++         }
++         return true;
++      } else {
++         for (int slot = 0, max = p_59386_.m_6643_(); slot < max; ++slot) {
++            final ItemStack stack = p_59386_.m_8020_(slot);
++            if (stack.m_41613_() < stack.m_41741_()) {
++               return false;
++            }
++         }
++         return true;
++      }
++      // Paper end - optimize hoppers
++//      return getSlots(p_59386_, p_59387_).allMatch((p_59379_) -> {
++//         ItemStack itemstack = p_59386_.getItem(p_59379_);
++//         return itemstack.getCount() >= itemstack.getMaxStackSize();
++//      });
+    }
+ 
+    private static boolean m_59397_(Container p_59398_, Direction p_59399_) {
+-      return m_59339_(p_59398_, p_59399_).allMatch((p_59319_) -> {
+-         return p_59398_.m_8020_(p_59319_).m_41619_();
+-      });
++      return allMatch(p_59398_, p_59399_, IS_EMPTY_TEST);
++//      return getSlots(p_59398_, p_59399_).allMatch((p_59319_) -> {
++//         return p_59398_.getItem(p_59319_).isEmpty();
++//      });
     }
  
     public static boolean m_155552_(Level p_155553_, Hopper p_155554_) {
@@ -28,6 +286,96 @@
        Container container = m_155596_(p_155553_, p_155554_);
        if (container != null) {
           Direction direction = Direction.DOWN;
+-         return m_59397_(container, direction) ? false : m_59339_(container, direction).anyMatch((p_59363_) -> {
+-            return m_59354_(p_155554_, container, p_59363_, direction);
+-         });
++         // Paper start - optimize hoppers and remove streams
++         // merge container isEmpty check and move logic into one loop
++         if (container instanceof WorldlyContainer worldlyContainer) {
++            for (final int slot : worldlyContainer.m_7071_(direction)) {
++               ItemStack item = worldlyContainer.m_8020_(slot);
++               if (item.m_41619_() || !m_59380_(container, item, slot, direction)) {
++                  continue;
++               }
++               if (hopperPull(p_155553_, p_155554_, container, item, slot)) {
++                  return true;
++               }
++            }
++            return false;
++         } else {
++            for (int slot = 0, max = container.m_6643_(); slot < max; ++slot) {
++               ItemStack item = container.m_8020_(slot);
++               if (item.m_41619_() || !m_59380_(container, item, slot, direction)) {
++                  continue;
++               }
++               if (hopperPull(p_155553_, p_155554_, container, item, slot)) {
++                  return true;
++               }
++            }
++            return false;
++         }
++         // Paper end
++//         return isEmptyContainer(container, direction) ? false : getSlots(container, direction).anyMatch((p_59363_) -> {
++//            return tryTakeInItemFromSlot(p_155554_, container, p_59363_, direction);
++//         });
+       } else {
+          for(ItemEntity itementity : m_155589_(p_155553_, p_155554_)) {
+             if (m_59331_(p_155554_, itementity)) {
+@@ -258,11 +_,14 @@
+          boolean flag = false;
+          boolean flag1 = p_59322_.m_7983_();
+          if (itemstack.m_41619_()) {
++            ignoreTileUpdates = true; // Paper
+             p_59322_.m_6836_(p_59324_, p_59323_);
++            ignoreTileUpdates = false; // Paper
+             p_59323_ = ItemStack.f_41583_;
+             flag = true;
+          } else if (m_59344_(itemstack, p_59323_)) {
+-            int i = p_59323_.m_41741_() - itemstack.m_41613_();
++            int i = Math.min(p_59323_.m_41741_(), p_59322_.m_6893_()) - itemstack.m_41613_(); // Paper
++            //int i = p_59323_.getMaxStackSize() - itemstack.getCount();
+             int j = Math.min(p_59323_.m_41613_(), i);
+             p_59323_.m_41774_(j);
+             itemstack.m_41769_(j);
+@@ -303,10 +_,35 @@
+       return m_59347_(p_155597_, p_155598_.m_6343_(), p_155598_.m_6358_() + 1.0D, p_155598_.m_6446_());
+    }
+ 
++   // Paper start - optimize hopper item suck in
++   static final AABB HOPPER_ITEM_SUCK_OVERALL = Hopper.f_59298_.m_83215_();
++   static final AABB[] HOPPER_ITEM_SUCK_INDIVIDUAL = Hopper.f_59298_.m_83299_().toArray(new AABB[0]);
++   // Paper end - optimize hopper item suck in
++
+    public static List<ItemEntity> m_155589_(Level p_155590_, Hopper p_155591_) {
+-      return p_155591_.m_59300_().m_83299_().stream().flatMap((p_155558_) -> {
+-         return p_155590_.m_6443_(ItemEntity.class, p_155558_.m_82386_(p_155591_.m_6343_() - 0.5D, p_155591_.m_6358_() - 0.5D, p_155591_.m_6446_() - 0.5D), EntitySelector.f_20402_).stream();
+-      }).collect(Collectors.toList());
++      // Paper start - optimize hopper item suck in
++      // eliminate multiple getEntitiesOfClass() but maintain the voxelshape collision by moving
++      // the individual AABB checks into the predicate
++      final double shiftX = p_155591_.m_6343_() - 0.5D;
++      final double shiftY = p_155591_.m_6358_() - 0.5D;
++      final double shiftZ = p_155591_.m_6446_() - 0.5D;
++      return p_155590_.m_6443_(ItemEntity.class, HOPPER_ITEM_SUCK_OVERALL.m_82386_(shiftX, shiftY, shiftZ), (final Entity entity) -> {
++         if (!entity.m_6084_()) { // EntitySelector.ENTITY_STILL_ALIVE
++            return false;
++         }
++
++         for (final AABB aabb : HOPPER_ITEM_SUCK_INDIVIDUAL) {
++            if (aabb.m_82386_(shiftX, shiftY, shiftZ).m_82381_(entity.m_20191_())) {
++               return true;
++            }
++         }
++
++         return false;
++      });
++      // Paper end - optimize hopper item suck in
++//      return p_155591_.getSuckShape().toAabbs().stream().flatMap((p_155558_) -> {
++//         return p_155590_.getEntitiesOfClass(ItemEntity.class, p_155558_.move(p_155591_.getLevelX() - 0.5D, p_155591_.getLevelY() - 0.5D, p_155591_.getLevelZ() - 0.5D), EntitySelector.ENTITY_STILL_ALIVE).stream();
++//      }).collect(Collectors.toList());
+    }
+ 
+    @Nullable
 @@ -397,5 +_,14 @@
  
     protected AbstractContainerMenu m_6555_(int p_59312_, Inventory p_59313_) {

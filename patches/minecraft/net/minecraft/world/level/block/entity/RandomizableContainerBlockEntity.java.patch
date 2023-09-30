@@ -1,0 +1,25 @@
+--- a/net/minecraft/world/level/block/entity/RandomizableContainerBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/RandomizableContainerBlockEntity.java
+@@ -89,11 +_,20 @@
+ 
+    public boolean m_7983_() {
+       this.m_59640_((Player)null);
+-      return this.m_7086_().stream().allMatch(ItemStack::m_41619_);
++      // Paper start
++      for (final ItemStack itemStack : this.m_7086_()) {
++         if (!itemStack.m_41619_()) {
++            return false;
++         }
++      }
++      return true;
++      // Paper end
++      //return this.getItems().stream().allMatch(ItemStack::isEmpty);
+    }
+ 
+    public ItemStack m_8020_(int p_59611_) {
+-      this.m_59640_((Player)null);
++      if (p_59611_ == 0) this.m_59640_((Player)null); // Paper
++      //this.unpackLootTable((Player)null);
+       return this.m_7086_().get(p_59611_);
+    }
+ 
