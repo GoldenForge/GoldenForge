@@ -1102,10 +1102,15 @@
           int i = Mth.m_14107_(p_20344_);
           int j = Mth.m_14107_(p_20345_);
           int k = Mth.m_14107_(p_20346_);
-@@ -2971,6 +_,15 @@
-          this.f_146801_.m_142044_();
-       }
+@@ -2968,8 +_,17 @@
+             }
+          }
  
+-         this.f_146801_.m_142044_();
+-      }
++         this.m_20194_().execute(() -> this.f_146801_.m_142044_());
++      }
++
 +      // Paper start - never allow AABB to become desynced from position
 +      // hanging has its own special logic
 +      if (!(this instanceof net.minecraft.world.entity.decoration.HangingEntity) && (this.f_19825_.f_82479_ != p_20344_ || this.f_19825_.f_82480_ != p_20345_ || this.f_19825_.f_82481_ != p_20346_)) {
@@ -1114,10 +1119,9 @@
 +      // Paper end
 +
 +      if (this.isAddedToWorld() && !this.f_19853_.f_46443_ && !this.m_213877_()) this.f_19853_.m_6325_((int) Math.floor(p_20344_) >> 4, (int) Math.floor(p_20346_) >> 4); // Forge - ensure target chunk is loaded.
-+
+ 
     }
  
-    public void m_6043_() {
 @@ -3048,19 +_,30 @@
     }
  
