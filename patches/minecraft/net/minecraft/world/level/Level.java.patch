@@ -307,7 +307,7 @@
        }
     }
  
-@@ -377,38 +_,69 @@
+@@ -377,38 +_,73 @@
        (this.f_151504_ ? this.f_151503_ : this.f_151512_).add(p_151526_);
     }
  
@@ -327,6 +327,10 @@
 +
 +      gameprofilerfiller.m_6180_("blockEntities");
        this.f_151504_ = true;
++      if (!this.freshBlockEntities.isEmpty()) {
++         this.freshBlockEntities.forEach(BlockEntity::onLoad);
++         this.freshBlockEntities.clear();
++      }
        if (!this.f_151503_.isEmpty()) {
           this.f_151512_.addAll(this.f_151503_);
           this.f_151503_.clear();
