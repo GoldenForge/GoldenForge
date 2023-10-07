@@ -35,7 +35,7 @@
     @Nullable
     private Supplier<ChunkHolder.FullChunkStatus> f_62790_;
     @Nullable
-@@ -77,13 +_,245 @@
+@@ -77,13 +_,246 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -153,6 +153,7 @@
 +
 +   public void unloadCallback() {
 +      if (!this.loadedTicketLevel) { f_62771_.error("Double calling chunk unload!", new Throwable()); } // Paper
++      net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Unload(this));
 +      ((ServerChunkCache) this.f_62776_.m_7726_()).removeLoadedChunk(this); // Paper
 +      // Paper start - neighbour cache
 +      int chunkX = this.f_187604_.f_45578_;

@@ -94,9 +94,16 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
             this.world.chunkTaskScheduler.chunkHolderManager.getOrCreateEntityChunk(this.chunkX, this.chunkZ, false);
 
             // we don't need the entitiesInLevel trash, this system doesn't double run callbacks
-            chunk.setLoaded(true);
-            chunk.registerAllBlockEntitiesAfterLevelLoad();
-            chunk.registerTickContainerInLevel(this.world);
+            try {
+                chunkHolder.vanillaChunkHolder.currentlyLoading = chunk;
+                chunk.setLoaded(true);
+                chunk.registerAllBlockEntitiesAfterLevelLoad();
+                chunk.registerTickContainerInLevel(this.world);
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Load(chunk));
+
+            } finally {
+                chunkHolder.vanillaChunkHolder.currentlyLoading = null;
+            }
         } catch (final Throwable throwable) {
             this.complete(null, throwable);
 

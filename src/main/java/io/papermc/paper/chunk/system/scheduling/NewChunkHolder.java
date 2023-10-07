@@ -1816,6 +1816,7 @@ public final class NewChunkHolder {
             try {
                 this.chunk.asyncsavedata = this.asyncSaveData;
                 toSerialize = ChunkSerializer.write(this.world, this.chunk);
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, toSerialize));
             } catch (final ThreadDeath death) {
                 throw death;
             } catch (final Throwable throwable) {
@@ -1825,6 +1826,7 @@ public final class NewChunkHolder {
                     try {
                         AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
                         synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
+                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
                     } catch (final ThreadDeath death) {
                         throw death;
                     } catch (final Throwable throwable2) {
@@ -1851,6 +1853,9 @@ public final class NewChunkHolder {
     }
 
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
+        if (chunk instanceof LevelChunk levelChunk) {
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Unload(levelChunk));
+        }
         if (!chunk.isUnsaved()) {
             if (unloading) {
                 this.completeAsyncChunkDataSave(null);
@@ -1862,7 +1867,6 @@ public final class NewChunkHolder {
             if (unloading) {
                 try {
                     final ChunkSerializer.AsyncSaveData asyncSaveData = ChunkSerializer.getAsyncSaveData(this.world, chunk);
-
                     final PrioritisedExecutor.PrioritisedTask task = this.scheduler.loadExecutor.createTask(new AsyncChunkSerializeTask(this.world, chunk, asyncSaveData, this));
 
                     this.chunkDataUnload.task().setTask(task);
@@ -1870,7 +1874,6 @@ public final class NewChunkHolder {
                     task.queue();
 
                     chunk.setUnsaved(false);
-
                     return true;
                 } catch (final ThreadDeath death) {
                     throw death;
@@ -1882,6 +1885,7 @@ public final class NewChunkHolder {
 
             chunk.asyncsavedata = null;
             final CompoundTag save = ChunkSerializer.write(this.world, chunk);
+            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, save));
 
             if (unloading) {
                 completing = true;
