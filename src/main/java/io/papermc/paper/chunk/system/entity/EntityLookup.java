@@ -189,7 +189,15 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
 
     @Override
     public <U extends Entity> void get(final EntityTypeTest<Entity, U> filter, final Consumer<U> action) {
-        for (final Entity entity : this.entityById.values()) {
+        final Int2ReferenceOpenHashMap<Entity> entityCopy;
+
+        this.entityByLock.readLock();
+        try {
+            entityCopy = this.entityById.clone();
+        } finally {
+            this.entityByLock.tryUnlockRead();
+        }
+        for (final Entity entity : entityCopy.values()) {
             final Visibility visibility = EntityLookup.getEntityStatus(entity);
             if (!visibility.isAccessible()) {
                 continue;
