@@ -20,18 +20,41 @@
     public WorldGenRegion(ServerLevel p_143484_, List<ChunkAccess> p_143485_, ChunkStatus p_143486_, int p_143487_) {
        this.f_143480_ = p_143486_;
        this.f_143481_ = p_143487_;
-@@ -102,6 +_,11 @@
+@@ -102,7 +_,33 @@
           this.f_9488_ = p_143485_.get(p_143485_.size() - 1).m_7697_();
           this.f_215157_ = p_143484_.m_215010_().m_220468_(this);
        }
+-   }
 +
 +      this.minChunkX = this.f_9487_.f_45578_;
 +      this.minChunkZ = this.f_9487_.f_45579_;
 +
 +      this.chunksArr = p_143485_.toArray(new ChunkAccess[0]);
-    }
++   }
++
++   // Paper start - starlight
++   @Override
++   public int m_45517_(final net.minecraft.world.level.LightLayer lightLayer, final BlockPos blockPos) {
++      final ChunkAccess chunk = this.m_6325_(blockPos.m_123341_() >> 4, blockPos.m_123343_() >> 4);
++      if (!chunk.m_6332_()) {
++         return 0;
++      }
++      return this.m_5518_().m_75814_(lightLayer).m_7768_(blockPos);
++   }
++
++
++   @Override
++   public int m_45524_(final BlockPos blockPos, final int subtract) {
++      final ChunkAccess chunk = this.m_6325_(blockPos.m_123341_() >> 4, blockPos.m_123343_() >> 4);
++      if (!chunk.m_6332_()) {
++         return 0;
++      }
++      return this.m_5518_().m_75831_(blockPos, subtract);
++   }
++   // Paper end - starlight
  
     public boolean m_215159_(ChunkPos p_215160_, int p_215161_) {
+       return this.f_9479_.m_7726_().f_8325_.m_223451_(p_215160_, p_215161_);
 @@ -120,6 +_,14 @@
        return this.m_46819_(p_9507_, p_9508_, ChunkStatus.f_62314_);
     }

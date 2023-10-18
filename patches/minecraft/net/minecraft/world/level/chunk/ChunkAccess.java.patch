@@ -17,7 +17,7 @@
     private long f_187615_;
     /** @deprecated */
     @Nullable
-@@ -74,9 +_,57 @@
+@@ -74,9 +_,63 @@
     protected final Map<BlockPos, BlockEntity> f_187610_ = Maps.newHashMap();
     protected final LevelHeightAccessor f_187611_;
     protected final LevelChunkSection[] f_187612_;
@@ -67,6 +67,12 @@
  
     public ChunkAccess(ChunkPos p_187621_, UpgradeData p_187622_, LevelHeightAccessor p_187623_, Registry<Biome> p_187624_, long p_187625_, @Nullable LevelChunkSection[] p_187626_, @Nullable BlendingData p_187627_) {
 -      this.f_187604_ = p_187621_;
++      // Paper start - rewrite light engine
++      if (!(this instanceof ImposterProtoChunk)) {
++         this.setBlockNibbles(ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_187623_));
++         this.setSkyNibbles(ca.spottedleaf.starlight.common.light.StarLightEngine.getFilledEmptyLight(p_187623_));
++      }
++      // Paper end - rewrite light engine
 +      if (p_187621_ != null) {
 +         this.locX = p_187621_.f_45578_; this.locZ = p_187621_.f_45579_; // Paper - reduce need for field lookups
 +      } else {
