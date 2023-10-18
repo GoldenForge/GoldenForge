@@ -17,8 +17,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.entity.*;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -310,21 +312,55 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         this.getChunk(x, z).updateStatus(newStatus, this);
     }
 
-    public void addLegacyChunkEntities(final List<Entity> entities) {
-        for (int i = 0, len = entities.size(); i < len; ++i) {
-            this.addEntity(entities.get(i), true);
+
+    public void addLegacyChunkEntities(final List<Entity> entities, final ChunkPos forChunk) {
+        this.addEntityChunk(entities, forChunk, true);
+    }
+
+    public void addEntityChunkEntities(final List<Entity> entities, final ChunkPos forChunk) {
+        this.addEntityChunk(entities, forChunk, true);
+    }
+
+    public void addWorldGenChunkEntities(final List<Entity> entities, final ChunkPos forChunk) {
+        this.addEntityChunk(entities, forChunk, false);
+    }
+
+    private void addRecursivelySafe(final Entity root, final boolean fromDisk) {
+        if (!this.addEntity(root, fromDisk)) {
+            // possible we are a passenger, and so should dismount from any valid entity in the world
+            root.stopRiding();
+            return;
+        }
+        for (final Entity passenger : root.getPassengers()) {
+            this.addRecursivelySafe(passenger, fromDisk);
         }
     }
 
-    public void addEntityChunkEntities(final List<Entity> entities) {
+    private void addEntityChunk(final List<Entity> entities, final ChunkPos forChunk, final boolean fromDisk) {
         for (int i = 0, len = entities.size(); i < len; ++i) {
-            this.addEntity(entities.get(i), true);
-        }
-    }
+            final Entity entity = entities.get(i);
+            if (entity.isPassenger()) {
+                continue;
+            }
 
-    public void addWorldGenChunkEntities(final List<Entity> entities) {
-        for (int i = 0, len = entities.size(); i < len; ++i) {
-            this.addEntity(entities.get(i), false);
+            if (!entity.chunkPosition().equals(forChunk)) {
+                LOGGER.warn("Root entity " + entity + " is outside of serialized chunk " + forChunk);
+                // can't set removed here, as we may not own the chunk position
+                // skip the entity
+                continue;
+            }
+
+            final Vec3 rootPosition = entity.position();
+
+            // always adjust positions before adding passengers in case plugins access the entity, and so that
+            // they are added to the right entity chunk
+            for (final Entity passenger : entity.getIndirectPassengers()) {
+                if (!passenger.chunkPosition().equals(forChunk)) {
+                    passenger.setPosRaw(rootPosition.x, rootPosition.y, rootPosition.z);
+                }
+            }
+
+            this.addRecursivelySafe(entity, fromDisk);
         }
     }
 

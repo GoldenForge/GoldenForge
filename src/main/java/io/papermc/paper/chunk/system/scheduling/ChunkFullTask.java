@@ -82,7 +82,7 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
                 final ServerLevel world = this.world;
                 final ProtoChunk protoChunk = (ProtoChunk)this.fromChunk;
                 chunk = new LevelChunk(this.world, protoChunk, (final LevelChunk unused) -> {
-                    ChunkMap.postLoadProtoChunk(world, protoChunk.getEntities());
+                    ChunkMap.postLoadProtoChunk(world, protoChunk.getEntities(), protoChunk.getPos()); // Paper - rewrite chunk system
                 });
             }
 

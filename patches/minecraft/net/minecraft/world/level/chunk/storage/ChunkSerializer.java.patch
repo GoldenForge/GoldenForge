@@ -483,3 +483,12 @@
        compoundtag.m_128365_("PostProcessing", m_63490_(p_63456_.m_6720_()));
        CompoundTag compoundtag2 = new CompoundTag();
  
+@@ -396,7 +_,7 @@
+       ListTag listtag1 = m_196897_(p_196892_, "block_entities");
+       return listtag == null && listtag1 == null ? null : (p_196904_) -> {
+          if (listtag != null) {
+-            p_196891_.m_143311_(EntityType.m_147045_(listtag, p_196891_));
++            p_196891_.addLegacyChunkEntities(EntityType.m_147045_(listtag, p_196891_), p_196904_.m_7697_()); // Paper - rewrite chunk system
+          }
+ 
+          if (listtag1 != null) {

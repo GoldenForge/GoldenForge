@@ -760,10 +760,10 @@
     }
  
 -   private static void m_143064_(ServerLevel p_143065_, List<CompoundTag> p_143066_) {
-+   public static void m_143064_(ServerLevel p_143065_, List<CompoundTag> p_143066_) {
++   public static void postLoadProtoChunk(ServerLevel p_143065_, List<CompoundTag> p_143066_, ChunkPos position) { // Paper - public and add chunk position parameter
        if (!p_143066_.isEmpty()) {
 -         p_143065_.m_143327_(EntityType.m_147045_(p_143066_, p_143065_));
-+         p_143065_.m_143327_(EntityType.m_147045_(p_143066_, p_143065_).filter((entity) -> {
++         p_143065_.addWorldGenChunkEntities(EntityType.m_147045_(p_143066_, p_143065_).filter((entity) -> {
 +            boolean needsRemoval = false;
 +            net.minecraft.server.dedicated.DedicatedServer server = (DedicatedServer) MinecraftServer.getServer();
 +            if (!server.m_6997_() && entity instanceof net.minecraft.world.entity.npc.Npc) {
@@ -776,7 +776,7 @@
 +            }
 +            checkDupeUUID(p_143065_, entity); // Paper
 +            return !needsRemoval;
-+         }));
++         }), position); // Paper - rewrite chunk system
        }
  
     }

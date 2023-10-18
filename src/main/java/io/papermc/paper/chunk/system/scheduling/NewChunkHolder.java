@@ -114,7 +114,7 @@ public final class NewChunkHolder {
             if (entityChunk != null) {
                 final List<Entity> entities = EntityStorage.readEntities(this.world, entityChunk);
 
-                this.world.getEntityLookup().addEntityChunkEntities(entities);
+                this.world.getEntityLookup().addEntityChunkEntities(entities, new ChunkPos(this.chunkX, this.chunkZ));
             }
         }
 

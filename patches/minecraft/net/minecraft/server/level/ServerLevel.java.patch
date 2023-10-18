@@ -996,17 +996,23 @@
 +
     public LevelEntityGetter<Entity> m_142646_() {
 -      return this.f_143244_.m_157567_();
-+      return this.entityLookup; // Paper - rewrite chunk system
-    }
- 
-    public void m_143311_(Stream<Entity> p_143312_) {
+-   }
+-
+-   public void m_143311_(Stream<Entity> p_143312_) {
 -      this.f_143244_.m_157552_(p_143312_);
-+      this.entityLookup.addLegacyChunkEntities(p_143312_.toList()); // Paper - rewrite chunk system
-    }
- 
-    public void m_143327_(Stream<Entity> p_143328_) {
+-   }
+-
+-   public void m_143327_(Stream<Entity> p_143328_) {
 -      this.f_143244_.m_157559_(p_143328_);
-+      this.entityLookup.addWorldGenChunkEntities(p_143328_.toList()); // Paper - rewrite chunk system
++      return this.entityLookup; // Paper - rewrite chunk system
++   }
++
++   public void addLegacyChunkEntities(Stream<Entity> p_143312_, ChunkPos forChunk) { // Paper - rewrite chunk system
++      this.entityLookup.addLegacyChunkEntities(p_143312_.toList(), forChunk); // Paper - rewrite chunk system
++   }
++
++   public void addWorldGenChunkEntities(Stream<Entity> p_143328_, ChunkPos forChunk) { // Paper - rewrite chunk system) {
++      this.entityLookup.addWorldGenChunkEntities(p_143328_.toList(), forChunk); // Paper - rewrite chunk system
     }
  
     public void m_184102_(LevelChunk p_184103_) {
