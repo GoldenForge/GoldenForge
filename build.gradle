@@ -72,7 +72,7 @@ ext {
     VERSION = gradleutils.getFilteredMCTagOffsetBranchVersion(true, '[0-9]', MC_VERSION)
     // FML_VERSION = gradleutils.getFilteredMCTagOffsetBranchVersion(true, 'FML', MC_VERSION)
     //FORGE_VERSION = VERSION.substring(MC_VERSION.length() + 1)
-    FORGE_VERSION = '43.2.21'
+    FORGE_VERSION = '43.3.5'
     println('Forge version': FORGE_VERSION)
 
     BINPATCH_TOOL = 'net.minecraftforge:binarypatcher:1.1.1:fatjar'
