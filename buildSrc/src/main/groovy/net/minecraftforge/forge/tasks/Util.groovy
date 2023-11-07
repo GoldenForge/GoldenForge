@@ -80,14 +80,6 @@ public class Util {
 					url = "https://raw.githubusercontent.com/GoldenForge/maven/master/${path}"
 				}
 			}
-			//TODO remove when Mojang launcher is updated
-			if (!classifiers && art.classifier != null) {
-				//Mojang launcher doesn't currently support classifiers, so... move it to part of the version, and force the extension to 'jar'
-				// However, keep the path normal so that our mirror system works.
-				art.version = "${art.version}-${art.classifier}"
-				art.classifier = null
-				art.extension = 'jar'
-			}
 			ret[key] = [
 				name: "${art.group}:${art.name}:${art.version}" + (art.classifier == null ? '' : ":${art.classifier}") + (art.extension == 'jar' ? '' : "@${art.extension}"),
 				downloads: [
