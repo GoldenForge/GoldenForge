@@ -44,7 +44,7 @@ public final class NearbyPlayers {
 
     public void addPlayer(final ServerPlayer player) {
         final TrackedPlayer[] newTrackers = new TrackedPlayer[TOTAL_MAP_TYPES];
-        if (this.players.put(player, newTrackers) != null) {
+        if (this.players.putIfAbsent(player, newTrackers) != null) {
             throw new IllegalStateException("Already have player " + player);
         }
 
