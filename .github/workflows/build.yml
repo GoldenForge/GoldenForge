@@ -16,10 +16,14 @@ jobs:
           java-version: '17'
       - name: Run chmod to make gradlew executable
         run: chmod +x ./gradlew
-      - name: Build
+      - name: Setup
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: clean setup installerjar
+          arguments: clean setup
+      - name: Build jar
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: installerjar
       - name: Upload Artifact
         uses: actions/upload-artifact@v2
         with:
