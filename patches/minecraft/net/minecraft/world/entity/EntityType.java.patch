@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/EntityType.java
 +++ b/net/minecraft/world/entity/EntityType.java
-@@ -292,6 +_,11 @@
+@@ -292,6 +_,13 @@
     private ResourceLocation f_20546_;
     private final EntityDimensions f_20547_;
  
@@ -8,6 +8,8 @@
 +   private final java.util.function.ToIntFunction<EntityType<?>> trackingRangeSupplier;
 +   private final java.util.function.ToIntFunction<EntityType<?>> updateIntervalSupplier;
 +   private final java.util.function.BiFunction<net.minecraftforge.network.PlayMessages.SpawnEntity, Level, T> customClientFactory;
++
++   public boolean dabEnabled = false; // Pufferfish
 +
     private static <T extends Entity> EntityType<T> m_20634_(String p_20635_, EntityType.Builder<T> p_20636_) {
        return Registry.m_122961_(Registry.f_122826_, p_20635_, p_20636_.m_20712_(p_20635_));

@@ -8,7 +8,16 @@
  import org.slf4j.Logger;
  
  public class Villager extends AbstractVillager implements ReputationEventHandler, VillagerDataHolder {
-@@ -203,9 +_,35 @@
+@@ -118,6 +_,8 @@
+    private int f_35364_;
+    private long f_35365_;
+    private boolean f_35366_;
++
++   public long nextGolemPanic = -1; // Pufferfish
+    private static final ImmutableList<MemoryModuleType<?>> f_35367_ = ImmutableList.of(MemoryModuleType.f_26359_, MemoryModuleType.f_26360_, MemoryModuleType.f_26361_, MemoryModuleType.f_26362_, MemoryModuleType.f_148204_, MemoryModuleType.f_148205_, MemoryModuleType.f_26366_, MemoryModuleType.f_26367_, MemoryModuleType.f_26368_, MemoryModuleType.f_148206_, MemoryModuleType.f_26332_, MemoryModuleType.f_26370_, MemoryModuleType.f_26371_, MemoryModuleType.f_26374_, MemoryModuleType.f_26375_, MemoryModuleType.f_26377_, MemoryModuleType.f_26379_, MemoryModuleType.f_26380_, MemoryModuleType.f_26381_, MemoryModuleType.f_26382_, MemoryModuleType.f_26323_, MemoryModuleType.f_26363_, MemoryModuleType.f_26324_, MemoryModuleType.f_26325_, MemoryModuleType.f_26326_, MemoryModuleType.f_26328_, MemoryModuleType.f_26329_, MemoryModuleType.f_26330_, MemoryModuleType.f_26327_);
+    private static final ImmutableList<SensorType<? extends Sensor<? super Villager>>> f_35368_ = ImmutableList.of(SensorType.f_26811_, SensorType.f_26812_, SensorType.f_26810_, SensorType.f_26813_, SensorType.f_26814_, SensorType.f_26815_, SensorType.f_26816_, SensorType.f_26817_, SensorType.f_26818_);
+    public static final Map<MemoryModuleType<GlobalPos>, BiPredicate<Villager, Holder<PoiType>>> f_35370_ = ImmutableMap.of(MemoryModuleType.f_26359_, (p_219625_, p_219626_) -> {
+@@ -203,9 +_,40 @@
        return this.f_35366_;
     }
  
@@ -38,10 +47,15 @@
 +      mobTick(false);
 +   }
 +
++   private int behaviorTick = 0; // Pufferfish
 +   protected void mobTick(boolean inactive) {
        this.f_19853_.m_46473_().m_6180_("villagerBrain");
 -      this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
-+      if (!inactive) this.m_6274_().m_21865_((ServerLevel) this.f_19853_, this); // Paper
++      // Pufferfish start
++      if (!inactive && this.behaviorTick++ % this.activatedPriority == 0) {
++         this.m_6274_().m_21865_((ServerLevel) this.f_19853_, this); // Paper
++      }
++      // Pufferfish end
        this.f_19853_.m_46473_().m_7238_();
        if (this.f_35366_) {
           this.f_35366_ = false;

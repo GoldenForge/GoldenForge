@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/entity/animal/axolotl/Axolotl.java
++++ b/net/minecraft/world/entity/animal/axolotl/Axolotl.java
+@@ -250,9 +_,11 @@
+       return true;
+    }
+ 
++   private int behaviorTick = 0; // Pufferfish
+    protected void m_8024_() {
+       this.f_19853_.m_46473_().m_6180_("axolotlBrain");
+-      this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
++      if (this.behaviorTick++ % this.activatedPriority == 0) // Pufferfish
++         this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
+       this.f_19853_.m_46473_().m_7238_();
+       this.f_19853_.m_46473_().m_6180_("axolotlActivityUpdate");
+       AxolotlAi.m_149292_(this);

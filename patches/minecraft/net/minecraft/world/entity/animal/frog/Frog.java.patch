@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/entity/animal/frog/Frog.java
++++ b/net/minecraft/world/entity/animal/frog/Frog.java
+@@ -165,9 +_,11 @@
+       return this.m_20184_().m_165925_() > 1.0E-6D && this.m_20072_();
+    }
+ 
++   private int behaviorTick = 0; // Pufferfish
+    protected void m_8024_() {
+       this.f_19853_.m_46473_().m_6180_("frogBrain");
+-      this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
++      if (this.behaviorTick++ % this.activatedPriority == 0) // Pufferfish
++         this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
+       this.f_19853_.m_46473_().m_7238_();
+       this.f_19853_.m_46473_().m_6180_("frogActivityUpdate");
+       FrogAi.m_218577_(this);

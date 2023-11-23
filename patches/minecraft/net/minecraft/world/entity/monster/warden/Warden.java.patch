@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/entity/monster/warden/Warden.java
++++ b/net/minecraft/world/entity/monster/warden/Warden.java
+@@ -248,10 +_,12 @@
+ 
+    }
+ 
++   private int behaviorTick = 0; // Pufferfish
+    protected void m_8024_() {
+       ServerLevel serverlevel = (ServerLevel)this.f_19853_;
+       serverlevel.m_46473_().m_6180_("wardenBrain");
+-      this.m_6274_().m_21865_(serverlevel, this);
++      if (this.behaviorTick++ % this.activatedPriority == 0) // Pufferfish
++         this.m_6274_().m_21865_(serverlevel, this);
+       this.f_19853_.m_46473_().m_7238_();
+       super.m_8024_();
+       if ((this.f_19797_ + this.m_19879_()) % 120 == 0) {

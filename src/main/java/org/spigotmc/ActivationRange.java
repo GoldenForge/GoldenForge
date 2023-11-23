@@ -37,6 +37,7 @@ import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.entity.schedule.Activity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.goldenforge.GoldenConfig;
 
 public class ActivationRange
@@ -213,6 +214,26 @@ public class ActivationRange
             for (int i = 0; i < entities.size(); i++) {
                 Entity entity = entities.get(i);
                 ActivationRange.activateEntity(entity);
+
+                // Pufferfish start
+                if (org.goldenforge.TempConfig.dearEnabled && entity.getType().dabEnabled) {
+                    if (!entity.activatedPriorityReset) {
+                        entity.activatedPriorityReset = true;
+                        entity.activatedPriority = org.goldenforge.TempConfig.maximumActivationPrio;
+                    }
+                    Vec3 playerVec = player.position();
+                    Vec3 entityVec = entity.position();
+                    double diffX = playerVec.x - entityVec.x, diffY = playerVec.y - entityVec.y, diffZ = playerVec.z - entityVec.z;
+                    int squaredDistance = (int) (diffX * diffX + diffY * diffY + diffZ * diffZ);
+                    entity.activatedPriority = squaredDistance > org.goldenforge.TempConfig.startDistanceSquared ?
+                            Math.max(1, Math.min(squaredDistance >> org.goldenforge.TempConfig.activationDistanceMod, entity.activatedPriority)) :
+                            1;
+                } else {
+                    entity.activatedPriority = 1;
+                }
+                // Pufferfish end
+
+
             }
             // Paper end
         }

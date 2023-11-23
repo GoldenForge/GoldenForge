@@ -87,9 +87,9 @@ println('Version: ' + VERSION +
         ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ')' +
         ' Arch: ' + System.getProperty('os.arch'))
 
-changelog {
-    fromTag MIN_TAG_FOR_CHANGELOG
-}
+//changelog {
+//    fromTag MIN_TAG_FOR_CHANGELOG
+//}
 
 def extraTxts = [
     rootProject.file('CREDITS.txt'),

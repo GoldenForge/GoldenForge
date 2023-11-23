@@ -170,7 +170,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,52 @@
+@@ -230,13 +_,57 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -205,6 +205,11 @@
 +   public boolean collidingWithWorldBorder; // Paper
 +   public boolean collisionLoadChunks = false; // Paper
 +   public boolean preserveMotion = true; // Paper - keep initial motion on first setPositionRotation
++   // Pufferfish start
++   public boolean activatedPriorityReset = false; // DAB
++   public int activatedPriority = org.goldenforge.TempConfig.maximumActivationPrio; // golf score
++   public final BlockPos.MutableBlockPos cachedBlockPos = new BlockPos.MutableBlockPos(); // used where needed
++   // Pufferfish end
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);
        this.f_19847_ = p_19870_;

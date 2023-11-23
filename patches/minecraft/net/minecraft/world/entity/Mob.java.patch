@@ -24,10 +24,10 @@
 +   @Override
 +   public void inactiveTick() {
 +      super.inactiveTick();
-+      if (this.f_21345_.inactiveTick()) {
++      if (this.f_21345_.inactiveTick(this.activatedPriority, true)) { // Pufferfish - pass activated priroity
 +         this.f_21345_.m_25373_();
 +      }
-+      if (this.f_21346_.inactiveTick()) {
++      if (this.f_21346_.inactiveTick(this.activatedPriority, true)) { // Pufferfish - pass activated priority
 +         this.f_21346_.m_25373_();
 +      }
 +   }
@@ -100,6 +100,32 @@
           if (entity != null) {
              double d0 = entity.m_20280_(this);
              int i = this.m_6095_().m_20674_().m_21611_();
+@@ -687,17 +_,21 @@
+       int i = this.f_19853_.m_7654_().m_129921_() + this.m_19879_();
+       if (i % 2 != 0 && this.f_19797_ > 1) {
+          this.f_19853_.m_46473_().m_6180_("targetSelector");
+-         this.f_21346_.m_186081_(false);
++         if (this.f_21346_.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
++            this.f_21346_.m_186081_(false);
+          this.f_19853_.m_46473_().m_7238_();
+          this.f_19853_.m_46473_().m_6180_("goalSelector");
+-         this.f_21345_.m_186081_(false);
++         if (this.f_21345_.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
++            this.f_21345_.m_186081_(false);
+          this.f_19853_.m_46473_().m_7238_();
+       } else {
+          this.f_19853_.m_46473_().m_6180_("targetSelector");
+-         this.f_21346_.m_25373_();
++         if (this.f_21345_.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
++            this.f_21346_.m_25373_();
+          this.f_19853_.m_46473_().m_7238_();
+          this.f_19853_.m_46473_().m_6180_("goalSelector");
+-         this.f_21345_.m_25373_();
++         if (this.f_21345_.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
++            this.f_21345_.m_25373_();
+          this.f_19853_.m_46473_().m_7238_();
+       }
+ 
 @@ -990,6 +_,10 @@
  
     }

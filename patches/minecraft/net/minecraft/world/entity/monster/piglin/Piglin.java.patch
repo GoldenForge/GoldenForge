@@ -1,5 +1,18 @@
 --- a/net/minecraft/world/entity/monster/piglin/Piglin.java
 +++ b/net/minecraft/world/entity/monster/piglin/Piglin.java
+@@ -238,9 +_,11 @@
+       return !this.f_34679_;
+    }
+ 
++   private int behaviorTick; // Pufferfish
+    protected void m_8024_() {
+       this.f_19853_.m_46473_().m_6180_("piglinBrain");
+-      this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
++      if (this.behaviorTick++ % this.activatedPriority == 0) // Pufferfish
++         this.m_6274_().m_21865_((ServerLevel)this.f_19853_, this);
+       this.f_19853_.m_46473_().m_7238_();
+       PiglinAi.m_34898_(this);
+       super.m_8024_();
 @@ -282,7 +_,7 @@
        } else if (this.m_34773_()) {
           return PiglinArmPose.CROSSBOW_CHARGE;

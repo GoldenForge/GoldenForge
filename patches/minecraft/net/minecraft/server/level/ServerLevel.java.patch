@@ -486,14 +486,16 @@
        if (flag) {
           this.m_8886_();
        }
-@@ -298,6 +_,7 @@
+@@ -298,7 +_,9 @@
              profilerfiller.m_7238_();
           }
  
 +         org.spigotmc.ActivationRange.activateEntities(this); // Spigot
           this.f_143243_.m_156910_((p_184065_) -> {
++            p_184065_.activatedPriorityReset = false; // Pufferfish - DAB
              if (!p_184065_.m_213877_()) {
                 if (this.m_143342_(p_184065_)) {
+                   p_184065_.m_146870_();
 @@ -306,7 +_,7 @@
                    profilerfiller.m_6180_("checkDespawn");
                    p_184065_.m_6043_();

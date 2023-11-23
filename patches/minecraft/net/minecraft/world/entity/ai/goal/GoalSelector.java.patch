@@ -23,15 +23,18 @@
  
     public GoalSelector(Supplier<ProfilerFiller> p_25351_) {
        this.f_25346_ = p_25351_;
-@@ -52,6 +_,21 @@
+@@ -52,6 +_,24 @@
           return p_25367_.m_26015_() == p_25364_;
        });
     }
 +
 +   // Paper start
-+   public boolean inactiveTick() {
++   public boolean inactiveTick(int tickRate, boolean inactive) { // Pufferfish start
++      if (inactive && !org.goldenforge.TempConfig.dearEnabled) tickRate = 4; // reset to Paper's
++      tickRate = Math.min(tickRate, this.f_25348_);
 +      this.curRate++;
-+      return this.curRate % this.f_25348_ == 0;
++      return this.curRate % tickRate == 0;
++      // Pufferfish end
 +   }
 +   public boolean hasTasks() {
 +      for (WrappedGoal task : this.f_25345_) {
