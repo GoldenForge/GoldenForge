@@ -1,14 +1,16 @@
 --- a/net/minecraft/world/entity/ai/goal/GoalSelector.java
 +++ b/net/minecraft/world/entity/ai/goal/GoalSelector.java
-@@ -10,6 +_,8 @@
+@@ -10,7 +_,10 @@
  import java.util.Set;
  import java.util.function.Supplier;
  import java.util.stream.Stream;
 +
 +import it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet;
  import net.minecraft.util.profiling.ProfilerFiller;
++import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
+ public class GoalSelector {
 @@ -25,11 +_,12 @@
        }
     };
@@ -30,7 +32,7 @@
 +
 +   // Paper start
 +   public boolean inactiveTick(int tickRate, boolean inactive) { // Pufferfish start
-+      if (inactive && !org.goldenforge.TempConfig.dearEnabled) tickRate = 4; // reset to Paper's
++      if (inactive && !GoldenForgeConfig.Server.dearEnabled.get()) tickRate = 4; // reset to Paper's
 +      tickRate = Math.min(tickRate, this.f_25348_);
 +      this.curRate++;
 +      return this.curRate % tickRate == 0;
