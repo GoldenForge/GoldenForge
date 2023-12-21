@@ -39,6 +39,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.goldenforge.GoldenConfig;
+import org.goldenforge.config.GoldenForgeConfig;
 
 public class ActivationRange
 {
@@ -216,7 +217,7 @@ public class ActivationRange
                 ActivationRange.activateEntity(entity);
 
                 // Pufferfish start
-                if (org.goldenforge.TempConfig.dearEnabled && entity.getType().dabEnabled) {
+                if (GoldenForgeConfig.Server.dearEnabled.get() && entity.getType().dabEnabled) {
                     if (!entity.activatedPriorityReset) {
                         entity.activatedPriorityReset = true;
                         entity.activatedPriority = org.goldenforge.TempConfig.maximumActivationPrio;

@@ -56,6 +56,8 @@ public class GoldenForgeConfig {
         public static RegionFileFormat regionFormat = RegionFileFormat.ANVIL;
         public static ConfigValue<Integer> regionFormatLinearCompressionLevel;
         public static ConfigValue<Boolean> linearCrashOnBrokenSymlink;
+        public static ConfigValue<Boolean> dearEnabled;
+
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -160,6 +162,11 @@ public class GoldenForgeConfig {
             onlyPlayersCollide = builder
                     .worldRestart()
                     .define("onlyPlayersCollide", false);
+
+            dearEnabled = builder
+                    .worldRestart()
+                    .comment("Enable dynamic brain activation")
+                    .define("dearEnabled", false);
 
             builder.pop();
 
