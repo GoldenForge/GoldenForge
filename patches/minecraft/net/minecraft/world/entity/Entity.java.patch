@@ -8,7 +8,7 @@
  import it.unimi.dsi.fastutil.objects.Object2DoubleArrayMap;
  import it.unimi.dsi.fastutil.objects.Object2DoubleMap;
  import java.util.Arrays;
-@@ -15,6 +_,7 @@
+@@ -15,11 +_,14 @@
  import java.util.Optional;
  import java.util.Set;
  import java.util.UUID;
@@ -16,6 +16,13 @@
  import java.util.concurrent.atomic.AtomicInteger;
  import java.util.function.BiConsumer;
  import java.util.function.Predicate;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.ReferenceArraySet;
+ import net.minecraft.BlockUtil;
+ import net.minecraft.CrashReport;
+ import net.minecraft.CrashReportCategory;
 @@ -85,7 +_,6 @@
  import net.minecraft.world.level.Level;
  import net.minecraft.world.level.block.Block;
@@ -66,7 +73,7 @@
     public boolean f_19862_;
     public boolean f_19863_;
     public boolean f_201939_;
-@@ -177,14 +_,89 @@
+@@ -177,15 +_,90 @@
     public double f_19790_;
     public double f_19791_;
     public double f_19792_;
@@ -155,10 +162,12 @@
 +   @Deprecated // Forge: Use forgeFluidTypeHeight instead
     protected Object2DoubleMap<TagKey<Fluid>> f_19799_ = new Object2DoubleArrayMap<>(2);
     protected boolean f_19800_;
+-   private final Set<TagKey<Fluid>> f_19801_ = new HashSet<>();
 +   @Deprecated // Forge: Use forgeFluidTypeOnEyes instead
-    private final Set<TagKey<Fluid>> f_19801_ = new HashSet<>();
++   private final Set<TagKey<Fluid>> f_19801_ =  new ReferenceArraySet<>(new HashSet<>()); // Goldenforge
     public int f_19802_;
     protected boolean f_19803_ = true;
+    protected final SynchedEntityData f_19804_;
 @@ -208,8 +_,8 @@
     private final VecDeltaCodec f_216985_ = new VecDeltaCodec();
     public boolean f_19811_;
@@ -583,10 +592,13 @@
     }
  
     void m_20074_() {
-@@ -1098,6 +_,7 @@
+@@ -1097,7 +_,9 @@
+ 
     private void m_20323_() {
        this.f_19800_ = this.m_204029_(FluidTags.f_13131_);
-       this.f_19801_.clear();
+-      this.f_19801_.clear();
++      if (!this.f_19801_.isEmpty())
++         this.f_19801_.clear();
 +      this.forgeFluidTypeOnEyes = net.minecraftforge.common.ForgeMod.EMPTY_TYPE.get();
        double d0 = this.m_20188_() - (double)0.11111111F;
        Entity entity = this.m_20202_();

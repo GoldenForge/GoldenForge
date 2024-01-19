@@ -1,0 +1,28 @@
+--- a/net/minecraft/world/level/GameRules.java
++++ b/net/minecraft/world/level/GameRules.java
+@@ -15,6 +_,8 @@
+ import java.util.function.Function;
+ import java.util.function.Supplier;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap;
+ import net.minecraft.commands.CommandSourceStack;
+ import net.minecraft.commands.Commands;
+ import net.minecraft.nbt.CompoundTag;
+@@ -96,13 +_,13 @@
+    }
+ 
+    public GameRules() {
+-      this.f_46130_ = f_46129_.entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, (p_46210_) -> {
++      this.f_46130_ = new Object2ObjectLinkedOpenHashMap<>(f_46129_.entrySet().stream().collect(ImmutableMap.toImmutableMap(Map.Entry::getKey, (p_46210_) -> {
+          return p_46210_.getValue().m_46352_();
+-      }));
++      }))); // Goldenforge
+    }
+ 
+    private GameRules(Map<GameRules.Key<?>, GameRules.Value<?>> p_46162_) {
+-      this.f_46130_ = p_46162_;
++      this.f_46130_ = new Object2ObjectLinkedOpenHashMap<>(p_46162_); // Goldenforge
+    }
+ 
+    public <T extends GameRules.Value<T>> T m_46170_(GameRules.Key<T> p_46171_) {
