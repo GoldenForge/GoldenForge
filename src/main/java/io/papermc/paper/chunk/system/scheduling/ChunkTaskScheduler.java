@@ -3,8 +3,10 @@ package io.papermc.paper.chunk.system.scheduling;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadPool;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadedTaskQueue;
+import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.mojang.logging.LogUtils;
+import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.scheduling.queue.RadiusAwarePrioritisedExecutor;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.TickThread;
@@ -88,7 +90,7 @@ public final class ChunkTaskScheduler {
         ChunkTaskScheduler.newChunkSystemGenParallelism = useParallelGen ? newChunkSystemWorkerThreads : 1;
         ChunkTaskScheduler.newChunkSystemLoadParallelism = newChunkSystemWorkerThreads;
 
-        io.papermc.paper.chunk.system.io.RegionFileIOThread.init(newChunkSystemIOThreads);
+        RegionFileIOThread.init(newChunkSystemIOThreads);
         workerThreads = new PrioritisedThreadPool(
                 "Paper Chunk System Worker Pool", newChunkSystemWorkerThreads,
                 (final Thread thread, final Integer id) -> {
@@ -154,7 +156,7 @@ public final class ChunkTaskScheduler {
                 ChunkStatus.NOISE,
 
                 // Parallel safe. Only touches the target chunk. Biome retrieval is now noise based, which is
-                // completely thread-safe.
+                // completely thread-safe.st be >= region shift (in paper, doesn't exist)
                 ChunkStatus.SURFACE,
 
                 // No global state is modified in the carvers. It only touches the specified chunk. So it is parallel safe.
@@ -194,10 +196,13 @@ public final class ChunkTaskScheduler {
         return (status.ordinal() - 1) + getAccessRadius(ChunkStatus.FULL);
     }
 
-    private static final int LOCK_SHIFT = ThreadedTicketLevelPropagator.SECTION_SHIFT;
-    public static int getChunkSystemLockShift() {
-        return LOCK_SHIFT;
+    final ReentrantAreaLock schedulingLockArea;
+    private final int lockShift;
+
+    public final int getChunkSystemLockShift() {
+        return this.lockShift;
     }
+    // Folia end - use area based lock to reduce contention
 
     private static final int[] ACCESS_RADIUS_TABLE = new int[ChunkStatus.getStatusList().size()];
     private static final int[] MAX_ACCESS_RADIUS_TABLE = new int[ACCESS_RADIUS_TABLE.length];
@@ -244,16 +249,18 @@ public final class ChunkTaskScheduler {
         return maxAccessRadius;
     }
 
-    final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock schedulingLockArea = new ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock(getChunkSystemLockShift());
-
     public ChunkTaskScheduler(final ServerLevel world, final PrioritisedThreadPool workers) {
         this.world = world;
         this.workers = workers;
+        // must be >= region shift (in paper, doesn't exist) and must be >= ticket propagator section shift
+        // it must be >= region shift since the regioniser assumes ticket updates do not occur in parallel for the region sections
+        // it must be >= ticket propagator section shift so that the ticket propagator can assume that owning a position implies owning
+        // the entire section
+        // we just take the max, as we want the smallest shift that satisfies these properties
+        this.lockShift = Math.max(world.getRegionChunkShift(), ThreadedTicketLevelPropagator.SECTION_SHIFT);
+        this.schedulingLockArea = new ReentrantAreaLock(this.getChunkSystemLockShift());
 
         final String worldName = world.getWorld().getName();
-        //this.genExecutor = workers.createExecutor("Chunk single-threaded generation executor for world '" + worldName + "'", 1);
-        // same as genExecutor, as there are race conditions between updating blocks in FEATURE status while lighting chunks
-        // this.lightExecutor = this.genExecutor;
         this.parallelGenExecutor = workers.createExecutor("Chunk parallel generation executor for world '" + worldName + "'", Math.max(1, newChunkSystemGenParallelism));
         this.loadExecutor = workers.createExecutor("Chunk load executor for world '" + worldName + "'", newChunkSystemLoadParallelism);
 

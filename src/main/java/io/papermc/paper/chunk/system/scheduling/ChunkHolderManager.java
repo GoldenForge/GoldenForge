@@ -59,7 +59,7 @@ public final class ChunkHolderManager {
 
     private static final long NO_TIMEOUT_MARKER = Long.MIN_VALUE;
     private static final long PROBE_MARKER = Long.MIN_VALUE + 1;
-    public final ReentrantAreaLock ticketLockArea = new ReentrantAreaLock(ChunkTaskScheduler.getChunkSystemLockShift());
+    public final ReentrantAreaLock ticketLockArea;
 
     private final ConcurrentHashMap<RegionFileIOThread.ChunkCoordinate, SortedArraySet<Ticket<?>>> tickets = new java.util.concurrent.ConcurrentHashMap<>();
     private final ConcurrentHashMap<RegionFileIOThread.ChunkCoordinate, Long2IntOpenHashMap> sectionToChunkToExpireCount = new java.util.concurrent.ConcurrentHashMap<>();
@@ -71,7 +71,7 @@ public final class ChunkHolderManager {
         final List<ChunkProgressionTask> scheduledTasks = new ArrayList<>();
         final List<NewChunkHolder> changedFullStatus = new ArrayList<>();
         final boolean ret;
-        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
+        final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
                 ((posX >> ticketShift) - 1) << ticketShift,
                 ((posZ >> ticketShift) - 1) << ticketShift,
                 (((posX >> ticketShift) + 1) << ticketShift) | ticketMask,
@@ -132,6 +132,7 @@ public final class ChunkHolderManager {
     public ChunkHolderManager(final ServerLevel world, final ChunkTaskScheduler taskScheduler) {
         this.world = world;
         this.taskScheduler = taskScheduler;
+        this.ticketLockArea = new ReentrantAreaLock(taskScheduler.getChunkSystemLockShift());
         this.unloadQueue = new ChunkQueue(TickRegions.getRegionChunkShift());
     }
 
@@ -396,7 +397,7 @@ public final class ChunkHolderManager {
     public Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> getTicketsCopy() {
         final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> ret = new Long2ObjectOpenHashMap<>();
         final Long2ObjectOpenHashMap<List<RegionFileIOThread.ChunkCoordinate>> sections = new Long2ObjectOpenHashMap();
-        final int sectionShift = ChunkTaskScheduler.getChunkSystemLockShift();
+        final int sectionShift = this.taskScheduler.getChunkSystemLockShift();
         for (final RegionFileIOThread.ChunkCoordinate coord : this.tickets.keySet()) {
             sections.computeIfAbsent(
                     CoordinateUtils.getChunkKey(
@@ -462,7 +463,7 @@ public final class ChunkHolderManager {
     private void addExpireCount(final int chunkX, final int chunkZ) {
         final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
-        final int sectionShift = TickRegions.getRegionChunkShift();
+        final int sectionShift = this.world.getRegionChunkShift();
         final RegionFileIOThread.ChunkCoordinate sectionKey = new RegionFileIOThread.ChunkCoordinate(CoordinateUtils.getChunkKey(
                 chunkX >> sectionShift,
                 chunkZ >> sectionShift
@@ -476,7 +477,7 @@ public final class ChunkHolderManager {
     private void removeExpireCount(final int chunkX, final int chunkZ) {
         final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
-        final int sectionShift = TickRegions.getRegionChunkShift();
+        final int sectionShift = this.world.getRegionChunkShift();
         final RegionFileIOThread.ChunkCoordinate sectionKey = new RegionFileIOThread.ChunkCoordinate(CoordinateUtils.getChunkKey(
                 chunkX >> sectionShift,
                 chunkZ >> sectionShift
@@ -655,7 +656,7 @@ public final class ChunkHolderManager {
         }
 
         final Long2ObjectOpenHashMap<List<RegionFileIOThread.ChunkCoordinate>> sections = new Long2ObjectOpenHashMap();
-        final int sectionShift = ChunkTaskScheduler.getChunkSystemLockShift();
+        final int sectionShift = this.taskScheduler.getChunkSystemLockShift();
         for (final RegionFileIOThread.ChunkCoordinate coord : this.tickets.keySet()) {
             sections.computeIfAbsent(
                     CoordinateUtils.getChunkKey(
@@ -689,7 +690,7 @@ public final class ChunkHolderManager {
     }
 
     public void tick() {
-        final int sectionShift = TickRegions.getRegionChunkShift();
+        final int sectionShift = this.world.getRegionChunkShift();
 
         final Predicate<Ticket<?>> expireNow = (final Ticket<?> ticket) -> {
             if (ticket.createdTick == NO_TIMEOUT_MARKER) {
@@ -1385,9 +1386,9 @@ public final class ChunkHolderManager {
 
         final JsonArray unloadQueue = new JsonArray();
         ret.add("unload_queue", unloadQueue);
-        ret.addProperty("lock_shift", Integer.valueOf(ChunkTaskScheduler.getChunkSystemLockShift()));
+        ret.addProperty("lock_shift", Integer.valueOf(this.taskScheduler.getChunkSystemLockShift()));
         ret.addProperty("ticket_shift", Integer.valueOf(ThreadedTicketLevelPropagator.SECTION_SHIFT));
-        ret.addProperty("region_shift", Integer.valueOf(TickRegions.getRegionChunkShift()));
+        ret.addProperty("region_shift", Integer.valueOf(this.world.getRegionChunkShift()));
         for (final ChunkQueue.SectionToUnload section : this.unloadQueue.retrieveForAllRegions()) {
             final JsonObject sectionJson = new JsonObject();
             unloadQueue.add(sectionJson);
