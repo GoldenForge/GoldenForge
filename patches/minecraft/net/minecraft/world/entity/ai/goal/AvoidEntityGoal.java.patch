@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/entity/ai/goal/AvoidEntityGoal.java
++++ b/net/minecraft/world/entity/ai/goal/AvoidEntityGoal.java
+@@ -3,6 +_,7 @@
+ import java.util.EnumSet;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
+ import net.minecraft.world.entity.EntitySelector;
+ import net.minecraft.world.entity.LivingEntity;
+ import net.minecraft.world.entity.PathfinderMob;

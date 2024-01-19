@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/level/block/piston/PistonStructureResolver.java
 +++ b/net/minecraft/world/level/block/piston/PistonStructureResolver.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.level.block.piston;
+ 
++import com.abdelaziz.canary.common.util.constants.DirectionConstants;
+ import com.google.common.collect.Lists;
+ import java.util.List;
+ import net.minecraft.core.BlockPos;
 @@ -51,7 +_,7 @@
        } else {
           for(int i = 0; i < this.f_60414_.size(); ++i) {
@@ -59,7 +66,12 @@
                          return false;
                       }
                    }
-@@ -174,7 +_,7 @@
+@@ -170,11 +_,11 @@
+    private boolean m_60431_(BlockPos p_60432_) {
+       BlockState blockstate = this.f_60409_.m_8055_(p_60432_);
+ 
+-      for(Direction direction : Direction.values()) {
++      for(Direction direction : DirectionConstants.ALL) { // Goldenforge: avoid allocation
           if (direction.m_122434_() != this.f_60413_.m_122434_()) {
              BlockPos blockpos = p_60432_.m_121945_(direction);
              BlockState blockstate1 = this.f_60409_.m_8055_(blockpos);

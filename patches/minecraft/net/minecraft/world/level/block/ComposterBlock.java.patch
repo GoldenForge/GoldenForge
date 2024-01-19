@@ -1,0 +1,42 @@
+--- a/net/minecraft/world/level/block/ComposterBlock.java
++++ b/net/minecraft/world/level/block/ComposterBlock.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.level.block;
+ 
++import com.abdelaziz.canary.common.util.constants.ArrayConstants;
+ import it.unimi.dsi.fastutil.objects.Object2FloatMap;
+ import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
+ import javax.annotation.Nullable;
+@@ -311,8 +_,9 @@
+          super(0);
+       }
+ 
++      // Goldenforge: avoid allocation
+       public int[] m_7071_(Direction p_52012_) {
+-         return new int[0];
++         return ArrayConstants.EMPTY;
+       }
+ 
+       public boolean m_7155_(int p_52008_, ItemStack p_52009_, @Nullable Direction p_52010_) {
+@@ -341,8 +_,9 @@
+          return 1;
+       }
+ 
++      // Goldenforge: avoid allocation
+       public int[] m_7071_(Direction p_52032_) {
+-         return p_52032_ == Direction.UP ? new int[]{0} : new int[0];
++         return p_52032_ == Direction.UP ? ArrayConstants.ZERO : ArrayConstants.EMPTY;
+       }
+ 
+       public boolean m_7155_(int p_52028_, ItemStack p_52029_, @Nullable Direction p_52030_) {
+@@ -382,8 +_,9 @@
+          return 1;
+       }
+ 
++      // Goldenforge: avoid allocation
+       public int[] m_7071_(Direction p_52053_) {
+-         return p_52053_ == Direction.DOWN ? new int[]{0} : new int[0];
++         return p_52053_ == Direction.DOWN ? ArrayConstants.ZERO : ArrayConstants.EMPTY;
+       }
+ 
+       public boolean m_7155_(int p_52049_, ItemStack p_52050_, @Nullable Direction p_52051_) {

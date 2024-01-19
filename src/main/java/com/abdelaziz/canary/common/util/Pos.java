@@ -1,4 +1,4 @@
-package com.abdelaziz.canary2.common.util;
+package com.abdelaziz.canary.common.util;
 
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.LevelHeightAccessor;

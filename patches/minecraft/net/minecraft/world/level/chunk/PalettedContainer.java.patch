@@ -3,7 +3,7 @@
 @@ -1,9 +_,9 @@
  package net.minecraft.world.level.chunk;
  
-+import com.abdelaziz.canary2.common.world.chunk.CanaryHashPalette;
++import com.abdelaziz.canary.common.world.chunk.CanaryHashPalette;
  import com.mojang.serialization.Codec;
  import com.mojang.serialization.DataResult;
  import com.mojang.serialization.codecs.RecordCodecBuilder;

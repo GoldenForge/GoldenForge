@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/level/block/RedStoneWireBlock.java
 +++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.level.block;
+ 
++import com.abdelaziz.canary.common.util.constants.DirectionConstants;
+ import com.google.common.collect.ImmutableMap;
+ import com.google.common.collect.Maps;
+ import com.google.common.collect.Sets;
 @@ -62,7 +_,9 @@
     });
     private static final float f_154303_ = 0.2F;
@@ -36,6 +43,15 @@
     }
  
     public boolean m_7898_(BlockState p_55585_, LevelReader p_55586_, BlockPos p_55587_) {
+@@ -229,7 +_,7 @@
+          Set<BlockPos> set = Sets.newHashSet();
+          set.add(p_55532_);
+ 
+-         for(Direction direction : Direction.values()) {
++         for(Direction direction : DirectionConstants.ALL) { // Goldenforge: avoid allocation
+             set.add(p_55532_.m_121945_(direction));
+          }
+ 
 @@ -241,9 +_,11 @@
     }
  
@@ -50,6 +66,15 @@
        int j = 0;
        if (i < 15) {
           for(Direction direction : Direction.Plane.HORIZONTAL) {
+@@ -270,7 +_,7 @@
+       if (p_55617_.m_8055_(p_55618_).m_60713_(this)) {
+          p_55617_.m_46672_(p_55618_, this);
+ 
+-         for(Direction direction : Direction.values()) {
++         for(Direction direction : DirectionConstants.ALL) { // Goldenforge: avoid allocation
+             p_55617_.m_46672_(p_55618_.m_121945_(direction), this);
+          }
+ 
 @@ -332,11 +_,11 @@
     }
  

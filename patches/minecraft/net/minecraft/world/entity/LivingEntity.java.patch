@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.entity;
+ 
++import com.abdelaziz.canary.common.util.constants.EquipmentSlotConstants;
+ import com.google.common.base.Objects;
+ import com.google.common.collect.ImmutableList;
+ import com.google.common.collect.ImmutableMap;
 @@ -16,6 +_,7 @@
  import java.util.Map;
  import java.util.Optional;
@@ -545,6 +552,15 @@
        Map<EquipmentSlot, ItemStack> map = this.m_21319_();
        if (map != null) {
           this.m_21091_(map);
+@@ -2340,7 +_,7 @@
+    private Map<EquipmentSlot, ItemStack> m_21319_() {
+       Map<EquipmentSlot, ItemStack> map = null;
+ 
+-      for(EquipmentSlot equipmentslot : EquipmentSlot.values()) {
++      for(EquipmentSlot equipmentslot : EquipmentSlotConstants.ALL) { // Goldenforge: avoid allocation
+          ItemStack itemstack;
+          switch (equipmentslot.m_20743_()) {
+             case HAND:
 @@ -2355,6 +_,7 @@
  
           ItemStack itemstack1 = this.m_6844_(equipmentslot);

@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/level/EntityBasedExplosionDamageCalculator.java
++++ b/net/minecraft/world/level/EntityBasedExplosionDamageCalculator.java
+@@ -13,10 +_,17 @@
+       this.f_45892_ = p_45894_;
+    }
+ 
++   // Goldenforge: avoid lambda and optional allocation
+    public Optional<Float> m_6617_(Explosion p_45902_, BlockGetter p_45903_, BlockPos p_45904_, BlockState p_45905_, FluidState p_45906_) {
+-      return super.m_6617_(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_).map((p_45913_) -> {
+-         return this.f_45892_.m_7077_(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_, p_45913_);
+-      });
++      Optional<Float> optionalBlastResistance = super.m_6617_(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_);
++      if (optionalBlastResistance.isPresent()) {
++         float blastResistance = optionalBlastResistance.get();
++         float effectiveExplosionResistance = this.f_45892_.m_7077_(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_, blastResistance);
++         if (effectiveExplosionResistance != blastResistance) {
++            return Optional.of(effectiveExplosionResistance);
++         }
++      }
++      return optionalBlastResistance;
+    }
+ 
+    public boolean m_6714_(Explosion p_45896_, BlockGetter p_45897_, BlockPos p_45898_, BlockState p_45899_, float p_45900_) {

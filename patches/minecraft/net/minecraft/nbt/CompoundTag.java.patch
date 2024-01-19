@@ -1,0 +1,38 @@
+--- a/net/minecraft/nbt/CompoundTag.java
++++ b/net/minecraft/nbt/CompoundTag.java
+@@ -14,6 +_,8 @@
+ import java.util.Set;
+ import java.util.UUID;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+ import net.minecraft.CrashReport;
+ import net.minecraft.CrashReportCategory;
+ import net.minecraft.ReportedException;
+@@ -33,7 +_,7 @@
+          if (p_128486_ > 512) {
+             throw new RuntimeException("Tried to read NBT tag with too high complexity, depth > 512");
+          } else {
+-            Map<String, Tag> map = Maps.newHashMap();
++            Map<String, Tag> map = new Object2ObjectOpenHashMap<>(); // Goldenforge
+ 
+             byte b0;
+             while((b0 = CompoundTag.m_128420_(p_128485_, p_128487_)) != 0) {
+@@ -123,7 +_,7 @@
+    }
+ 
+    public CompoundTag() {
+-      this(Maps.newHashMap());
++      this(new Object2ObjectOpenHashMap<>()); // Goldenforge
+    }
+ 
+    public void m_6434_(DataOutput p_128341_) throws IOException {
+@@ -420,7 +_,7 @@
+    }
+ 
+    public CompoundTag m_6426_() {
+-      Map<String, Tag> map = Maps.newHashMap(Maps.transformValues(this.f_128329_, Tag::m_6426_));
++      Map<String, Tag> map = new Object2ObjectOpenHashMap<>(Maps.transformValues(this.f_128329_, Tag::m_6426_)); // Goldenforge
+       return new CompoundTag(map);
+    }
+ 

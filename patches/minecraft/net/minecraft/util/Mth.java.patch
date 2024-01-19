@@ -1,0 +1,11 @@
+--- a/net/minecraft/util/Mth.java
++++ b/net/minecraft/util/Mth.java
+@@ -25,7 +_,7 @@
+    public static final float f_144835_ = 1.0E-5F;
+    public static final float f_13994_ = m_14116_(2.0F);
+    private static final float f_144842_ = 10430.378F;
+-   private static final float[] f_13995_ = Util.m_137469_(new float[65536], (p_14077_) -> {
++   public static final float[] f_13995_ = Util.m_137469_(new float[65536], (p_14077_) -> {
+       for(int i = 0; i < p_14077_.length; ++i) {
+          p_14077_[i] = (float)Math.sin((double)i * Math.PI * 2.0D / 65536.0D);
+       }
