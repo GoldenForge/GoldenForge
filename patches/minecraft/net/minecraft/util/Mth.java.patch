@@ -1,5 +1,14 @@
 --- a/net/minecraft/util/Mth.java
 +++ b/net/minecraft/util/Mth.java
+@@ -4,6 +_,8 @@
+ import java.util.UUID;
+ import java.util.function.IntPredicate;
+ import java.util.stream.IntStream;
++
++import com.abdelaziz.canary.common.util.math.CompactSineLUT;
+ import net.minecraft.Util;
+ import net.minecraft.core.Vec3i;
+ import net.minecraft.world.phys.AABB;
 @@ -25,7 +_,7 @@
     public static final float f_144835_ = 1.0E-5F;
     public static final float f_13994_ = m_14116_(2.0F);
@@ -9,3 +18,17 @@
        for(int i = 0; i < p_14077_.length; ++i) {
           p_14077_[i] = (float)Math.sin((double)i * Math.PI * 2.0D / 65536.0D);
        }
+@@ -41,11 +_,11 @@
+    private static final double[] f_14000_ = new double[257];
+ 
+    public static float m_14031_(float p_14032_) {
+-      return f_13995_[(int)(p_14032_ * 10430.378F) & '\uffff'];
++      return CompactSineLUT.sin(p_14032_); // Goldenforge
+    }
+ 
+    public static float m_14089_(float p_14090_) {
+-      return f_13995_[(int)(p_14090_ * 10430.378F + 16384.0F) & '\uffff'];
++      return CompactSineLUT.cos(p_14090_); // Goldenforge
+    }
+ 
+    public static float m_14116_(float p_14117_) {
