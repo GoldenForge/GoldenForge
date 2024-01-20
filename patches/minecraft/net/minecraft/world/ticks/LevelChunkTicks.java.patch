@@ -1,15 +1,60 @@
 --- a/net/minecraft/world/ticks/LevelChunkTicks.java
 +++ b/net/minecraft/world/ticks/LevelChunkTicks.java
-@@ -25,6 +_,20 @@
+@@ -1,30 +_,57 @@
+ package net.minecraft.world.ticks;
+ 
++import com.abdelaziz.canary.common.world.scheduler.OrderedTickQueue;
+ import com.google.common.collect.ImmutableList;
++import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
++import it.unimi.dsi.fastutil.longs.Long2ReferenceAVLTreeMap;
++import it.unimi.dsi.fastutil.objects.ObjectIterator;
+ import it.unimi.dsi.fastutil.objects.ObjectOpenCustomHashSet;
+-import java.util.Iterator;
+-import java.util.List;
+-import java.util.Optional;
+-import java.util.PriorityQueue;
+-import java.util.Queue;
+-import java.util.Set;
++
++import java.util.*;
+ import java.util.function.BiConsumer;
+ import java.util.function.Function;
+ import java.util.function.Predicate;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.nbt.ListTag;
+ import net.minecraft.world.level.ChunkPos;
+ 
+ public class LevelChunkTicks<T> implements SerializableTickContainer<T>, TickContainerAccess<T> {
+-   private final Queue<ScheduledTick<T>> f_193163_ = new PriorityQueue<>(ScheduledTick.f_193373_);
++   private Queue<ScheduledTick<T>> f_193163_ = new PriorityQueue<>(ScheduledTick.f_193373_);
+    @Nullable
+    private List<SavedTick<T>> f_193164_;
+-   private final Set<ScheduledTick<?>> f_193165_ = new ObjectOpenCustomHashSet<>(ScheduledTick.f_193375_);
++   private Set<ScheduledTick<?>> f_193165_ = new ObjectOpenCustomHashSet<>(ScheduledTick.f_193375_);
     @Nullable
     private BiConsumer<LevelChunkTicks<T>, ScheduledTick<T>> f_193166_;
  
++   private static volatile Reference2IntOpenHashMap<Object> TYPE_2_INDEX;
++
++   static {
++      TYPE_2_INDEX = new Reference2IntOpenHashMap<>();
++      TYPE_2_INDEX.defaultReturnValue(-1);
++   }
++
++   private final Long2ReferenceAVLTreeMap<OrderedTickQueue<T>> tickQueuesByTimeAndPriority = new Long2ReferenceAVLTreeMap<>();
++   private OrderedTickQueue<T> nextTickQueue;
++   private final IntOpenHashSet allTicks = new IntOpenHashSet();
++
 +   // Paper start - add dirty flag
 +   private boolean dirty;
 +   private long lastSaved = Long.MIN_VALUE;
 +
 +   public boolean isDirty(final long tick) {
-+      return this.dirty || (!this.f_193163_.isEmpty() && tick != this.lastSaved);
++      return this.dirty || (!(this.nextTickQueue == null) && tick != this.lastSaved);
 +   }
 +
 +   public void clearDirty() {
@@ -21,48 +66,228 @@
     public LevelChunkTicks() {
     }
  
-@@ -50,6 +_,7 @@
-    public ScheduledTick<T> m_193195_() {
-       ScheduledTick<T> scheduledtick = this.f_193163_.poll();
-       if (scheduledtick != null) {
-+         this.dirty = true; // Paper - add dirty flag
-          this.f_193165_.remove(scheduledtick);
+@@ -34,8 +_,47 @@
+       for(SavedTick<T> savedtick : p_193169_) {
+          this.f_193165_.add(ScheduledTick.m_193397_(savedtick.f_193311_(), savedtick.f_193312_()));
        }
+-
+-   }
++      //Remove replaced collections
++      if (this.f_193164_ != null) {
++         for (SavedTick<?> orderedTick : this.f_193164_) {
++            this.allTicks.add(tickToInt(orderedTick.f_193312_(), orderedTick.f_193311_()));
++         }
++      }
++      this.f_193165_ = null;
++      this.f_193163_ = null;
++   }
++
++   private static int tickToInt(BlockPos pos, Object type) {
++      //Y coordinate is 12 bits (BlockPos.toLong)
++      //X and Z coordinate is 4 bits each (This scheduler is for a single chunk)
++      //20 bits are in use for pos
++      //12 bits remaining for the type, so up to 4096 different tickable blocks/fluids (not block states) -> can upgrade to long if needed
++      int typeIndex = TYPE_2_INDEX.getInt(type);
++      if (typeIndex == -1) {
++         typeIndex = fixMissingType2Index(type);
++      }
++
++      int ret = ((pos.m_123341_() & 0xF) << 16) | ((pos.m_123342_() & (0xfff)) << 4) | (pos.m_123343_() & 0xF);
++      ret |= typeIndex << 20;
++      return ret;
++   }
++
++   //This method must be synchronized, otherwise type->int assignments can be overwritten and therefore change
++   //Uses clone and volatile store to ensure only fully initialized maps are used, all threads share the same mapping
++   private static synchronized int fixMissingType2Index(Object type) {
++      //check again, other thread might have replaced the collection
++      int typeIndex = TYPE_2_INDEX.getInt(type);
++      if (typeIndex == -1) {
++         Reference2IntOpenHashMap<Object> clonedType2Index = TYPE_2_INDEX.clone();
++         clonedType2Index.put(type, typeIndex = clonedType2Index.size());
++         TYPE_2_INDEX = clonedType2Index;
++         if (typeIndex >= 4096) {
++            throw new IllegalStateException("Canary Tick Scheduler assumes at most 4096 different block types that receive scheduled ticks exist! Add mixin.world.tick_scheduler=false to the lithium properties/config to disable the optimization!");
++         }
++      }
++      return typeIndex;
++   }
++
  
-@@ -58,6 +_,7 @@
+    public void m_193181_(@Nullable BiConsumer<LevelChunkTicks<T>, ScheduledTick<T>> p_193182_) {
+       this.f_193166_ = p_193182_;
+@@ -43,24 +_,68 @@
+ 
+    @Nullable
+    public ScheduledTick<T> m_193189_() {
+-      return this.f_193163_.peek();
++      if (this.nextTickQueue == null) {
++         return null;
++      }
++      return this.nextTickQueue.peek();
+    }
+ 
+    @Nullable
+    public ScheduledTick<T> m_193195_() {
+-      ScheduledTick<T> scheduledtick = this.f_193163_.poll();
+-      if (scheduledtick != null) {
+-         this.f_193165_.remove(scheduledtick);
++      ScheduledTick<T> orderedTick = this.nextTickQueue.poll();
++      if (orderedTick != null) {
++         this.dirty = true; // Paper - add dirty flag
++         if (this.nextTickQueue.isEmpty()) {
++            this.updateNextTickQueue(true);
++         }
++         this.allTicks.remove(tickToInt(orderedTick.f_193377_(), orderedTick.f_193376_()));
++         return orderedTick;
+       }
+-
+-      return scheduledtick;
++      return null;
+    }
  
     public void m_183393_(ScheduledTick<T> p_193177_) {
-       if (this.f_193165_.add(p_193177_)) {
+-      if (this.f_193165_.add(p_193177_)) {
+-         this.m_193193_(p_193177_);
+-      }
+-
++      int intTick = tickToInt(p_193177_.f_193377_(), p_193177_.f_193376_());
++      if (this.allTicks.add(intTick)) {
 +         this.dirty = true; // Paper - add dirty flag
-          this.m_193193_(p_193177_);
-       }
++         this.queueTick(p_193177_);
++      }
++   }
++
++   private void queueTick(ScheduledTick<T> orderedTick) {
++      OrderedTickQueue<T> tickQueue = this.tickQueuesByTimeAndPriority.computeIfAbsent(getBucketKey(orderedTick.f_193378_(), orderedTick.f_193379_()), key -> new OrderedTickQueue<>());
++      if (tickQueue.isEmpty()) {
++         this.updateNextTickQueue(false);
++      }
++      tickQueue.offer(orderedTick);
++
++      if (this.f_193166_ != null) {
++         //noinspection unchecked
++         this.f_193166_.accept((LevelChunkTicks<T>) (Object) this, orderedTick);
++      }
++   }
++
++   // Computes a timestamped key including the tick's priority
++   // Keys can be sorted in descending order to find what should be executed first
++   // 60 time bits, 4 priority bits
++   private static long getBucketKey(long time, TickPriority priority) {
++      //using priority.ordinal() as is not negative instead of priority.index
++      return (time << 4L) | (priority.ordinal() & 15);
++   }
++
++   private void updateNextTickQueue(boolean checkEmpty) {
++      if (checkEmpty && this.nextTickQueue != null && this.nextTickQueue.isEmpty()) {
++         OrderedTickQueue<T> removed = this.tickQueuesByTimeAndPriority.remove(this.tickQueuesByTimeAndPriority.firstLongKey());
++         if (removed != this.nextTickQueue) {
++            throw new IllegalStateException("Next tick queue doesn't have the lowest key!");
++         }
++      }
++      if (this.tickQueuesByTimeAndPriority.isEmpty()) {
++         this.nextTickQueue = null;
++         return;
++      }
++      long firstKey = this.tickQueuesByTimeAndPriority.firstLongKey();
++      this.nextTickQueue = this.tickQueuesByTimeAndPriority.get(firstKey);
+    }
  
-@@ -81,7 +_,7 @@
-       while(iterator.hasNext()) {
-          ScheduledTick<T> scheduledtick = iterator.next();
-          if (p_193184_.test(scheduledtick)) {
+    private void m_193193_(ScheduledTick<T> p_193194_) {
+@@ -72,54 +_,69 @@
+    }
+ 
+    public boolean m_183582_(BlockPos p_193179_, T p_193180_) {
+-      return this.f_193165_.contains(ScheduledTick.m_193397_(p_193180_, p_193179_));
++      return this.allTicks.contains(tickToInt(p_193179_, p_193180_));
+    }
+ 
+    public void m_193183_(Predicate<ScheduledTick<T>> p_193184_) {
+-      Iterator<ScheduledTick<T>> iterator = this.f_193163_.iterator();
+-
+-      while(iterator.hasNext()) {
+-         ScheduledTick<T> scheduledtick = iterator.next();
+-         if (p_193184_.test(scheduledtick)) {
 -            iterator.remove();
-+            iterator.remove(); this.dirty = true; // Paper - add dirty flag
-             this.f_193165_.remove(scheduledtick);
+-            this.f_193165_.remove(scheduledtick);
++      for (ObjectIterator<OrderedTickQueue<T>> tickQueueIterator = this.tickQueuesByTimeAndPriority.values().iterator(); tickQueueIterator.hasNext(); ) {
++         OrderedTickQueue<T> nextTickQueue = tickQueueIterator.next();
++         nextTickQueue.sort();
++         boolean removed = false;
++         for (int i = 0; i < nextTickQueue.size(); i++) {
++            ScheduledTick<T> nextTick = nextTickQueue.getTickAtIndex(i);
++            if (p_193184_.test(nextTick)) {
++               this.dirty = true; // Paper - add dirty flag
++               nextTickQueue.setTickAtIndex(i, null);
++               this.allTicks.remove(tickToInt(nextTick.f_193377_(), nextTick.f_193376_()));
++               removed = true;
++            }
++         }
++         if (removed) {
++            nextTickQueue.removeNullsAndConsumed();
++         }
++         if (nextTickQueue.isEmpty()) {
++            tickQueueIterator.remove();
           }
        }
-@@ -97,6 +_,7 @@
+-
++      this.updateNextTickQueue(false);
+    }
+ 
+    public Stream<ScheduledTick<T>> m_193196_() {
+-      return this.f_193163_.stream();
++      return this.tickQueuesByTimeAndPriority.values().stream().flatMap(Collection::stream);
+    }
+ 
+    public int m_183574_() {
+-      return this.f_193163_.size() + (this.f_193164_ != null ? this.f_193164_.size() : 0);
++      return this.allTicks.size();
     }
  
     public ListTag m_183237_(long p_193174_, Function<T, String> p_193175_) {
+-      ListTag listtag = new ListTag();
 +      this.lastSaved = p_193174_; // Paper - add dirty system to level ticks
-       ListTag listtag = new ListTag();
++      ListTag nbtList = new ListTag();
        if (this.f_193164_ != null) {
-          for(SavedTick<T> savedtick : this.f_193164_) {
-@@ -113,6 +_,11 @@
+-         for(SavedTick<T> savedtick : this.f_193164_) {
+-            listtag.add(savedtick.m_193343_(p_193175_));
+-         }
+-      }
+-
+-      for(ScheduledTick<T> scheduledtick : this.f_193163_) {
+-         listtag.add(SavedTick.m_193331_(scheduledtick, p_193175_, p_193174_));
+-      }
+-
+-      return listtag;
++         for (SavedTick<T> tick : this.f_193164_) {
++            nbtList.add(tick.m_193343_(p_193175_));
++         }
++      }
++      for (OrderedTickQueue<T> nextTickQueue : this.tickQueuesByTimeAndPriority.values()) {
++         for (ScheduledTick<T> orderedTick : nextTickQueue) {
++            nbtList.add(SavedTick.m_193331_(orderedTick, p_193175_, p_193174_));
++         }
++      }
++      return nbtList;
+    }
  
     public void m_193171_(long p_193172_) {
        if (this.f_193164_ != null) {
 +         // Paper start - add dirty system to level chunk ticks
-+         if (this.f_193163_.isEmpty()) {
++         if (this.nextTickQueue == null) {
 +            this.lastSaved = p_193172_;
 +         }
 +         // Paper end - add dirty system to level chunk ticks
           int i = -this.f_193164_.size();
+-
+-         for(SavedTick<T> savedtick : this.f_193164_) {
+-            this.m_193193_(savedtick.m_193328_(p_193172_, (long)(i++)));
++         for (SavedTick<T> tick : this.f_193164_) {
++            this.queueTick(tick.m_193328_(p_193172_, i++));
+          }
+       }
+-
+       this.f_193164_ = null;
+    }
  
-          for(SavedTick<T> savedtick : this.f_193164_) {
