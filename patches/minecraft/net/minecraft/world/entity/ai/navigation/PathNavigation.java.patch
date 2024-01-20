@@ -1,5 +1,17 @@
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -6,9 +_,11 @@
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
+ import net.minecraft.Util;
++import net.minecraft.client.multiplayer.ClientLevel;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Vec3i;
+ import net.minecraft.network.protocol.game.DebugPackets;
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.tags.BlockTags;
+ import net.minecraft.util.Mth;
+ import net.minecraft.world.entity.Entity;
 @@ -41,7 +_,7 @@
     protected long f_26503_;
     protected double f_26504_;
@@ -24,7 +36,34 @@
     public PathNavigation(Mob p_26515_, Level p_26516_) {
        this.f_26494_ = p_26515_;
        this.f_26495_ = p_26516_;
-@@ -157,9 +_,29 @@
+@@ -82,6 +_,9 @@
+          if (this.f_26509_ != null) {
+             this.f_26496_ = null;
+             this.f_26496_ = this.m_7864_(this.f_26509_, this.f_26510_);
++            // Goldenforge start
++            this.updateNavigationState();
++            // Goldenforge end
+             this.f_26507_ = this.f_26495_.m_46467_();
+             this.f_26506_ = false;
+          }
+@@ -91,6 +_,16 @@
+ 
+    }
+ 
++   public void updateNavigationState() {
++      if (this.f_26494_.isRegisteredToWorld()) {
++         if (this.f_26496_ == null) {
++            ((ServerLevel) this.f_26495_).setNavigationInactive(this.f_26494_);
++         } else {
++            ((ServerLevel) this.f_26495_).setNavigationActive(this.f_26494_);
++         }
++      }
++   }
++
+    @Nullable
+    public final Path m_26524_(double p_26525_, double p_26526_, double p_26527_, int p_26528_) {
+       return this.m_7864_(new BlockPos(p_26525_, p_26526_, p_26527_), p_26528_);
+@@ -157,14 +_,35 @@
        return this.m_26536_(this.m_26524_(p_26520_, p_26521_, p_26522_, 1), p_26523_);
     }
  
@@ -55,6 +94,32 @@
     }
  
     public boolean m_26536_(@Nullable Path p_26537_, double p_26538_) {
+       if (p_26537_ == null) {
+          this.f_26496_ = null;
++         this.updateNavigationState();
+          return false;
+       } else {
+          if (!p_26537_.m_77385_(this.f_26496_)) {
+@@ -172,16 +_,19 @@
+          }
+ 
+          if (this.m_26571_()) {
++            this.updateNavigationState();
+             return false;
+          } else {
+             this.m_6804_();
+             if (this.f_26496_.m_77398_() <= 0) {
++               this.updateNavigationState();
+                return false;
+             } else {
+                this.f_26497_ = p_26538_;
+                Vec3 vec3 = this.m_7475_();
+                this.f_26499_ = this.f_26498_;
+                this.f_26500_ = vec3;
++               this.updateNavigationState();
+                return true;
+             }
+          }
 @@ -227,10 +_,10 @@
        Vec3 vec3 = this.m_7475_();
        this.f_26505_ = this.f_26494_.m_20205_() > 0.75F ? this.f_26494_.m_20205_() / 2.0F : 0.75F - this.f_26494_.m_20205_() / 2.0F;
@@ -69,3 +134,11 @@
        if (flag || this.f_26494_.m_21481_(this.f_26496_.m_77401_().f_77282_) && this.m_26559_(vec3)) {
           this.f_26496_.m_77374_();
        }
+@@ -310,6 +_,7 @@
+ 
+    public void m_26573_() {
+       this.f_26496_ = null;
++      this.updateNavigationState();
+    }
+ 
+    protected abstract Vec3 m_7475_();

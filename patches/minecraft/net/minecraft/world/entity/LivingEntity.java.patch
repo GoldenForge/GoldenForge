@@ -459,6 +459,16 @@
        if (!this.f_20911_ || this.f_20913_ >= this.m_21304_() / 2 || this.f_20913_ < 0) {
           this.f_20913_ = -1;
           this.f_20911_ = true;
+@@ -1794,6 +_,9 @@
+    }
+ 
+    protected void m_21203_() {
++      if (!this.f_20911_ && this.f_20913_ == 0) {
++         return; // Goldenforge
++      }
+       int i = this.m_21304_();
+       if (this.f_20911_) {
+          ++this.f_20913_;
 @@ -1972,14 +_,17 @@
        }
  

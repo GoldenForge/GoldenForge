@@ -106,7 +106,7 @@
  import org.slf4j.Logger;
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
-@@ -110,37 +_,145 @@
+@@ -110,37 +_,124 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -182,27 +182,6 @@
 +   public final io.papermc.paper.chunk.SingleThreadChunkRegionManager dataRegionManager;
 +
 +   public static final class DataRegionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionData {
-+      // Paper start - optimise notify()
-+      private io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> navigators;
-+
-+      public io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<Mob> getNavigators() {
-+         return this.navigators;
-+      }
-+
-+      public boolean addToNavigators(final Mob navigator) {
-+         if (this.navigators == null) {
-+            this.navigators = new io.papermc.paper.util.maplist.IteratorSafeOrderedReferenceSet<>();
-+         }
-+         return this.navigators.add(navigator);
-+      }
-+
-+      public boolean removeFromNavigators(final Mob navigator) {
-+         if (this.navigators == null) {
-+            return false;
-+         }
-+         return this.navigators.remove(navigator);
-+      }
-+      // Paper end - optimise notify()
 +   }
 +
 +   public static final class DataRegionSectionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSectionData {

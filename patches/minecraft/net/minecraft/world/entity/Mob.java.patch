@@ -7,12 +7,34 @@
  import com.google.common.collect.ImmutableSet;
  import com.google.common.collect.Maps;
  import java.util.Arrays;
-@@ -116,6 +_,8 @@
+@@ -7,6 +_,8 @@
+ import java.util.Optional;
+ import java.util.UUID;
+ import javax.annotation.Nullable;
++
++import net.minecraft.client.multiplayer.ClientLevel;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.NonNullList;
+ import net.minecraft.core.Vec3i;
+@@ -116,6 +_,21 @@
     private CompoundTag f_21359_;
     private BlockPos f_21360_ = BlockPos.f_121853_;
     private float f_21341_ = -1.0F;
 +   @Nullable
 +   private MobSpawnType spawnType;
++   private PathNavigation registeredNavigation;
++
++   public boolean isRegisteredToWorld() {
++      return this.registeredNavigation != null;
++   }
++
++   public void setRegisteredToWorld(PathNavigation navigation) {
++      this.registeredNavigation = navigation;
++   }
++
++   public PathNavigation getRegisteredNavigation() {
++      return this.registeredNavigation;
++   }
  
     protected Mob(EntityType<? extends Mob> p_21368_, Level p_21369_) {
        super(p_21368_, p_21369_);
@@ -145,6 +167,37 @@
        return p_21437_;
     }
  
+@@ -1240,9 +_,29 @@
+       if (flag && this.m_21523_()) {
+          this.m_21455_(true, true);
+       }
+-
++      this.updateNavigationRegistration(); // Goldenforge
+       return flag;
+    }
++
++   public void m_8127_() { // Goldenforge
++      super.m_8127_();
++      this.updateNavigationRegistration();
++   }
++
++   public void updateNavigationRegistration() {
++      if (this.isRegisteredToWorld()) {
++         PathNavigation navigation = this.m_21573_();
++         if (this.registeredNavigation != navigation) {
++            ((ServerLevel) this.f_19853_).setNavigationInactive((Mob) (Object) this);
++            this.registeredNavigation = navigation;
++
++            if (navigation.m_26570_() != null) {
++               ((ServerLevel) this.f_19853_).setNavigationActive((Mob) (Object) this);
++            }
++         }
++      }
++   }
++
+ 
+    private void m_21528_() {
+       if (this.f_21359_ != null && this.f_19853_ instanceof ServerLevel) {
 @@ -1374,15 +_,25 @@
        return false;
     }
