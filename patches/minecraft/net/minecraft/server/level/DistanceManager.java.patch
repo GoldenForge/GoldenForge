@@ -194,12 +194,12 @@
 +
 +   boolean addTicket(long i, Ticket<?> ticket) {
 +      org.spigotmc.AsyncCatcher.catchOp("ChunkMapDistance::addTicket"); // Paper
-+      return this.getChunkHolderManager().addTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.m_9433_()); // Paper - rewrite chunk system
++      return this.getChunkHolderManager().addTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_); // Paper - rewrite chunk system
 +   }
 +
 +   boolean removeTicket(long i, Ticket<?> ticket) {
 +      org.spigotmc.AsyncCatcher.catchOp("ChunkMapDistance::removeTicket"); // Paper
-+      return this.getChunkHolderManager().removeTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.m_9433_()); // Paper - rewrite chunk system
++      return this.getChunkHolderManager().removeTicketAtLevel((TicketType)ticket.m_9428_(), i, ticket.m_9433_(), ticket.f_9422_); // Paper - rewrite chunk system
     }
  
     public <T> void m_140792_(TicketType<T> p_140793_, ChunkPos p_140794_, int p_140795_, T p_140796_) {
