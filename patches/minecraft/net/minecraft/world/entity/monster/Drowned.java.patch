@@ -1,0 +1,22 @@
+--- a/net/minecraft/world/entity/monster/Drowned.java
++++ b/net/minecraft/world/entity/monster/Drowned.java
+@@ -209,9 +_,11 @@
+          if (this.m_6142_() && this.m_20069_() && this.m_32392_()) {
+             this.f_21344_ = this.f_32340_;
+             this.m_20282_(true);
++            this.updateNavigationRegistration(); // Goldenforge
+          } else {
+             this.f_21344_ = this.f_32341_;
+             this.m_20282_(false);
++            this.updateNavigationRegistration(); // Goldenforge
+          }
+       }
+ 
+@@ -289,6 +_,7 @@
+          this.f_32407_.m_32398_(false);
+          this.f_32407_.f_21344_ = this.f_32407_.f_32341_;
+          super.m_8056_();
++         this.f_32407_.updateNavigationRegistration(); // Goldenforge
+       }
+ 
+       public void m_8041_() {
