@@ -694,15 +694,17 @@
              profilerfiller.m_7238_();
  
              for(Entity entity : p_8664_.m_20197_()) {
-@@ -682,34 +_,72 @@
+@@ -682,26 +_,66 @@
        return !this.f_8548_.m_7762_(this, p_8697_, p_8696_) && this.m_6857_().m_61937_(p_8697_);
     }
  
 +   // Paper start - derived from below
 +   public void saveIncrementally(boolean doFull) {
 +      ServerChunkCache chunkproviderserver = this.m_7726_();
++
++
 +         if (doFull) {
-+            this.saveLevelData(true); // Paper - Write SavedData IO async
++            this.m_8806_();
 +         }
 +
 +         if (!this.m_7441_()) chunkproviderserver.saveIncrementally();
@@ -741,9 +743,6 @@
 -         }
 -
 -      }
--   }
--
--   private void m_8806_() {
 +      // Paper start - rewrite chunk system - add close param
 +      this.save(p_8644_, p_8645_, p_8646_, false);
 +   }
@@ -756,7 +755,7 @@
 +               progressListener.m_6309_(Component.m_237115_("menu.savingLevel"));
 +            }
 +
-+         this.saveLevelData(!close); // Paper - Write SavedData IO async
++            this.m_8806_();
 +            if (progressListener != null) {
 +               progressListener.m_6307_(Component.m_237115_("menu.savingChunks"));
 +            }
@@ -778,18 +777,9 @@
 +      this.f_8548_.f_129749_.m_5917_(this.f_8548_.m_129901_().m_136307_());
 +      this.f_8548_.f_129744_.m_78290_(this.f_8548_.m_206579_(), this.f_8548_.f_129749_, this.f_8548_.m_6846_().m_6960_());
 +      // CraftBukkit end
-+   }
-+
-+   private void saveLevelData(boolean async) {
-       if (this.f_8559_ != null) {
-          this.f_8548_.m_129910_().m_5915_(this.f_8559_.m_64081_());
-       }
- 
--      this.m_7726_().m_8483_().m_78151_();
-+      this.m_7726_().m_8483_().save(async);
     }
  
-    public <T extends Entity> List<? extends T> m_143280_(EntityTypeTest<Entity, T> p_143281_, Predicate<? super T> p_143282_) {
+    private void m_8806_() {
 @@ -774,6 +_,7 @@
     }
  

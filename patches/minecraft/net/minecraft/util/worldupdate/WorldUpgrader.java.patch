@@ -54,21 +54,6 @@
                    }
  
                    if (flag1) {
-@@ -192,7 +_,13 @@
-             }
-          }
- 
--         this.f_18813_.m_78151_();
-+         // Paper start - Write SavedData IO async
-+         try {
-+            this.f_18813_.close();
-+         } catch (IOException exception) {
-+            f_18797_.error("Failed to close persistent world data", exception);
-+         }
-+         // Paper end - Write SavedData IO async
-          j = Util.m_137550_() - j;
-          f_18797_.info("World optimizaton finished after {} ms", (long)j);
-          this.f_18805_ = true;
 @@ -203,7 +_,7 @@
        File file1 = this.f_18801_.m_197394_(p_18831_).toFile();
        File file2 = new File(file1, "region");
