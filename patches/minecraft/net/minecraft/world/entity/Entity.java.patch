@@ -179,7 +179,7 @@
     protected int f_19818_;
     protected BlockPos f_19819_;
     private boolean f_19840_;
-@@ -230,13 +_,57 @@
+@@ -230,13 +_,59 @@
     @Nullable
     private BlockState f_185934_ = null;
  
@@ -218,6 +218,8 @@
 +   public boolean activatedPriorityReset = false; // DAB
 +   public int activatedPriority = org.goldenforge.TempConfig.maximumActivationPrio; // golf score
 +   public final BlockPos.MutableBlockPos cachedBlockPos = new BlockPos.MutableBlockPos(); // used where needed
++
++   protected int numCollisions = 0; // Paper
 +   // Pufferfish end
     public Entity(EntityType<?> p_19870_, Level p_19871_) {
 +      super(Entity.class);

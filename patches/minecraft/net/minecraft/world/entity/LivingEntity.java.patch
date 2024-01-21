@@ -15,8 +15,11 @@
  import java.util.function.Predicate;
  import javax.annotation.Nullable;
  import net.minecraft.BlockUtil;
-@@ -118,12 +_,14 @@
+@@ -116,14 +_,17 @@
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
  import net.minecraft.world.scores.PlayerTeam;
++import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
 -public abstract class LivingEntity extends Entity {
@@ -617,6 +620,46 @@
           if (itemstack.m_150930_(Items.f_42741_) && ElytraItem.m_41140_(itemstack)) {
              flag = true;
              int i = this.f_20937_ + 1;
+@@ -2608,9 +_,23 @@
+    }
+ 
+    protected void m_6138_() {
++      // Paper start - don't run getEntities if we're not going to use its result
++      if (!this.m_6094_()) {
++         return;
++      }
++      net.minecraft.world.scores.Team team = this.m_5647_();
++      if (team != null && team.m_7156_() == net.minecraft.world.scores.Team.CollisionRule.NEVER) {
++         return;
++      }
++
++      int i = this.f_19853_.m_46469_().m_46215_(GameRules.f_46149_);
++      if (i <= 0 && GoldenForgeConfig.Server.maxEntityCollisions.get() <= 0) {
++         return;
++      }
++      // Paper end - don't run getEntities if we're not going to use its result
+       List<Entity> list = this.f_19853_.m_6249_(this, this.m_20191_(), EntitySelector.m_20421_(this));
+       if (!list.isEmpty()) {
+-         int i = this.f_19853_.m_46469_().m_46215_(GameRules.f_46149_);
++         // Paper - moved up
+          if (i > 0 && list.size() > i - 1 && this.f_19796_.m_188503_(4) == 0) {
+             int j = 0;
+ 
+@@ -2625,8 +_,12 @@
+             }
+          }
+ 
+-         for(int l = 0; l < list.size(); ++l) {
+-            Entity entity = list.get(l);
++         Iterator iterator1 = list.iterator();
++         this.numCollisions = Math.max(0, this.numCollisions - GoldenForgeConfig.Server.maxEntityCollisions.get()); // Paper
++         while (iterator1.hasNext() && this.numCollisions < GoldenForgeConfig.Server.maxEntityCollisions.get()) { // Paper
++            Entity entity = (Entity) iterator1.next();
++            entity.numCollisions++; // Paper
++            this.numCollisions++; // Paper
+             this.m_7324_(entity);
+          }
+       }
 @@ -2670,10 +_,9 @@
     public void m_8127_() {
        Entity entity = this.m_20202_();

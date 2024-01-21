@@ -40,6 +40,7 @@ public class GoldenForgeConfig {
         public static ConfigValue<Boolean> enableAsyncMobSpawning;
         public static ConfigValue<Boolean> perPlayerMobSpawns;
         public static ConfigValue<Boolean> onlyPlayersCollide;
+        public static ConfigValue<Integer> maxEntityCollisions;
 
         public static ConfigValue<Integer> autoSaveInterval;
         public static ConfigValue<Integer> maxAutoSaveChunksPerTick;
@@ -162,6 +163,10 @@ public class GoldenForgeConfig {
             onlyPlayersCollide = builder
                     .worldRestart()
                     .define("onlyPlayersCollide", false);
+
+            maxEntityCollisions = builder
+                    .worldRestart()
+                    .define("maxEntityCollisions", 8);
 
             dearEnabled = builder
                     .worldRestart()
