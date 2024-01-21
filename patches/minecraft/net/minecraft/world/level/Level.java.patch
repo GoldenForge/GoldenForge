@@ -37,9 +37,11 @@
  import net.minecraft.world.entity.player.Player;
  import net.minecraft.world.item.ItemStack;
  import net.minecraft.world.item.crafting.RecipeManager;
-@@ -64,8 +_,9 @@
+@@ -63,9 +_,11 @@
+ import net.minecraft.world.level.storage.LevelData;
  import net.minecraft.world.level.storage.WritableLevelData;
  import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.Vec3;
  import net.minecraft.world.scores.Scoreboard;
 +import org.goldenforge.bukkit.Bukkit;
  
@@ -154,9 +156,94 @@
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
-@@ -145,7 +_,7 @@
+@@ -144,8 +_,92 @@
+       return null;
     }
  
++   // Paper start - Broken down method of raytracing for EntityLiving#hasLineOfSight, replaces BlockGetter#clip(CollisionContext)
++   public net.minecraft.world.phys.BlockHitResult.Type clipDirect(Vec3 start, Vec3 end, net.minecraft.world.phys.shapes.CollisionContext collisionContext) {
++      // most of this code comes from BlockGetter#clip(CollisionContext, BiFunction, Function), but removes the needless functions
++      if (start.equals(end)) {
++         return net.minecraft.world.phys.BlockHitResult.Type.MISS;
++      }
++
++      final double endX = Mth.m_14139_(-1.0E-7D, end.f_82479_, start.f_82479_);
++      final double endY = Mth.m_14139_(-1.0E-7D, end.f_82480_, start.f_82480_);
++      final double endZ = Mth.m_14139_(-1.0E-7D, end.f_82481_, start.f_82481_);
++
++      final double startX = Mth.m_14139_(-1.0E-7D, start.f_82479_, end.f_82479_);
++      final double startY = Mth.m_14139_(-1.0E-7D, start.f_82480_, end.f_82480_);
++      final double startZ = Mth.m_14139_(-1.0E-7D, start.f_82481_, end.f_82481_);
++
++      int currentX = Mth.m_14107_(startX);
++      int currentY = Mth.m_14107_(startY);
++      int currentZ = Mth.m_14107_(startZ);
++
++      final BlockPos.MutableBlockPos currentBlock = new BlockPos.MutableBlockPos(currentX, currentY, currentZ);
++
++      LevelChunk chunk = this.getChunkIfLoaded(currentBlock);
++      if (chunk == null) {
++         return net.minecraft.world.phys.BlockHitResult.Type.MISS;
++      }
++
++      final net.minecraft.world.phys.BlockHitResult.Type initialCheck = this.clipDirect(start, end, currentBlock, chunk.m_8055_(currentBlock), collisionContext);
++      if (initialCheck != null) {
++         return initialCheck;
++      }
++
++      final double diffX = endX - startX;
++      final double diffY = endY - startY;
++      final double diffZ = endZ - startZ;
++
++      final int xDirection = Mth.m_14205_(diffX);
++      final int yDirection = Mth.m_14205_(diffY);
++      final int zDirection = Mth.m_14205_(diffZ);
++
++      final double normalizedX = xDirection == 0 ? Double.MAX_VALUE : (double) xDirection / diffX;
++      final double normalizedY = yDirection == 0 ? Double.MAX_VALUE : (double) yDirection / diffY;
++      final double normalizedZ = zDirection == 0 ? Double.MAX_VALUE : (double) zDirection / diffZ;
++
++      double normalizedXDirection = normalizedX * (xDirection > 0 ? 1.0D - Mth.m_14185_(startX) : Mth.m_14185_(startX));
++      double normalizedYDirection = normalizedY * (yDirection > 0 ? 1.0D - Mth.m_14185_(startY) : Mth.m_14185_(startY));
++      double normalizedZDirection = normalizedZ * (zDirection > 0 ? 1.0D - Mth.m_14185_(startZ) : Mth.m_14185_(startZ));
++
++      net.minecraft.world.phys.BlockHitResult.Type result;
++
++      do {
++         if (normalizedXDirection > 1.0D && normalizedYDirection > 1.0D && normalizedZDirection > 1.0D) {
++            return net.minecraft.world.phys.BlockHitResult.Type.MISS;
++         }
++
++         if (normalizedXDirection < normalizedYDirection) {
++            if (normalizedXDirection < normalizedZDirection) {
++               currentX += xDirection;
++               normalizedXDirection += normalizedX;
++            } else {
++               currentZ += zDirection;
++               normalizedZDirection += normalizedZ;
++            }
++         } else if (normalizedYDirection < normalizedZDirection) {
++            currentY += yDirection;
++            normalizedYDirection += normalizedY;
++         } else {
++            currentZ += zDirection;
++            normalizedZDirection += normalizedZ;
++         }
++
++         currentBlock.m_122178_(currentX, currentY, currentZ);
++         if (chunk.m_7697_().f_45578_ != currentBlock.m_123341_() >> 4 || chunk.m_7697_().f_45579_ != currentBlock.m_123343_() >> 4) {
++            chunk = this.getChunkIfLoaded(currentBlock);
++            if (chunk == null) {
++               return net.minecraft.world.phys.BlockHitResult.Type.MISS;
++            }
++         }
++         result = this.clipDirect(start, end, currentBlock, chunk.m_8055_(currentBlock), collisionContext);
++      } while (result == null);
++
++      return result;
++   }
++   // Paper end
++
     public boolean m_46739_(BlockPos p_46740_) {
 -      return !this.m_151570_(p_46740_) && m_46457_(p_46740_);
 +      return p_46740_.isInsideBuildHeightAndWorldBoundsHorizontal(this); // Paper - use better/optimized check
