@@ -688,7 +688,7 @@
           this.f_20935_ = itemstack;
 -         this.f_20936_ = itemstack.m_41779_();
 +         // Paper start - lag compensate eating
-+         this.f_20936_ = this.totalEatTimeTicks = itemstack.m_41779_();
++         this.f_20936_ = this.totalEatTimeTicks = duration;
 +         this.eatStartTime = System.nanoTime();
 +         // Paper end
           if (!this.f_19853_.f_46443_) {
