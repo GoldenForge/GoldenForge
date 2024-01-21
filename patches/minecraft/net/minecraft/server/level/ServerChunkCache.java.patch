@@ -20,7 +20,7 @@
  import net.minecraft.Util;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.SectionPos;
-@@ -45,14 +_,16 @@
+@@ -45,14 +_,17 @@
  import net.minecraft.world.level.storage.DimensionDataStorage;
  import net.minecraft.world.level.storage.LevelData;
  import net.minecraft.world.level.storage.LevelStorageSource;
@@ -28,6 +28,7 @@
 +import org.goldenforge.config.GoldenForgeConfig;
  
  public class ServerChunkCache extends ChunkSource {
++   public static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger(); // Paper
     private static final List<ChunkStatus> f_8326_ = ChunkStatus.m_62349_();
 -   private final DistanceManager f_8327_;
 +   public final DistanceManager f_8327_;
@@ -425,7 +426,7 @@
     }
  
     public void m_8419_(boolean p_8420_) {
-@@ -294,10 +_,21 @@
+@@ -294,10 +_,28 @@
        this.f_8325_.m_140318_(p_8420_);
     }
  
@@ -447,6 +448,13 @@
 +
 +   public void close(boolean save) { // Paper - rewrite chunk system
 +      this.f_8329_.chunkTaskScheduler.chunkHolderManager.close(save, true); // Paper - rewrite chunk system
++      // Paper start - Write SavedData IO async
++      try {
++         this.f_8333_.close();
++      } catch (IOException exception) {
++         this.LOGGER.error("Failed to close persistent world data", exception);
++      }
++      // Paper end - Write SavedData IO async
     }
  
     public void m_201698_(BooleanSupplier p_201913_, boolean p_201914_) {

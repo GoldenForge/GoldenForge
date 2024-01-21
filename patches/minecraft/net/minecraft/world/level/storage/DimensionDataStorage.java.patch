@@ -1,5 +1,26 @@
 --- a/net/minecraft/world/level/storage/DimensionDataStorage.java
 +++ b/net/minecraft/world/level/storage/DimensionDataStorage.java
+@@ -20,15 +_,19 @@
+ import net.minecraft.world.level.saveddata.SavedData;
+ import org.slf4j.Logger;
+ 
+-public class DimensionDataStorage {
++public class DimensionDataStorage implements java.io.Closeable { // Paper - Write SavedData IO async
+    private static final Logger f_78143_ = LogUtils.getLogger();
+    private final Map<String, SavedData> f_78144_ = Maps.newHashMap();
+    private final DataFixer f_78145_;
+    private final File f_78146_;
+ 
++   protected final java.util.concurrent.ExecutorService ioExecutor; // Paper - Write SavedData IO async
++
+    public DimensionDataStorage(File p_78149_, DataFixer p_78150_) {
+       this.f_78145_ = p_78150_;
+       this.f_78146_ = p_78149_;
++      String worldFolder = f_78146_.getParent(); // Paper - Write SavedData IO async
++      this.ioExecutor = java.util.concurrent.Executors.newSingleThreadExecutor(new com.google.common.util.concurrent.ThreadFactoryBuilder().setNameFormat("DimensionDataIO - " + worldFolder + " - %d").setDaemon(true).build()); // Paper - Write SavedData IO async
+    }
+ 
+    private File m_78156_(String p_78157_) {
 @@ -49,9 +_,13 @@
     @Nullable
     public <T extends SavedData> T m_164858_(Function<CompoundTag, T> p_164859_, String p_164860_) {
@@ -14,3 +35,29 @@
        }
  
        return (T)saveddata;
+@@ -151,10 +_,23 @@
+       return flag;
+    }
+ 
+-   public void m_78151_() {
++   // Paper start - Write SavedData IO async
++   @Override
++   public void close() throws IOException {
++      save(false);
++      this.ioExecutor.shutdown();
++   }
++   // Paper end - Write SavedData IO async
++
++   public void save(boolean async) { // Paper - Write SavedData IO async
+       this.f_78144_.forEach((p_164866_, p_164867_) -> {
+          if (p_164867_ != null) {
+-            p_164867_.m_77757_(this.m_78156_(p_164866_));
++            // Paper start - Write SavedData IO async
++            final java.util.concurrent.CompletableFuture<Void> save = p_164867_.save(this.m_78156_(p_164866_), ioExecutor);
++            if (!async) {
++               save.join();
++            }
++            // Paper end - Write SavedData IO async
+          }
+ 
+       });

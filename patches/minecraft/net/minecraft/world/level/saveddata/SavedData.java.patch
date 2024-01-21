@@ -1,0 +1,50 @@
+--- a/net/minecraft/world/level/saveddata/SavedData.java
++++ b/net/minecraft/world/level/saveddata/SavedData.java
+@@ -6,6 +_,7 @@
+ import net.minecraft.SharedConstants;
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.nbt.NbtIo;
++import net.minecraft.nbt.NbtUtils;
+ import org.slf4j.Logger;
+ 
+ public abstract class SavedData {
+@@ -27,18 +_,31 @@
+    }
+ 
+    public void m_77757_(File p_77758_) {
++      save(p_77758_, null).join(); // Paper - Write SavedData IO async - joining is evil, but we assume the old blocking behavior here just for safety
++   }
++
++   public java.util.concurrent.CompletableFuture<Void> save(File file, @org.jetbrains.annotations.Nullable java.util.concurrent.ExecutorService ioExecutor) { // Paper - Write SavedData IO async
+       if (this.m_77764_()) {
+-         CompoundTag compoundtag = new CompoundTag();
+-         compoundtag.m_128365_("data", this.m_7176_(new CompoundTag()));
+-         compoundtag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
++         CompoundTag compoundTag = new CompoundTag();
++         compoundTag.m_128365_("data", this.m_7176_(new CompoundTag()));
++         compoundTag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
+ 
+-         try {
+-            NbtIo.m_128944_(compoundtag, p_77758_);
+-         } catch (IOException ioexception) {
+-            f_77751_.error("Could not save data {}", this, ioexception);
+-         }
++         Runnable writeRunnable = () -> { // Paper - Write SavedData IO async
++            try {
++               NbtIo.m_128944_(compoundTag, file);
++            } catch (IOException var4) {
++               f_77751_.error("Could not save data {}", this, var4);
++            }
++         }; // Paper - Write SavedData IO async
+ 
+          this.m_77760_(false);
++         // Paper start - Write SavedData IO async
++         if (ioExecutor == null) {
++            return java.util.concurrent.CompletableFuture.runAsync(writeRunnable); // No executor, just use common pool
++         }
++         return java.util.concurrent.CompletableFuture.runAsync(writeRunnable, ioExecutor);
+       }
++      return java.util.concurrent.CompletableFuture.completedFuture(null);
++      // Paper end - Write SavedData IO async
+    }
+ }
