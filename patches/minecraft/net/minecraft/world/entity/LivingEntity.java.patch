@@ -672,21 +672,6 @@
     }
  
     public void m_6083_() {
-@@ -2722,11 +_,9 @@
-       } else {
-          Vec3 vec3 = new Vec3(this.m_20185_(), this.m_20188_(), this.m_20189_());
-          Vec3 vec31 = new Vec3(p_147185_.m_20185_(), p_147185_.m_20188_(), p_147185_.m_20189_());
--         if (vec31.m_82554_(vec3) > 128.0D) {
--            return false;
--         } else {
--            return this.f_19853_.m_45547_(new ClipContext(vec3, vec31, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this)).m_6662_() == HitResult.Type.MISS;
--         }
-+
-+         // Paper - diff on change - used in CraftLivingEntity#hasLineOfSight(Location) and CraftWorld#lineOfSightExists
-+         return vec31.m_82557_(vec3) > 128.0D * 128.0D ? false : this.f_19853_.clipDirect(vec3, vec31, net.minecraft.world.phys.shapes.CollisionContext.m_82750_(this)) == HitResult.Type.MISS; // Paper - Perf: Use distance squared
-       }
-    }
- 
 @@ -2806,11 +_,22 @@
     public InteractionHand m_7655_() {
        return (this.f_19804_.m_135370_(f_20909_) & 2) > 0 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;

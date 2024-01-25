@@ -25,23 +25,10 @@
     }
  
     default int m_7469_() {
-@@ -54,19 +_,48 @@
+@@ -53,20 +_,35 @@
+          return BlockHitResult.m_82426_(p_151370_.m_151404_(), Direction.m_122366_(vec3.f_82479_, vec3.f_82480_, vec3.f_82481_), new BlockPos(p_151370_.m_151404_()));
        });
     }
- 
-+   // Paper start - Broken down variant of the method below, used by Level#clipDirect
-+   @Nullable
-+   default BlockHitResult.Type clipDirect(Vec3 start, Vec3 end, BlockPos pos, BlockState state, net.minecraft.world.phys.shapes.CollisionContext collisionContext) {
-+      if (state.m_60795_()) {
-+         return null;
-+      }
-+
-+      final VoxelShape voxelshape = ClipContext.Block.COLLIDER.m_7544_(state, this, pos, collisionContext);
-+      final BlockHitResult hitResult = this.m_45558_(start, end, pos, voxelshape, state);
-+      return hitResult == null ? null : hitResult.m_6662_();
-+   }
-+   // Paper end
-+
 +   // CraftBukkit start - moved block handling into separate method for use by Block#rayTrace
 +   default BlockHitResult clip(ClipContext raytrace1, BlockPos blockposition) {
 +      // Paper start - Prevent raytrace from loading chunks
@@ -67,7 +54,7 @@
 +      return d0 <= d1 ? movingobjectpositionblock : movingobjectpositionblock1;
 +   }
 +   // CraftBukkit end
-+
+ 
     default BlockHitResult m_45547_(ClipContext p_45548_) {
        return m_151361_(p_45548_.m_45702_(), p_45548_.m_45693_(), p_45548_, (p_151359_, p_151360_) -> {
 -         BlockState blockstate = this.m_8055_(p_151360_);
