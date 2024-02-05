@@ -38,29 +38,35 @@
              }
           } catch (ClassNotFoundException classnotfoundexception) {
           }
-@@ -89,28 +_,42 @@
+@@ -89,28 +_,57 @@
  
     private <T> void m_135385_(EntityDataAccessor<T> p_135386_, T p_135387_) {
        SynchedEntityData.DataItem<T> dataitem = new SynchedEntityData.DataItem<>(p_135386_, p_135387_);
 -      this.f_135346_.writeLock().lock();
-       this.f_135345_.put(p_135386_.m_135015_(), dataitem);
--      this.f_135347_ = false;
--      this.f_135346_.writeLock().unlock();
-+      // Paper start - Perf: array backed synched entity data
-+      if (this.entriesArray.length <= p_135386_.m_135015_()) {
-+         final int newSize = Math.min(p_135386_.m_135015_() + GROW_FACTOR, f_179843_);
++      // Goldenforge start
++      SynchedEntityData.DataItem<?>[] storage = this.entriesArray;
++      // Check if we need to grow the backing array to accommodate the new key range
++      if (storage.length <= p_135386_.m_135015_()) {
++         // Grow the array to accommodate 8 entries after this one, but limit it to never be larger
++         // than 256 entries as per the vanilla limit
++         int newSize = Math.min(p_135386_.m_135015_() + GROW_FACTOR, 256);
 +
-+         this.entriesArray = java.util.Arrays.copyOf(this.entriesArray, newSize);
++         this.entriesArray = storage = Arrays.copyOf(storage, newSize);
 +      }
 +
-+      this.entriesArray[p_135386_.m_135015_()] = dataitem;
-+      // Paper end - Perf: array backed synched entity data
++      // Update the storage
++      storage[p_135386_.m_135015_()] = dataitem;
+       this.f_135345_.put(p_135386_.m_135015_(), dataitem);
++      // Goldenforge end
+       this.f_135347_ = false;
+-      this.f_135346_.writeLock().unlock();
     }
  
     private <T> SynchedEntityData.DataItem<T> m_135379_(EntityDataAccessor<T> p_135380_) {
 -      this.f_135346_.readLock().lock();
 -
 -      SynchedEntityData.DataItem<T> dataitem;
++      // Goldenforge start
        try {
 -         dataitem = (SynchedEntityData.DataItem<T>)this.f_135345_.get(p_135380_.m_135015_());
 -      } catch (Throwable throwable) {
@@ -70,21 +76,29 @@
 -         throw new ReportedException(crashreport);
 -      } finally {
 -         this.f_135346_.readLock().unlock();
-+         // Paper start - Perf: array backed synched entity data
-+         final int id = p_135380_.m_135015_();
++         SynchedEntityData.DataItem<?>[] array = this.entriesArray;
 +
-+         if (id < 0 || id >= this.entriesArray.length) {
++         int id = p_135380_.m_135015_();
++
++         // The vanilla implementation will simply return null if the tracker doesn't contain the specified entry. However,
++         // accessing an array with an invalid pointer will throw a OOB exception, where-as a HashMap would simply
++         // return null. We check this case (which should be free, even if so insignificant, as the subsequent bounds
++         // check will hopefully be eliminated)
++         if (id < 0 || id >= array.length) {
 +            return null;
 +         }
 +
-+         return (DataItem<T>) this.entriesArray[id];
-+         // Paper end - Perf: array backed synched entity data
++         // This cast can fail if trying to access a entry which doesn't belong to this tracker, as the ID could
++         // instead point to an entry of a different type. However, that is also vanilla behaviour.
++         // noinspection unchecked
++         return (SynchedEntityData.DataItem<T>) array[id];
 +      } catch (Throwable cause) {
 +         // Move to another method so this function can be in-lined better
 +         throw onGetException(cause, p_135380_);
        }
 -
 -      return dataitem;
++      // Goldenforge end
 +   }
 +
 +   private static <T> ReportedException onGetException(Throwable cause, EntityDataAccessor<T> data) {
