@@ -9,7 +9,7 @@
           return false;
        } else if (this.f_25600_ > 0) {
           --this.f_25600_;
-@@ -113,7 +_,9 @@
+@@ -113,13 +_,17 @@
  
     @Nullable
     private BlockPos m_25852_(BlockPos p_25853_, BlockGetter p_25854_) {
@@ -20,7 +20,21 @@
           return p_25853_;
        } else {
           BlockPos[] ablockpos = new BlockPos[]{p_25853_.m_7495_(), p_25853_.m_122024_(), p_25853_.m_122029_(), p_25853_.m_122012_(), p_25853_.m_122019_(), p_25853_.m_7495_().m_7495_()};
-@@ -133,6 +_,7 @@
+ 
+          for(BlockPos blockpos : ablockpos) {
+-            if (p_25854_.m_8055_(blockpos).m_60713_(this.f_25836_)) {
++
++            net.minecraft.world.level.block.state.BlockState block2 = p_25854_.getBlockStateIfLoaded(blockpos); // Paper - Prevent AI rules from loading chunks
++            if (block2 != null && block2.m_60713_(this.f_25836_)) { // Paper - Prevent AI rules from loading chunks
+                return blockpos;
+             }
+          }
+@@ -129,10 +_,11 @@
+    }
+ 
+    protected boolean m_6465_(LevelReader p_25850_, BlockPos p_25851_) {
+-      ChunkAccess chunkaccess = p_25850_.m_6522_(SectionPos.m_123171_(p_25851_.m_123341_()), SectionPos.m_123171_(p_25851_.m_123343_()), ChunkStatus.f_62326_, false);
++      ChunkAccess chunkaccess = ((Level) p_25850_).getChunkIfLoadedImmediately(p_25851_.m_123341_() >> 4, p_25851_.m_123343_() >> 4); // Paper - Prevent AI rules from loading chunks
        if (chunkaccess == null) {
           return false;
        } else {

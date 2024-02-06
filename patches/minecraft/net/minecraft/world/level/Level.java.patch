@@ -62,7 +62,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -97,15 +_,90 @@
+@@ -97,15 +_,98 @@
     private final RandomSource f_220348_ = RandomSource.m_216337_();
     private final ResourceKey<DimensionType> f_220349_;
     private final Holder<DimensionType> f_204147_;
@@ -96,6 +96,14 @@
 +
 +   protected final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom(java.util.concurrent.ThreadLocalRandom.current().nextLong()); public net.minecraft.util.RandomSource getThreadUnsafeRandom() { return this.randomTickRandom; } // Pufferfish - move thread unsafe random initialization // Pufferfish - getter
 +
++   @Override
++   public final boolean m_46805_(BlockPos pos) {
++      return getChunkIfLoaded(pos.m_123341_() >> 4, pos.m_123343_() >> 4) != null; // Paper - Perf: Optimize Level.hasChunkAt(BlockPosition)Z
++   }
++
++   public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
++      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(x, z);
++   }
 +
 +   public final boolean isLoadedAndInBounds(BlockPos blockposition) { // Paper - final for inline
 +      return m_6857_().m_61937_(blockposition) && getChunkIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4) != null;

@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/item/CompassItem.java
++++ b/net/minecraft/world/item/CompassItem.java
+@@ -75,7 +_,7 @@
+             Optional<ResourceKey<Level>> optional = m_40727_(compoundtag);
+             if (optional.isPresent() && optional.get() == p_40721_.m_46472_() && compoundtag.m_128441_("LodestonePos")) {
+                BlockPos blockpos = NbtUtils.m_129239_(compoundtag.m_128469_("LodestonePos"));
+-               if (!p_40721_.m_46739_(blockpos) || !((ServerLevel)p_40721_).m_8904_().m_217874_(PoiTypes.f_218065_, blockpos)) {
++               if (!p_40721_.m_46739_(blockpos) || (p_40721_.m_46805_(blockpos) && !((ServerLevel)p_40721_).m_8904_().m_217874_(PoiTypes.f_218065_, blockpos))) { // Paper - Prevent compass from loading chunks
+                   compoundtag.m_128473_("LodestonePos");
+                }
+             }
