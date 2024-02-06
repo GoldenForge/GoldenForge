@@ -106,7 +106,7 @@
  import org.slf4j.Logger;
  
  public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider {
-@@ -110,37 +_,124 @@
+@@ -110,37 +_,159 @@
     public static final int f_143032_ = 33;
     public static final int f_140127_ = 33 + ChunkStatus.m_62421_();
     public static final int f_143033_ = 31;
@@ -214,12 +214,33 @@
 +   public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerMobSpawnMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets);
 +   // Paper end - optimise ChunkMap#anyPlayerCloseEnoughForSpawning
 +
++   // inlined EnumMap, TrackingRange.TrackingRangeType
++   static final org.spigotmc.TrackingRange.TrackingRangeType[] TRACKING_RANGE_TYPES = org.spigotmc.TrackingRange.TrackingRangeType.values();
++   public final com.destroystokyo.paper.util.misc.PlayerAreaMap[] playerEntityTrackerTrackMaps;
++   final int[] entityTrackerTrackRanges;
++   public final int getEntityTrackerRange(final int ordinal) {
++      return this.entityTrackerTrackRanges[ordinal];
++   }
++
++   private int convertSpigotRangeToVanilla(final int vanilla) {
++      return net.minecraft.server.MinecraftServer.getServer().m_7186_(vanilla);
++   }
++   // Paper end - use distance map to optimise tracker
++
 +   void addPlayerToDistanceMaps(ServerPlayer player) {
 +      int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20185_());
 +      int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.m_20189_());
 +      // Note: players need to be explicitly added to distance maps before they can be updated
 +      this.nearbyPlayers.addPlayer(player);
 +      this.f_140133_.playerChunkLoader.addPlayer(player); // Paper - replace chunk loader
++      // Paper start - use distance map to optimise entity tracker
++      for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
++         com.destroystokyo.paper.util.misc.PlayerAreaMap trackMap = this.playerEntityTrackerTrackMaps[i];
++         int trackRange = this.entityTrackerTrackRanges[i];
++
++         trackMap.add(player, chunkX, chunkZ, Math.min(trackRange, io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(player)));
++      }
++      // Paper end - use distance map to optimise entity tracker
 +   }
 +
 +   void removePlayerFromDistanceMaps(ServerPlayer player) {
@@ -229,6 +250,12 @@
 +      this.nearbyPlayers.removePlayer(player);
 +      this.f_140133_.playerChunkLoader.removePlayer(player); // Paper - replace chunk loader
 +      this.playerMobSpawnMap.remove(player); // Paper - optimise chunk tick iteration
++      // Paper start - use distance map to optimise tracker
++      for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
++         this.playerEntityTrackerTrackMaps[i].remove(player);
++      }
++      // Paper end - use distance map to optimise tracker
++      this.playerMobSpawnMap.remove(player); // Paper - optimise chunk tick iteration
 +   }
 +
 +   void updateMaps(ServerPlayer player) {
@@ -237,6 +264,14 @@
 +      // Note: players need to be explicitly added to distance maps before they can be updated
 +      this.nearbyPlayers.tickPlayer(player);
 +      this.f_140133_.playerChunkLoader.updatePlayer(player); // Paper - replace chunk loader
++      // Paper start - use distance map to optimise entity tracker
++      for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
++         com.destroystokyo.paper.util.misc.PlayerAreaMap trackMap = this.playerEntityTrackerTrackMaps[i];
++         int trackRange = this.entityTrackerTrackRanges[i];
++
++         trackMap.update(player, chunkX, chunkZ, Math.min(trackRange, io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(player)));
++      }
++      // Paper end - use distance map to optimise entity tracker
 +   }
 +
 +   public final io.papermc.paper.util.player.NearbyPlayers nearbyPlayers;
@@ -247,7 +282,7 @@
        this.f_214833_ = p_214839_;
        Path path = p_214837_.m_197394_(p_214836_.m_46472_());
        this.f_182284_ = path.getFileName().toString();
-@@ -153,20 +_,33 @@
+@@ -153,20 +_,70 @@
        }
  
        this.f_140135_ = p_214841_;
@@ -279,6 +314,43 @@
 +      this.regionManagers.add(this.dataRegionManager);
 +      this.nearbyPlayers = new io.papermc.paper.util.player.NearbyPlayers(this.f_140133_);
 +      // Paper end
++      // Paper start - use distance map to optimise entity tracker
++      this.playerEntityTrackerTrackMaps = new com.destroystokyo.paper.util.misc.PlayerAreaMap[TRACKING_RANGE_TYPES.length];
++      this.entityTrackerTrackRanges = new int[TRACKING_RANGE_TYPES.length];
++
++      for (int ordinal = 0, len = TRACKING_RANGE_TYPES.length; ordinal < len; ++ordinal) {
++         org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = TRACKING_RANGE_TYPES[ordinal];
++         int configuredSpigotValue;
++         switch (trackingRangeType) {
++            case PLAYER:
++               configuredSpigotValue = GoldenConfig.playerTrackingRange;
++               break;
++            case ANIMAL:
++               configuredSpigotValue = GoldenConfig.animalTrackingRange;
++               break;
++            case MONSTER:
++               configuredSpigotValue = GoldenConfig.monsterTrackingRange;
++               break;
++            case MISC:
++               configuredSpigotValue = GoldenConfig.miscTrackingRange;
++               break;
++            case OTHER:
++               configuredSpigotValue = GoldenConfig.otherTrackingRange;
++               break;
++            case ENDERDRAGON:
++               configuredSpigotValue = EntityType.f_20565_.m_20681_() * 16;
++               break;
++            default:
++               throw new IllegalStateException("Missing case for enum " + trackingRangeType);
++         }
++         configuredSpigotValue = convertSpigotRangeToVanilla(configuredSpigotValue);
++
++         int trackRange = (configuredSpigotValue >>> 4) + ((configuredSpigotValue & 15) != 0 ? 1 : 0);
++         this.entityTrackerTrackRanges[ordinal] = trackRange;
++
++         this.playerEntityTrackerTrackMaps[ordinal] = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets);
++      }
++      // Paper end - use distance map to optimise entity tracker
 +   }
 +
 +   // Paper start
@@ -1434,7 +1506,7 @@
                 ChunkMap.TrackedEntity chunkmap$trackedentity = new ChunkMap.TrackedEntity(p_140200_, i, j, entitytype.m_20683_());
                 this.f_140150_.put(p_140200_.m_19879_(), chunkmap$trackedentity);
 -               chunkmap$trackedentity.m_140487_(this.f_140133_.m_6907_());
-+               chunkmap$trackedentity.m_140487_(this.f_140133_.m_6907_()); // Paper - don't search all players
++               chunkmap$trackedentity.updatePlayers(p_140200_.getPlayersInTrackRange()); // Paper - don't search all players
                 if (p_140200_ instanceof ServerPlayer) {
                    ServerPlayer serverplayer = (ServerPlayer)p_140200_;
                    this.m_140192_(serverplayer, true);
@@ -1445,6 +1517,39 @@
 +      org.spigotmc.AsyncCatcher.catchOp("entity untrack"); // Spigot
        if (p_140332_ instanceof ServerPlayer serverplayer) {
           this.m_140192_(serverplayer, false);
+ 
+@@ -1145,10 +_,30 @@
+       if (chunkmap$trackedentity1 != null) {
+          chunkmap$trackedentity1.m_140482_();
+       }
+-
+-   }
++      p_140332_.tracker = null; // Paper - We're no longer tracked
++
++   }
++
++   // Paper start - optimised tracker
++   private final void processTrackQueue() {
++      for (TrackedEntity tracker : this.f_140150_.values()) {
++         // update tracker entry
++         tracker.updatePlayers(tracker.f_140472_.getPlayersInTrackRange());
++      }
++
++      for (TrackedEntity tracker : this.f_140150_.values()) {
++         tracker.f_140471_.m_8533_();
++      }
++   }
++   // Paper end - optimised tracker
+ 
+    protected void m_140421_() {
++      // Paper start - optimized tracker
++      if (true) {
++         this.processTrackQueue();
++         return;
++      }
++      // Paper end - optimized tracker
+       List<ServerPlayer> list = Lists.newArrayList();
+       List<ServerPlayer> list1 = this.f_140133_.m_6907_();
  
 @@ -1202,38 +_,11 @@
  
@@ -1502,7 +1607,13 @@
        }
  
        @Nullable
-@@ -1270,15 +_,52 @@
+@@ -1265,20 +_,57 @@
+       }
+    }
+ 
+-   class TrackedEntity {
++   public class TrackedEntity {
+       final ServerEntity f_140471_;
        final Entity f_140472_;
        private final int f_140473_;
        SectionPos f_140474_;
