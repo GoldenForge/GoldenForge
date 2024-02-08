@@ -1,11 +1,12 @@
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -45,7 +_,7 @@
+@@ -45,7 +_,8 @@
  import net.minecraft.world.level.storage.DimensionDataStorage;
  import net.minecraft.world.level.storage.LevelStorageSource;
  
 -public class ServerChunkCache extends ChunkSource {
 +public class ServerChunkCache extends ChunkSource implements net.neoforged.neoforge.common.extensions.IServerChunkCacheExtension {
++    public static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger(); // Paper
      private static final List<ChunkStatus> CHUNK_STATUSES = ChunkStatus.getStatusList();
      private final DistanceManager distanceManager;
      public final ServerLevel level;
@@ -28,6 +29,28 @@
                  Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either = chunkholder.getFutureIfPresent(ChunkStatus.FULL).getNow(null);
                  if (either == null) {
                      return null;
+@@ -328,9 +_,18 @@
+ 
+     @Override
+     public void close() throws IOException {
+-        this.save(true);
+-        this.lightEngine.close();
+-        this.chunkMap.close();
++        this.close(true);
++    }
++
++    public void close(boolean save) { // Paper - rewrite chunk system
++        this.level.chunkTaskScheduler.chunkHolderManager.close(save, true); // Paper - rewrite chunk system
++        // Paper start - Write SavedData IO async
++        try {
++            this.dataStorage.close();
++        } catch (IOException exception) {
++            LOGGER.error("Failed to close persistent world data", exception);
++        }
++        // Paper end - Write SavedData IO async
+     }
+ 
+     @Override
 @@ -383,7 +_,7 @@
                  for(ServerChunkCache.ChunkAndHolder serverchunkcache$chunkandholder : list) {
                      LevelChunk levelchunk1 = serverchunkcache$chunkandholder.chunk;

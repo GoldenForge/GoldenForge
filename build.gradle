@@ -91,6 +91,6 @@ spotless {
     }
 }
 
-apply from: rootProject.file('buildscript/spotless-rules.gradle')
+//apply from: rootProject.file('buildscript/spotless-rules.gradle')
 apply from: rootProject.file('buildscript/generate-package-infos.gradle')
 apply from: rootProject.file('buildscript/apply-all-formatting.gradle')

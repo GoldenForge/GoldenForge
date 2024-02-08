@@ -1,11 +1,24 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -252,7 +_,7 @@
+@@ -160,7 +_,7 @@
+ import org.slf4j.Logger;
  
+ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, CommandSource, AutoCloseable {
+-    private static final Logger LOGGER = LogUtils.getLogger();
++    public static final Logger LOGGER = LogUtils.getLogger();
+     public static final String VANILLA_BRAND = "vanilla";
+     private static final float AVERAGE_TICK_TIME_SMOOTHING = 0.8F;
+     private static final int TICK_STATS_SPAN = 100;
+@@ -250,9 +_,11 @@
+     protected final WorldData worldData;
+     private volatile boolean isSaving;
+ 
++    public boolean forceTicks; // Paper
++
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
          AtomicReference<S> atomicreference = new AtomicReference<>();
 -        Thread thread = new Thread(() -> atomicreference.get().runServer(), "Server thread");
-+        Thread thread = new Thread(net.neoforged.fml.util.thread.SidedThreadGroups.SERVER, () -> atomicreference.get().runServer(), "Server thread");
++        Thread thread = new io.papermc.paper.util.TickThread(() -> atomicreference.get().runServer(), "Server thread");
          thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> LOGGER.error("Uncaught exception in server thread", p_177910_));
          if (Runtime.getRuntime().availableProcessors() > 4) {
              thread.setPriority(8);
@@ -33,6 +46,14 @@
              ChunkPos chunkpos = new ChunkPos(serverchunkcache.randomState().sampler().findSpawnPosition());
              int i = serverchunkcache.getGenerator().getSpawnHeight(p_177897_);
              if (i < p_177897_.getMinBuildHeight()) {
+@@ -480,6 +_,7 @@
+     }
+ 
+     private void prepareLevels(ChunkProgressListener p_129941_) {
++        this.forceTicks = true;
+         ServerLevel serverlevel = this.overworld();
+         LOGGER.info("Preparing start region for dimension {}", serverlevel.dimension().location());
+         BlockPos blockpos = serverlevel.getSharedSpawnPos();
 @@ -506,6 +_,7 @@
                      ChunkPos chunkpos = new ChunkPos(i);
                      serverlevel1.getChunkSource().updateChunkForced(chunkpos, true);
@@ -41,15 +62,103 @@
              }
          }
  
-@@ -613,6 +_,7 @@
-         for(ServerLevel serverlevel2 : this.getAllLevels()) {
-             if (serverlevel2 != null) {
-                 try {
-+                    net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Unload(serverlevel2));
-                     serverlevel2.close();
-                 } catch (IOException ioexception1) {
-                     LOGGER.error("Exception closing the level", (Throwable)ioexception1);
-@@ -659,9 +_,11 @@
+@@ -513,6 +_,7 @@
+         this.waitUntilNextTick();
+         p_129941_.stop();
+         this.updateMobSpawningFlags();
++        this.forceTicks = false;
+     }
+ 
+     public GameType getDefaultGameType() {
+@@ -529,15 +_,21 @@
+ 
+     public abstract boolean shouldRconBroadcast();
+ 
+-    public boolean saveAllChunks(boolean p_129886_, boolean p_129887_, boolean p_129888_) {
++    public boolean saveAllChunks(boolean suppressLogs, boolean flush, boolean force) {
++        // Paper start - rewrite chunk system - add close param
++        // This allows us to avoid double saving chunks by closing instead of saving then closing
++        return this.saveAllChunks(suppressLogs, flush, force, false);
++    }
++
++    public boolean saveAllChunks(boolean suppressLogs, boolean flush, boolean force, boolean close) {
+         boolean flag = false;
+ 
+         for(ServerLevel serverlevel : this.getAllLevels()) {
+-            if (!p_129886_) {
++            if (!suppressLogs) {
+                 LOGGER.info("Saving chunks for level '{}'/{}", serverlevel, serverlevel.dimension().location());
+             }
+ 
+-            serverlevel.save(null, p_129887_, serverlevel.noSave && !p_129888_);
++            serverlevel.save(null, flush, serverlevel.noSave && !force, close);
+             flag = true;
+         }
+ 
+@@ -546,7 +_,7 @@
+         serverleveldata.setWorldBorder(serverlevel2.getWorldBorder().createSettings());
+         this.worldData.setCustomBossEvents(this.getCustomBossEvents().save());
+         this.storageSource.saveDataTag(this.registryAccess(), this.worldData, this.getPlayerList().getSingleplayerData());
+-        if (p_129887_) {
++        if (flush) {
+             for(ServerLevel serverlevel1 : this.getAllLevels()) {
+                 LOGGER.info("ThreadedAnvilChunkStorage ({}): All chunks are saved", serverlevel1.getChunkSource().chunkMap.getStorageName());
+             }
+@@ -597,28 +_,7 @@
+             }
+         }
+ 
+-        while(this.levels.values().stream().anyMatch(p_202480_ -> p_202480_.getChunkSource().chunkMap.hasWork())) {
+-            this.nextTickTimeNanos = Util.getNanos() + TimeUtil.NANOSECONDS_PER_MILLISECOND;
+-
+-            for(ServerLevel serverlevel1 : this.getAllLevels()) {
+-                serverlevel1.getChunkSource().removeTicketsOnClosing();
+-                serverlevel1.getChunkSource().tick(() -> true, false);
+-            }
+-
+-            this.waitUntilNextTick();
+-        }
+-
+-        this.saveAllChunks(false, true, false);
+-
+-        for(ServerLevel serverlevel2 : this.getAllLevels()) {
+-            if (serverlevel2 != null) {
+-                try {
+-                    serverlevel2.close();
+-                } catch (IOException ioexception1) {
+-                    LOGGER.error("Exception closing the level", (Throwable)ioexception1);
+-                }
+-            }
+-        }
++        this.saveAllChunks(false, true, false, true); // Paper - rewrite chunk system - move closing into here
+ 
+         this.isSaving = false;
+         this.resources.close();
+@@ -628,6 +_,15 @@
+         } catch (IOException ioexception) {
+             LOGGER.error("Failed to unlock level {}", this.storageSource.getLevelId(), ioexception);
+         }
++
++        // Paper start - move final shutdown items here
++        LOGGER.info("Flushing Chunk IO");
++        // Paper end - move final shutdown items here
++        io.papermc.paper.chunk.system.io.RegionFileIOThread.close(true); // Paper - rewrite chunk system
++        // Paper start - move final shutdown items here
++        LOGGER.info("Closing Thread Pool");
++        Util.shutdownExecutors(); // Paper
++        LOGGER.info("Closing Server");
+     }
+ 
+     public String getLocalIp() {
+@@ -653,17 +_,27 @@
+         }
+     }
+ 
++    public static volatile RuntimeException chunkSystemCrash; // Paper - rewrite chunk system
++
+     protected void runServer() {
+         try {
+             if (!this.initServer()) {
                  throw new IllegalStateException("Failed to initialize server");
              }
  
@@ -60,7 +169,15 @@
 +            resetStatusCache(status);
  
              while(this.running) {
++                // Paper start - rewrite chunk system
++                // guarantee that nothing can stop the server from halting if it can at least still tick
++                if (this.chunkSystemCrash != null) {
++                    throw this.chunkSystemCrash;
++                }
++                // Paper end - rewrite chunk system
                  long i;
+                 if (!this.isPaused() && this.tickRateManager.isSprinting() && this.tickRateManager.checkShouldSprintThisTick()) {
+                     i = 0L;
 @@ -704,6 +_,8 @@
                  this.isReady = true;
                  JvmProfiler.INSTANCE.onServerTick(this.smoothedTickTimeMillis);
@@ -86,6 +203,18 @@
                  this.onServerExit();
              }
          }
+@@ -755,6 +_,11 @@
+     }
+ 
+     private boolean haveTime() {
++        // Paper start
++        if (this.forceTicks) {
++            return true;
++        }
++        // Paper end
+         return this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
+     }
+ 
 @@ -838,12 +_,14 @@
  
      public void tickServer(BooleanSupplier p_129871_) {
@@ -241,6 +370,18 @@
      public void dumpServerProperties(Path p_177911_) throws IOException {
      }
  
+@@ -1711,6 +_,11 @@
+         }
+     }
+ 
++    @Override
++    public boolean isSameThread() {
++        return io.papermc.paper.util.TickThread.isTickThread(); // Paper - rewrite chunk system
++    }
++
+     private void startMetricsRecordingTick() {
+         if (this.willStartRecordingMetrics) {
+             this.metricsRecorder = ActiveMetricsRecorder.createStarted(
 @@ -1777,6 +_,10 @@
  
      public WorldData getWorldData() {

@@ -87,14 +87,48 @@
              p_8664_.rideTick();
              profilerfiller.pop();
  
-@@ -792,6 +_,7 @@
-             } else {
-                 this.entityManager.autoSave();
-             }
-+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Save(this));
-         }
+@@ -774,25 +_,26 @@
+         return !this.server.isUnderSpawnProtection(this, p_8697_, p_8696_) && this.getWorldBorder().isWithinBounds(p_8697_);
      }
  
+-    public void save(@Nullable ProgressListener p_8644_, boolean p_8645_, boolean p_8646_) {
++    public void save(@Nullable ProgressListener progressListener, boolean flush, boolean savingDisabled) {
++        // Paper start - rewrite chunk system - add close param
++        this.save(progressListener, flush, savingDisabled, false);
++    }
++
++    public void save(@Nullable ProgressListener progressListener, boolean flush, boolean savingDisabled, boolean close) {
+         ServerChunkCache serverchunkcache = this.getChunkSource();
+-        if (!p_8646_) {
+-            if (p_8644_ != null) {
+-                p_8644_.progressStartNoAbort(Component.translatable("menu.savingLevel"));
++        if (!savingDisabled) {
++            if (progressListener != null) {
++                progressListener.progressStartNoAbort(Component.translatable("menu.savingLevel"));
+             }
+ 
+             this.saveLevelData();
+-            if (p_8644_ != null) {
+-                p_8644_.progressStage(Component.translatable("menu.savingChunks"));
+-            }
+-
+-            serverchunkcache.save(p_8645_);
+-            if (p_8645_) {
+-                this.entityManager.saveAll();
+-            } else {
+-                this.entityManager.autoSave();
+-            }
+-        }
++            if (progressListener != null) {
++                progressListener.progressStage(Component.translatable("menu.savingChunks"));
++            }
++            if (!close) serverchunkcache.save(flush); // Paper - rewrite chunk system
++            if (close) serverchunkcache.close(true); // Paper - rewrite chunk system
++            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Save(this));
++        } else if (close) { serverchunkcache.close(false); } // Paper - rewrite chunk system
+     }
+ 
+     private void saveLevelData() {
 @@ -885,6 +_,7 @@
      }
  

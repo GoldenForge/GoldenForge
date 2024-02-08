@@ -4,12 +4,12 @@ import org.jetbrains.annotations.NotNull;
 
 public class SneakyThrow {
 
-    public static void sneaky(@NotNull Throwable exception) {
+    public static void sneaky(Throwable exception) {
         SneakyThrow.<RuntimeException>throwSneaky(exception);
     }
 
     @SuppressWarnings("unchecked")
-    private static <T extends Throwable> void throwSneaky(@NotNull Throwable exception) throws T {
+    private static <T extends Throwable> void throwSneaky(Throwable exception) throws T {
         throw (T) exception;
     }
 

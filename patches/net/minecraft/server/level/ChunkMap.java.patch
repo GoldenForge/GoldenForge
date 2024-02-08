@@ -1,73 +1,1197 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
-@@ -414,6 +_,7 @@
-                 this.modified = true;
-             }
+@@ -107,10 +_,10 @@
+     public static final int MIN_VIEW_DISTANCE = 2;
+     public static final int MAX_VIEW_DISTANCE = 32;
+     public static final int FORCED_TICKET_LEVEL = ChunkLevel.byStatus(FullChunkStatus.ENTITY_TICKING);
+-    private final Long2ObjectLinkedOpenHashMap<ChunkHolder> updatingChunkMap = new Long2ObjectLinkedOpenHashMap<>();
+-    private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap = this.updatingChunkMap.clone();
+-    private final Long2ObjectLinkedOpenHashMap<ChunkHolder> pendingUnloads = new Long2ObjectLinkedOpenHashMap<>();
+-    private final LongSet entitiesInLevel = new LongOpenHashSet();
++//    private final Long2ObjectLinkedOpenHashMap<ChunkHolder> updatingChunkMap = new Long2ObjectLinkedOpenHashMap<>();
++//    private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap = this.updatingChunkMap.clone();
++//    private final Long2ObjectLinkedOpenHashMap<ChunkHolder> pendingUnloads = new Long2ObjectLinkedOpenHashMap<>();
++//    private final LongSet entitiesInLevel = new LongOpenHashSet();
+     final ServerLevel level;
+     private final ThreadedLevelLightEngine lightEngine;
+     private final BlockableEventLoop<Runnable> mainThreadExecutor;
+@@ -119,16 +_,16 @@
+     private final ChunkGeneratorStructureState chunkGeneratorState;
+     private final Supplier<DimensionDataStorage> overworldDataStorage;
+     private final PoiManager poiManager;
+-    final LongSet toDrop = new LongOpenHashSet();
++//    final LongSet toDrop = new LongOpenHashSet();
+     private boolean modified;
+-    private final ChunkTaskPriorityQueueSorter queueSorter;
+-    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> worldgenMailbox;
+-    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> mainThreadMailbox;
++//    private final ChunkTaskPriorityQueueSorter queueSorter;
++//    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> worldgenMailbox;
++//    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> mainThreadMailbox;
+     private final ChunkProgressListener progressListener;
+     private final ChunkStatusUpdateListener chunkStatusListener;
+     private final ChunkMap.DistanceManager distanceManager;
+     private final AtomicInteger tickingGenerated = new AtomicInteger();
+-    private final StructureTemplateManager structureTemplateManager;
++//    private final StructureTemplateManager structureTemplateManager;
+     private final String storageName;
+     private final PlayerMap playerMap = new PlayerMap();
+     private final Int2ObjectMap<ChunkMap.TrackedEntity> entityMap = new Int2ObjectOpenHashMap<>();
+@@ -137,6 +_,108 @@
+     private final Queue<Runnable> unloadQueue = Queues.newConcurrentLinkedQueue();
+     private int serverViewDistance;
  
-+            net.neoforged.neoforge.event.EventHooks.fireChunkTicketLevelUpdated(this.level, p_140177_, p_140180_, p_140178_, p_140179_);
-             return p_140179_;
++    // Paper start - distance maps
++    private final com.destroystokyo.paper.util.misc.PooledLinkedHashSets<ServerPlayer> pooledLinkedPlayerHashSets = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets<>();
++    // Paper start - use distance map to optimise tracker
++    public static boolean isLegacyTrackingEntity(Entity entity) {
++        return entity.isLegacyTrackingEntity;
++    }
++
++    // inlined EnumMap, TrackingRange.TrackingRangeType
++    static final org.spigotmc.TrackingRange.TrackingRangeType[] TRACKING_RANGE_TYPES = org.spigotmc.TrackingRange.TrackingRangeType.values();
++    public final com.destroystokyo.paper.util.misc.PlayerAreaMap[] playerEntityTrackerTrackMaps;
++    final int[] entityTrackerTrackRanges;
++    public final int getEntityTrackerRange(final int ordinal) {
++        return this.entityTrackerTrackRanges[ordinal];
++    }
++
++    private int convertSpigotRangeToVanilla(final int vanilla) {
++        return net.minecraft.server.MinecraftServer.getServer().getScaledTrackingDistance(vanilla);
++    }
++    // Paper end - use distance map to optimise tracker
++
++    void addPlayerToDistanceMaps(ServerPlayer player) {
++        int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.getX());
++        int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.getZ());
++        // Note: players need to be explicitly added to distance maps before they can be updated
++        this.nearbyPlayers.addPlayer(player);
++        this.level.playerChunkLoader.addPlayer(player); // Paper - replace chunk loader
++        // Paper start - use distance map to optimise entity tracker
++        for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
++            com.destroystokyo.paper.util.misc.PlayerAreaMap trackMap = this.playerEntityTrackerTrackMaps[i];
++            int trackRange = this.entityTrackerTrackRanges[i];
++
++            trackMap.add(player, chunkX, chunkZ, Math.min(trackRange, io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(player)));
++        }
++        // Paper end - use distance map to optimise entity tracker
++    }
++
++    void removePlayerFromDistanceMaps(ServerPlayer player) {
++        int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.getX());
++        int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.getZ());
++        // Note: players need to be explicitly added to distance maps before they can be updated
++        this.nearbyPlayers.removePlayer(player);
++        this.level.playerChunkLoader.removePlayer(player); // Paper - replace chunk loader
++        // Paper start - use distance map to optimise tracker
++        for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
++            this.playerEntityTrackerTrackMaps[i].remove(player);
++        }
++        // Paper end - use distance map to optimise tracker
++        this.playerMobSpawnMap.remove(player); // Paper - optimise chunk tick iteration
++    }
++
++    void updateMaps(ServerPlayer player) {
++        int chunkX = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.getX());
++        int chunkZ = io.papermc.paper.util.MCUtil.getChunkCoordinate(player.getZ());
++        // Note: players need to be explicitly added to distance maps before they can be updated
++        this.nearbyPlayers.tickPlayer(player);
++        this.level.playerChunkLoader.updatePlayer(player); // Paper - replace chunk loader
++        // Paper start - use distance map to optimise entity tracker
++        for (int i = 0, len = TRACKING_RANGE_TYPES.length; i < len; ++i) {
++            com.destroystokyo.paper.util.misc.PlayerAreaMap trackMap = this.playerEntityTrackerTrackMaps[i];
++            int trackRange = this.entityTrackerTrackRanges[i];
++
++            trackMap.update(player, chunkX, chunkZ, Math.min(trackRange, io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(player)));
++        }
++        // Paper end - use distance map to optimise entity tracker
++    }
++    // Paper end
++    // Paper start
++    public final List<io.papermc.paper.chunk.SingleThreadChunkRegionManager> regionManagers = new java.util.ArrayList<>();
++    public final io.papermc.paper.chunk.SingleThreadChunkRegionManager dataRegionManager;
++
++    public static final class DataRegionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionData {
++    }
++
++    public static final class DataRegionSectionData implements io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSectionData {
++
++        @Override
++        public void removeFromRegion(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section,
++                                     final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region from) {
++            final DataRegionSectionData sectionData = (DataRegionSectionData)section.sectionData;
++            final DataRegionData fromData = (DataRegionData)from.regionData;
++        }
++
++        @Override
++        public void addToRegion(final io.papermc.paper.chunk.SingleThreadChunkRegionManager.RegionSection section,
++                                final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region oldRegion,
++                                final io.papermc.paper.chunk.SingleThreadChunkRegionManager.Region newRegion) {
++            final DataRegionSectionData sectionData = (DataRegionSectionData)section.sectionData;
++            final DataRegionData oldRegionData = oldRegion == null ? null : (DataRegionData)oldRegion.regionData;
++            final DataRegionData newRegionData = (DataRegionData)newRegion.regionData;
++        }
++    }
++
++    public final ChunkHolder getUnloadingChunkHolder(int chunkX, int chunkZ) {
++        return null; // Paper - rewrite chunk system
++    }
++    public final io.papermc.paper.util.player.NearbyPlayers nearbyPlayers;
++    // Paper end
++    // Paper start - optimise chunk tick iteration
++    public final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<ChunkHolder> needsChangeBroadcasting = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
++    public final com.destroystokyo.paper.util.misc.PlayerAreaMap playerMobSpawnMap = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets);
++    // Paper end - optimise chunk tick iteration
++
+     public ChunkMap(
+         ServerLevel p_214836_,
+         LevelStorageSource.LevelStorageAccess p_214837_,
+@@ -153,7 +_,6 @@
+         boolean p_214848_
+     ) {
+         super(p_214837_.getDimensionPath(p_214836_.dimension()).resolve("region"), p_214838_, p_214848_);
+-        this.structureTemplateManager = p_214839_;
+         Path path = p_214837_.getDimensionPath(p_214836_.dimension());
+         this.storageName = path.getFileName().toString();
+         this.level = p_214836_;
+@@ -168,24 +_,70 @@
+ 
+         this.chunkGeneratorState = p_214843_.createState(registryaccess.lookupOrThrow(Registries.STRUCTURE_SET), this.randomState, i);
+         this.mainThreadExecutor = p_214841_;
+-        ProcessorMailbox<Runnable> processormailbox1 = ProcessorMailbox.create(p_214840_, "worldgen");
+-        ProcessorHandle<Runnable> processorhandle = ProcessorHandle.of("main", p_214841_::tell);
+         this.progressListener = p_214844_;
+         this.chunkStatusListener = p_214845_;
+-        ProcessorMailbox<Runnable> processormailbox = ProcessorMailbox.create(p_214840_, "light");
+-        this.queueSorter = new ChunkTaskPriorityQueueSorter(
+-            ImmutableList.of(processormailbox1, processorhandle, processormailbox), p_214840_, Integer.MAX_VALUE
+-        );
+-        this.worldgenMailbox = this.queueSorter.getProcessor(processormailbox1, false);
+-        this.mainThreadMailbox = this.queueSorter.getProcessor(processorhandle, false);
+         this.lightEngine = new ThreadedLevelLightEngine(
+-            p_214842_, this, this.level.dimensionType().hasSkyLight(), processormailbox, this.queueSorter.getProcessor(processormailbox, false)
++            p_214842_, this, this.level.dimensionType().hasSkyLight(), null,null
+         );
+         this.distanceManager = new ChunkMap.DistanceManager(p_214840_, p_214841_);
+         this.overworldDataStorage = p_214846_;
+         this.poiManager = new PoiManager(path.resolve("poi"), p_214838_, p_214848_, registryaccess, p_214836_);
+         this.setServerViewDistance(p_214847_);
+-    }
++        // Paper start
++        this.dataRegionManager = new io.papermc.paper.chunk.SingleThreadChunkRegionManager(this.level, 2, (1.0 / 3.0), 1, 6, "Data", DataRegionData::new, DataRegionSectionData::new);
++        this.regionManagers.add(this.dataRegionManager);
++        this.nearbyPlayers = new io.papermc.paper.util.player.NearbyPlayers(this.level);
++        // Paper end
++        // Paper start - use distance map to optimise entity tracker
++        this.playerEntityTrackerTrackMaps = new com.destroystokyo.paper.util.misc.PlayerAreaMap[TRACKING_RANGE_TYPES.length];
++        this.entityTrackerTrackRanges = new int[TRACKING_RANGE_TYPES.length];
++
++        org.spigotmc.SpigotWorldConfig spigotWorldConfig = this.level.spigotConfig;
++
++        for (int ordinal = 0, len = TRACKING_RANGE_TYPES.length; ordinal < len; ++ordinal) {
++            org.spigotmc.TrackingRange.TrackingRangeType trackingRangeType = TRACKING_RANGE_TYPES[ordinal];
++            int configuredSpigotValue;
++            switch (trackingRangeType) {
++                case PLAYER:
++                    configuredSpigotValue = spigotWorldConfig.playerTrackingRange;
++                    break;
++                case ANIMAL:
++                    configuredSpigotValue = spigotWorldConfig.animalTrackingRange;
++                    break;
++                case MONSTER:
++                    configuredSpigotValue = spigotWorldConfig.monsterTrackingRange;
++                    break;
++                case MISC:
++                    configuredSpigotValue = spigotWorldConfig.miscTrackingRange;
++                    break;
++                case OTHER:
++                    configuredSpigotValue = spigotWorldConfig.otherTrackingRange;
++                    break;
++                case ENDERDRAGON:
++                    configuredSpigotValue = EntityType.ENDER_DRAGON.clientTrackingRange() * 16;
++                    break;
++                case DISPLAY:
++                    configuredSpigotValue = spigotWorldConfig.displayTrackingRange;
++                    break;
++                default:
++                    throw new IllegalStateException("Missing case for enum " + trackingRangeType);
++            }
++            configuredSpigotValue = convertSpigotRangeToVanilla(configuredSpigotValue);
++
++            int trackRange = (configuredSpigotValue >>> 4) + ((configuredSpigotValue & 15) != 0 ? 1 : 0);
++            this.entityTrackerTrackRanges[ordinal] = trackRange;
++
++            this.playerEntityTrackerTrackMaps[ordinal] = new com.destroystokyo.paper.util.misc.PlayerAreaMap(this.pooledLinkedPlayerHashSets);
++        }
++        // Paper end - use distance map to optimise entity tracker
++    }
++
++    // Paper start
++    // always use accessor, so folia can override
++    public final io.papermc.paper.util.player.NearbyPlayers getNearbyPlayers() {
++        return this.nearbyPlayers;
++    }
++    // Paper end
+ 
+     protected ChunkGenerator generator() {
+         return this.generator;
+@@ -214,24 +_,15 @@
+     }
+ 
+     boolean isChunkTracked(ServerPlayer p_295366_, int p_294911_, int p_296247_) {
+-        return p_295366_.getChunkTrackingView().contains(p_294911_, p_296247_)
+-            && !p_295366_.connection.chunkSender.isPending(ChunkPos.asLong(p_294911_, p_296247_));
++        // Paper start - rewrite player chunk loader
++        return this.level.playerChunkLoader.isChunkSent(p_295366_, p_294911_, p_296247_);
++        // Paper end - rewrite player chunk loader
+     }
+ 
+     private boolean isChunkOnTrackedBorder(ServerPlayer p_295596_, int p_294838_, int p_295212_) {
+-        if (!this.isChunkTracked(p_295596_, p_294838_, p_295212_)) {
+-            return false;
+-        } else {
+-            for(int i = -1; i <= 1; ++i) {
+-                for(int j = -1; j <= 1; ++j) {
+-                    if ((i != 0 || j != 0) && !this.isChunkTracked(p_295596_, p_294838_ + i, p_295212_ + j)) {
+-                        return true;
+-                    }
+-                }
+-            }
+-
+-            return false;
+-        }
++        // Paper start - rewrite player chunk loader
++        return this.level.playerChunkLoader.isChunkSent(p_295596_, p_294838_, p_295212_, true);
++        // Paper end - rewrite player chunk loader
+     }
+ 
+     protected ThreadedLevelLightEngine getLightEngine() {
+@@ -240,21 +_,22 @@
+ 
+     @Nullable
+     protected ChunkHolder getUpdatingChunkIfPresent(long p_140175_) {
+-        return this.updatingChunkMap.get(p_140175_);
++        // Paper start - rewrite chunk system
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder holder = this.level.chunkTaskScheduler.chunkHolderManager.getChunkHolder(p_140175_);
++        return holder == null ? null : holder.vanillaChunkHolder;
++        // Paper end - rewrite chunk system
+     }
+ 
+     @Nullable
+     public ChunkHolder getVisibleChunkIfPresent(long p_140328_) {
+-        return this.visibleChunkMap.get(p_140328_);
++        // Paper start - rewrite chunk system
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder holder = this.level.chunkTaskScheduler.chunkHolderManager.getChunkHolder(p_140328_);
++        return holder == null ? null : holder.vanillaChunkHolder;
++        // Paper end - rewrite chunk system
+     }
+ 
+     protected IntSupplier getChunkQueueLevel(long p_140372_) {
+-        return () -> {
+-            ChunkHolder chunkholder = this.getVisibleChunkIfPresent(p_140372_);
+-            return chunkholder == null
+-                ? ChunkTaskPriorityQueue.PRIORITY_LEVEL_COUNT - 1
+-                : Math.min(chunkholder.getQueueLevel(), ChunkTaskPriorityQueue.PRIORITY_LEVEL_COUNT - 1);
+-        };
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     public String getChunkDebugData(ChunkPos p_140205_) {
+@@ -282,74 +_,7 @@
+     private CompletableFuture<Either<List<ChunkAccess>, ChunkHolder.ChunkLoadingFailure>> getChunkRangeFuture(
+         ChunkHolder p_281446_, int p_282030_, IntFunction<ChunkStatus> p_282923_
+     ) {
+-        if (p_282030_ == 0) {
+-            ChunkStatus chunkstatus1 = p_282923_.apply(0);
+-            return p_281446_.getOrScheduleFuture(chunkstatus1, this).thenApply(p_214893_ -> p_214893_.mapLeft(List::of));
+-        } else {
+-            List<CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>>> list = new ArrayList<>();
+-            List<ChunkHolder> list1 = new ArrayList<>();
+-            ChunkPos chunkpos = p_281446_.getPos();
+-            int i = chunkpos.x;
+-            int j = chunkpos.z;
+-
+-            for(int k = -p_282030_; k <= p_282030_; ++k) {
+-                for(int l = -p_282030_; l <= p_282030_; ++l) {
+-                    int i1 = Math.max(Math.abs(l), Math.abs(k));
+-                    final ChunkPos chunkpos1 = new ChunkPos(i + l, j + k);
+-                    long j1 = chunkpos1.toLong();
+-                    ChunkHolder chunkholder = this.getUpdatingChunkIfPresent(j1);
+-                    if (chunkholder == null) {
+-                        return CompletableFuture.completedFuture(Either.right(new ChunkHolder.ChunkLoadingFailure() {
+-                            @Override
+-                            public String toString() {
+-                                return "Unloaded " + chunkpos1;
+-                            }
+-                        }));
+-                    }
+-
+-                    ChunkStatus chunkstatus = p_282923_.apply(i1);
+-                    CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture = chunkholder.getOrScheduleFuture(
+-                        chunkstatus, this
+-                    );
+-                    list1.add(chunkholder);
+-                    list.add(completablefuture);
+-                }
+-            }
+-
+-            CompletableFuture<List<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>>> completablefuture1 = Util.sequence(list);
+-            CompletableFuture<Either<List<ChunkAccess>, ChunkHolder.ChunkLoadingFailure>> completablefuture2 = completablefuture1.thenApply(p_183730_ -> {
+-                List<ChunkAccess> list2 = Lists.newArrayList();
+-                int k1 = 0;
+-
+-                for(final Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure> either : p_183730_) {
+-                    if (either == null) {
+-                        throw this.debugFuturesAndCreateReportedException(new IllegalStateException("At least one of the chunk futures were null"), "n/a");
+-                    }
+-
+-                    Optional<ChunkAccess> optional = either.left();
+-                    if (optional.isEmpty()) {
+-                        final int l1 = k1;
+-                        return Either.right(new ChunkHolder.ChunkLoadingFailure() {
+-                            @Override
+-                            public String toString() {
+-                                return "Unloaded " + new ChunkPos(i + l1 % (p_282030_ * 2 + 1), j + l1 / (p_282030_ * 2 + 1)) + " " + either.right().get();
+-                            }
+-                        });
+-                    }
+-
+-                    list2.add(optional.get());
+-                    ++k1;
+-                }
+-
+-                return Either.left(list2);
+-            });
+-
+-            for(ChunkHolder chunkholder1 : list1) {
+-                chunkholder1.addSaveDependency("getChunkRangeFuture " + chunkpos + " " + p_282030_, completablefuture2);
+-            }
+-
+-            return completablefuture2;
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     public ReportedException debugFuturesAndCreateReportedException(IllegalStateException p_203752_, String p_203753_) {
+@@ -370,9 +_,9 @@
+                     }
+                 );
+         stringbuilder.append("Updating:").append(System.lineSeparator());
+-        this.updatingChunkMap.values().forEach(consumer);
++        io.papermc.paper.chunk.system.ChunkSystem.getUpdatingChunkHolders(this.level).forEach(consumer); // Paper
+         stringbuilder.append("Visible:").append(System.lineSeparator());
+-        this.visibleChunkMap.values().forEach(consumer);
++        io.papermc.paper.chunk.system.ChunkSystem.getVisibleChunkHolders(this.level).forEach(consumer); // Paper
+         CrashReport crashreport = CrashReport.forThrowable(p_203752_, "Chunk loading");
+         CrashReportCategory crashreportcategory = crashreport.addCategory("Chunk loading");
+         crashreportcategory.setDetail("Details", p_203753_);
+@@ -381,85 +_,27 @@
+     }
+ 
+     public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> prepareEntityTickingChunk(ChunkHolder p_281455_) {
+-        return this.getChunkRangeFuture(p_281455_, 2, p_203078_ -> ChunkStatus.FULL)
+-            .thenApplyAsync(p_212878_ -> p_212878_.mapLeft(p_214939_ -> (LevelChunk)p_214939_.get(p_214939_.size() / 2)), this.mainThreadExecutor);
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     @Nullable
+     ChunkHolder updateChunkScheduling(long p_140177_, int p_140178_, @Nullable ChunkHolder p_140179_, int p_140180_) {
+-        if (!ChunkLevel.isLoaded(p_140180_) && !ChunkLevel.isLoaded(p_140178_)) {
+-            return p_140179_;
+-        } else {
+-            if (p_140179_ != null) {
+-                p_140179_.setTicketLevel(p_140178_);
+-            }
+-
+-            if (p_140179_ != null) {
+-                if (!ChunkLevel.isLoaded(p_140178_)) {
+-                    this.toDrop.add(p_140177_);
+-                } else {
+-                    this.toDrop.remove(p_140177_);
+-                }
+-            }
+-
+-            if (ChunkLevel.isLoaded(p_140178_) && p_140179_ == null) {
+-                p_140179_ = this.pendingUnloads.remove(p_140177_);
+-                if (p_140179_ != null) {
+-                    p_140179_.setTicketLevel(p_140178_);
+-                } else {
+-                    p_140179_ = new ChunkHolder(new ChunkPos(p_140177_), p_140178_, this.level, this.lightEngine, this.queueSorter, this);
+-                }
+-
+-                this.updatingChunkMap.put(p_140177_, p_140179_);
+-                this.modified = true;
+-            }
+-
+-            return p_140179_;
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     @Override
+     public void close() throws IOException {
+-        try {
+-            this.queueSorter.close();
+-            this.poiManager.close();
+-        } finally {
+-            super.close();
+-        }
+-    }
++        throw new UnsupportedOperationException("Use ServerChunkCache#close"); // Paper - rewrite chunk system
++    }
++
++    // Paper start - rewrite chunk system
++    protected void saveIncrementally() {
++        this.level.chunkTaskScheduler.chunkHolderManager.autoSave(); // Paper - rewrite chunk system
++    }
++    // Paper end - - rewrite chunk system
+ 
+     protected void saveAllChunks(boolean p_140319_) {
+-        if (p_140319_) {
+-            List<ChunkHolder> list = this.visibleChunkMap
+-                .values()
+-                .stream()
+-                .filter(ChunkHolder::wasAccessibleSinceLastSave)
+-                .peek(ChunkHolder::refreshAccessibility)
+-                .toList();
+-            MutableBoolean mutableboolean = new MutableBoolean();
+-
+-            do {
+-                mutableboolean.setFalse();
+-                list.stream()
+-                    .map(p_203102_ -> {
+-                        CompletableFuture<ChunkAccess> completablefuture;
+-                        do {
+-                            completablefuture = p_203102_.getChunkToSave();
+-                            this.mainThreadExecutor.managedBlock(completablefuture::isDone);
+-                        } while(completablefuture != p_203102_.getChunkToSave());
+-    
+-                        return completablefuture.join();
+-                    })
+-                    .filter(p_203088_ -> p_203088_ instanceof ImposterProtoChunk || p_203088_ instanceof LevelChunk)
+-                    .filter(this::save)
+-                    .forEach(p_203051_ -> mutableboolean.setTrue());
+-            } while(mutableboolean.isTrue());
+-
+-            this.processUnloads(() -> true);
+-            this.flushWorker();
+-        } else {
+-            this.visibleChunkMap.values().forEach(this::saveChunkIfNeeded);
+-        }
++        this.level.chunkTaskScheduler.chunkHolderManager.saveAllChunks(flush, false, false); // Paper - rewrite chunk system
+     }
+ 
+     protected void tick(BooleanSupplier p_140281_) {
+@@ -475,131 +_,27 @@
+     }
+ 
+     public boolean hasWork() {
+-        return this.lightEngine.hasLightWork()
+-            || !this.pendingUnloads.isEmpty()
+-            || !this.updatingChunkMap.isEmpty()
+-            || this.poiManager.hasWork()
+-            || !this.toDrop.isEmpty()
+-            || !this.unloadQueue.isEmpty()
+-            || this.queueSorter.hasWork()
+-            || this.distanceManager.hasTickets();
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private void processUnloads(BooleanSupplier p_140354_) {
+-        LongIterator longiterator = this.toDrop.iterator();
+-
+-        long j;
+-        for(int i = 0; longiterator.hasNext() && (p_140354_.getAsBoolean() || i < 200 || this.toDrop.size() > 2000); longiterator.remove()) {
+-            j = longiterator.nextLong();
+-            ChunkHolder chunkholder = this.updatingChunkMap.remove(j);
+-            if (chunkholder != null) {
+-                this.pendingUnloads.put(j, chunkholder);
+-                this.modified = true;
+-                ++i;
+-                this.scheduleUnload(j, chunkholder);
+-            }
+-        }
+-
+-        int k = Math.max(0, this.unloadQueue.size() - 2000);
+-
+-        Runnable runnable;
+-        while((p_140354_.getAsBoolean() || k > 0) && (runnable = this.unloadQueue.poll()) != null) {
+-            --k;
+-            runnable.run();
+-        }
+-
+-        int l = 0;
+-        ObjectIterator<ChunkHolder> objectiterator = this.visibleChunkMap.values().iterator();
+-
+-        while(l < 20 && p_140354_.getAsBoolean() && objectiterator.hasNext()) {
+-            if (this.saveChunkIfNeeded(objectiterator.next())) {
+-                ++l;
+-            }
+-        }
++        this.level.chunkTaskScheduler.chunkHolderManager.processUnloads(); // Paper - rewrite chunk system
+     }
+ 
+     private void scheduleUnload(long p_140182_, ChunkHolder p_140183_) {
+-        CompletableFuture<ChunkAccess> completablefuture = p_140183_.getChunkToSave();
+-        completablefuture.thenAcceptAsync(p_203002_ -> {
+-            CompletableFuture<ChunkAccess> completablefuture1 = p_140183_.getChunkToSave();
+-            if (completablefuture1 != completablefuture) {
+-                this.scheduleUnload(p_140182_, p_140183_);
+-            } else {
+-                if (this.pendingUnloads.remove(p_140182_, p_140183_) && p_203002_ != null) {
+-                    if (p_203002_ instanceof LevelChunk) {
+-                        ((LevelChunk)p_203002_).setLoaded(false);
+-                    }
+-
+-                    this.save(p_203002_);
+-                    if (this.entitiesInLevel.remove(p_140182_) && p_203002_ instanceof LevelChunk levelchunk) {
+-                        this.level.unload(levelchunk);
+-                    }
+-
+-                    this.lightEngine.updateChunkStatus(p_203002_.getPos());
+-                    this.lightEngine.tryScheduleUpdate();
+-                    this.progressListener.onStatusChange(p_203002_.getPos(), null);
+-                    this.chunkSaveCooldowns.remove(p_203002_.getPos().toLong());
+-                }
+-            }
+-        }, this.unloadQueue::add).whenComplete((p_202996_, p_202997_) -> {
+-            if (p_202997_ != null) {
+-                LOGGER.error("Failed to save chunk {}", p_140183_.getPos(), p_202997_);
+-            }
+-        });
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     protected boolean promoteChunkMap() {
+-        if (!this.modified) {
+-            return false;
+-        } else {
+-            this.visibleChunkMap = this.updatingChunkMap.clone();
+-            this.modified = false;
+-            return true;
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> schedule(ChunkHolder p_140293_, ChunkStatus p_140294_) {
+-        ChunkPos chunkpos = p_140293_.getPos();
+-        if (p_140294_ == ChunkStatus.EMPTY) {
+-            return this.scheduleChunkLoad(chunkpos);
+-        } else {
+-            if (p_140294_ == ChunkStatus.LIGHT) {
+-                this.distanceManager.addTicket(TicketType.LIGHT, chunkpos, ChunkLevel.byStatus(ChunkStatus.LIGHT), chunkpos);
+-            }
+-
+-            if (!p_140294_.hasLoadDependencies()) {
+-                Optional<ChunkAccess> optional = p_140293_.getOrScheduleFuture(p_140294_.getParent(), this).getNow(ChunkHolder.UNLOADED_CHUNK).left();
+-                if (optional.isPresent() && optional.get().getStatus().isOrAfter(p_140294_)) {
+-                    CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture = p_140294_.load(
+-                        this.level, this.structureTemplateManager, this.lightEngine, p_203081_ -> this.protoChunkToFullChunk(p_140293_), optional.get()
+-                    );
+-                    this.progressListener.onStatusChange(chunkpos, p_140294_);
+-                    return completablefuture;
+-                }
+-            }
+-
+-            return this.scheduleChunkGeneration(p_140293_, p_140294_);
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> scheduleChunkLoad(ChunkPos p_140418_) {
+-        return this.readChunk(p_140418_).thenApply(p_214925_ -> p_214925_.filter(p_214928_ -> {
+-                boolean flag = isChunkDataValid(p_214928_);
+-                if (!flag) {
+-                    LOGGER.error("Chunk file at {} is missing level data, skipping", p_140418_);
+-                }
+-
+-                return flag;
+-            })).<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>>thenApplyAsync(p_313584_ -> {
+-            this.level.getProfiler().incrementCounter("chunkLoad");
+-            if (p_313584_.isPresent()) {
+-                ChunkAccess chunkaccess = ChunkSerializer.read(this.level, this.poiManager, p_140418_, p_313584_.get());
+-                this.markPosition(p_140418_, chunkaccess.getStatus().getChunkType());
+-                return Either.left(chunkaccess);
+-            } else {
+-                return Either.left(this.createEmptyChunk(p_140418_));
+-            }
+-        }, this.mainThreadExecutor).exceptionallyAsync(p_214888_ -> this.handleChunkLoadFailure(p_214888_, p_140418_), this.mainThreadExecutor);
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private static boolean isChunkDataValid(CompoundTag p_214941_) {
+@@ -636,60 +_,7 @@
+     }
+ 
+     private CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> scheduleChunkGeneration(ChunkHolder p_140361_, ChunkStatus p_140362_) {
+-        ChunkPos chunkpos = p_140361_.getPos();
+-        CompletableFuture<Either<List<ChunkAccess>, ChunkHolder.ChunkLoadingFailure>> completablefuture = this.getChunkRangeFuture(
+-            p_140361_, p_140362_.getRange(), p_214935_ -> this.getDependencyStatus(p_140362_, p_214935_)
+-        );
+-        this.level.getProfiler().incrementCounter(() -> "chunkGenerate " + p_140362_);
+-        Executor executor = p_214958_ -> this.worldgenMailbox.tell(ChunkTaskPriorityQueueSorter.message(p_140361_, p_214958_));
+-        return completablefuture.thenComposeAsync(
+-            p_214873_ -> p_214873_.map(
+-                    p_280971_ -> {
+-                        try {
+-                            ChunkAccess chunkaccess = p_280971_.get(p_280971_.size() / 2);
+-                            CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture1;
+-                            if (chunkaccess.getStatus().isOrAfter(p_140362_)) {
+-                                completablefuture1 = p_140362_.load(
+-                                    this.level,
+-                                    this.structureTemplateManager,
+-                                    this.lightEngine,
+-                                    p_214919_ -> this.protoChunkToFullChunk(p_140361_),
+-                                    chunkaccess
+-                                );
+-                            } else {
+-                                completablefuture1 = p_140362_.generate(
+-                                    executor,
+-                                    this.level,
+-                                    this.generator,
+-                                    this.structureTemplateManager,
+-                                    this.lightEngine,
+-                                    p_280966_ -> this.protoChunkToFullChunk(p_140361_),
+-                                    p_280971_
+-                                );
+-                            }
+-        
+-                            this.progressListener.onStatusChange(chunkpos, p_140362_);
+-                            return completablefuture1;
+-                        } catch (Exception exception) {
+-                            exception.getStackTrace();
+-                            CrashReport crashreport = CrashReport.forThrowable(exception, "Exception generating new chunk");
+-                            CrashReportCategory crashreportcategory = crashreport.addCategory("Chunk to be generated");
+-                            crashreportcategory.setDetail("Location", String.format(Locale.ROOT, "%d,%d", chunkpos.x, chunkpos.z));
+-                            crashreportcategory.setDetail("Position hash", ChunkPos.asLong(chunkpos.x, chunkpos.z));
+-                            crashreportcategory.setDetail("Generator", this.generator);
+-                            this.mainThreadExecutor.execute(() -> {
+-                                throw new ReportedException(crashreport);
+-                            });
+-                            throw new ReportedException(crashreport);
+-                        }
+-                    },
+-                    p_214867_ -> {
+-                        this.releaseLightTicket(chunkpos);
+-                        return CompletableFuture.completedFuture(Either.right(p_214867_));
+-                    }
+-                ),
+-            executor
+-        );
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     protected void releaseLightTicket(ChunkPos p_140376_) {
+@@ -702,7 +_,7 @@
+             );
+     }
+ 
+-    private ChunkStatus getDependencyStatus(ChunkStatus p_140263_, int p_140264_) {
++    public static ChunkStatus getDependencyStatus(ChunkStatus p_140263_, int p_140264_) { // Paper -> public, static
+         ChunkStatus chunkstatus;
+         if (p_140264_ == 0) {
+             chunkstatus = p_140263_.getParent();
+@@ -713,7 +_,7 @@
+         return chunkstatus;
+     }
+ 
+-    private static void postLoadProtoChunk(ServerLevel p_143065_, List<CompoundTag> p_143066_) {
++    public static void postLoadProtoChunk(ServerLevel p_143065_, List<CompoundTag> p_143066_, ChunkPos position) { // Paper - public and add chunk position parameter
+         if (!p_143066_.isEmpty()) {
+             p_143065_.addWorldGenChunkEntities(EntityType.loadEntitiesRecursive(p_143066_, p_143065_));
+         }
+@@ -723,73 +_,19 @@
+         CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completablefuture = p_140384_.getFutureIfPresentUnchecked(
+             ChunkStatus.FULL.getParent()
+         );
+-        return completablefuture.thenApplyAsync(p_287363_ -> {
+-            ChunkStatus chunkstatus = ChunkLevel.generationStatus(p_140384_.getTicketLevel());
+-            return !chunkstatus.isOrAfter(ChunkStatus.FULL) ? ChunkHolder.UNLOADED_CHUNK : p_287363_.mapLeft(p_214856_ -> {
+-                ChunkPos chunkpos = p_140384_.getPos();
+-                ProtoChunk protochunk = (ProtoChunk)p_214856_;
+-                LevelChunk levelchunk;
+-                if (protochunk instanceof ImposterProtoChunk) {
+-                    levelchunk = ((ImposterProtoChunk)protochunk).getWrapped();
+-                } else {
+-                    levelchunk = new LevelChunk(this.level, protochunk, p_214900_ -> postLoadProtoChunk(this.level, protochunk.getEntities()));
+-                    p_140384_.replaceProtoChunk(new ImposterProtoChunk(levelchunk, false));
+-                }
+-
+-                levelchunk.setFullStatus(() -> ChunkLevel.fullStatus(p_140384_.getTicketLevel()));
+-                levelchunk.runPostLoad();
+-                if (this.entitiesInLevel.add(chunkpos.toLong())) {
+-                    levelchunk.setLoaded(true);
+-                    levelchunk.registerAllBlockEntitiesAfterLevelLoad();
+-                    levelchunk.registerTickContainerInLevel(this.level);
+-                }
+-
+-                return levelchunk;
+-            });
+-        }, p_214951_ -> this.mainThreadMailbox.tell(ChunkTaskPriorityQueueSorter.message(p_214951_, p_140384_.getPos().toLong(), p_140384_::getTicketLevel)));
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> prepareTickingChunk(ChunkHolder p_143054_) {
+-        CompletableFuture<Either<List<ChunkAccess>, ChunkHolder.ChunkLoadingFailure>> completablefuture = this.getChunkRangeFuture(
+-            p_143054_, 1, p_214916_ -> ChunkStatus.FULL
+-        );
+-        CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> completablefuture1 = completablefuture.<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>>thenApplyAsync(
+-                p_280964_ -> p_280964_.mapLeft(p_293806_ -> (LevelChunk)p_293806_.get(p_293806_.size() / 2)),
+-                p_214944_ -> this.mainThreadMailbox.tell(ChunkTaskPriorityQueueSorter.message(p_143054_, p_214944_))
+-            )
+-            .thenApplyAsync(p_300772_ -> p_300772_.ifLeft(p_300770_ -> {
+-                    p_300770_.postProcessGeneration();
+-                    this.level.startTickingChunk(p_300770_);
+-                    CompletableFuture<?> completablefuture2 = p_143054_.getChunkSendSyncFuture();
+-                    if (completablefuture2.isDone()) {
+-                        this.onChunkReadyToSend(p_300770_);
+-                    } else {
+-                        completablefuture2.thenAcceptAsync(p_300774_ -> this.onChunkReadyToSend(p_300770_), this.mainThreadExecutor);
+-                    }
+-                }), this.mainThreadExecutor);
+-        completablefuture1.handle((p_287364_, p_287365_) -> {
+-            this.tickingGenerated.getAndIncrement();
+-            return null;
+-        });
+-        return completablefuture1;
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private void onChunkReadyToSend(LevelChunk p_296003_) {
+-        ChunkPos chunkpos = p_296003_.getPos();
+-
+-        for(ServerPlayer serverplayer : this.playerMap.getAllPlayers()) {
+-            if (serverplayer.getChunkTrackingView().contains(chunkpos)) {
+-                markChunkPendingToSend(serverplayer, p_296003_);
+-            }
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> prepareAccessibleChunk(ChunkHolder p_143110_) {
+-        return this.getChunkRangeFuture(p_143110_, 1, ChunkStatus::getStatusAroundFullChunk)
+-            .thenApplyAsync(
+-                p_203086_ -> p_203086_.mapLeft(p_203092_ -> (LevelChunk)p_203092_.get(p_203092_.size() / 2)),
+-                p_214859_ -> this.mainThreadMailbox.tell(ChunkTaskPriorityQueueSorter.message(p_143110_, p_214859_))
+-            );
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     public int getTickingGenerated() {
+@@ -797,115 +_,51 @@
+     }
+ 
+     private boolean saveChunkIfNeeded(ChunkHolder p_198875_) {
+-        if (!p_198875_.wasAccessibleSinceLastSave()) {
+-            return false;
+-        } else {
+-            ChunkAccess chunkaccess = p_198875_.getChunkToSave().getNow(null);
+-            if (!(chunkaccess instanceof ImposterProtoChunk) && !(chunkaccess instanceof LevelChunk)) {
+-                return false;
+-            } else {
+-                long i = chunkaccess.getPos().toLong();
+-                long j = this.chunkSaveCooldowns.getOrDefault(i, -1L);
+-                long k = System.currentTimeMillis();
+-                if (k < j) {
+-                    return false;
+-                } else {
+-                    boolean flag = this.save(chunkaccess);
+-                    p_198875_.refreshAccessibility();
+-                    if (flag) {
+-                        this.chunkSaveCooldowns.put(i, k + 10000L);
+-                    }
+-
+-                    return flag;
+-                }
+-            }
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private boolean save(ChunkAccess p_140259_) {
+-        this.poiManager.flush(p_140259_.getPos());
+-        if (!p_140259_.isUnsaved()) {
+-            return false;
+-        } else {
+-            p_140259_.setUnsaved(false);
+-            ChunkPos chunkpos = p_140259_.getPos();
+-
+-            try {
+-                ChunkStatus chunkstatus = p_140259_.getStatus();
+-                if (chunkstatus.getChunkType() != ChunkStatus.ChunkType.LEVELCHUNK) {
+-                    if (this.isExistingChunkFull(chunkpos)) {
+-                        return false;
+-                    }
+-
+-                    if (chunkstatus == ChunkStatus.EMPTY && p_140259_.getAllStarts().values().stream().noneMatch(StructureStart::isValid)) {
+-                        return false;
+-                    }
+-                }
+-
+-                this.level.getProfiler().incrementCounter("chunkSave");
+-                CompoundTag compoundtag = ChunkSerializer.write(this.level, p_140259_);
+-                this.write(chunkpos, compoundtag);
+-                this.markPosition(chunkpos, chunkstatus.getChunkType());
+-                return true;
+-            } catch (Exception exception) {
+-                LOGGER.error("Failed to save chunk {},{}", chunkpos.x, chunkpos.z, exception);
+-                return false;
+-            }
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private boolean isExistingChunkFull(ChunkPos p_140426_) {
+-        byte b0 = this.chunkTypeCache.get(p_140426_.toLong());
+-        if (b0 != 0) {
+-            return b0 == 1;
+-        } else {
+-            CompoundTag compoundtag;
+-            try {
+-                compoundtag = this.readChunk(p_140426_).join().orElse(null);
+-                if (compoundtag == null) {
+-                    this.markPositionReplaceable(p_140426_);
+-                    return false;
+-                }
+-            } catch (Exception exception) {
+-                LOGGER.error("Failed to read chunk {}", p_140426_, exception);
+-                this.markPositionReplaceable(p_140426_);
+-                return false;
+-            }
+-
+-            ChunkStatus.ChunkType chunkstatus$chunktype = ChunkSerializer.getChunkTypeFromTag(compoundtag);
+-            return this.markPosition(p_140426_, chunkstatus$chunktype) == 1;
+-        }
+-    }
+-
+-    protected void setServerViewDistance(int p_295758_) {
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++    }
++
++    // Paper start - replace player loader system
++    public void setTickViewDistance(int distance) {
++        this.level.playerChunkLoader.setTickDistance(distance);
++    }
++
++    public void setSendViewDistance(int distance) {
++        this.level.playerChunkLoader.setSendDistance(distance);
++    }
++    // Paper end - replace player loader system
++
++    public void setServerViewDistance(int p_295758_) { // Paper - public
+         int i = Mth.clamp(p_295758_, 2, 32);
+         if (i != this.serverViewDistance) {
+             this.serverViewDistance = i;
+-            this.distanceManager.updatePlayerTickets(this.serverViewDistance);
+-
+-            for(ServerPlayer serverplayer : this.playerMap.getAllPlayers()) {
+-                this.updateChunkTracking(serverplayer);
+-            }
++            this.level.playerChunkLoader.setLoadDistance(this.serverViewDistance + 1); // Paper - replace player loader system
          }
      }
-@@ -528,6 +_,7 @@
-                 if (this.pendingUnloads.remove(p_140182_, p_140183_) && p_203002_ != null) {
-                     if (p_203002_ instanceof LevelChunk) {
-                         ((LevelChunk)p_203002_).setLoaded(false);
-+                        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.ChunkEvent.Unload(p_203002_));
-                     }
  
-                     this.save(p_203002_);
-@@ -737,11 +_,22 @@
-                 }
+-    int getPlayerViewDistance(ServerPlayer p_295024_) {
+-        return Mth.clamp(p_295024_.requestedViewDistance(), 2, this.serverViewDistance);
++    public int getPlayerViewDistance(ServerPlayer p_295024_) {
++        return io.papermc.paper.chunk.system.ChunkSystem.getSendViewDistance(p_295024_); // Paper - per player view distance
+     }
  
-                 levelchunk.setFullStatus(() -> ChunkLevel.fullStatus(p_140384_.getTicketLevel()));
-+                try {
-+                p_140384_.currentlyLoading = levelchunk; // Neo: bypass the future chain when getChunk is called, this prevents deadlocks.
-                 levelchunk.runPostLoad();
-+                } finally {
-+                p_140384_.currentlyLoading = null; // Neo: Stop bypassing the future chain.
-+                }
-                 if (this.entitiesInLevel.add(chunkpos.toLong())) {
-                     levelchunk.setLoaded(true);
-+                    try {
-+                    p_140384_.currentlyLoading = levelchunk; // Neo: bypass the future chain when getChunk is called, this prevents deadlocks.
-                     levelchunk.registerAllBlockEntitiesAfterLevelLoad();
-                     levelchunk.registerTickContainerInLevel(this.level);
-+                    net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.ChunkEvent.Load(levelchunk, !(protochunk instanceof ImposterProtoChunk)));
-+                    } finally {
-+                         p_140384_.currentlyLoading = null; // Neo: Stop bypassing the future chain.
-+                    }
-                 }
- 
-                 return levelchunk;
-@@ -844,6 +_,7 @@
- 
-                 this.level.getProfiler().incrementCounter("chunkSave");
-                 CompoundTag compoundtag = ChunkSerializer.write(this.level, p_140259_);
-+                net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.ChunkDataEvent.Save(p_140259_, p_140259_.getWorldForge() != null ? p_140259_.getWorldForge() : this.level, compoundtag));
-                 this.write(chunkpos, compoundtag);
-                 this.markPosition(chunkpos, chunkstatus.getChunkType());
-                 return true;
-@@ -902,9 +_,11 @@
+     private void markChunkPendingToSend(ServerPlayer p_294638_, ChunkPos p_296183_) {
+-        LevelChunk levelchunk = this.getChunkToSend(p_296183_.toLong());
+-        if (levelchunk != null) {
+-            markChunkPendingToSend(p_294638_, levelchunk);
+-        }
++        throw new UnsupportedOperationException(); // Paper - per player view distance
+     }
  
      private static void markChunkPendingToSend(ServerPlayer p_295834_, LevelChunk p_296281_) {
-         p_295834_.connection.chunkSender.markChunkPendingToSend(p_296281_);
+-        p_295834_.connection.chunkSender.markChunkPendingToSend(p_296281_);
++        throw new UnsupportedOperationException(); // Paper - per player view distance
 +        net.neoforged.neoforge.event.EventHooks.fireChunkWatch(p_295834_, p_296281_, p_295834_.serverLevel());
      }
  
      private static void dropChunk(ServerPlayer p_294215_, ChunkPos p_294758_) {
+-        p_294215_.connection.chunkSender.dropChunk(p_294215_, p_294758_);
++        throw new UnsupportedOperationException(); // Paper - per player view distance
 +        net.neoforged.neoforge.event.EventHooks.fireChunkUnWatch(p_294215_, p_294758_, p_294215_.serverLevel());
-         p_294215_.connection.chunkSender.dropChunk(p_294215_, p_294758_);
      }
  
-@@ -1099,6 +_,7 @@
+     @Nullable
+@@ -915,7 +_,7 @@
+     }
+ 
+     public int size() {
+-        return this.visibleChunkMap.size();
++        return io.papermc.paper.chunk.system.ChunkSystem.getVisibleChunkHolderCount(this.level); // Paper
+     }
+ 
+     public net.minecraft.server.level.DistanceManager getDistanceManager() {
+@@ -923,57 +_,11 @@
+     }
+ 
+     protected Iterable<ChunkHolder> getChunks() {
+-        return Iterables.unmodifiableIterable(this.visibleChunkMap.values());
++        return Iterables.unmodifiableIterable(io.papermc.paper.chunk.system.ChunkSystem.getVisibleChunkHolders(this.level)); // Paper
+     }
+ 
+     void dumpChunks(Writer p_140275_) throws IOException {
+-        CsvOutput csvoutput = CsvOutput.builder()
+-            .addColumn("x")
+-            .addColumn("z")
+-            .addColumn("level")
+-            .addColumn("in_memory")
+-            .addColumn("status")
+-            .addColumn("full_status")
+-            .addColumn("accessible_ready")
+-            .addColumn("ticking_ready")
+-            .addColumn("entity_ticking_ready")
+-            .addColumn("ticket")
+-            .addColumn("spawning")
+-            .addColumn("block_entity_count")
+-            .addColumn("ticking_ticket")
+-            .addColumn("ticking_level")
+-            .addColumn("block_ticks")
+-            .addColumn("fluid_ticks")
+-            .build(p_140275_);
+-        TickingTracker tickingtracker = this.distanceManager.tickingTracker();
+-
+-        for(Entry<ChunkHolder> entry : this.visibleChunkMap.long2ObjectEntrySet()) {
+-            long i = entry.getLongKey();
+-            ChunkPos chunkpos = new ChunkPos(i);
+-            ChunkHolder chunkholder = entry.getValue();
+-            Optional<ChunkAccess> optional = Optional.ofNullable(chunkholder.getLastAvailable());
+-            Optional<LevelChunk> optional1 = optional.flatMap(
+-                p_214932_ -> p_214932_ instanceof LevelChunk ? Optional.of((LevelChunk)p_214932_) : Optional.empty()
+-            );
+-            csvoutput.writeRow(
+-                chunkpos.x,
+-                chunkpos.z,
+-                chunkholder.getTicketLevel(),
+-                optional.isPresent(),
+-                optional.map(ChunkAccess::getStatus).orElse(null),
+-                optional1.map(LevelChunk::getFullStatus).orElse(null),
+-                printFuture(chunkholder.getFullChunkFuture()),
+-                printFuture(chunkholder.getTickingChunkFuture()),
+-                printFuture(chunkholder.getEntityTickingChunkFuture()),
+-                this.distanceManager.getTicketDebugString(i),
+-                this.anyPlayerCloseEnoughForSpawning(chunkpos),
+-                optional1.<Integer>map(p_214953_ -> p_214953_.getBlockEntities().size()).orElse(0),
+-                tickingtracker.getTicketDebugString(i),
+-                tickingtracker.getLevel(i),
+-                optional1.<Integer>map(p_214946_ -> p_214946_.getBlockTicks().count()).orElse(0),
+-                optional1.<Integer>map(p_214937_ -> p_214937_.getFluidTicks().count()).orElse(0)
+-            );
+-        }
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
+     private static String printFuture(CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> p_140279_) {
+@@ -987,14 +_,103 @@
+         }
+     }
+ 
++    // Paper start - Asynchronous chunk io
++    @Nullable
++    @Override
++    public CompoundTag readSync(ChunkPos chunkcoordintpair) throws IOException {
++        // Paper start - rewrite chunk system
++        if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
++            return io.papermc.paper.chunk.system.io.RegionFileIOThread.loadData(
++                    this.level, chunkcoordintpair.x, chunkcoordintpair.z, io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.CHUNK_DATA,
++                    io.papermc.paper.chunk.system.io.RegionFileIOThread.getIOBlockingPriorityForCurrentThread()
++            );
++        }
++        // Paper end - rewrite chunk system
++        return super.readSync(chunkcoordintpair);
++    }
++
++    @Override
++    public void write(ChunkPos chunkcoordintpair, CompoundTag nbttagcompound) throws IOException {
++        // Paper start - rewrite chunk system
++        if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
++            io.papermc.paper.chunk.system.io.RegionFileIOThread.scheduleSave(
++                    this.level, chunkcoordintpair.x, chunkcoordintpair.z, nbttagcompound,
++                    io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.CHUNK_DATA);
++            return;
++        }
++        // Paper end - rewrite chunk system
++        super.write(chunkcoordintpair, nbttagcompound);
++    }
++    // Paper end
++
+     private CompletableFuture<Optional<CompoundTag>> readChunk(ChunkPos p_214964_) {
+-        return this.read(p_214964_).thenApplyAsync(p_214907_ -> p_214907_.map(this::upgradeChunkTag), Util.backgroundExecutor());
++        // Paper start - Cache chunk status on disk
++        try {
++            return CompletableFuture.completedFuture(Optional.ofNullable(this.readConvertChunkSync(p_214964_)));
++        } catch (Throwable thr) {
++            return CompletableFuture.failedFuture(thr);
++        }
++        // Paper end - Cache chunk status on disk
+     }
+ 
+     private CompoundTag upgradeChunkTag(CompoundTag p_214948_) {
+         return this.upgradeChunkTag(this.level.dimension(), this.overworldDataStorage, p_214948_, this.generator.getTypeNameForDataFixer());
+     }
+ 
++    // Paper start - Cache chunk status on disk
++    @Nullable
++    public CompoundTag readConvertChunkSync(ChunkPos pos) throws IOException {
++        CompoundTag nbttagcompound = this.readSync(pos);
++        if (nbttagcompound == null) {
++            return null;
++        }
++
++        nbttagcompound = this.upgradeChunkTag(nbttagcompound, pos); // CraftBukkit
++        if (nbttagcompound == null) {
++            return null;
++        }
++
++        this.updateChunkStatusOnDisk(pos, nbttagcompound);
++
++        return nbttagcompound;
++    }
++
++    public ChunkStatus getChunkStatusOnDiskIfCached(ChunkPos chunkPos) {
++        net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFileIfLoaded(chunkPos);
++
++        return regionFile == null ? null : regionFile.getStatusIfCached(chunkPos.x, chunkPos.z);
++    }
++
++    public ChunkStatus getChunkStatusOnDisk(ChunkPos chunkPos) throws IOException {
++        net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFile(chunkPos, true);
++
++        if (regionFile == null || !regionFileCache.chunkExists(chunkPos)) {
++            return null;
++        }
++
++        ChunkStatus status = regionFile.getStatusIfCached(chunkPos.x, chunkPos.z);
++
++        if (status != null) {
++            return status;
++        }
++
++        this.readChunk(chunkPos);
++
++        return regionFile.getStatusIfCached(chunkPos.x, chunkPos.z);
++    }
++
++    public void updateChunkStatusOnDisk(ChunkPos chunkPos, @Nullable CompoundTag compound) throws IOException {
++        net.minecraft.world.level.chunk.storage.RegionFile regionFile = regionFileCache.getRegionFile(chunkPos, false);
++
++        regionFile.setStatus(chunkPos.x, chunkPos.z, ChunkSerializer.getStatus(compound));
++    }
++
++    public ChunkAccess getUnloadingChunk(int chunkX, int chunkZ) {
++        ChunkHolder chunkHolder = io.papermc.paper.chunk.system.ChunkSystem.getUnloadingChunkHolder(this.level, chunkX, chunkZ);
++        return chunkHolder == null ? null : chunkHolder.getAvailableChunkNow();
++    }
++    // Paper end - Cache chunk status on disk
++
+     boolean anyPlayerCloseEnoughForSpawning(ChunkPos p_183880_) {
+         if (!this.distanceManager.hasPlayersNearby(p_183880_.toLong())) {
+             return false;
+@@ -1049,8 +_,8 @@
+                 this.distanceManager.addPlayer(SectionPos.of(p_140193_), p_140193_);
+             }
+ 
+-            p_140193_.setChunkTrackingView(ChunkTrackingView.EMPTY);
+-            this.updateChunkTracking(p_140193_);
++            // Paper - handled by player chunk loader
++            this.addPlayerToDistanceMaps(p_140193_); // Paper - distance maps
+         } else {
+             SectionPos sectionpos = p_140193_.getLastSectionPos();
+             this.playerMap.removePlayer(p_140193_);
+@@ -1058,7 +_,8 @@
+                 this.distanceManager.removePlayer(sectionpos, p_140193_);
+             }
+ 
+-            this.applyChunkTrackingView(p_140193_, ChunkTrackingView.EMPTY);
++            this.removePlayerFromDistanceMaps(p_140193_); // Paper - distance maps
++            // Paper - handled by player chunk loader
+         }
+     }
+ 
+@@ -1068,13 +_,7 @@
+     }
+ 
+     public void move(ServerPlayer p_140185_) {
+-        for(ChunkMap.TrackedEntity chunkmap$trackedentity : this.entityMap.values()) {
+-            if (chunkmap$trackedentity.entity == p_140185_) {
+-                chunkmap$trackedentity.updatePlayers(this.level.players());
+-            } else {
+-                chunkmap$trackedentity.updatePlayer(p_140185_);
+-            }
+-        }
++        // Paper - delay this logic for the entity tracker tick, no need to duplicate it
+ 
+         SectionPos sectionpos = p_140185_.getLastSectionPos();
+         SectionPos sectionpos1 = SectionPos.of(p_140185_);
+@@ -1099,59 +_,33 @@
                  this.playerMap.unIgnorePlayer(p_140185_);
              }
  
-+            //PATCH 1.20.2: Figure out the firing of the watch and unwatch events when chunk tracking updates.
-             this.updateChunkTracking(p_140185_);
+-            this.updateChunkTracking(p_140185_);
++            // Paper - replaced by PlayerChunkLoader
          }
++        this.updateMaps(p_140185_); // Paper - distance maps
      }
-@@ -1151,7 +_,7 @@
+ 
+     private void updateChunkTracking(ServerPlayer p_183755_) {
+-        ChunkPos chunkpos = p_183755_.chunkPosition();
+-        int i = this.getPlayerViewDistance(p_183755_);
+-        ChunkTrackingView chunktrackingview = p_183755_.getChunkTrackingView();
+-        if (chunktrackingview instanceof ChunkTrackingView.Positioned chunktrackingview$positioned
+-            && chunktrackingview$positioned.center().equals(chunkpos)
+-            && chunktrackingview$positioned.viewDistance() == i) {
+-            return;
+-        }
+-
+-        this.applyChunkTrackingView(p_183755_, ChunkTrackingView.of(chunkpos, i));
++        throw new UnsupportedOperationException(); // Paper - replaced by PlayerChunkLoader
+     }
+ 
+     private void applyChunkTrackingView(ServerPlayer p_294188_, ChunkTrackingView p_294174_) {
+-        if (p_294188_.level() == this.level) {
+-            ChunkTrackingView chunktrackingview = p_294188_.getChunkTrackingView();
+-            if (p_294174_ instanceof ChunkTrackingView.Positioned chunktrackingview$positioned
+-                && (
+-                    !(chunktrackingview instanceof ChunkTrackingView.Positioned chunktrackingview$positioned1)
+-                        || !chunktrackingview$positioned1.center().equals(chunktrackingview$positioned.center())
+-                )) {
+-                p_294188_.connection
+-                    .send(new ClientboundSetChunkCacheCenterPacket(chunktrackingview$positioned.center().x, chunktrackingview$positioned.center().z));
+-            }
+-
+-            ChunkTrackingView.difference(
+-                chunktrackingview, p_294174_, p_293802_ -> this.markChunkPendingToSend(p_294188_, p_293802_), p_293800_ -> dropChunk(p_294188_, p_293800_)
+-            );
+-            p_294188_.setChunkTrackingView(p_294174_);
+-        }
++        throw new UnsupportedOperationException(); // Paper - replaced by PlayerChunkLoader
+     }
+ 
+     @Override
+     public List<ServerPlayer> getPlayers(ChunkPos p_183801_, boolean p_183802_) {
+-        Set<ServerPlayer> set = this.playerMap.getAllPlayers();
+-        Builder<ServerPlayer> builder = ImmutableList.builder();
+-
+-        for(ServerPlayer serverplayer : set) {
+-            if (p_183802_ && this.isChunkOnTrackedBorder(serverplayer, p_183801_.x, p_183801_.z)
+-                || !p_183802_ && this.isChunkTracked(serverplayer, p_183801_.x, p_183801_.z)) {
+-                builder.add(serverplayer);
+-            }
++        // Paper start - per player view distance
++        ChunkHolder holder = this.getVisibleChunkIfPresent(p_183801_.toLong());
++        if (holder == null) {
++            return new java.util.ArrayList<>();
++        } else {
++            return holder.getPlayers(p_183802_);
+         }
+-
+-        return builder.build();
++        // Paper end - per player view distance
      }
  
      protected void addEntity(Entity p_140200_) {

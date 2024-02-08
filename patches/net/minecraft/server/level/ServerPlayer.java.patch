@@ -1,5 +1,69 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
+@@ -257,6 +_,55 @@
+     public int containerCounter;
+     public boolean wonGame;
+ 
++    public boolean isRealPlayer; // Paper
++    public final com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> cachedSingleHashSet; // Paper
++    // Paper start - replace player chunk loader
++    private final java.util.concurrent.atomic.AtomicReference<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> viewDistances = new java.util.concurrent.atomic.AtomicReference<>(new io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances(-1, -1, -1));
++    public io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.PlayerChunkLoaderData chunkLoader;
++
++    public io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances getViewDistances() {
++        return this.viewDistances.get();
++    }
++
++    private void updateViewDistance(final java.util.function.Function<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances, io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> update) {
++        for (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances curr = this.viewDistances.get();;) {
++            if (this.viewDistances.compareAndSet(curr, update.apply(curr))) {
++                return;
++            }
++        }
++    }
++
++    public void setTickViewDistance(final int distance) {
++        if ((distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE)) {
++            throw new IllegalArgumentException("Tick view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE) + ", got: " + distance);
++        }
++        this.updateViewDistance((input) -> {
++            return input.setTickViewDistance(distance);
++        });
++    }
++
++    public void setLoadViewDistance(final int distance) {
++        if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
++            throw new IllegalArgumentException("Load view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
++        }
++        this.updateViewDistance((input) -> {
++            return input.setLoadViewDistance(distance);
++        });
++    }
++
++    public void setSendViewDistance(final int distance) {
++        if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
++            throw new IllegalArgumentException("Send view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
++        }
++        this.updateViewDistance((input) -> {
++            return input.setSendViewDistance(distance);
++        });
++    }
++    // Paper end - replace player chunk loader
++    // Paper start - optimise chunk tick iteration
++    public double lastEntitySpawnRadiusSquared = -1.0;
++    // Paper end - optimise chunk tick iteration
++
+     public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_301997_) {
+         super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
+         this.textFilter = p_254143_.createTextFilterForPlayer(this);
+@@ -267,6 +_,7 @@
+         this.setMaxUpStep(1.0F);
+         this.fudgeSpawnLocation(p_254435_);
+         this.updateOptions(p_301997_);
++        this.cachedSingleHashSet = new com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<>(this); // Paper
+     }
+ 
+     private void fudgeSpawnLocation(ServerLevel p_9202_) {
 @@ -594,6 +_,7 @@
      @Override
      public void die(DamageSource p_9035_) {
