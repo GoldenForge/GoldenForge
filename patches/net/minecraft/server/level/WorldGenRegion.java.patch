@@ -1,5 +1,61 @@
 --- a/net/minecraft/server/level/WorldGenRegion.java
 +++ b/net/minecraft/server/level/WorldGenRegion.java
+@@ -101,6 +_,28 @@
+         }
+     }
+ 
++
++    // Paper start - starlight
++    @Override
++    public int getBrightness(final net.minecraft.world.level.LightLayer lightLayer, final BlockPos blockPos) {
++        final ChunkAccess chunk = this.getChunk(blockPos.getX() >> 4, blockPos.getZ() >> 4);
++        if (!chunk.isLightCorrect()) {
++            return 0;
++        }
++        return this.getLightEngine().getLayerListener(lightLayer).getLightValue(blockPos);
++    }
++
++
++    @Override
++    public int getRawBrightness(final BlockPos blockPos, final int subtract) {
++        final ChunkAccess chunk = this.getChunk(blockPos.getX() >> 4, blockPos.getZ() >> 4);
++        if (!chunk.isLightCorrect()) {
++            return 0;
++        }
++        return this.getLightEngine().getRawBrightness(blockPos, subtract);
++    }
++    // Paper end - starlight
++
+     public boolean isOldChunkAround(ChunkPos p_215160_, int p_215161_) {
+         return this.level.getChunkSource().chunkMap.isOldChunkAround(p_215160_, p_215161_);
+     }
+@@ -160,6 +_,26 @@
+         return p_9574_ >= this.firstPos.x && p_9574_ <= this.lastPos.x && p_9575_ >= this.firstPos.z && p_9575_ <= this.lastPos.z;
+     }
+ 
++    // Paper start - if loaded util
++    @Nullable
++    @Override
++    public ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
++        return this.getChunk(x, z, ChunkStatus.FULL, false);
++    }
++
++    @Override
++    public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
++        return chunk == null ? null : chunk.getBlockState(blockposition);
++    }
++
++    @Override
++    public final FluidState getFluidIfLoaded(BlockPos blockposition) {
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
++        return chunk == null ? null : chunk.getFluidState(blockposition);
++    }
++    // Paper end
++
+     @Override
+     public BlockState getBlockState(BlockPos p_9587_) {
+         return this.getChunk(SectionPos.blockToSectionCoord(p_9587_.getX()), SectionPos.blockToSectionCoord(p_9587_.getZ())).getBlockState(p_9587_);
 @@ -328,6 +_,7 @@
  
      @Override
@@ -8,3 +64,24 @@
          int i = SectionPos.blockToSectionCoord(p_9580_.getBlockX());
          int j = SectionPos.blockToSectionCoord(p_9580_.getBlockZ());
          this.getChunk(i, j).addEntity(p_9580_);
+@@ -481,4 +_,20 @@
+     public long nextSubTickCount() {
+         return this.subTickCount.getAndIncrement();
+     }
++    // Paper start
++    // No-op, this class doesn't provide entity access
++    @Override
++    public List<Entity> getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate) {
++        return Collections.emptyList();
++    }
++
++    @Override
++    public void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {}
++
++    @Override
++    public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {}
++
++    @Override
++    public <T> void getEntitiesByClass(Class<? extends T> clazz, Entity except, AABB box, List<? super T> into, Predicate<? super T> predicate) {}
++    // Paper end
+ }

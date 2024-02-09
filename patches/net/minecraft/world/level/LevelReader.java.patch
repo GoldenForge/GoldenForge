@@ -1,13 +1,31 @@
 --- a/net/minecraft/world/level/LevelReader.java
 +++ b/net/minecraft/world/level/LevelReader.java
-@@ -183,6 +_,10 @@
-         return this.hasChunkAt(p_46806_.getX(), p_46806_.getZ());
-     }
+@@ -25,6 +_,17 @@
+ public interface LevelReader extends BlockAndTintGetter, CollisionGetter, SignalGetter, BiomeManager.NoiseBiomeSource {
+     @Nullable
+     ChunkAccess getChunk(int p_46823_, int p_46824_, ChunkStatus p_46825_, boolean p_46826_);
++    // Paper start - rewrite chunk system
++    default ChunkAccess syncLoadNonFull(int chunkX, int chunkZ, ChunkStatus status) {
++        if (status == null || status.isOrAfter(ChunkStatus.FULL)) {
++            throw new IllegalArgumentException("Status: " + status.toString());
++        }
++        return this.getChunk(chunkX, chunkZ, status, true);
++    }
++    // Paper end - rewrite chunk system
++
++    @Nullable ChunkAccess getChunkIfLoadedImmediately(int x, int z); // Paper - ifLoaded api (we need this since current impl blocks if the chunk is loading)
++    @Nullable default ChunkAccess getChunkIfLoadedImmediately(BlockPos pos) { return this.getChunkIfLoadedImmediately(pos.getX() >> 4, pos.getZ() >> 4);}
  
-+    default boolean isAreaLoaded(BlockPos center, int range) {
-+        return this.hasChunksAt(center.offset(-range, -range, -range), center.offset(range, range, range));
+     @Deprecated
+     boolean hasChunk(int p_46838_, int p_46839_);
+@@ -181,6 +_,10 @@
+     @Deprecated
+     default boolean hasChunkAt(BlockPos p_46806_) {
+         return this.hasChunkAt(p_46806_.getX(), p_46806_.getZ());
 +    }
 +
++    default boolean isAreaLoaded(BlockPos center, int range) {
++        return this.hasChunksAt(center.offset(-range, -range, -range), center.offset(range, range, range));
+     }
+ 
      @Deprecated
-     default boolean hasChunksAt(BlockPos p_46833_, BlockPos p_46834_) {
-         return this.hasChunksAt(p_46833_.getX(), p_46833_.getY(), p_46833_.getZ(), p_46834_.getX(), p_46834_.getY(), p_46834_.getZ());

@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/BlockGetter.java
 +++ b/net/minecraft/world/level/BlockGetter.java
+@@ -9,6 +_,7 @@
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.util.Mth;
++import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.entity.BlockEntity;
+ import net.minecraft.world.level.block.entity.BlockEntityType;
+ import net.minecraft.world.level.block.state.BlockState;
 @@ -18,7 +_,7 @@
  import net.minecraft.world.phys.Vec3;
  import net.minecraft.world.phys.shapes.VoxelShape;
@@ -9,7 +17,20 @@
      @Nullable
      BlockEntity getBlockEntity(BlockPos p_45570_);
  
-@@ -32,7 +_,7 @@
+@@ -28,11 +_,20 @@
+     }
+ 
+     BlockState getBlockState(BlockPos p_45571_);
++    // Paper start - if loaded util
++    @Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition);
++
++    default @Nullable Block getBlockIfLoaded(BlockPos blockposition) {
++        BlockState type = this.getBlockStateIfLoaded(blockposition);
++        return type == null ? null : type.getBlock();
++    }
++    @Nullable FluidState getFluidIfLoaded(BlockPos blockposition);
++    // Paper end
+ 
      FluidState getFluidState(BlockPos p_45569_);
  
      default int getLightEmission(BlockPos p_45572_) {

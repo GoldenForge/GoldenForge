@@ -1,0 +1,19 @@
+--- a/net/minecraft/world/level/EntityGetter.java
++++ b/net/minecraft/world/level/EntityGetter.java
+@@ -19,6 +_,16 @@
+ import net.minecraft.world.phys.shapes.VoxelShape;
+ 
+ public interface EntityGetter {
++    // Paper start
++    List<Entity> getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate);
++
++    void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++
++    void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into);
++
++    <T> void getEntitiesByClass(Class<? extends T> clazz, Entity except, final AABB box, List<? super T> into,
++                                Predicate<? super T> predicate);
++    // Paper end
+     List<Entity> getEntities(@Nullable Entity p_45936_, AABB p_45937_, Predicate<? super Entity> p_45938_);
+ 
+     <T extends Entity> List<T> getEntities(EntityTypeTest<Entity, T> p_151464_, AABB p_151465_, Predicate<? super T> p_151466_);

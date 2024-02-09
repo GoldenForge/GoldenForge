@@ -1,10 +1,32 @@
 --- a/net/minecraft/server/network/PlayerChunkSender.java
 +++ b/net/minecraft/server/network/PlayerChunkSender.java
-@@ -74,9 +_,12 @@
+@@ -43,11 +_,18 @@
+ 
+     public void dropChunk(ServerPlayer p_294214_, ChunkPos p_294933_) {
+         if (!this.pendingChunks.remove(p_294933_.toLong()) && p_294214_.isAlive()) {
+-            p_294214_.connection.send(new ClientboundForgetLevelChunkPacket(p_294933_));
++            // Paper start - rewrite player chunk loader
++            dropChunkStatic(p_294214_, p_294933_);
+         }
+     }
++    public static void dropChunkStatic(ServerPlayer player, ChunkPos pos) {
++        player.serverLevel().chunkSource.chunkMap.getVisibleChunkIfPresent(pos.toLong()).removePlayer(player);
++        player.connection.send(new ClientboundForgetLevelChunkPacket(pos));
++    }
++    // Paper end - rewrite player chunk loader
+ 
+     public void sendNextChunks(ServerPlayer p_296009_) {
++        if (true) return; // Paper - rewrite player chunk loader
+         if (this.unacknowledgedBatches < this.maxUnacknowledgedBatches) {
+             float f = Math.max(1.0F, this.desiredChunksPerTick);
+             this.batchQuota = Math.min(this.batchQuota + this.desiredChunksPerTick, f);
+@@ -73,10 +_,13 @@
+         }
      }
  
-     private static void sendChunk(ServerGamePacketListenerImpl p_295237_, ServerLevel p_294963_, LevelChunk p_295144_) {
+-    private static void sendChunk(ServerGamePacketListenerImpl p_295237_, ServerLevel p_294963_, LevelChunk p_295144_) {
 -        p_295237_.send(new ClientboundLevelChunkWithLightPacket(p_295144_, p_294963_.getLightEngine(), null, null));
++    public static void sendChunk(ServerGamePacketListenerImpl p_295237_, ServerLevel p_294963_, LevelChunk p_295144_) { // Paper - rewrite chunk loader - public
 +        p_295237_.send(p_295144_.getAuxLightManager(p_295144_.getPos()).sendLightDataTo(
 +                new ClientboundLevelChunkWithLightPacket(p_295144_, p_294963_.getLightEngine(), null, null)
 +        ));
@@ -14,3 +36,11 @@
      }
  
      private List<LevelChunk> collectChunksToSend(ChunkMap p_296053_, ChunkPos p_295659_) {
+@@ -108,6 +_,7 @@
+     }
+ 
+     public void onChunkBatchReceivedByClient(float p_294462_) {
++        if (true) return; // Paper - rewrite player chunk loader
+         --this.unacknowledgedBatches;
+         this.desiredChunksPerTick = Double.isNaN((double)p_294462_) ? 0.01F : Mth.clamp(p_294462_, 0.01F, 64.0F);
+         if (this.unacknowledgedBatches == 0) {
