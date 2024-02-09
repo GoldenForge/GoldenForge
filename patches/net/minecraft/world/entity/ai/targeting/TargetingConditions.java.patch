@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
++++ b/net/minecraft/world/entity/ai/targeting/TargetingConditions.java
+@@ -10,7 +_,7 @@
+     public static final TargetingConditions DEFAULT = forCombat();
+     private static final double MIN_VISIBILITY_DISTANCE_FOR_INVISIBLE_TARGET = 2.0;
+     private final boolean isCombat;
+-    private double range = -1.0;
++    public double range = -1.0;
+     private boolean checkLineOfSight = true;
+     private boolean testInvisible = true;
+     @Nullable

@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
-@@ -107,10 +_,10 @@
+@@ -107,28 +_,28 @@
      public static final int MIN_VIEW_DISTANCE = 2;
      public static final int MAX_VIEW_DISTANCE = 32;
      public static final int FORCED_TICKET_LEVEL = ChunkLevel.byStatus(FullChunkStatus.ENTITY_TICKING);
@@ -14,8 +14,10 @@
 +//    private final LongSet entitiesInLevel = new LongOpenHashSet();
      final ServerLevel level;
      private final ThreadedLevelLightEngine lightEngine;
-     private final BlockableEventLoop<Runnable> mainThreadExecutor;
-@@ -119,16 +_,16 @@
+-    private final BlockableEventLoop<Runnable> mainThreadExecutor;
++    public final BlockableEventLoop<Runnable> mainThreadExecutor;
+     private ChunkGenerator generator;
+     private final RandomState randomState;
      private final ChunkGeneratorStructureState chunkGeneratorState;
      private final Supplier<DimensionDataStorage> overworldDataStorage;
      private final PoiManager poiManager;
@@ -1128,7 +1130,7 @@
  
          SectionPos sectionpos = p_140185_.getLastSectionPos();
          SectionPos sectionpos1 = SectionPos.of(p_140185_);
-@@ -1099,59 +_,33 @@
+@@ -1099,59 +_,41 @@
                  this.playerMap.unIgnorePlayer(p_140185_);
              }
  
@@ -1196,7 +1198,42 @@
  
      protected void addEntity(Entity p_140200_) {
 -        if (!(p_140200_ instanceof EnderDragonPart)) {
++        org.spigotmc.AsyncCatcher.catchOp("entity track"); // Spigot
++        // Paper start - ignore and warn about illegal addEntity calls instead of crashing server
++        if (!p_140200_.valid || p_140200_.level() != this.level || this.entityMap.containsKey(p_140200_.getId())) {
++            LOGGER.error("Illegal ChunkMap::addEntity for world " + this.level.dimension()
++                    + ": " + p_140200_  + (this.entityMap.containsKey(p_140200_.getId()) ? " ALREADY CONTAINED (This would have crashed your server)" : ""), new Throwable());
++            return;
++        }
++        // Paper end - ignore and warn about illegal addEntity calls instead of crashing server
 +        if (!(p_140200_ instanceof net.neoforged.neoforge.entity.PartEntity)) {
              EntityType<?> entitytype = p_140200_.getType();
              int i = entitytype.clientTrackingRange() * 16;
              if (i != 0) {
+@@ -1272,23 +_,17 @@
+     }
+ 
+     public void waitForLightBeforeSending(ChunkPos p_301194_, int p_301130_) {
+-        int i = p_301130_ + 1;
+-        ChunkPos.rangeClosed(p_301194_, i).forEach(p_300775_ -> {
+-            ChunkHolder chunkholder = this.getVisibleChunkIfPresent(p_300775_.toLong());
+-            if (chunkholder != null) {
+-                chunkholder.addSendDependency(this.lightEngine.waitForPendingTasks(p_300775_.x, p_300775_.z));
+-            }
+-        });
++        // Paper - rewrite player chunk loader
+     }
+ 
+     class DistanceManager extends net.minecraft.server.level.DistanceManager {
+         protected DistanceManager(Executor p_140459_, Executor p_140460_) {
+-            super(p_140459_, p_140460_);
++            super(p_140459_, p_140460_, ChunkMap.this);
+         }
+ 
+         @Override
+         protected boolean isChunkToRemove(long p_140462_) {
+-            return ChunkMap.this.toDrop.contains(p_140462_);
++            throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+         }
+ 
+         @Nullable

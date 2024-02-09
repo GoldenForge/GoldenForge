@@ -1,6 +1,15 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -190,7 +_,7 @@
+@@ -173,7 +_,7 @@
+     private final MinecraftServer server;
+     private final ServerLevelData serverLevelData;
+     final EntityTickList entityTickList = new EntityTickList();
+-    private final PersistentEntitySectionManager<Entity> entityManager;
++    //private final PersistentEntitySectionManager<Entity> entityManager;
+     private final GameEventDispatcher gameEventDispatcher;
+     public boolean noSave;
+     private final SleepStatus sleepStatus;
+@@ -190,12 +_,468 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
      private EndDragonFight dragonFight;
@@ -9,15 +18,507 @@
      private final StructureManager structureManager;
      private final StructureCheck structureCheck;
      private final boolean tickTime;
-@@ -281,6 +_,8 @@
+     private final RandomSequences randomSequences;
+ 
++    public LevelChunk getChunkIfLoaded(int x, int z) {
++        return this.chunkSource.getChunkAtIfLoadedImmediately(x, z); // Paper - Use getChunkIfLoadedImmediately
++    }
++
++    // Paper start
++    public final boolean areChunksLoadedForMove(AABB axisalignedbb) {
++        // copied code from collision methods, so that we can guarantee that they wont load chunks (we don't override
++        // ICollisionAccess methods for VoxelShapes)
++        // be more strict too, add a block (dumb plugins in move events?)
++        int minBlockX = Mth.floor(axisalignedbb.minX - 1.0E-7D) - 3;
++        int maxBlockX = Mth.floor(axisalignedbb.maxX + 1.0E-7D) + 3;
++
++        int minBlockZ = Mth.floor(axisalignedbb.minZ - 1.0E-7D) - 3;
++        int maxBlockZ = Mth.floor(axisalignedbb.maxZ + 1.0E-7D) + 3;
++
++        int minChunkX = minBlockX >> 4;
++        int maxChunkX = maxBlockX >> 4;
++
++        int minChunkZ = minBlockZ >> 4;
++        int maxChunkZ = maxBlockZ >> 4;
++
++        ServerChunkCache chunkProvider = this.getChunkSource();
++
++        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
++            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
++                if (chunkProvider.getChunkAtIfLoadedImmediately(cx, cz) == null) {
++                    return false;
++                }
++            }
++        }
++
++        return true;
++    }
++
++    public final void loadChunksAsync(BlockPos pos, int radiusBlocks,
++                                      ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                      java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        loadChunksAsync(
++                (pos.getX() - radiusBlocks) >> 4,
++                (pos.getX() + radiusBlocks) >> 4,
++                (pos.getZ() - radiusBlocks) >> 4,
++                (pos.getZ() + radiusBlocks) >> 4,
++                priority, onLoad
++        );
++    }
++
++    public final void loadChunksAsync(BlockPos pos, int radiusBlocks,
++                                      net.minecraft.world.level.chunk.ChunkStatus chunkStatus,
++                                      ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                      java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        loadChunksAsync(
++                (pos.getX() - radiusBlocks) >> 4,
++                (pos.getX() + radiusBlocks) >> 4,
++                (pos.getZ() - radiusBlocks) >> 4,
++                (pos.getZ() + radiusBlocks) >> 4,
++                chunkStatus, priority, onLoad
++        );
++    }
++
++    public final void loadChunksAsync(int minChunkX, int maxChunkX, int minChunkZ, int maxChunkZ,
++                                      ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                      java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        this.loadChunksAsync(minChunkX, maxChunkX, minChunkZ, maxChunkZ, net.minecraft.world.level.chunk.ChunkStatus.FULL, priority, onLoad);
++    }
++
++    public final void loadChunksAsync(int minChunkX, int maxChunkX, int minChunkZ, int maxChunkZ,
++                                      net.minecraft.world.level.chunk.ChunkStatus chunkStatus,
++                                      ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                      java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        List<net.minecraft.world.level.chunk.ChunkAccess> ret = new java.util.ArrayList<>();
++
++        ServerChunkCache chunkProvider = this.getChunkSource();
++
++        int requiredChunks = (maxChunkX - minChunkX + 1) * (maxChunkZ - minChunkZ + 1);
++        java.util.concurrent.atomic.AtomicInteger loadedChunks = new java.util.concurrent.atomic.AtomicInteger();
++
++        Long holderIdentifier = Long.valueOf(chunkProvider.chunkFutureAwaitCounter.getAndIncrement());
++
++        int ticketLevel = 33 + net.minecraft.world.level.chunk.ChunkStatus.getDistance(chunkStatus);
++
++        java.util.function.Consumer<net.minecraft.world.level.chunk.ChunkAccess> consumer = (net.minecraft.world.level.chunk.ChunkAccess chunk) -> {
++            if (chunk != null) {
++                synchronized (ret) { // Folia - region threading - make callback thread-safe TODO rebase
++                    ret.add(chunk);
++                } // Folia - region threading - make callback thread-safe TODO rebase
++                chunkProvider.addTicketAtLevel(TicketType.FUTURE_AWAIT, chunk.getPos(), ticketLevel, holderIdentifier);
++            }
++            if (loadedChunks.incrementAndGet() == requiredChunks) {
++                try {
++                    onLoad.accept(java.util.Collections.unmodifiableList(ret));
++                } finally {
++                    for (int i = 0, len = ret.size(); i < len; ++i) {
++                        ChunkPos chunkPos = ret.get(i).getPos();
++
++                        chunkProvider.addTicketAtLevel(TicketType.UNKNOWN, chunkPos, ticketLevel, chunkPos);
++                        chunkProvider.removeTicketAtLevel(TicketType.FUTURE_AWAIT, chunkPos, ticketLevel, holderIdentifier);
++                    }
++                }
++            }
++        };
++
++        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
++            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
++                io.papermc.paper.chunk.system.ChunkSystem.scheduleChunkLoad(
++                        this, cx, cz, chunkStatus, true, priority, consumer
++                );
++            }
++        }
++    }
++
++    public final void loadChunksForMoveAsync(AABB axisalignedbb, ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                             java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++
++        int minBlockX = Mth.floor(axisalignedbb.minX - 1.0E-7D) - 3;
++        int maxBlockX = Mth.floor(axisalignedbb.maxX + 1.0E-7D) + 3;
++
++        int minBlockZ = Mth.floor(axisalignedbb.minZ - 1.0E-7D) - 3;
++        int maxBlockZ = Mth.floor(axisalignedbb.maxZ + 1.0E-7D) + 3;
++
++        int minChunkX = minBlockX >> 4;
++        int maxChunkX = maxBlockX >> 4;
++
++        int minChunkZ = minBlockZ >> 4;
++        int maxChunkZ = maxBlockZ >> 4;
++
++        this.loadChunksAsync(minChunkX, maxChunkX, minChunkZ, maxChunkZ, priority, onLoad);
++    }
++
++    // Paper start - rewrite chunk system
++    public final io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler chunkTaskScheduler;
++    public final io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController chunkDataControllerNew
++            = new io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController(io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.CHUNK_DATA) {
++
++        @Override
++        public net.minecraft.world.level.chunk.storage.RegionFileStorage getCache() {
++            return ServerLevel.this.getChunkSource().chunkMap.regionFileCache;
++        }
++
++        @Override
++        public void writeData(int chunkX, int chunkZ, net.minecraft.nbt.CompoundTag compound) throws IOException {
++            ServerLevel.this.getChunkSource().chunkMap.write(new ChunkPos(chunkX, chunkZ), compound);
++        }
++
++        @Override
++        public net.minecraft.nbt.CompoundTag readData(int chunkX, int chunkZ) throws IOException {
++            return ServerLevel.this.getChunkSource().chunkMap.readSync(new ChunkPos(chunkX, chunkZ));
++        }
++    };
++    public final io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController poiDataControllerNew
++            = new io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController(io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.POI_DATA) {
++
++        @Override
++        public net.minecraft.world.level.chunk.storage.RegionFileStorage getCache() {
++            return ServerLevel.this.getChunkSource().chunkMap.getPoiManager();
++        }
++
++        @Override
++        public void writeData(int chunkX, int chunkZ, net.minecraft.nbt.CompoundTag compound) throws IOException {
++            ServerLevel.this.getChunkSource().chunkMap.getPoiManager().write(new ChunkPos(chunkX, chunkZ), compound);
++        }
++
++        @Override
++        public net.minecraft.nbt.CompoundTag readData(int chunkX, int chunkZ) throws IOException {
++            return ServerLevel.this.getChunkSource().chunkMap.getPoiManager().read(new ChunkPos(chunkX, chunkZ));
++        }
++    };
++    public final io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController entityDataControllerNew
++            = new io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController(io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.ENTITY_DATA) {
++
++        @Override
++        public net.minecraft.world.level.chunk.storage.RegionFileStorage getCache() {
++            return ServerLevel.this.entityStorage;
++        }
++
++        @Override
++        public void writeData(int chunkX, int chunkZ, net.minecraft.nbt.CompoundTag compound) throws IOException {
++            ServerLevel.this.writeEntityChunk(chunkX, chunkZ, compound);
++        }
++
++        @Override
++        public net.minecraft.nbt.CompoundTag readData(int chunkX, int chunkZ) throws IOException {
++            return ServerLevel.this.readEntityChunk(chunkX, chunkZ);
++        }
++    };
++    private final EntityRegionFileStorage entityStorage;
++
++    private static final class EntityRegionFileStorage extends net.minecraft.world.level.chunk.storage.RegionFileStorage {
++
++        public EntityRegionFileStorage(Path directory, boolean dsync) {
++            super(directory, dsync);
++        }
++
++        protected void write(ChunkPos pos, net.minecraft.nbt.CompoundTag nbt) throws IOException {
++            ChunkPos nbtPos = nbt == null ? null : EntityStorage.readChunkPos(nbt);
++            if (nbtPos != null && !pos.equals(nbtPos)) {
++                throw new IllegalArgumentException(
++                        "Entity chunk coordinate and serialized data do not have matching coordinates, trying to serialize coordinate " + pos.toString()
++                                + " but compound says coordinate is " + nbtPos + " for world: " + this
++                );
++            }
++            super.write(pos, nbt);
++        }
++    }
++
++    private void writeEntityChunk(int chunkX, int chunkZ, net.minecraft.nbt.CompoundTag compound) throws IOException {
++        if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
++            io.papermc.paper.chunk.system.io.RegionFileIOThread.scheduleSave(
++                    this, chunkX, chunkZ, compound,
++                    io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.ENTITY_DATA);
++            return;
++        }
++        this.entityStorage.write(new ChunkPos(chunkX, chunkZ), compound);
++    }
++
++    private net.minecraft.nbt.CompoundTag readEntityChunk(int chunkX, int chunkZ) throws IOException {
++        if (!io.papermc.paper.chunk.system.io.RegionFileIOThread.isRegionFileThread()) {
++            return io.papermc.paper.chunk.system.io.RegionFileIOThread.loadData(
++                    this, chunkX, chunkZ, io.papermc.paper.chunk.system.io.RegionFileIOThread.RegionFileType.ENTITY_DATA,
++                    io.papermc.paper.chunk.system.io.RegionFileIOThread.getIOBlockingPriorityForCurrentThread()
++            );
++        }
++        return this.entityStorage.read(new ChunkPos(chunkX, chunkZ));
++    }
++
++    private final io.papermc.paper.chunk.system.entity.EntityLookup entityLookup;
++    public final io.papermc.paper.chunk.system.entity.EntityLookup getEntityLookup() {
++        return this.entityLookup;
++    }
++
++    private final java.util.concurrent.atomic.AtomicLong nonFullSyncLoadIdGenerator = new java.util.concurrent.atomic.AtomicLong();
++
++    private ChunkAccess getIfAboveStatus(int chunkX, int chunkZ, net.minecraft.world.level.chunk.ChunkStatus status) {
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder loaded =
++                this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(chunkX, chunkZ);
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder.ChunkCompletion loadedCompletion;
++        if (loaded != null && (loadedCompletion = loaded.getLastChunkCompletion()) != null && loadedCompletion.genStatus().isOrAfter(status)) {
++            return loadedCompletion.chunk();
++        }
++
++        return null;
++    }
++
++    @Override
++    public ChunkAccess syncLoadNonFull(int chunkX, int chunkZ, net.minecraft.world.level.chunk.ChunkStatus status) {
++        if (status == null || status.isOrAfter(net.minecraft.world.level.chunk.ChunkStatus.FULL)) {
++            throw new IllegalArgumentException("Status: " + status);
++        }
++        ChunkAccess loaded = this.getIfAboveStatus(chunkX, chunkZ, status);
++        if (loaded != null) {
++            return loaded;
++        }
++
++        Long ticketId = Long.valueOf(this.nonFullSyncLoadIdGenerator.getAndIncrement());
++        int ticketLevel = 33 + net.minecraft.world.level.chunk.ChunkStatus.getDistance(status);
++        this.chunkTaskScheduler.chunkHolderManager.addTicketAtLevel(
++                TicketType.NON_FULL_SYNC_LOAD, chunkX, chunkZ, ticketLevel, ticketId
++        );
++        this.chunkTaskScheduler.chunkHolderManager.processTicketUpdates();
++
++        this.chunkTaskScheduler.beginChunkLoadForNonFullSync(chunkX, chunkZ, status, ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.BLOCKING);
++
++        // we could do a simple spinwait here, since we do not need to process tasks while performing this load
++        // but we process tasks only because it's a better use of the time spent
++        this.chunkSource.mainThreadProcessor.managedBlock(() -> {
++            return ServerLevel.this.getIfAboveStatus(chunkX, chunkZ, status) != null;
++        });
++
++        loaded = ServerLevel.this.getIfAboveStatus(chunkX, chunkZ, status);
++        if (loaded == null) {
++            throw new IllegalStateException("Expected chunk to be loaded for status " + status);
++        }
++
++        this.chunkTaskScheduler.chunkHolderManager.removeTicketAtLevel(
++                TicketType.NON_FULL_SYNC_LOAD, chunkX, chunkZ, ticketLevel, ticketId
++        );
++
++        return loaded;
++    }
++
++    public final int getRegionChunkShift() {
++        // placeholder for folia
++        return io.papermc.paper.threadedregions.TickRegions.getRegionChunkShift();
++    }
++    // Paper end - rewrite chunk system
++
++    public final io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader playerChunkLoader = new io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader(this);
++    private final java.util.concurrent.atomic.AtomicReference<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> viewDistances = new java.util.concurrent.atomic.AtomicReference<>(new io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances(-1, -1, -1));
++
++    public io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances getViewDistances() {
++        return this.viewDistances.get();
++    }
++
++    private void updateViewDistance(final java.util.function.Function<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances, io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> update) {
++        for (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances curr = this.viewDistances.get();;) {
++            if (this.viewDistances.compareAndSet(curr, update.apply(curr))) {
++                return;
++            }
++        }
++    }
++
++    public void setTickViewDistance(final int distance) {
++        if ((distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE)) {
++            throw new IllegalArgumentException("Tick view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE) + ", got: " + distance);
++        }
++        this.updateViewDistance((input) -> {
++            return input.setTickViewDistance(distance);
++        });
++    }
++
++    public void setLoadViewDistance(final int distance) {
++        if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
++            throw new IllegalArgumentException("Load view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
++        }
++        this.updateViewDistance((input) -> {
++            return input.setLoadViewDistance(distance);
++        });
++    }
++
++    public void setSendViewDistance(final int distance) {
++        if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
++            throw new IllegalArgumentException("Send view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
++        }
++        this.updateViewDistance((input) -> {
++            return input.setSendViewDistance(distance);
++        });
++    }
++
++    // Paper start - optimise getPlayerByUUID
++    @Nullable
++    @Override
++    public Player getPlayerByUUID(UUID uuid) {
++        final Player player = this.getServer().getPlayerList().getPlayer(uuid);
++        return player != null && player.level() == this ? player : null;
++    }
++    // Paper end - optimise getPlayerByUUID
++    // Paper start - lag compensation
++    private long lagCompensationTick = net.minecraft.server.MinecraftServer.SERVER_INIT;
++
++    public long getLagCompensationTick() {
++        return this.lagCompensationTick;
++    }
++
++    public void updateLagCompensationTick() {
++        this.lagCompensationTick = (System.nanoTime() - net.minecraft.server.MinecraftServer.SERVER_INIT) / (java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(50L));
++    }
++    // Paper end - lag compensation
++    // Paper start - optimise nearby player retrieval
++    @Override
++    public java.util.List<net.minecraft.world.entity.player.Player> getNearbyPlayers(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate,
++                                                                                     net.minecraft.world.entity.LivingEntity entity,
++                                                                                     net.minecraft.world.phys.AABB box) {
++        return this.getNearbyEntities(Player.class, targetPredicate, entity, box);
++    }
++
++    @Override
++    public Player getNearestPlayer(double x, double y, double z, double maxDistance, @Nullable Predicate<Entity> targetPredicate) {
++        if (maxDistance > 0.0D) {
++            io.papermc.paper.util.player.NearbyPlayers players = this.chunkSource.chunkMap.getNearbyPlayers();
++
++            com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> nearby = players.getPlayersByBlock(
++                    io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(x),
++                    io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(z),
++                    io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.GENERAL
++            );
++
++            if (nearby == null) {
++                return null;
++            }
++
++            ServerPlayer nearest = null;
++            double nearestDist = maxDistance * maxDistance;
++            Object[] rawData = nearby.getRawData();
++            for (int i = 0, len = nearby.size(); i < len; ++i) {
++                ServerPlayer player = (ServerPlayer)rawData[i];
++                double dist = player.distanceToSqr(x, y, z);
++                if (dist >= nearestDist) {
++                    continue;
++                }
++
++                if (targetPredicate == null || targetPredicate.test(player)) {
++                    nearest = player;
++                    nearestDist = dist;
++                }
++            }
++
++            return nearest;
++        } else {
++            ServerPlayer nearest = null;
++            double nearestDist = Double.MAX_VALUE;
++
++            for (ServerPlayer player : this.players()) {
++                double dist = player.distanceToSqr(x, y, z);
++                if (dist >= nearestDist) {
++                    continue;
++                }
++
++                if (targetPredicate == null || targetPredicate.test(player)) {
++                    nearest = player;
++                    nearestDist = dist;
++                }
++            }
++
++            return nearest;
++        }
++    }
++
++    @Override
++    public Player getNearestPlayer(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate, LivingEntity entity) {
++        return this.getNearestPlayer(targetPredicate, entity, entity.getX(), entity.getY(), entity.getZ());
++    }
++
++    @Override
++    public Player getNearestPlayer(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate, LivingEntity entity,
++                                   double x, double y, double z) {
++        double range = targetPredicate.range;
++        if (range > 0.0D) {
++            io.papermc.paper.util.player.NearbyPlayers players = this.chunkSource.chunkMap.getNearbyPlayers();
++
++            com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> nearby = players.getPlayersByBlock(
++                    io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(x),
++                    io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(z),
++                    io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.GENERAL
++            );
++
++            if (nearby == null) {
++                return null;
++            }
++
++            ServerPlayer nearest = null;
++            double nearestDist = Double.MAX_VALUE;
++            Object[] rawData = nearby.getRawData();
++            for (int i = 0, len = nearby.size(); i < len; ++i) {
++                ServerPlayer player = (ServerPlayer)rawData[i];
++                double dist = player.distanceToSqr(x, y, z);
++                if (dist >= nearestDist) {
++                    continue;
++                }
++
++                if (targetPredicate.test(entity, player)) {
++                    nearest = player;
++                    nearestDist = dist;
++                }
++            }
++
++            return nearest;
++        } else {
++            return this.getNearestEntity(this.players(), targetPredicate, entity, x, y, z);
++        }
++    }
++
++    @Nullable
++    public Player getNearestPlayer(net.minecraft.world.entity.ai.targeting.TargetingConditions targetPredicate, double x, double y, double z) {
++        return this.getNearestPlayer(targetPredicate, null, x, y, z);
++    }
++    // Paper end - optimise nearby player retrieval
++
+     public ServerLevel(
+         MinecraftServer p_214999_,
+         Executor p_215000_,
+@@ -231,7 +_,8 @@
+         EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(
+             this, p_215001_.getDimensionPath(p_215003_).resolve("entities"), datafixer, flag, p_214999_
+         );
+-        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++        this.entityStorage = new EntityRegionFileStorage(p_215001_.getDimensionPath(p_215003_).resolve("entities"), flag);
++        //this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
+         this.chunkSource = new ServerChunkCache(
+             this,
+             p_215001_,
+@@ -243,7 +_,7 @@
+             p_214999_.getPlayerList().getSimulationDistance(),
+             flag,
+             p_215005_,
+-            this.entityManager::updateChunkStatus,
++            null, // paper
+             () -> p_214999_.overworld().getDataStorage()
+         );
+         this.chunkSource.getGeneratorState().ensureStructuresGenerated();
+@@ -281,7 +_,19 @@
          this.randomSequences = Objects.requireNonNullElseGet(
              p_288977_, () -> this.getDataStorage().computeIfAbsent(RandomSequences.factory(i), "random_sequences")
          );
+-    }
++
++        this.chunkTaskScheduler = new io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler(this, io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.workerThreads); // Paper - rewrite chunk system
++        this.entityLookup = new io.papermc.paper.chunk.system.entity.EntityLookup(this, new EntityCallbacks()); // Paper - rewrite chunk system
 +
 +        net.neoforged.neoforge.attachment.LevelAttachmentsSavedData.init(this);
-     }
++    }
++
++    // Paper start
++    @Override
++    public boolean hasChunk(int chunkX, int chunkZ) {
++        return this.getChunkSource().getChunkAtIfLoadedImmediately(chunkX, chunkZ) != null;
++    }
++    // Paper end
  
      @Deprecated
+     @VisibleForTesting
 @@ -325,7 +_,7 @@
          if (this.sleepStatus.areEnoughSleeping(i) && this.sleepStatus.areEnoughDeepSleeping(i, this.players)) {
              if (this.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
@@ -36,6 +537,15 @@
          if (flag1) {
              this.resetEmptyTime();
          }
+@@ -384,7 +_,7 @@
+                         profilerfiller.push("checkDespawn");
+                         p_308566_.checkDespawn();
+                         profilerfiller.pop();
+-                        if (this.chunkSource.chunkMap.getDistanceManager().inEntityTickingRange(p_308566_.chunkPosition().toLong())) {
++                        if (true || this.chunkSource.chunkMap.getDistanceManager().inEntityTickingRange(p_308566_.chunkPosition().toLong())) { // Paper - now always true if in the ticking list
+                             Entity entity = p_308566_.getVehicle();
+                             if (entity != null) {
+                                 if (!entity.isRemoved() && entity.hasPassenger(p_308566_)) {
 @@ -395,7 +_,9 @@
                              }
  
@@ -47,6 +557,25 @@
                              profilerfiller.pop();
                          }
                      }
+@@ -406,13 +_,16 @@
+         }
+ 
+         profilerfiller.push("entityManagement");
+-        this.entityManager.tick();
++        // this.entityManager.tick(); // Paper - rewrite chunk system
+         profilerfiller.pop();
+     }
+ 
+     @Override
+     public boolean shouldTickBlocksAt(long p_184059_) {
+-        return this.chunkSource.chunkMap.getDistanceManager().inBlockTickingRange(p_184059_);
++        // Paper start - replace player chunk loader system
++        ChunkHolder holder = this.chunkSource.chunkMap.getVisibleChunkIfPresent(p_184059_);
++        return holder != null && holder.isTickingReady();
++        // Paper end - replace player chunk loader system
+     }
+ 
+     protected void tickTime() {
 @@ -527,6 +_,7 @@
          BlockPos blockpos = this.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING, p_295060_);
          BlockPos blockpos1 = blockpos.below();
@@ -142,17 +671,17 @@
          }
  
 -        this.entityManager.addNewEntity(p_8854_);
-+        this.entityManager.addNewEntityWithoutEvent(p_8854_);
++        this.entityLookup.addNewEntity(p_8854_); // Paper - rewite chunk system
 +        p_8854_.onAddedToWorld();
      }
  
      private boolean addEntity(Entity p_8873_) {
-@@ -900,7 +_,12 @@
+@@ -900,12 +_,17 @@
              LOGGER.warn("Tried to add entity {} but it was marked as removed already", EntityType.getKey(p_8873_.getType()));
              return false;
          } else {
 -            return this.entityManager.addNewEntity(p_8873_);
-+            if (this.entityManager.addNewEntity(p_8873_)) {
++            if (this.entityLookup.addNewEntity(p_8873_)) { // Paper - rewrite chunk system
 +                p_8873_.onAddedToWorld();
 +                return true;
 +            } else {
@@ -161,6 +690,12 @@
          }
      }
  
+     public boolean tryAddFreshEntityWithPassengers(Entity p_8861_) {
+-        if (p_8861_.getSelfAndPassengers().map(Entity::getUUID).anyMatch(this.entityManager::isLoaded)) {
++        if (p_8861_.getSelfAndPassengers().map(Entity::getUUID).anyMatch(this.entityLookup::hasEntity)) { // Paper - rewrite chunk system
+             return false;
+         } else {
+             this.addFreshEntityWithPassengers(p_8861_);
 @@ -948,6 +_,12 @@
          float p_263390_,
          long p_263403_
@@ -212,6 +747,143 @@
          this.neighborUpdater.updateNeighborsAtExceptFromFacing(p_215052_, p_215053_, p_215054_);
      }
  
+@@ -1420,7 +_,6 @@
+                 }
+             }
+ 
+-            writer.write(String.format(Locale.ROOT, "entities: %s\n", this.entityManager.gatherStats()));
+             writer.write(String.format(Locale.ROOT, "block_entity_tickers: %d\n", this.blockEntityTickers.size()));
+             writer.write(String.format(Locale.ROOT, "block_ticks: %d\n", this.getBlockTicks().count()));
+             writer.write(String.format(Locale.ROOT, "fluid_ticks: %d\n", this.getFluidTicks().count()));
+@@ -1444,7 +_,7 @@
+         Path path1 = p_8787_.resolve("entity_chunks.csv");
+ 
+         try (Writer writer5 = Files.newBufferedWriter(path1)) {
+-            this.entityManager.dumpSections(writer5);
++            //this.entityManager.dumpSections(writer5);
+         }
+ 
+         Path path2 = p_8787_.resolve("entities.csv");
+@@ -1544,18 +_,9 @@
+ 
+     @VisibleForTesting
+     public String getWatchdogStats() {
+-        return String.format(
+-            Locale.ROOT,
+-            "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s",
+-            this.players.size(),
+-            this.entityManager.gatherStats(),
+-            getTypeCount(this.entityManager.getEntityGetter().getAll(), p_258244_ -> BuiltInRegistries.ENTITY_TYPE.getKey(p_258244_.getType()).toString()),
+-            this.blockEntityTickers.size(),
+-            getTypeCount(this.blockEntityTickers, TickingBlockEntity::getType),
+-            this.getBlockTicks().count(),
+-            this.getFluidTicks().count(),
+-            this.gatherChunkSourceStats()
+-        );
++        return String.format(Locale.ROOT, "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s", this.players.size(), this.entityLookup.getDebugInfo(), ServerLevel.getTypeCount(this.entityLookup.getAll(), (entity) -> { // Paper - rewrite chunk system
++            return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
++        }), this.blockEntityTickers.size(), ServerLevel.getTypeCount(this.blockEntityTickers, TickingBlockEntity::getType), this.getBlockTicks().count(), this.getFluidTicks().count(), this.gatherChunkSourceStats());
+     }
+ 
+     private static <T> String getTypeCount(Iterable<T> p_143302_, Function<T, String> p_143303_) {
+@@ -1591,15 +_,16 @@
+ 
+     @Override
+     public LevelEntityGetter<Entity> getEntities() {
+-        return this.entityManager.getEntityGetter();
+-    }
+-
+-    public void addLegacyChunkEntities(Stream<Entity> p_143312_) {
+-        this.entityManager.addLegacyChunkEntities(p_143312_);
+-    }
+-
+-    public void addWorldGenChunkEntities(Stream<Entity> p_143328_) {
+-        this.entityManager.addWorldGenChunkEntities(p_143328_);
++        org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
++        return this.entityLookup; // Paper - rewrite chunk system
++    }
++
++    public void addLegacyChunkEntities(Stream<Entity> entities, ChunkPos forChunk) { // Paper - rewrite chunk system
++        this.entityLookup.addLegacyChunkEntities(entities.toList(), forChunk); // Paper - rewrite chunk system
++    }
++
++    public void addWorldGenChunkEntities(Stream<Entity> entities, ChunkPos forChunk) { // Paper - rewrite chunk system
++        this.entityLookup.addWorldGenChunkEntities(entities.toList(), forChunk); // Paper - rewrite chunk system
+     }
+ 
+     public void startTickingChunk(LevelChunk p_184103_) {
+@@ -1613,32 +_,47 @@
+     @Override
+     public void close() throws IOException {
+         super.close();
+-        this.entityManager.close();
++        //this.entityManager.close();
+     }
+ 
+     @Override
+     public String gatherChunkSourceStats() {
+-        return "Chunks[S] W: " + this.chunkSource.gatherStats() + " E: " + this.entityManager.gatherStats();
++        return "Chunks[S] W: " + this.chunkSource.gatherStats() + " E: " + this.entityLookup.getDebugInfo(); // Paper - rewrite chunk system
+     }
+ 
+     public boolean areEntitiesLoaded(long p_143320_) {
+-        return this.entityManager.areEntitiesLoaded(p_143320_);
++        // Paper start - rewrite chunk system
++        return this.getChunkIfLoadedImmediately(ChunkPos.getX(p_143320_), ChunkPos.getZ(p_143320_)) != null;
++        // Paper end - rewrite chunk system
+     }
+ 
+     private boolean isPositionTickingWithEntitiesLoaded(long p_184111_) {
+-        return this.areEntitiesLoaded(p_184111_) && this.chunkSource.isPositionTicking(p_184111_);
++        // Paper start - optimize is ticking ready type functions
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(p_184111_);
++        // isTicking implies the chunk is loaded, and the chunk is loaded now implies the entities are loaded
++        return chunkHolder != null && chunkHolder.isTickingReady();
++        // Paper end
+     }
+ 
+     public boolean isPositionEntityTicking(BlockPos p_143341_) {
+-        return this.entityManager.canPositionTick(p_143341_) && this.chunkSource.chunkMap.getDistanceManager().inEntityTickingRange(ChunkPos.asLong(p_143341_));
++        // Paper start - rewrite chunk system
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(io.papermc.paper.util.CoordinateUtils.getChunkKey(p_143341_));
++        return chunkHolder != null && chunkHolder.isEntityTickingReady();
++        // Paper end - rewrite chunk system
+     }
+ 
+     public boolean isNaturalSpawningAllowed(BlockPos p_201919_) {
+-        return this.entityManager.canPositionTick(p_201919_);
++        // Paper start - rewrite chunk system
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(io.papermc.paper.util.CoordinateUtils.getChunkKey(p_201919_));
++        return chunkHolder != null && chunkHolder.isEntityTickingReady();
++        // Paper end - rewrite chunk system
+     }
+ 
+     public boolean isNaturalSpawningAllowed(ChunkPos p_201917_) {
+-        return this.entityManager.canPositionTick(p_201917_);
++        // Paper start - rewrite chunk system
++        io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(io.papermc.paper.util.CoordinateUtils.getChunkKey(p_201917_));
++        return chunkHolder != null && chunkHolder.isEntityTickingReady();
++        // Paper end - rewrite chunk system
+     }
+ 
+     @Override
+@@ -1657,7 +_,7 @@
+     @Override
+     public CrashReportCategory fillReportDetails(CrashReport p_307518_) {
+         CrashReportCategory crashreportcategory = super.fillReportDetails(p_307518_);
+-        crashreportcategory.setDetail("Loaded entity count", () -> String.valueOf(this.entityManager.count()));
++        crashreportcategory.setDetail("Loaded entity count", () -> String.valueOf(this.entityLookup.getAllCopy().length)); // Paper
+         return crashreportcategory;
+     }
+ 
+@@ -1678,6 +_,7 @@
+         }
+ 
+         public void onTrackingStart(Entity p_143371_) {
++            p_143371_.valid = true; // CraftBukkit
+             ServerLevel.this.getChunkSource().addEntity(p_143371_);
+             if (p_143371_ instanceof ServerPlayer serverplayer) {
+                 ServerLevel.this.players.add(serverplayer);
 @@ -1695,8 +_,8 @@
                  ServerLevel.this.navigatingMobs.add(mob);
              }
@@ -223,7 +895,7 @@
                      ServerLevel.this.dragonParts.put(enderdragonpart.getId(), enderdragonpart);
                  }
              }
-@@ -1715,24 +_,61 @@
+@@ -1715,24 +_,62 @@
                  if (ServerLevel.this.isUpdatingNavigations) {
                      String s = "onTrackingStart called during navigation iteration";
                      Util.logAndPauseIfInIde(
@@ -245,6 +917,7 @@
  
              p_143375_.updateDynamicGameEventListener(DynamicGameEventListener::remove);
 +
++            p_143375_.valid = false;
 +            p_143375_.onRemovedFromWorld();
 +            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent(p_143375_, ServerLevel.this));
          }

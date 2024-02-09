@@ -1,20 +1,33 @@
 --- a/net/minecraft/server/level/Ticket.java
 +++ b/net/minecraft/server/level/Ticket.java
-@@ -9,9 +_,14 @@
-     private long createdTick;
- 
-     protected Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_) {
-+        this(p_9425_, p_9426_, p_9427_, false);
-+    }
+@@ -5,14 +_,23 @@
+ public final class Ticket<T> implements Comparable<Ticket<?>> {
+     private final TicketType<T> type;
+     private final int ticketLevel;
+-    private final T key;
+-    private long createdTick;
+-
+-    protected Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_) {
++    public final T key;
++    public long removeDelay;
 +
-+    public Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_, boolean forceTicks) {
++
++    public Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_, long removeDelay) {
          this.type = p_9425_;
          this.ticketLevel = p_9426_;
          this.key = p_9427_;
-+        this.forceTicks = forceTicks;
++        this.removeDelay = removeDelay;
      }
++
++//    public Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_, boolean forceTicks) {
++//        this.type = p_9425_;
++//        this.ticketLevel = p_9426_;
++//        this.key = p_9427_;
++//        this.forceTicks = forceTicks;
++//    }
  
      public int compareTo(Ticket<?> p_9432_) {
+         int i = Integer.compare(this.ticketLevel, p_9432_.ticketLevel);
 @@ -32,18 +_,18 @@
              return false;
          } else {
@@ -33,18 +46,26 @@
      @Override
      public String toString() {
 -        return "Ticket[" + this.type + " " + this.ticketLevel + " (" + this.key + ")] at " + this.createdTick;
-+        return "Ticket[" + this.type + " " + this.ticketLevel + " (" + this.key + ")] at " + this.createdTick + " force ticks " + forceTicks;
++        return "Ticket[" + this.type + " " + this.ticketLevel + " (" + this.key + ")] do die in " + this.removeDelay + " force ticks " + forceTicks;
      }
  
      public TicketType<T> getType() {
-@@ -61,5 +_,12 @@
+@@ -55,11 +_,17 @@
+     }
+ 
+     protected void setCreatedTick(long p_9430_) {
+-        this.createdTick = p_9430_;
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+     }
+ 
      protected boolean timedOut(long p_9435_) {
-         long i = this.type.timeout();
-         return i != 0L && p_9435_ - this.createdTick > i;
+-        long i = this.type.timeout();
+-        return i != 0L && p_9435_ - this.createdTick > i;
++        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
 +    }
 +
 +    /* ======================================== FORGE START =====================================*/
-+    private final boolean forceTicks;
++    private final boolean forceTicks = false;
 +
 +    public boolean isForceTicks() {
 +        return forceTicks;

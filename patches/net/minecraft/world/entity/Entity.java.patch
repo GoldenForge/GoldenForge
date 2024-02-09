@@ -28,6 +28,15 @@
      private final Set<TagKey<Fluid>> fluidOnEyes = new HashSet<>();
      public int invulnerableTime;
      protected boolean firstTick = true;
+@@ -242,6 +_,8 @@
+     @Nullable
+     private BlockState feetBlockState = null;
+ 
++    public boolean valid;
++
+     public Entity(EntityType<?> p_19870_, Level p_19871_) {
+         this.type = p_19870_;
+         this.level = p_19871_;
 @@ -260,7 +_,10 @@
          this.entityData.define(DATA_TICKS_FROZEN, 0);
          this.defineSynchedData();

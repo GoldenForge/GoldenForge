@@ -32,7 +32,6 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.ChunkPos;
-import org.bukkit.plugin.Plugin;
 import org.slf4j.Logger;
 import java.io.IOException;
 import java.text.DecimalFormat;
@@ -52,7 +51,7 @@ import java.util.function.Predicate;
 
 public final class ChunkHolderManager {
 
-    private static final Logger LOGGER = LogUtils.getClassLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     public static final int FULL_LOADED_TICKET_LEVEL    = 33;
     public static final int BLOCK_TICKING_TICKET_LEVEL  = 32;
