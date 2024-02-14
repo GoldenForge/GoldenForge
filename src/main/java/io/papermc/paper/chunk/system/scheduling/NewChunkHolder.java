@@ -34,6 +34,7 @@ import net.minecraft.world.level.chunk.ImposterProtoChunk;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.chunk.storage.EntityStorage;
+import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
 import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
@@ -1810,8 +1811,47 @@ public final class NewChunkHolder {
             this.toComplete = toComplete;
         }
 
+//        @Override
+//        public void run() {
+//            final CompoundTag toSerialize;
+//            try {
+//                this.chunk.asyncsavedata = this.asyncSaveData;
+//                toSerialize = ChunkSerializer.write(this.world, this.chunk);
+//                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, toSerialize));
+//            } catch (final ThreadDeath death) {
+//                throw death;
+//            } catch (final Throwable throwable) {
+//                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + this.world.getWorld().getName() + "', falling back to synchronous save", throwable);
+//                this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
+//                    final CompoundTag synchronousSave;
+//                    try {
+//                        AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
+//                        synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
+//                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
+//                    } catch (final ThreadDeath death) {
+//                        throw death;
+//                    } catch (final Throwable throwable2) {
+//                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
+//                        AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
+//                        return;
+//                    }
+//
+//                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
+//                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
+//
+//                }, PrioritisedExecutor.Priority.HIGHEST);
+//                return;
+//            }
+//            this.toComplete.completeAsyncChunkDataSave(toSerialize);
+//        }
+
+
         @Override
         public void run() {
+            if (!GoldenForgeConfig.Server.asynchronousSave.get()) {
+                this.synchronousSave(false);
+                return;
+            }
             final CompoundTag toSerialize;
             try {
                 this.chunk.asyncsavedata = this.asyncSaveData;
@@ -1821,28 +1861,54 @@ public final class NewChunkHolder {
                 throw death;
             } catch (final Throwable throwable) {
                 LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + this.world.getWorld().getName() + "', falling back to synchronous save", throwable);
-                this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
-                    final CompoundTag synchronousSave;
-                    try {
-                        AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
-                        synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
-                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
-                    } catch (final ThreadDeath death) {
-                        throw death;
-                    } catch (final Throwable throwable2) {
-                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
-                        AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
-                        return;
-                    }
-
-                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
-                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
-
-                }, PrioritisedExecutor.Priority.HIGHEST);
+                this.synchronousSave(true);
                 return;
             }
             this.toComplete.completeAsyncChunkDataSave(toSerialize);
         }
+
+        private void synchronousSave(boolean debug) {
+            this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
+                final CompoundTag synchronousSave;
+                try {
+                    AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
+                    synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
+                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
+                } catch (final ThreadDeath death) {
+                    throw death;
+                } catch (final Throwable throwable2) {
+                    LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
+                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
+                    return;
+                }
+
+                AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
+                if (debug) LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
+
+            }, PrioritisedExecutor.Priority.HIGHEST);
+        }
+
+//        @Override
+//        public void run() {
+//            this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
+//                final CompoundTag synchronousSave;
+//                try {
+//                    AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
+//                    synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
+//                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
+//                } catch (final ThreadDeath death) {
+//                    throw death;
+//                } catch (final Throwable throwable2) {
+//                    LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
+//                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
+//                    return;
+//                }
+//
+//                AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
+//                LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
+//
+//            }, PrioritisedExecutor.Priority.HIGHEST);
+//        }
 
         @Override
         public String toString() {

@@ -23,6 +23,7 @@ public class GoldenForgeConfig {
 
         public static ConfigValue<Integer> ioThreads;
         public static ConfigValue<Integer> workerThreads;
+        public static ConfigValue<Boolean> asynchronousSave;
 
         public static ConfigValue<Boolean> autoconfigSendDistance;
         public static ConfigValue<Double> playerMaxChunkLoadRate;
@@ -73,6 +74,11 @@ public class GoldenForgeConfig {
                     .comment("he number of threads the server should use for world generation loading chunks.")
                     .worldRestart()
                     .define("workerThreads", -1);
+
+            asynchronousSave = builder
+                    .comment("Define if the server should use asynchronous chunk saving. can cause mod incompatibility since ChunkDataEvent.Save is not executed on the main thread")
+                    .worldRestart()
+                    .define("asynchronousSave", true);
 
             autoconfigSendDistance = builder
                     .comment("Whether to use the client's view distance for the chunk send distance of the server. This will exclusively change the radius of chunks sent to the client and will not affect server-side chunk loading or ticking.")
