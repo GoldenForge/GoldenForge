@@ -541,6 +541,7 @@ public final class ChunkHolderManager {
                 this.updateTicketLevel(chunk, levelAfter);
             }
 
+            net.minecraftforge.event.ForgeEventFactory.fireChunkTicketLevelUpdated(this.world, chunk, levelBefore, levelAfter, this.getChunkHolder(chunk).vanillaChunkHolder);
             return current == ticket;
         } finally {
             if (ticketLock != null) {
@@ -1313,6 +1314,7 @@ public final class ChunkHolderManager {
         if (BLOCK_TICKET_UPDATES.get() == Boolean.TRUE) {
             //throw new IllegalStateException("Cannot update ticket level while unloading chunks or updating entity manager");
             LOGGER.error("Cannot update ticket level while unloading chunks or updating entity manager. This is likely caused by a bad mod behaviour");
+            new Exception().printStackTrace();
             return false;
         }
 

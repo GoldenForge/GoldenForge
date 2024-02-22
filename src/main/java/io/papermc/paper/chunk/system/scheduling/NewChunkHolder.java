@@ -827,6 +827,7 @@ public final class NewChunkHolder {
         if (chunk != null) {
             if (chunk instanceof LevelChunk levelChunk) {
                 levelChunk.setLoaded(false);
+                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Unload(chunk));
             }
 
             if (!shouldLevelChunkNotSave) {
@@ -1919,9 +1920,6 @@ public final class NewChunkHolder {
     }
 
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
-        if (chunk instanceof LevelChunk levelChunk) {
-            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Unload(levelChunk));
-        }
         if (!chunk.isUnsaved()) {
             if (unloading) {
                 this.completeAsyncChunkDataSave(null);
