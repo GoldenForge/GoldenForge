@@ -520,15 +520,15 @@ public final class StarLightInterface {
     }
 
     public void scheduleChunkLight(final ChunkPos pos, final Runnable run) {
-        throw new UnsupportedOperationException("No longer implemented, use the new lightQueue field to queue tasks"); // Paper - replace light queue
+        //throw new UnsupportedOperationException("No longer implemented, use the new lightQueue field to queue tasks"); // Paper - replace light queue
     }
 
     public void removeChunkTasks(final ChunkPos pos) {
-        throw new UnsupportedOperationException("No longer implemented, use the new lightQueue field to queue tasks"); // Paper - replace light queue
+        //throw new UnsupportedOperationException("No longer implemented, use the new lightQueue field to queue tasks"); // Paper - replace light queue
     }
 
     public void propagateChanges() {
-        throw new UnsupportedOperationException("No longer implemented, task draining is now performed by the light thread"); // Paper - replace light queue
+        //throw new UnsupportedOperationException("No longer implemented, task draining is now performed by the light thread"); // Paper - replace light queue
     }
 
     public static final class LightQueue {
