@@ -31,6 +31,7 @@ public class GoldenForge {
     }
 
     public GoldenForge() {
+        LOGGER.info("Loading GoldenForge");
         MinecraftForge.EVENT_BUS.register(this);
     }
 
