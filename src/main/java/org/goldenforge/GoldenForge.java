@@ -1,13 +1,20 @@
 package org.goldenforge;
 
 import com.electronwill.nightconfig.core.file.CommentedFileConfig;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.IConfigEvent;
 import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.server.command.ConfigCommand;
+import net.minecraftforge.server.command.ForgeCommand;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.goldenforge.commands.GoldenForgeCommand;
 import org.goldenforge.config.GoldenForgeConfig;
 import me.wesley1808.servercore.Config;
 import org.goldenforgelauncher.GoldenForgeEntryPoint;
@@ -15,11 +22,21 @@ import org.goldenforgelauncher.GoldenForgeEntryPoint;
 import java.io.File;
 import java.nio.file.Path;
 
+@Mod("goldenforge")
 public class GoldenForge {
     public static Logger LOGGER = LogManager.getLogger("GoldenForge");
 
     public static String getBranding() {
         return "Goldenforge 1.19.2 " + GoldenForgeEntryPoint.getVersion();
+    }
+
+    public GoldenForge() {
+        MinecraftForge.EVENT_BUS.register(this);
+    }
+
+    @SubscribeEvent
+    public void onCommandsRegister(RegisterCommandsEvent event) {
+        new GoldenForgeCommand(event.getDispatcher());
     }
 
     public static void init() {

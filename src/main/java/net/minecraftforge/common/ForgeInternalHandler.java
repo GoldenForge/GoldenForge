@@ -5,31 +5,30 @@
 
 package net.minecraftforge.common;
 
+import net.minecraft.server.TickTask;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.server.TickTask;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.common.loot.LootModifierManager;
 import net.minecraftforge.common.util.FakePlayerFactory;
+import net.minecraftforge.common.util.LogicalSidedProvider;
 import net.minecraftforge.event.AddReloadListenerEvent;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.TagsUpdatedEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.TickEvent.ClientTickEvent;
+import net.minecraftforge.event.TickEvent.ServerTickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.event.TagsUpdatedEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.TickEvent.ClientTickEvent;
-import net.minecraftforge.event.TickEvent.ServerTickEvent;
 import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.common.util.LogicalSidedProvider;
-import net.minecraftforge.server.command.ForgeCommand;
 import net.minecraftforge.server.command.ConfigCommand;
-import org.goldenforge.commands.GoldenForgeCommand;
+import net.minecraftforge.server.command.ForgeCommand;
 
 public class ForgeInternalHandler
 {
@@ -110,7 +109,6 @@ public class ForgeInternalHandler
     @SubscribeEvent
     public void onCommandsRegister(RegisterCommandsEvent event)
     {
-        new GoldenForgeCommand(event.getDispatcher());
         new ForgeCommand(event.getDispatcher());
         ConfigCommand.register(event.getDispatcher());
     }

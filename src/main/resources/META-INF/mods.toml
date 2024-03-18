@@ -15,3 +15,13 @@ license="LGPL v2.1"
     description='''
     Forge, a broad compatibility API.
     '''
+[[mods]]
+modId="goldenforge"
+version="${global.forgeVersion}"
+displayURL="https://goldenforge.modcraftmc.fr"
+displayName="GoldenForge"
+credits="Anyone who has contributed on Github and supports our development"
+authors="manugame"
+description='''
+    A fork of forge designed to improve modded server performance.
+    '''
