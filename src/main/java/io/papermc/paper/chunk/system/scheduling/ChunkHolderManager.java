@@ -541,7 +541,7 @@ public final class ChunkHolderManager {
                 this.updateTicketLevel(chunk, levelAfter);
             }
 
-            net.minecraftforge.event.ForgeEventFactory.fireChunkTicketLevelUpdated(this.world, chunk, levelBefore, levelAfter, this.getChunkHolder(chunk).vanillaChunkHolder);
+            //net.minecraftforge.event.ForgeEventFactory.fireChunkTicketLevelUpdated(this.world, chunk, levelBefore, levelAfter, this.getChunkHolder(chunk).vanillaChunkHolder);
             return current == ticket;
         } finally {
             if (ticketLock != null) {
