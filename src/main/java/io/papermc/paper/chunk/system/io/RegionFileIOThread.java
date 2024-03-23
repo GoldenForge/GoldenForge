@@ -7,6 +7,7 @@ import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedQueueExecutorT
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedThreadedTaskQueue;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.mojang.logging.LogUtils;
+import dev.kaiijumc.kaiiju.region.LinearRegionFile;
 import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.TickThread;
 import it.unimi.dsi.fastutil.HashCommon;
@@ -829,8 +830,14 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
                     // not sure at this point, let the I/O thread figure it out
                     return Boolean.TRUE;
                 }
+                if (file instanceof RegionFile regionFile) {
+                    return regionFile.hasChunk(chunkPos) ? Boolean.TRUE : Boolean.FALSE;
+                }
+                if (file instanceof LinearRegionFile linearRegionFile) {
+                    return linearRegionFile.hasChunk(chunkPos) ? Boolean.TRUE : Boolean.FALSE;
+                }
 
-                return file.hasChunk(chunkPos) ? Boolean.TRUE : Boolean.FALSE;
+                throw new IllegalStateException();
             });
         }
     }
