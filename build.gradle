@@ -17,7 +17,7 @@ import org.gradle.plugins.ide.eclipse.model.SourceFolder
 plugins {
     id 'org.cadixdev.licenser' version '0.6.1'
     id 'com.github.ben-manes.versions' version '0.46.0'
-    id 'net.minecraftforge.gradleutils' version '[2.2,2.3)'
+    id 'net.minecraftforge.gradleutils' version '2+'
     id 'eclipse'
     id 'de.undercouch.download' version '5.4.0'
     id 'net.minecraftforge.gradle.patcher' version '[6.0,6.2)' apply false
@@ -88,14 +88,10 @@ println('Version: ' + VERSION +
         ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ')' +
         ' Arch: ' + System.getProperty('os.arch'))
 
-changelog {
-    fromTag MIN_TAG_FOR_CHANGELOG
-}
 
 def extraTxts = [
     rootProject.file('CREDITS.txt'),
     rootProject.file('LICENSE.txt'),
-    rootProject.tasks.createChangelog.outputFile
 ]
 
 tasks.register('downloadVersionManifest', Download) {
