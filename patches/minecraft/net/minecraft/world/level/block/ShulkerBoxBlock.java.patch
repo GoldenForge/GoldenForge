@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/level/block/ShulkerBoxBlock.java
++++ b/net/minecraft/world/level/block/ShulkerBoxBlock.java
+@@ -205,6 +_,7 @@
+    }
+ 
+    public VoxelShape m_5940_(BlockState p_56257_, BlockGetter p_56258_, BlockPos p_56259_, CollisionContext p_56260_) {
++      if (Thread.currentThread().getName().contains("petal-path-processor")) return Shapes.m_83144_(); // Kaiiju - async pathfinding - we cannot get block entities
+       BlockEntity blockentity = p_56258_.m_7702_(p_56259_);
+       return blockentity instanceof ShulkerBoxBlockEntity ? Shapes.m_83064_(((ShulkerBoxBlockEntity)blockentity).m_59666_(p_56257_)) : Shapes.m_83144_();
+    }

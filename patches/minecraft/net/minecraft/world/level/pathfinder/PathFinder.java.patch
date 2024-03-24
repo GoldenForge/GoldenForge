@@ -1,7 +1,41 @@
 --- a/net/minecraft/world/level/pathfinder/PathFinder.java
 +++ b/net/minecraft/world/level/pathfinder/PathFinder.java
-@@ -38,28 +_,31 @@
+@@ -25,42 +_,90 @@
+    private static final boolean f_164715_ = false;
+    private final BinaryHeap f_77423_ = new BinaryHeap();
+ 
++   private final @Nullable dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator; // Kaiiju - petal - we use this later to generate an evaluator
++
++
++   public PathFinder(NodeEvaluator pathNodeMaker, int range, @Nullable dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator) { // Kaiiju - petal - add nodeEvaluatorGenerator
++      this.f_77422_ = pathNodeMaker;
++      this.f_77421_ = range;
++      // Kaiiju start - petal - support nodeEvaluatorgenerators
++      this.nodeEvaluatorGenerator = nodeEvaluatorGenerator;
++   }
++
+    public PathFinder(NodeEvaluator p_77425_, int p_77426_) {
+-      this.f_77422_ = p_77425_;
+-      this.f_77421_ = p_77426_;
++      this(p_77425_, p_77426_, null);
++      // Kaiiju end
+    }
+ 
+    @Nullable
+    public Path m_77427_(PathNavigationRegion p_77428_, Mob p_77429_, Set<BlockPos> p_77430_, float p_77431_, int p_77432_, float p_77433_) {
+-      this.f_77423_.m_77081_();
+-      this.f_77422_.m_6028_(p_77428_, p_77429_);
+-      Node node = this.f_77422_.m_7171_();
++      if(!org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get()) this.f_77423_.m_77081_(); // Kaiiju - petal - it's always cleared in processPath
++      // Kaiiju start - petal - use a generated evaluator if we have one otherwise run sync
++      NodeEvaluator nodeEvaluator = this.nodeEvaluatorGenerator == null
++              ? this.f_77422_
++              : dev.kaiijumc.kaiiju.path.NodeEvaluatorCache.takeNodeEvaluator(this.nodeEvaluatorGenerator, this.f_77422_);
++      nodeEvaluator.m_6028_(p_77428_, p_77429_);
++      Node node = nodeEvaluator.m_7171_();
++      // Kaiiju end
        if (node == null) {
++         dev.kaiijumc.kaiiju.path.NodeEvaluatorCache.removeNodeEvaluator(nodeEvaluator); // Kaiiju - petal - handle nodeEvaluatorGenerator
           return null;
        } else {
 -         Map<Target, BlockPos> map = p_77430_.stream().collect(Collectors.toMap((p_77448_) -> {
@@ -11,46 +45,85 @@
 +         // Paper start - remove streams - and optimize collection
 +         List<Map.Entry<Target, BlockPos>> map = Lists.newArrayList();
 +         for (BlockPos pos : p_77430_) {
-+            map.add(new java.util.AbstractMap.SimpleEntry<>(this.f_77422_.m_7568_(pos.m_123341_(), pos.m_123342_(), pos.m_123343_()), pos));
++            map.add(new java.util.AbstractMap.SimpleEntry<>(nodeEvaluator.m_7568_(pos.m_123341_(), pos.m_123342_(), pos.m_123343_()), pos)); // Kaiiju - petal - handle nodeEvaluatorGenerator
 +         }
 +         // Paper end
-+         Path path = this.findPath(p_77428_.m_151625_(), node, map, p_77431_, p_77432_, p_77433_);
++         // Kaiiju start - petal - async path processing
++         if (this.nodeEvaluatorGenerator == null) {
++            // run sync :(
++            dev.kaiijumc.kaiiju.path.NodeEvaluatorCache.removeNodeEvaluator(nodeEvaluator);
++            return this.findPath(p_77428_.m_151625_(), node, map, p_77431_, p_77432_, p_77433_);
++         }
++
++         return new dev.kaiijumc.kaiiju.path.AsyncPath(Lists.newArrayList(), p_77430_, () -> {
++            try {
++               return this.processPath(nodeEvaluator, node, map, p_77431_, p_77432_, p_77433_);
++            } catch (Exception e) {
++               e.printStackTrace();
++               return null;
++            } finally {
++               nodeEvaluator.m_6802_();
++               dev.kaiijumc.kaiiju.path.NodeEvaluatorCache.returnNodeEvaluator(nodeEvaluator);
++            }
++         });
++         // Kaiiju end
++      }
++   }
++
++   private Path findPath(ProfilerFiller profiler, Node startNode, List<Map.Entry<Target, BlockPos>> positions, float followRange, int distance, float rangeMultiplier) {
++      profiler.m_6180_("find_path");
++      profiler.m_142259_(MetricCategory.PATH_FINDING);
++      // Kaiiju start - petal - split pathfinding into the original sync method for compat and processing for delaying
++      try {
++         return this.processPath(this.f_77422_, startNode, positions, followRange, distance, rangeMultiplier);
++      } catch (Exception e) {
++         e.printStackTrace();
++         return null;
++      } finally {
           this.f_77422_.m_6802_();
-          return path;
+-         return path;
        }
     }
  
-    @Nullable
+-   @Nullable
 -   private Path m_164716_(ProfilerFiller p_164717_, Node p_164718_, Map<Target, BlockPos> p_164719_, float p_164720_, int p_164721_, float p_164722_) {
-+   private Path findPath(ProfilerFiller p_164717_, Node p_164718_, List<Map.Entry<Target, BlockPos>> p_164719_, float p_164720_, int p_164721_, float p_164722_) {
-       p_164717_.m_6180_("find_path");
-       p_164717_.m_142259_(MetricCategory.PATH_FINDING);
+-      p_164717_.m_6180_("find_path");
+-      p_164717_.m_142259_(MetricCategory.PATH_FINDING);
 -      Set<Target> set = p_164719_.keySet();
-+      //Set<Target> set = p_164719_.keySet();
-       p_164718_.f_77275_ = 0.0F;
+-      p_164718_.f_77275_ = 0.0F;
 -      p_164718_.f_77276_ = this.m_77444_(p_164718_, set);
-+      p_164718_.f_77276_ = this.getBestH(p_164718_, p_164719_);
-       p_164718_.f_77277_ = p_164718_.f_77276_;
+-      p_164718_.f_77277_ = p_164718_.f_77276_;
++   private synchronized @org.jetbrains.annotations.NotNull Path processPath(NodeEvaluator nodeEvaluator, Node startNode, List<Map.Entry<Target, BlockPos>> positions, float followRange, int distance, float rangeMultiplier) { // sync to only use the caching functions in this class on a single thread
++      org.apache.commons.lang3.Validate.isTrue(!positions.isEmpty()); // ensure that we have at least one position, which means we'll always return a path
++      // Kaiiju end
++      // Set<Target> set = positions.keySet();
++      startNode.f_77275_ = 0.0F;
++      startNode.f_77276_ = this.getBestH(startNode, positions); // Paper - optimize collection
++      startNode.f_77277_ = startNode.f_77276_;
        this.f_77423_.m_77081_();
-       this.f_77423_.m_77084_(p_164718_);
+-      this.f_77423_.m_77084_(p_164718_);
 -      Set<Node> set1 = ImmutableSet.of();
-+      //Set<Node> set1 = ImmutableSet.of();
++      this.f_77423_.m_77084_(startNode);
++      // Set<Node> set2 = ImmutableSet.of(); // Paper - unused - diff on change
        int i = 0;
 -      Set<Target> set2 = Sets.newHashSetWithExpectedSize(set.size());
-+      List<Map.Entry<Target, BlockPos>> entryList = Lists.newArrayListWithExpectedSize(p_164719_.size());
-       int j = (int)((float)this.f_77421_ * p_164722_);
+-      int j = (int)((float)this.f_77421_ * p_164722_);
++      List<Map.Entry<Target, BlockPos>> entryList = Lists.newArrayListWithExpectedSize(positions.size()); // Paper - optimize collection
++      int j = (int)((float)this.f_77421_ * rangeMultiplier);
  
        while(!this.f_77423_.m_77092_()) {
-@@ -71,14 +_,18 @@
+          ++i;
+@@ -71,57 +_,68 @@
           Node node = this.f_77423_.m_77091_();
           node.f_77279_ = true;
  
 -         for(Target target : set) {
+-            if (node.m_77304_(target) <= (float)p_164721_) {
 +         // Paper start - optimize collection
-+         for(int i1 = 0; i1 < p_164719_.size(); i1++) {
-+            final Map.Entry<Target, BlockPos> entry = p_164719_.get(i1);
++         for(int i1 = 0; i1 < positions.size(); i1++) {
++            final Map.Entry<Target, BlockPos> entry = positions.get(i1);
 +            Target target = entry.getKey();
-             if (node.m_77304_(target) <= (float)p_164721_) {
++            if (node.m_77304_(target) <= (float)distance) {
                 target.m_77509_();
 -               set2.add(target);
 +               entryList.add(entry);
@@ -59,20 +132,44 @@
           }
  
 -         if (!set2.isEmpty()) {
-+         if (!entryList.isEmpty()) {
++         if (!entryList.isEmpty()) { // Paper - rename variable
              break;
           }
  
-@@ -93,7 +_,7 @@
-                if (node1.f_77280_ < p_164720_ && (!node1.m_77303_() || f1 < node1.f_77275_)) {
-                   node1.f_77278_ = node;
-                   node1.f_77275_ = f1;
+-         if (!(node.m_77293_(p_164718_) >= p_164720_)) {
+-            int k = this.f_77422_.m_6065_(this.f_77420_, node);
++         if (!(node.m_77293_(startNode) >= followRange)) {
++            int k = nodeEvaluator.m_6065_(this.f_77420_, node); // Kaiiju - petal - use provided nodeEvaluator
+ 
+             for(int l = 0; l < k; ++l) {
+-               Node node1 = this.f_77420_[l];
+-               float f = this.m_214208_(node, node1);
+-               node1.f_77280_ = node.f_77280_ + f;
+-               float f1 = node.f_77275_ + f + node1.f_77281_;
+-               if (node1.f_77280_ < p_164720_ && (!node1.m_77303_() || f1 < node1.f_77275_)) {
+-                  node1.f_77278_ = node;
+-                  node1.f_77275_ = f1;
 -                  node1.f_77276_ = this.m_77444_(node1, set) * 1.5F;
-+                  node1.f_77276_ = this.getBestH(node1, p_164719_) * 1.5F;
-                   if (node1.m_77303_()) {
-                      this.f_77423_.m_77086_(node1, node1.f_77275_ + node1.f_77276_);
+-                  if (node1.m_77303_()) {
+-                     this.f_77423_.m_77086_(node1, node1.f_77275_ + node1.f_77276_);
++               Node node2 = this.f_77420_[l];
++               float f = this.m_214208_(node, node2);
++               node2.f_77280_ = node.f_77280_ + f;
++               float g = node.f_77275_ + f + node2.f_77281_;
++               if (node2.f_77280_ < followRange && (!node2.m_77303_() || g < node2.f_77275_)) {
++                  node2.f_77278_ = node;
++                  node2.f_77275_ = g;
++                  node2.f_77276_ = this.getBestH(node2, positions) * 1.5F; // Paper - list instead of set
++                  if (node2.m_77303_()) {
++                     this.f_77423_.m_77086_(node2, node2.f_77275_ + node2.f_77276_);
                    } else {
-@@ -105,23 +_,29 @@
+-                     node1.f_77277_ = node1.f_77275_ + node1.f_77276_;
+-                     this.f_77423_.m_77084_(node1);
++                     node2.f_77277_ = node2.f_77275_ + node2.f_77276_;
++                     this.f_77423_.m_77084_(node2);
+                   }
+                }
+             }
           }
        }
  
@@ -88,11 +185,12 @@
 +      boolean entryListIsEmpty = entryList.isEmpty();
 +      Comparator<Path> comparator = entryListIsEmpty ? Comparator.comparingInt(Path::m_77398_)
 +              : Comparator.comparingDouble(Path::m_77407_).thenComparingInt(Path::m_77398_);
-+      for (Map.Entry<Target, BlockPos> entry : entryListIsEmpty ? p_164719_ : entryList) {
++      for (Map.Entry<Target, BlockPos> entry : entryListIsEmpty ? positions : entryList) {
 +         Path path = this.m_77434_(entry.getKey().m_77508_(), entry.getValue(), !entryListIsEmpty);
 +         if (best == null || comparator.compare(path, best) < 0)
 +            best = path;
 +      }
++      //noinspection ConstantConditions // Kaiiju - petal - ignore this warning, we know that the above loop always runs at least once since positions is not empty
 +      return best;
 +      // Paper end
     }

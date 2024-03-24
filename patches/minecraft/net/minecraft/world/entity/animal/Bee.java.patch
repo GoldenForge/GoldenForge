@@ -73,7 +73,24 @@
        private static final int f_148805_ = 3;
        final List<BlockPos> f_27981_ = Lists.newArrayList();
        @Nullable
-@@ -824,7 +_,7 @@
+@@ -757,7 +_,7 @@
+                   } else {
+                      Bee.this.m_27880_(Bee.this.f_27698_);
+                   }
+-               } else {
++               } else if (f_21344_.m_26570_() != null && f_21344_.m_26570_().isProcessed()) { // Kaiiju - petal - check processing
+                   boolean flag = this.m_27990_(Bee.this.f_27698_);
+                   if (!flag) {
+                      this.m_28007_();
+@@ -817,14 +_,14 @@
+             return true;
+          } else {
+             Path path = Bee.this.f_21344_.m_26570_();
+-            return path != null && path.m_77406_().equals(p_28002_) && path.m_77403_() && path.m_77392_();
++            return path != null && path.isProcessed() && path.m_77406_().equals(p_28002_) && path.m_77403_() && path.m_77392_(); // Kaiiju - petal - ensure path is processed
+          }
+       }
+    }
  
     public class BeeGoToKnownFlowerGoal extends Bee.BaseBeeGoal {
        private static final int f_148807_ = 600;

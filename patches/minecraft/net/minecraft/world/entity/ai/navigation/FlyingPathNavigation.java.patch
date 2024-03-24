@@ -1,0 +1,35 @@
+--- a/net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/FlyingPathNavigation.java
+@@ -16,9 +_,24 @@
+       super(p_26424_, p_26425_);
+    }
+ 
++   // Kaiiju start - petal - async path processing
++   private static final dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (dev.kaiijumc.kaiiju.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++      FlyNodeEvaluator nodeEvaluator = new FlyNodeEvaluator();
++      nodeEvaluator.m_77351_(nodeEvaluatorFeatures.canPassDoors());
++      nodeEvaluator.m_77358_(nodeEvaluatorFeatures.canFloat());
++      nodeEvaluator.m_77355_(nodeEvaluatorFeatures.canOpenDoors());
++      return nodeEvaluator;
++   };
++   // Kaiiju end
++
+    protected PathFinder m_5532_(int p_26428_) {
+       this.f_26508_ = new FlyNodeEvaluator();
+       this.f_26508_.m_77351_(true);
++      // Kaiiju start - petal - async path processing
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get())
++         return new PathFinder(this.f_26508_, p_26428_, nodeEvaluatorGenerator);
++      else
++         // Kaiiju end
+       return new PathFinder(this.f_26508_, p_26428_);
+    }
+ 
+@@ -39,6 +_,7 @@
+       if (this.f_26506_) {
+          this.m_26569_();
+       }
++      if (this.f_26496_ != null && !this.f_26496_.isProcessed()) return; // Kaiiju - petal - async path processing
+ 
+       if (!this.m_26571_()) {
+          if (this.m_7632_()) {

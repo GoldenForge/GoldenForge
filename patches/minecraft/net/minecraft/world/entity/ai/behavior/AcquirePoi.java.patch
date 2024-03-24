@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-@@ -85,7 +_,12 @@
+@@ -85,7 +_,46 @@
              return true;
           }
        };
@@ -11,6 +11,49 @@
 +      Set<Pair<Holder<PoiType>, BlockPos>> set = new java.util.HashSet<>(poiposes);
 +      // Paper end - optimise POI access
 +      //Set<Pair<Holder<PoiType>, BlockPos>> set = poimanager.findAllClosestFirstWithType(this.poiType, predicate, p_22351_.blockPosition(), 48, PoiManager.Occupancy.HAS_SPACE).limit(5L).collect(Collectors.toSet());
++      // Kaiiju start - petal - Async path processing
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get()) {
++         // await on path async
++         Path possiblePath = m_217097_(p_22351_, set);
++
++         // wait on the path to be processed
++         dev.kaiijumc.kaiiju.path.AsyncPathProcessor.awaitProcessing(p_22351_, possiblePath, path -> {
++            // read canReach check
++            if (path == null || !path.m_77403_()) {
++               for(Pair<Holder<PoiType>, BlockPos> pair : set) {
++                  f_22321_.computeIfAbsent(
++                          pair.getSecond().m_121878_(),
++                          (m) -> new JitteredLinearRetry(p_22351_.m_9236_().f_46441_, p_22352_)
++                  );
++               }
++               return;
++            }
++            BlockPos blockPos = path.m_77406_();
++            poimanager.m_27177_(blockPos).ifPresent((poiType) -> {
++               poimanager.m_217946_(this.f_22316_,
++                       (holder, blockPos2) -> blockPos2.equals(blockPos),
++                       blockPos,
++                       1
++               );
++               p_22351_.m_6274_().m_21879_(this.f_22317_, GlobalPos.m_122643_(p_22350_.m_46472_(), blockPos));
++               this.f_22319_.ifPresent((status) -> {
++                  p_22350_.m_7605_(p_22351_, status);
++               });
++               f_22321_.clear();
++               DebugPackets.m_133719_(p_22350_, blockPos);
++            });
++         });
++      } else {
++         // Kaiiju end
        Path path = m_217097_(p_22351_, set);
        if (path != null && path.m_77403_()) {
           BlockPos blockpos = path.m_77406_();
+@@ -107,7 +_,7 @@
+             });
+          }
+       }
+-
++      } // Kaiiju - Async path processing
+    }
+ 
+    @Nullable

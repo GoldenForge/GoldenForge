@@ -1,0 +1,27 @@
+--- a/net/minecraft/world/entity/ai/navigation/WaterBoundPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/WaterBoundPathNavigation.java
+@@ -15,9 +_,24 @@
+       super(p_26594_, p_26595_);
+    }
+ 
++   // Kaiiju start - petal - async path processing
++   private static final dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (dev.kaiijumc.kaiiju.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++      SwimNodeEvaluator nodeEvaluator = new SwimNodeEvaluator(nodeEvaluatorFeatures.allowBreaching());
++      nodeEvaluator.m_77351_(nodeEvaluatorFeatures.canPassDoors());
++      nodeEvaluator.m_77358_(nodeEvaluatorFeatures.canFloat());
++      nodeEvaluator.m_77355_(nodeEvaluatorFeatures.canOpenDoors());
++      return nodeEvaluator;
++   };
++   // Kaiiju end
++
+    protected PathFinder m_5532_(int p_26598_) {
+       this.f_26592_ = this.f_26494_.m_6095_() == EntityType.f_20559_;
+       this.f_26508_ = new SwimNodeEvaluator(this.f_26592_);
++      // Kaiiju start - async path processing
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get())
++         return new PathFinder(this.f_26508_, p_26598_, nodeEvaluatorGenerator);
++      else
++         // Kaiiju end
+       return new PathFinder(this.f_26508_, p_26598_);
+    }
+ 

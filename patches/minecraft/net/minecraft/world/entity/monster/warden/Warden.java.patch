@@ -14,3 +14,20 @@
        this.f_19853_.m_46473_().m_7238_();
        super.m_8024_();
        if ((this.f_19797_ + this.m_19879_()) % 120 == 0) {
+@@ -571,6 +_,16 @@
+          protected PathFinder m_5532_(int p_219479_) {
+             this.f_26508_ = new WalkNodeEvaluator();
+             this.f_26508_.m_77351_(true);
++            // Kaiiju start - petal - async path processing
++            if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get())
++               return new PathFinder(this.f_26508_, p_219479_, GroundPathNavigation.nodeEvaluatorGenerator) {
++                  @Override
++                  protected float m_214208_(Node p_219486_, Node p_219487_) {
++                     return p_219486_.m_230613_(p_219487_);
++                  }
++               };
++            else
++               // Kaiiju end
+             return new PathFinder(this.f_26508_, p_219479_) {
+                protected float m_214208_(Node p_219486_, Node p_219487_) {
+                   return p_219486_.m_230613_(p_219487_);

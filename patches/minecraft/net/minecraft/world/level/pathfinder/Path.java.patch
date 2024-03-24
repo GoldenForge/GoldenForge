@@ -1,0 +1,46 @@
+--- a/net/minecraft/world/level/pathfinder/Path.java
++++ b/net/minecraft/world/level/pathfinder/Path.java
+@@ -12,7 +_,7 @@
+ import net.minecraft.world.phys.Vec3;
+ 
+ public class Path {
+-   private final List<Node> f_77362_;
++   public final List<Node> f_77362_;
+    private Node[] f_77363_ = new Node[0];
+    private Node[] f_77364_ = new Node[0];
+    @Nullable
+@@ -22,6 +_,8 @@
+    private final float f_77368_;
+    private final boolean f_77369_;
+ 
++   public boolean hasNext() { return m_77399_() < this.f_77362_.size(); } // Paper
++
+    public Path(List<Node> p_77371_, BlockPos p_77372_, boolean p_77373_) {
+       this.f_77362_ = p_77371_;
+       this.f_77367_ = p_77372_;
+@@ -29,6 +_,17 @@
+       this.f_77369_ = p_77373_;
+    }
+ 
++   // Kaiiju start - petal - async path processing
++   /**
++    * checks if the path is completely processed in the case of it being computed async
++    *
++    * @return true if the path is processed
++    */
++   public boolean isProcessed() {
++      return true;
++   }
++   // Kaiiju end
++
+    public void m_77374_() {
+       ++this.f_77366_;
+    }
+@@ -103,6 +_,7 @@
+    }
+ 
+    public boolean m_77385_(@Nullable Path p_77386_) {
++      if (p_77386_ == this) return true; // Kaiiju - petal - short circuit
+       if (p_77386_ == null) {
+          return false;
+       } else if (p_77386_.f_77362_.size() != this.f_77362_.size()) {

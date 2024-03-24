@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/ai/goal/DoorInteractGoal.java
++++ b/net/minecraft/world/entity/ai/goal/DoorInteractGoal.java
+@@ -56,7 +_,7 @@
+       } else {
+          GroundPathNavigation groundpathnavigation = (GroundPathNavigation)this.f_25189_.m_21573_();
+          Path path = groundpathnavigation.m_26570_();
+-         if (path != null && !path.m_77392_() && groundpathnavigation.m_26492_()) {
++         if (path != null && path.isProcessed() && !path.m_77392_() && groundpathnavigation.m_26492_()) {// Kaiiju - async pathfinding - ensure path is processed
+             for(int i = 0; i < Math.min(path.m_77399_() + 2, path.m_77398_()); ++i) {
+                Node node = path.m_77375_(i);
+                this.f_25190_ = new BlockPos(node.f_77271_, node.f_77272_ + 1, node.f_77273_);

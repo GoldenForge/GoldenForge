@@ -1,0 +1,27 @@
+--- a/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
+@@ -12,9 +_,24 @@
+       super(p_217788_, p_217789_);
+    }
+ 
++   // Kaiiju start - petal - async path processing
++   private static final dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (dev.kaiijumc.kaiiju.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++      AmphibiousNodeEvaluator nodeEvaluator = new AmphibiousNodeEvaluator(false);
++      nodeEvaluator.m_77351_(nodeEvaluatorFeatures.canPassDoors());
++      nodeEvaluator.m_77358_(nodeEvaluatorFeatures.canFloat());
++      nodeEvaluator.m_77355_(nodeEvaluatorFeatures.canOpenDoors());
++      return nodeEvaluator;
++   };
++   // Kaiiju end
++
+    protected PathFinder m_5532_(int p_217792_) {
+       this.f_26508_ = new AmphibiousNodeEvaluator(false);
+       this.f_26508_.m_77351_(true);
++      // Kaiiju start - petal - async path processing
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get())
++         return new PathFinder(this.f_26508_, p_217792_, nodeEvaluatorGenerator);
++      else
++         // Kaiiju end
+       return new PathFinder(this.f_26508_, p_217792_);
+    }
+ 

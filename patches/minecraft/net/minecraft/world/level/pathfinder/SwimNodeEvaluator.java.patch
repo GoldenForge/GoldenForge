@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/pathfinder/SwimNodeEvaluator.java
++++ b/net/minecraft/world/level/pathfinder/SwimNodeEvaluator.java
+@@ -16,7 +_,7 @@
+ import net.minecraft.world.level.material.FluidState;
+ 
+ public class SwimNodeEvaluator extends NodeEvaluator {
+-   private final boolean f_77455_;
++   public final boolean f_77455_;
+    private final Long2ObjectMap<BlockPathTypes> f_192951_ = new Long2ObjectOpenHashMap<>();
+ 
+    public SwimNodeEvaluator(boolean p_77457_) {

@@ -13,3 +13,28 @@
        this.f_19853_.m_46473_().m_7238_();
        this.f_19853_.m_46473_().m_6180_("frogActivityUpdate");
        FrogAi.m_218577_(this);
+@@ -384,9 +_,24 @@
+          super(p_218556_, p_218557_);
+       }
+ 
++      // Kaiiju start - petal - async path processing
++      private static final dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (dev.kaiijumc.kaiiju.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++         Frog.FrogNodeEvaluator nodeEvaluator = new Frog.FrogNodeEvaluator(true);
++         nodeEvaluator.m_77351_(nodeEvaluatorFeatures.canPassDoors());
++         nodeEvaluator.m_77358_(nodeEvaluatorFeatures.canFloat());
++         nodeEvaluator.m_77355_(nodeEvaluatorFeatures.canOpenDoors());
++         return nodeEvaluator;
++      };
++      // Kaiiju end
++
+       protected PathFinder m_5532_(int p_218559_) {
+          this.f_26508_ = new Frog.FrogNodeEvaluator(true);
+          this.f_26508_.m_77351_(true);
++         // Kaiiju start - petal - async path processing
++         if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get())
++            return new PathFinder(this.f_26508_, p_218559_, nodeEvaluatorGenerator);
++         else
++            // Kaiiju end
+          return new PathFinder(this.f_26508_, p_218559_);
+       }
+    }

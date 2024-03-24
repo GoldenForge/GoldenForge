@@ -60,6 +60,10 @@ public class GoldenForgeConfig {
         public static ConfigValue<Boolean> linearCrashOnBrokenSymlink;
         public static ConfigValue<Boolean> dearEnabled;
 
+        public static ConfigValue<Boolean> asyncPathProcessing;
+        public static ConfigValue<Integer> asyncPathProcessingMaxThreads;
+        public static ConfigValue<Integer> asyncPathProcessingKeepalive;
+
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
                     .push("ChunkSystem");
@@ -228,6 +232,23 @@ public class GoldenForgeConfig {
                     .worldRestart()
                     .define("linearCrashOnBrokenSymlink", true);
 
+            builder.pop();
+
+            builder.push("Async PathFinding (experimental)");
+            asyncPathProcessing = builder
+                    .comment("enable asyncPathProcessing")
+                    .worldRestart()
+                    .define("asyncPathProcessing", false);
+
+            asyncPathProcessingMaxThreads = builder
+                    .worldRestart()
+                    .define("asyncPathProcessingMaxThreads", 1);
+
+            asyncPathProcessingKeepalive = builder
+                    .worldRestart()
+                    .define("asyncPathProcessingKeepalive", 60);
+
+            builder.pop();
         }
 
         public void postConfig() {

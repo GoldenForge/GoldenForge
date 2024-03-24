@@ -8,3 +8,28 @@
        p_33884_.m_6518_(p_33882_, p_33883_, MobSpawnType.JOCKEY, p_33885_, (CompoundTag)null);
        p_33884_.m_7998_(this, true);
        return new AgeableMob.AgeableMobGroupData(0.0F);
+@@ -457,9 +_,24 @@
+          super(p_33969_, p_33970_);
+       }
+ 
++      // Kaiiju start - petal - async path processing
++      private static final dev.kaiijumc.kaiiju.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (dev.kaiijumc.kaiiju.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++         WalkNodeEvaluator nodeEvaluator = new WalkNodeEvaluator();
++         nodeEvaluator.m_77351_(nodeEvaluatorFeatures.canPassDoors());
++         nodeEvaluator.m_77358_(nodeEvaluatorFeatures.canFloat());
++         nodeEvaluator.m_77355_(nodeEvaluatorFeatures.canOpenDoors());
++         return nodeEvaluator;
++      };
++      // Kaiiju end
++
+       protected PathFinder m_5532_(int p_33972_) {
+          this.f_26508_ = new WalkNodeEvaluator();
+          this.f_26508_.m_77351_(true);
++         // Kaiiju start - async path processing
++         if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get())
++            return new PathFinder(this.f_26508_, p_33972_, nodeEvaluatorGenerator);
++         else
++            // Kaiiju end
+          return new PathFinder(this.f_26508_, p_33972_);
+       }
+ 

@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/level/block/piston/MovingPistonBlock.java
++++ b/net/minecraft/world/level/block/piston/MovingPistonBlock.java
+@@ -94,6 +_,7 @@
+    }
+ 
+    public VoxelShape m_5939_(BlockState p_60104_, BlockGetter p_60105_, BlockPos p_60106_, CollisionContext p_60107_) {
++      if (Thread.currentThread().getName().contains("petal-path-processor")) return Shapes.m_83040_(); // Kaiiju - async pathfinding - we cannot get block entities
+       PistonMovingBlockEntity pistonmovingblockentity = this.m_60053_(p_60105_, p_60106_);
+       return pistonmovingblockentity != null ? pistonmovingblockentity.m_60356_(p_60105_, p_60106_) : Shapes.m_83040_();
+    }

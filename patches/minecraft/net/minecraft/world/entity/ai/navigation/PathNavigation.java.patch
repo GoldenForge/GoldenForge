@@ -63,6 +63,48 @@
     @Nullable
     public final Path m_26524_(double p_26525_, double p_26526_, double p_26527_, int p_26528_) {
        return this.m_7864_(new BlockPos(p_26525_, p_26526_, p_26527_), p_26528_);
+@@ -134,6 +_,10 @@
+          return null;
+       } else if (!this.m_7632_()) {
+          return null;
++         // Kaiiju start - petal - catch early if it's still processing these positions let it keep processing
++      } else if (this.f_26496_ instanceof dev.kaiijumc.kaiiju.path.AsyncPath asyncPath && !asyncPath.isProcessed() && asyncPath.hasSameProcessingPositions(p_148223_)) {
++         return this.f_26496_;
++         // Kaiiju end
+       } else if (this.f_26496_ != null && !this.f_26496_.m_77392_() && p_148223_.contains(this.f_26509_)) {
+          return this.f_26496_;
+       } else {
+@@ -143,12 +_,29 @@
+          PathNavigationRegion pathnavigationregion = new PathNavigationRegion(this.f_26495_, blockpos.m_7918_(-i, -i, -i), blockpos.m_7918_(i, i, i));
+          Path path = this.f_26512_.m_77427_(pathnavigationregion, this.f_26494_, p_148223_, p_148227_, p_148226_, this.f_26511_);
+          this.f_26495_.m_46473_().m_7238_();
++         // Kaiiju start - petal - async path processing
++         if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get()) {
++            // assign early a target position. most calls will only have 1 position
++            if (!p_148223_.isEmpty()) this.f_26509_ = p_148223_.iterator().next();
++
++            dev.kaiijumc.kaiiju.path.AsyncPathProcessor.awaitProcessing(f_26494_, path, processedPath -> {
++               // check that processing didn't take so long that we calculated a new path
++               if (processedPath != this.f_26496_) return;
++
++               if (processedPath != null && processedPath.m_77406_() != null) {
++                  this.f_26509_ = processedPath.m_77406_();
++                  this.f_26510_ = p_148226_;
++                  this.m_26565_();
++               }
++            });
++         } else {
++            // Kaiiju end
+          if (path != null && path.m_77406_() != null) {
+             this.f_26509_ = path.m_77406_();
+             this.f_26510_ = p_148226_;
+             this.m_26565_();
+          }
+-
++         } // Kaiiju - async path processing
+          return path;
+       }
+    }
 @@ -157,14 +_,35 @@
        return this.m_26536_(this.m_26524_(p_26520_, p_26521_, p_26522_, 1), p_26523_);
     }
@@ -100,16 +142,17 @@
           return false;
        } else {
           if (!p_26537_.m_77385_(this.f_26496_)) {
-@@ -172,16 +_,19 @@
+@@ -172,16 +_,18 @@
           }
  
           if (this.m_26571_()) {
 +            this.updateNavigationState();
              return false;
           } else {
-             this.m_6804_();
-             if (this.f_26496_.m_77398_() <= 0) {
-+               this.updateNavigationState();
+-            this.m_6804_();
+-            if (this.f_26496_.m_77398_() <= 0) {
++            if (f_26496_.isProcessed()) this.m_6804_(); // Kaiiju - petal - only trim if processed
++            if (f_26496_.isProcessed() && this.f_26496_.m_77398_() <= 0) { // Kaiiju - petal - only check node count if processed
                 return false;
              } else {
                 this.f_26497_ = p_26538_;
@@ -120,7 +163,19 @@
                 return true;
              }
           }
-@@ -227,10 +_,10 @@
+@@ -198,6 +_,7 @@
+       if (this.f_26506_) {
+          this.m_26569_();
+       }
++      if (this.f_26496_ != null && !this.f_26496_.isProcessed()) return; // Kaiiju - petal - skip pathfinding if we're still processing
+ 
+       if (!this.m_26571_()) {
+          if (this.m_7632_()) {
+@@ -224,13 +_,14 @@
+    }
+ 
+    protected void m_7636_() {
++      if (!this.f_26496_.isProcessed()) return; // Kaiiju - petal - skip if not processed
        Vec3 vec3 = this.m_7475_();
        this.f_26505_ = this.f_26494_.m_20205_() > 0.75F ? this.f_26494_.m_20205_() / 2.0F : 0.75F - this.f_26494_.m_20205_() / 2.0F;
        Vec3i vec3i = this.f_26496_.m_77400_();
@@ -142,3 +197,12 @@
     }
  
     protected abstract Vec3 m_7475_();
+@@ -366,7 +_,7 @@
+    public boolean m_200903_(BlockPos p_200904_) {
+       if (this.f_26506_) {
+          return false;
+-      } else if (this.f_26496_ != null && !this.f_26496_.m_77392_() && this.f_26496_.m_77398_() != 0) {
++      } else if (this.f_26496_ != null && this.f_26496_.isProcessed() && !this.f_26496_.m_77392_() && this.f_26496_.m_77398_() != 0) {  // Kaiiju - petal - Skip if not processed
+          Node node = this.f_26496_.m_77395_();
+          Vec3 vec3 = new Vec3(((double)node.f_77271_ + this.f_26494_.m_20185_()) / 2.0D, ((double)node.f_77272_ + this.f_26494_.m_20186_()) / 2.0D, ((double)node.f_77273_ + this.f_26494_.m_20189_()) / 2.0D);
+          return p_200904_.m_203195_(vec3, (double)(this.f_26496_.m_77398_() - this.f_26496_.m_77399_()));

@@ -1,0 +1,123 @@
+--- a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
++++ b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+@@ -21,6 +_,7 @@
+    private int f_23567_;
+    @Nullable
+    private Path f_23568_;
++   private boolean finishedProcessing; // Kaiiju - petal - track when path is processed
+    @Nullable
+    private BlockPos f_23569_;
+    private float f_23570_;
+@@ -41,9 +_,10 @@
+          Brain<?> brain = p_23584_.m_6274_();
+          WalkTarget walktarget = brain.m_21952_(MemoryModuleType.f_26370_).get();
+          boolean flag = this.m_23589_(p_23584_, walktarget);
+-         if (!flag && this.m_23592_(p_23584_, walktarget, p_23583_.m_46467_())) {
++         if (!org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get() &&  !flag && this.m_23592_(p_23584_, walktarget, p_23583_.m_46467_())) {
+             this.f_23569_ = walktarget.m_26420_().m_6675_();
+             return true;
++         } else if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get() && !flag) { return true; // Kaiiju - async pathfinding
+          } else {
+             brain.m_21936_(MemoryModuleType.f_26370_);
+             if (flag) {
+@@ -56,6 +_,7 @@
+    }
+ 
+    protected boolean m_6737_(ServerLevel p_23586_, Mob p_23587_, long p_23588_) {
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get() && !this.finishedProcessing) return true; // Kaiiju - petal - wait for processing
+       if (this.f_23568_ != null && this.f_23569_ != null) {
+          Optional<WalkTarget> optional = p_23587_.m_6274_().m_21952_(MemoryModuleType.f_26370_);
+          PathNavigation pathnavigation = p_23587_.m_21573_();
+@@ -77,11 +_,67 @@
+    }
+ 
+    protected void m_6735_(ServerLevel p_23609_, Mob p_23610_, long p_23611_) {
++      // Kaiiju start - petal - start processing
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get()) {
++         Brain<?> brain = p_23610_.m_6274_();
++         WalkTarget walkTarget = brain.m_21952_(MemoryModuleType.f_26370_).get();
++
++         this.finishedProcessing = false;
++         this.f_23569_ = walkTarget.m_26420_().m_6675_();
++         this.f_23568_ = this.computePath(p_23610_, walkTarget);
++         return;
++      }
++      // Kaiiju end
+       p_23610_.m_6274_().m_21879_(MemoryModuleType.f_26377_, this.f_23568_);
+       p_23610_.m_21573_().m_26536_(this.f_23568_, (double)this.f_23570_);
+    }
+ 
+    protected void m_6725_(ServerLevel p_23617_, Mob p_23618_, long p_23619_) {
++      // Kaiiju start - petal - Async path processing
++      if (org.goldenforge.config.GoldenForgeConfig.Server.asyncPathProcessing.get()) {
++         if (this.f_23568_ != null && !this.f_23568_.isProcessed()) return; // wait for processing
++
++         if (!this.finishedProcessing) {
++            this.finishedProcessing = true;
++
++            Brain<?> brain = p_23618_.m_6274_();
++            boolean canReach = this.f_23568_ != null && this.f_23568_.m_77403_();
++            if (canReach) {
++               brain.m_21936_(MemoryModuleType.f_26326_);
++            } else if (!brain.m_21874_(MemoryModuleType.f_26326_)) {
++               brain.m_21879_(MemoryModuleType.f_26326_, p_23619_);
++            }
++
++            if (!canReach) {
++               Optional<WalkTarget> walkTarget = brain.m_21952_(MemoryModuleType.f_26370_);
++
++               if (!walkTarget.isPresent()) return;
++
++               BlockPos blockPos = walkTarget.get().m_26420_().m_6675_();
++               Vec3 vec3 = DefaultRandomPos.m_148412_((PathfinderMob)p_23618_, 10, 7, Vec3.m_82539_(blockPos), (float)Math.PI / 2F);
++               if (vec3 != null) {
++                  // try recalculating the path using a random position
++                  this.f_23568_ = p_23618_.m_21573_().m_26524_(vec3.f_82479_, vec3.f_82480_, vec3.f_82481_, 0);
++                  this.finishedProcessing = false;
++                  return;
++               }
++            }
++
++            p_23618_.m_6274_().m_21879_(MemoryModuleType.f_26377_, this.f_23568_);
++            p_23618_.m_21573_().m_26536_(this.f_23568_, this.f_23570_);
++         }
++
++         Path path = p_23618_.m_21573_().m_26570_();
++         Brain<?> brain = p_23618_.m_6274_();
++
++         if (path != null && this.f_23569_ != null && brain.m_21874_(MemoryModuleType.f_26370_)) {
++            WalkTarget walkTarget = brain.m_21952_(MemoryModuleType.f_26370_).get(); // we know isPresent = true
++            if (walkTarget.m_26420_().m_6675_().m_123331_(this.f_23569_) > 4.0D) {
++               this.m_6735_(p_23617_, p_23618_, p_23619_);
++            }
++         }
++      } else {
++         // Kaiiju end
+       Path path = p_23618_.m_21573_().m_26570_();
+       Brain<?> brain = p_23618_.m_6274_();
+       if (this.f_23568_ != path) {
+@@ -97,7 +_,23 @@
+          }
+ 
+       }
+-   }
++      } // Kaiiju - async path processing
++   }
++
++   // Kaiiju start - petal - Async path processing
++   @Nullable
++   private Path computePath(Mob entity, WalkTarget walkTarget) {
++      BlockPos blockPos = walkTarget.m_26420_().m_6675_();
++      // don't pathfind outside region
++      if (!io.papermc.paper.util.TickThread.isTickThreadFor(entity)) return null;
++      this.f_23570_ = walkTarget.m_26421_();
++      Brain<?> brain = entity.m_6274_();
++      if (this.m_23589_(entity, walkTarget)) {
++         brain.m_21936_(MemoryModuleType.f_26326_);
++      }
++      return entity.m_21573_().m_7864_(blockPos, 0);
++   }
++   // Kaiiju end
+ 
+    private boolean m_23592_(Mob p_23593_, WalkTarget p_23594_, long p_23595_) {
+       BlockPos blockpos = p_23594_.m_26420_().m_6675_();
