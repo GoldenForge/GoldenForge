@@ -17,7 +17,7 @@ import org.gradle.plugins.ide.eclipse.model.SourceFolder
 plugins {
     id 'org.cadixdev.licenser' version '0.6.1'
     id 'com.github.ben-manes.versions' version '0.46.0'
-    id 'net.minecraftforge.gradleutils' version '2.+'
+    id 'net.minecraftforge.gradleutils' version '[2.2,2.3)'
     id 'eclipse'
     id 'de.undercouch.download' version '5.4.0'
     id 'net.minecraftforge.gradle.patcher' version '[6.0,6.2)' apply false
@@ -42,7 +42,7 @@ ext {
     MCP_VERSION = '20220805.130853'
     SPI_VERSION = '6.0.0'
     ACCESSTRANSFORMERS_VERSION = '8.0.4'
-    COREMODS_VERSION = '5.1.2'
+    COREMODS_VERSION = '5.0.1'
     EVENTBUS_VERSION = '6.0.3'
     MODLAUNCHER_VERSION = '10.0.8'
     SECUREJARHANDLER_VERSION = '2.1.4'
@@ -80,7 +80,7 @@ ext {
     INSTALLER_TOOLS = 'net.minecraftforge:installertools:1.4.1'
     JAR_SPLITTER = 'net.minecraftforge:jarsplitter:1.1.4'
     FART = 'net.minecraftforge:ForgeAutoRenamingTool:0.1.22:all'
-    MIN_TAG_FOR_CHANGELOG = '41.0'
+    MIN_TAG_FOR_CHANGELOG = 'alpha-0.0.1'
 }
 
 println('Version: ' + VERSION +
@@ -88,15 +88,14 @@ println('Version: ' + VERSION +
         ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ')' +
         ' Arch: ' + System.getProperty('os.arch'))
 
-//changelog {
-//    fromTag MIN_TAG_FOR_CHANGELOG
-//}
+changelog {
+    fromTag MIN_TAG_FOR_CHANGELOG
+}
 
 def extraTxts = [
     rootProject.file('CREDITS.txt'),
     rootProject.file('LICENSE.txt'),
-
-    // rootProject.tasks.createChangelog.outputFile
+    rootProject.tasks.createChangelog.outputFile
 ]
 
 tasks.register('downloadVersionManifest', Download) {

@@ -425,7 +425,6 @@ public class ForgeMod
 
     public ForgeMod()
     {
-        GoldenForge.init();
         LOGGER.info(FORGEMOD,"Forge mod loading, version {}, for MC {} with MCP {}", ForgeVersion.getVersion(), MCPVersion.getMCVersion(), MCPVersion.getMCPVersion());
         INSTANCE = this;
         MinecraftForge.initialize();
