@@ -10,7 +10,7 @@
  import net.minecraft.Util;
  import net.minecraft.core.Registry;
  import net.minecraft.nbt.CompoundTag;
-@@ -19,12 +_,14 @@
+@@ -19,8 +_,8 @@
  
  public class AttributeMap {
     private static final Logger f_22138_ = LogUtils.getLogger();
@@ -19,22 +19,16 @@
 +   private final Map<Attribute, AttributeInstance> f_22139_ = new Reference2ReferenceOpenHashMap<>(0);
 +   private final Set<AttributeInstance> f_22140_ = new ReferenceOpenHashSet<>(0);
     private final AttributeSupplier f_22141_;
-+   private final java.util.function.Function<Attribute, AttributeInstance> createInstance; // Pufferfish
  
     public AttributeMap(AttributeSupplier p_22144_) {
-       this.f_22141_ = p_22144_;
-+      this.createInstance = attribute -> this.f_22141_.m_22250_(this::m_22157_, attribute); // Pufferfish
-    }
- 
-    private void m_22157_(AttributeInstance p_22158_) {
-@@ -46,9 +_,7 @@
+@@ -46,8 +_,8 @@
  
     @Nullable
     public AttributeInstance m_22146_(Attribute p_22147_) {
 -      return this.f_22139_.computeIfAbsent(p_22147_, (p_22188_) -> {
 -         return this.f_22141_.m_22250_(this::m_22157_, p_22188_);
--      });
-+      return this.f_22139_.computeIfAbsent(p_22147_, this.createInstance); // Pufferfish - cache lambda, as for some reason java allocates it anyways
++      return this.f_22139_.computeIfAbsent(p_22147_, (attributex) -> {
++         return this.f_22141_.m_22250_(this::m_22157_, attributex);
+       });
     }
  
-    public boolean m_22171_(Attribute p_22172_) {
