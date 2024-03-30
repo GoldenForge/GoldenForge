@@ -148,7 +148,12 @@ subprojects {
             name = 'minecraft'
             url = 'https://libraries.minecraft.net/'
         }
-        maven { url='https://repo.papermc.io/repository/maven-public/'}
+        maven {
+            url='https://repo.papermc.io/repository/maven-public/'
+            content {
+                includeGroup "com.velocitypowered"
+            }
+        }
         maven {
             url "https://raw.githubusercontent.com/GoldenForge/maven/master/"
         }
@@ -1549,14 +1554,11 @@ project(':forge') {
         }
     }
 
-    task installerJar(type: InstallerJar, dependsOn: [genClientBinPatches, genServerBinPatches, 'signUniversalJar', launcherJson]) {
+    task installerJar(type: InstallerJar, dependsOn: [genServerBinPatches, 'signUniversalJar', launcherJson]) {
         packedDependencies = PACKED_DEPS
         from(extraTxts)
         from(rootProject.file('/forge_installer_logo.png')) {
             rename { 'big_logo.png' }
-        }
-        from(genClientBinPatches.output) {
-            rename { 'data/client.lzma' }
         }
         from(genServerBinPatches.output) {
             rename { 'data/server.lzma' }

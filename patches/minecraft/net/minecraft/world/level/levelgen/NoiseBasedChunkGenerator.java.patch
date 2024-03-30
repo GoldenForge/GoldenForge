@@ -17,15 +17,110 @@
     }
  
     private void m_224291_(Blender p_224292_, RandomState p_224293_, StructureManager p_224294_, ChunkAccess p_224295_) {
-@@ -260,7 +_,7 @@
+@@ -248,24 +_,49 @@
+       if (k <= 0) {
+          return CompletableFuture.completedFuture(p_224316_);
+       } else {
+-         int l = p_224316_.m_151564_(k * noisesettings.m_189212_() - 1 + i);
+-         int i1 = p_224316_.m_151564_(i);
+-         Set<LevelChunkSection> set = Sets.newHashSet();
+-
+-         for(int j1 = l; j1 >= i1; --j1) {
+-            LevelChunkSection levelchunksection = p_224316_.m_183278_(j1);
+-            levelchunksection.m_62981_();
+-            set.add(levelchunksection);
++
++         int startingChunkSectionIndex = p_224316_.m_151564_(k * noisesettings.m_189212_() - 1 + i);
++         int minimumYChunkSectionIndex = p_224316_.m_151564_(i);
++
++         LevelChunkSection[] chunkSections = new LevelChunkSection[startingChunkSectionIndex - minimumYChunkSectionIndex + 1];
++
++         for (int chunkSectionIndex = startingChunkSectionIndex; chunkSectionIndex >= minimumYChunkSectionIndex; --chunkSectionIndex) {
++            LevelChunkSection chunkSection = p_224316_.m_183278_(chunkSectionIndex);
++
++            chunkSection.m_63006_();
++            chunkSections[chunkSectionIndex] = chunkSection;
+          }
  
-          return CompletableFuture.supplyAsync(Util.m_183946_("wgen_fill_noise", () -> {
-             return this.m_224284_(p_224313_, p_224315_, p_224314_, p_224316_, j, k);
+-         return CompletableFuture.supplyAsync(Util.m_183946_("wgen_fill_noise", () -> {
+-            return this.m_224284_(p_224313_, p_224315_, p_224314_, p_224316_, j, k);
 -         }), Util.m_183991_()).whenCompleteAsync((p_224309_, p_224310_) -> {
-+         }), p_224312_).whenCompleteAsync((p_224309_, p_224310_) -> { // Paper - run with supplied executor
-             for(LevelChunkSection levelchunksection1 : set) {
-                levelchunksection1.m_63006_();
+-            for(LevelChunkSection levelchunksection1 : set) {
+-               levelchunksection1.m_63006_();
++         return CompletableFuture.supplyAsync(
++                 Util.m_183946_(
++                         "wgen_fill_noise",
++                         () -> this.m_224284_(p_224313_, p_224315_, p_224314_, p_224316_, j,
++                                 k
++                         )
++                 ), p_224312_).whenCompleteAsync((chunk2, throwable) -> {
++            // Replace an enhanced for loop with a fori loop
++            for (int i1 = 0; i1 < chunkSections.length; i1++) {
++               chunkSections[i1].m_63006_();
              }
+-
+          }, p_224312_);
++//         int l = p_224316_.getSectionIndex(k * noisesettings.getCellHeight() - 1 + i);
++//         int i1 = p_224316_.getSectionIndex(i);
++//         Set<LevelChunkSection> set = Sets.newHashSet();
++//
++//         for(int j1 = l; j1 >= i1; --j1) {
++//            LevelChunkSection levelchunksection = p_224316_.getSection(j1);
++//            levelchunksection.acquire();
++//            set.add(levelchunksection);
++//         }
++//
++//         return CompletableFuture.supplyAsync(Util.wrapThreadWithTaskName("wgen_fill_noise", () -> {
++//            return this.doFill(p_224313_, p_224315_, p_224314_, p_224316_, j, k);
++//         }), p_224312_).whenCompleteAsync((p_224309_, p_224310_) -> { // Paper - run with supplied executor
++//            for(LevelChunkSection levelchunksection1 : set) {
++//               levelchunksection1.release();
++//            }
++//
++//         }, p_224312_);
+       }
+    }
+ 
+@@ -329,7 +_,8 @@
+                               ((ProtoChunk)p_224288_).m_63277_(blockpos$mutableblockpos);
+                            }
+ 
+-                           levelchunksection.m_62991_(l3, l2, k4, blockstate, false);
++                           noisium$populateNoiseWrapSetBlockStateOperation(levelchunksection, l3, l2, k4, blockstate, false);
++                           //levelchunksection.setBlockState(l3, l2, k4, blockstate, false);
+                            heightmap.m_64249_(l3, k2, k4, blockstate);
+                            heightmap1.m_64249_(l3, k2, k4, blockstate);
+                            if (aquifer.m_142203_() && !blockstate.m_60819_().m_76178_()) {
+@@ -350,6 +_,29 @@
+       return p_224288_;
+    }
+ 
++   private BlockState noisium$populateNoiseWrapSetBlockStateOperation(LevelChunkSection chunkSection, int chunkSectionBlockPosX, int chunkSectionBlockPosY, int chunkSectionBlockPosZ, BlockState blockState, boolean lock) {
++      // Update the non empty block count to avoid issues with MC's lighting engine and other systems not recognising the direct palette storage set
++      // See ChunkSection#setBlockState
++      chunkSection.f_62969_ += 1;
++
++      if (!blockState.m_60819_().m_76178_()) {
++         chunkSection.f_62971_ += 1;
++      }
++
++      if (blockState.m_60823_()) {
++         chunkSection.f_62970_ += 1;
++      }
++
++      // Set the blockstate in the palette storage directly to improve performance
++      var blockStateId = chunkSection.f_62972_.f_188032_.f_188102_.m_6796_(blockState);
++      chunkSection.f_62972_.f_188032_.f_188101_().m_13524_(
++              chunkSection.f_62972_.f_188033_.m_188145_(chunkSectionBlockPosX, chunkSectionBlockPosY,
++                      chunkSectionBlockPosZ
++              ), blockStateId);
++
++      return blockState;
++   }
++
+    private BlockState m_198231_(NoiseChunk p_198232_, int p_198233_, int p_198234_, int p_198235_, BlockState p_198236_) {
+       return p_198236_;
+    }
 @@ -359,7 +_,7 @@
     }
  

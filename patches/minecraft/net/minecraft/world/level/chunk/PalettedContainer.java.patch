@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/PalettedContainer.java
 +++ b/net/minecraft/world/level/chunk/PalettedContainer.java
-@@ -1,9 +_,9 @@
+@@ -1,13 +_,14 @@
  package net.minecraft.world.level.chunk;
  
 +import com.abdelaziz.canary.common.world.chunk.CanaryHashPalette;
@@ -11,7 +11,12 @@
  import it.unimi.dsi.fastutil.ints.IntArraySet;
  import it.unimi.dsi.fastutil.ints.IntSet;
  import java.util.Arrays;
-@@ -24,6 +_,7 @@
+ import java.util.List;
++import java.util.Objects;
+ import java.util.Optional;
+ import java.util.function.Consumer;
+ import java.util.function.IntUnaryOperator;
+@@ -24,21 +_,25 @@
  import net.minecraft.util.ZeroBitStorage;
  
  public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainerRO<T> {
@@ -19,8 +24,12 @@
     private static final int f_188031_ = 0;
     private final PaletteResize<T> f_63070_ = (p_238275_, p_238276_) -> {
        return 0;
-@@ -33,12 +_,15 @@
-    private final PalettedContainer.Strategy f_188033_;
+    };
+    private final IdMap<T> f_63071_;
+-   private volatile PalettedContainer.Data<T> f_188032_;
+-   private final PalettedContainer.Strategy f_188033_;
++   public volatile PalettedContainer.Data<T> f_188032_;
++   public final PalettedContainer.Strategy f_188033_;
     private final ThreadingDetector f_199441_ = new ThreadingDetector("PalettedContainer");
  
 +   private static final ThreadLocal<short[]> CACHED_ARRAY_4096 = ThreadLocal.withInitial(() -> new short[4096]);
@@ -214,11 +223,10 @@
     }
  
     static record Configuration<T>(Palette.Factory f_188085_, int f_188086_) {
-@@ -301,6 +_,14 @@
-          return new PalettedContainer.Data<>(this, bitstorage, palette);
+@@ -302,34 +_,88 @@
        }
     }
-+
+ 
 +   // Paper start
 +   public void forEachLocation(PalettedContainer.CountConsumer<T> consumer) {
 +      this.f_188032_.f_188101_.forEach((int location, int data) -> {
@@ -226,6 +234,104 @@
 +      });
 +   }
 +   // Paper end
- 
++
     @FunctionalInterface
     public interface CountConsumer<T> {
+       void m_63144_(T p_63145_, int p_63146_);
+    }
+ 
+-   static record Data<T>(PalettedContainer.Configuration<T> f_188100_, BitStorage f_188101_, Palette<T> f_188102_) {
+-      public void m_188111_(Palette<T> p_188112_, BitStorage p_188113_) {
+-         for(int i = 0; i < p_188113_.m_13521_(); ++i) {
+-            T t = p_188112_.m_5795_(p_188113_.m_13514_(i));
+-            this.f_188101_.m_13524_(i, this.f_188102_.m_6796_(t));
+-         }
+-
+-      }
+-
+-      public int m_188107_() {
+-         return 1 + this.f_188102_.m_6429_() + FriendlyByteBuf.m_130053_(this.f_188101_.m_13521_()) + this.f_188101_.m_13513_().length * 8;
+-      }
+-
+-      public void m_188114_(FriendlyByteBuf p_188115_) {
+-         p_188115_.writeByte(this.f_188101_.m_144604_());
+-         this.f_188102_.m_5678_(p_188115_);
+-         p_188115_.m_130091_(this.f_188101_.m_13513_());
+-      }
+-
+-      public PalettedContainer.Data<T> m_238361_() {
+-         return new PalettedContainer.Data<>(this.f_188100_, this.f_188101_.m_199833_(), this.f_188102_.m_199814_());
+-      }
+-   }
++    public static final class Data<T> {
++        private final Configuration<T> f_188100_;
++        private final BitStorage f_188101_;
++        public final Palette<T> f_188102_;
++
++        public Data(Configuration<T> f_188100_, BitStorage f_188101_, Palette<T> f_188102_) {
++            this.f_188100_ = f_188100_;
++            this.f_188101_ = f_188101_;
++            this.f_188102_ = f_188102_;
++        }
++
++        public void m_188111_(Palette<T> p_188112_, BitStorage p_188113_) {
++            for (int i = 0; i < p_188113_.m_13521_(); ++i) {
++                T t = p_188112_.m_5795_(p_188113_.m_13514_(i));
++                this.f_188101_.m_13524_(i, this.f_188102_.m_6796_(t));
++            }
++
++        }
++
++        public int m_188107_() {
++            return 1 + this.f_188102_.m_6429_() + FriendlyByteBuf.m_130053_(this.f_188101_.m_13521_()) + this.f_188101_.m_13513_().length * 8;
++        }
++
++        public void m_188114_(FriendlyByteBuf p_188115_) {
++            p_188115_.writeByte(this.f_188101_.m_144604_());
++            this.f_188102_.m_5678_(p_188115_);
++            p_188115_.m_130091_(this.f_188101_.m_13513_());
++        }
++
++        public Data<T> m_238361_() {
++            return new Data<>(this.f_188100_, this.f_188101_.m_199833_(), this.f_188102_.m_199814_());
++        }
++
++        public Configuration<T> f_188100_() {
++            return f_188100_;
++        }
++
++        public BitStorage f_188101_() {
++            return f_188101_;
++        }
++
++        public Palette<T> f_188102_() {
++            return f_188102_;
++        }
++
++        @Override
++        public boolean equals(Object p_188120_) {
++            if (p_188120_ == this) return true;
++            if (p_188120_ == null || p_188120_.getClass() != this.getClass()) return false;
++            var that = (Data) p_188120_;
++            return Objects.equals(this.f_188100_, that.f_188100_) &&
++                    Objects.equals(this.f_188101_, that.f_188101_) &&
++                    Objects.equals(this.f_188102_, that.f_188102_);
++        }
++
++        @Override
++        public int hashCode() {
++            return Objects.hash(f_188100_, f_188101_, f_188102_);
++        }
++
++        @Override
++        public String toString() {
++            return "Data[" +
++                    "configuration=" + f_188100_ + ", " +
++                    "storage=" + f_188101_ + ", " +
++                    "palette=" + f_188102_ + ']';
++        }
++
++    }
+ 
+    public abstract static class Strategy {
+       public static final Palette.Factory f_188134_ = SingleValuePalette::m_188213_;

@@ -1,0 +1,33 @@
+--- a/net/minecraft/world/level/levelgen/material/MaterialRuleList.java
++++ b/net/minecraft/world/level/levelgen/material/MaterialRuleList.java
+@@ -9,13 +_,26 @@
+ public record MaterialRuleList(List<NoiseChunk.BlockStateFiller> f_191545_) implements NoiseChunk.BlockStateFiller {
+    @Nullable
+    public BlockState m_207387_(DensityFunction.FunctionContext p_209815_) {
+-      for(NoiseChunk.BlockStateFiller noisechunk$blockstatefiller : this.f_191545_) {
+-         BlockState blockstate = noisechunk$blockstatefiller.m_207387_(p_209815_);
+-         if (blockstate != null) {
+-            return blockstate;
++      // Goldenforge: noisium
++      for (int i = 0; i < this.f_191545_.size(); i++) {
++         BlockState blockState = this.f_191545_.get(i).m_207387_(p_209815_);
++         if (blockState == null) {
++            continue;
+          }
++
++         return blockState;
+       }
+ 
+       return null;
++
++      // GoldenForge: old code
++//      for(NoiseChunk.BlockStateFiller noisechunk$blockstatefiller : this.materialRuleList) {
++//         BlockState blockstate = noisechunk$blockstatefiller.calculate(p_209815_);
++//         if (blockstate != null) {
++//            return blockstate;
++//         }
++//      }
++//
++//      return null;
+    }
+ }

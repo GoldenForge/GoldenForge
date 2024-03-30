@@ -5,10 +5,12 @@
     public static final int f_187994_ = 2;
     private final int f_62968_;
 -   private short f_62969_;
-+   public short f_62969_;
-    private short f_62970_;
-    private short f_62971_;
+-   private short f_62970_;
+-   private short f_62971_;
 -   private final PalettedContainer<BlockState> f_62972_;
++   public short f_62969_;
++   public short f_62970_;
++   public short f_62971_;
 +   public final PalettedContainer<BlockState> f_62972_;
     private PalettedContainerRO<Holder<Biome>> f_187995_;
  
