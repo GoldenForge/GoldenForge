@@ -1289,6 +1289,10 @@ public final class ChunkHolderManager {
         return Boolean.FALSE;
     });
 
+    public boolean isTicketUpdatesBlocked() {
+        return BLOCK_TICKET_UPDATES.get();
+    }
+
     public Boolean blockTicketUpdates() {
         final Boolean ret = BLOCK_TICKET_UPDATES.get();
         BLOCK_TICKET_UPDATES.set(Boolean.TRUE);

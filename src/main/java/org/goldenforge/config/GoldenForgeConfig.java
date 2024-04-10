@@ -63,6 +63,8 @@ public class GoldenForgeConfig {
         public static ConfigValue<Boolean> asyncPathProcessing;
         public static ConfigValue<Integer> asyncPathProcessingMaxThreads;
         public static ConfigValue<Integer> asyncPathProcessingKeepalive;
+        public static ConfigValue<Boolean> shouldTickNeighborUpdatesWhileTicketUpdates;
+        public static ConfigValue<Boolean> logSkippedNeighborUpdates;
 
         Server(ForgeConfigSpec.Builder builder) {
             builder.comment("GoldenForge Configuration")
@@ -247,6 +249,18 @@ public class GoldenForgeConfig {
             asyncPathProcessingKeepalive = builder
                     .worldRestart()
                     .define("asyncPathProcessingKeepalive", 60);
+
+            builder.pop();
+
+            builder.push("experimental features");
+            shouldTickNeighborUpdatesWhileTicketUpdates = builder
+                    .comment("Do not tick neighbor updates while chunk tickets updates. Neighbor updates are queued until the ticket manager finished updating tickets. This should fix crash related to IC2 or Pneumaticraft.")
+                    .worldRestart()
+                    .define("shouldTickNeighborUpdatesWhileTicketUpdates", true);
+
+            logSkippedNeighborUpdates = builder
+                    .worldRestart()
+                    .define("logSkippedNeighborUpdates", false);
 
             builder.pop();
         }

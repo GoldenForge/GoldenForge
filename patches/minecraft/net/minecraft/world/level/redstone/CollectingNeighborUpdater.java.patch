@@ -1,0 +1,43 @@
+--- a/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
++++ b/net/minecraft/world/level/redstone/CollectingNeighborUpdater.java
+@@ -5,11 +_,16 @@
+ import java.util.ArrayList;
+ import java.util.List;
+ import javax.annotation.Nullable;
++
++import net.minecraft.client.multiplayer.ClientLevel;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.state.BlockState;
++import org.goldenforge.GoldenForge;
++import org.goldenforge.config.GoldenForgeConfig;
+ import org.slf4j.Logger;
+ 
+ public class CollectingNeighborUpdater implements NeighborUpdater {
+@@ -55,10 +_,20 @@
+          f_230635_.error("Too many chained neighbor updates. Skipping the rest. First skipped position: " + p_230661_.m_123344_());
+       }
+ 
+-      if (!flag) {
++      if (!flag && shouldUpdateNow()) { // Goldenforge
+          this.m_230645_();
+-      }
+-
++      } else if (GoldenForgeConfig.Server.logSkippedNeighborUpdates.get()) {
++         GoldenForge.LOGGER.warn("Skipping neighbor updates at {}, ticket manager is ticking", p_230661_.m_123344_());
++      }
++
++   }
++
++   private boolean shouldUpdateNow() {
++      if (GoldenForgeConfig.Server.shouldTickNeighborUpdatesWhileTicketUpdates.get()) {
++         return true;
++      } else {
++         return !((ServerLevel) f_230636_).m_7726_().f_8327_.getChunkHolderManager().isTicketUpdatesBlocked();
++      }
+    }
+ 
+    private void m_230645_() {

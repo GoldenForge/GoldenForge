@@ -42,10 +42,11 @@
  import net.minecraft.world.level.gameevent.DynamicGameEventListener;
  import net.minecraft.world.level.gameevent.GameEvent;
  import net.minecraft.world.level.gameevent.GameEventListener;
-@@ -147,6 +_,7 @@
+@@ -147,6 +_,8 @@
  import net.minecraft.world.phys.shapes.Shapes;
  import net.minecraft.world.phys.shapes.VoxelShape;
  import net.minecraft.world.ticks.LevelTicks;
++import org.goldenforge.GoldenForge;
 +import org.goldenforge.config.GoldenForgeConfig;
  import org.slf4j.Logger;
  
