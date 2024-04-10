@@ -49,23 +49,19 @@ public class GoldenForgeCommand {
             .build();
 
 
-    public GoldenForgeCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 
-        dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("goldenforge")
+        dispatcher.register(Commands.literal("goldenforge")
                 .executes(GoldenForgeCommand::main)
                 .then(Commands.literal("chunkinfo").then(Commands.argument("world", DimensionArgument.dimension()).executes(GoldenForgeCommand::chunkInfos)))
                 .then(Commands.literal("syncloadinfo").executes(GoldenForgeCommand::logSyncload)));
 
 
-        dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("tpsmonitor")
+        dispatcher.register(Commands.literal("tpsmonitor")
                 .executes(GoldenForgeCommand::toggleTPSMonitor));
 
-        dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("mobcaps").then(Commands.argument("world", DimensionArgument.dimension()))
-                .executes(GoldenForgeCommand::printMobcaps));
-
-        dispatcher.register(LiteralArgumentBuilder.<CommandSourceStack>literal("playermobcaps")
-                .executes(GoldenForgeCommand::toggleTPSMonitor));
-
+//        dispatcher.register(Commands.literal("mobcaps").then(Commands.argument("world", DimensionArgument.dimension()))
+//                .executes(GoldenForgeCommand::printMobcaps));
     }
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss");

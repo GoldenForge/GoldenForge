@@ -46,7 +46,7 @@ public class GoldenForge {
 
     @SubscribeEvent
     public void onCommandsRegister(RegisterCommandsEvent event) {
-        new GoldenForgeCommand(event.getDispatcher());
+        GoldenForgeCommand.register(event.getDispatcher());
     }
 
     private static void openConfig(final ModConfig config, final Path configBasePath) {
