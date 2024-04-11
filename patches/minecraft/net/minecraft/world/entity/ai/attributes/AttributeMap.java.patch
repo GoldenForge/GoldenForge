@@ -16,8 +16,8 @@
     private static final Logger f_22138_ = LogUtils.getLogger();
 -   private final Map<Attribute, AttributeInstance> f_22139_ = Maps.newHashMap();
 -   private final Set<AttributeInstance> f_22140_ = Sets.newHashSet();
-+   private final Map<Attribute, AttributeInstance> f_22139_ = new Reference2ReferenceOpenHashMap<>(0);
-+   private final Set<AttributeInstance> f_22140_ = new ReferenceOpenHashSet<>(0);
++   private final Map<Attribute, AttributeInstance> f_22139_ = Maps.newConcurrentMap();
++   private final Set<AttributeInstance> f_22140_ = Sets.newConcurrentHashSet();
     private final AttributeSupplier f_22141_;
  
     public AttributeMap(AttributeSupplier p_22144_) {

@@ -7,14 +7,18 @@
  import com.google.common.base.Objects;
  import com.google.common.collect.ImmutableList;
  import com.google.common.collect.ImmutableMap;
-@@ -16,6 +_,7 @@
+@@ -16,8 +_,11 @@
  import java.util.Map;
  import java.util.Optional;
  import java.util.UUID;
 +import java.util.concurrent.CompletableFuture;
  import java.util.function.Predicate;
  import javax.annotation.Nullable;
++
++import io.papermc.paper.util.TickThread;
  import net.minecraft.BlockUtil;
+ import net.minecraft.advancements.CriteriaTriggers;
+ import net.minecraft.commands.arguments.EntityAnchorArgument;
 @@ -116,14 +_,17 @@
  import net.minecraft.world.phys.HitResult;
  import net.minecraft.world.phys.Vec3;
@@ -329,14 +333,16 @@
  
        boolean flag = this.f_20889_ > 0;
        if (this.m_6125_() && this.f_19853_.m_46469_().m_46207_(GameRules.f_46135_)) {
-@@ -1324,6 +_,10 @@
+@@ -1324,6 +_,12 @@
  
        this.m_5907_();
        this.m_21226_();
 +
 +      Collection<ItemEntity> drops = captureDrops(null);
-+      if (!net.minecraftforge.common.ForgeHooks.onLivingDrops(this, p_21192_, drops, i, f_20889_ > 0))
-+         drops.forEach(e -> f_19853_.m_7967_(e));
++      this.m_20194_().execute(() -> { // Goldenforge: industrial foregoing call hurt() in async
++         if (!net.minecraftforge.common.ForgeHooks.onLivingDrops(this, p_21192_, drops, i, f_20889_ > 0))
++            drops.forEach(e -> f_19853_.m_7967_(e));
++      });
     }
  
     protected void m_5907_() {
