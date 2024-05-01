@@ -73,7 +73,7 @@ ext {
     //VERSION = gradleutils.getFilteredMCTagOffsetBranchVersion(true, '[0-9]', MC_VERSION)
     // FML_VERSION = gradleutils.getFilteredMCTagOffsetBranchVersion(true, 'FML', MC_VERSION)
     //FORGE_VERSION = VERSION.substring(MC_VERSION.length() + 1)
-    FORGE_VERSION = '43.3.8'
+    FORGE_VERSION = '43.3.13'
     VERSION = MC_VERSION + "-" + FORGE_VERSION
     println('Forge version': FORGE_VERSION)
 
