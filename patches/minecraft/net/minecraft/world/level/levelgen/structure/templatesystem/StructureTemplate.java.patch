@@ -15,6 +15,14 @@
  import java.util.stream.Collectors;
  import javax.annotation.Nullable;
  import net.minecraft.SharedConstants;
+@@ -23,6 +_,7 @@
+ import net.minecraft.nbt.IntTag;
+ import net.minecraft.nbt.ListTag;
+ import net.minecraft.nbt.NbtUtils;
++import net.minecraft.server.MinecraftServer;
+ import net.minecraft.util.RandomSource;
+ import net.minecraft.world.Clearable;
+ import net.minecraft.world.entity.Entity;
 @@ -201,6 +_,10 @@
        return m_74593_(p_74565_, p_74564_.m_74401_(), p_74564_.m_74404_(), p_74564_.m_74407_());
     }
@@ -65,7 +73,7 @@
           }
  
           if (structuretemplate$structureblockinfo1 != null) {
-@@ -377,13 +_,29 @@
+@@ -377,29 +_,46 @@
        return list;
     }
  
@@ -101,12 +109,13 @@
              ListTag listtag = new ListTag();
              listtag.add(DoubleTag.m_128500_(vec31.f_82479_));
              listtag.add(DoubleTag.m_128500_(vec31.f_82480_));
-@@ -391,10 +_,11 @@
+             listtag.add(DoubleTag.m_128500_(vec31.f_82481_));
              compoundtag.m_128365_("Pos", listtag);
              compoundtag.m_128473_("UUID");
-             m_74543_(p_74524_, compoundtag).ifPresent((p_205061_) -> {
+-            m_74543_(p_74524_, compoundtag).ifPresent((p_205061_) -> {
 -               float f = p_205061_.m_7890_(p_74527_);
 -               f += p_205061_.m_6961_(p_74526_) - p_205061_.m_146908_();
++            MinecraftServer.getServer().execute(() -> m_74543_(p_74524_, compoundtag).ifPresent((p_205061_) -> { // Goldenforge: always add entities on the main thread
 +               float f = p_205061_.m_7890_(placementIn.m_74404_());
 +               f += p_205061_.m_6961_(placementIn.m_74401_()) - p_205061_.m_146908_();
                 p_205061_.m_7678_(vec31.f_82479_, vec31.f_82480_, vec31.f_82481_, f, p_205061_.m_146909_());
@@ -115,6 +124,12 @@
 +                  if (!net.minecraftforge.event.ForgeEventFactory.doSpecialSpawn((Mob)p_205061_, p_74524_, (float)p_205061_.m_20185_(), (float)p_205061_.m_20186_(), (float)p_205061_.m_20189_(), null, MobSpawnType.STRUCTURE))
                    ((Mob)p_205061_).m_6518_(p_74524_, p_74524_.m_6436_(new BlockPos(vec31)), MobSpawnType.STRUCTURE, (SpawnGroupData)null, compoundtag);
                 }
+ 
+                p_74524_.m_47205_(p_205061_);
+-            });
++            })); // Goldenforge end
+          }
+       }
  
 @@ -690,7 +_,7 @@
  
