@@ -17,8 +17,11 @@
  import net.minecraft.server.level.ServerLevel;
  import net.minecraft.util.profiling.ProfilerFiller;
  import net.minecraft.world.entity.Entity;
-@@ -48,7 +_,7 @@
+@@ -46,9 +_,10 @@
+ import net.minecraft.world.level.material.Fluids;
+ import net.minecraft.world.ticks.LevelChunkTicks;
  import net.minecraft.world.ticks.TickContainerAccess;
++import org.goldenforge.GoldenForge;
  import org.slf4j.Logger;
  
 -public class LevelChunk extends ChunkAccess {
@@ -35,7 +38,7 @@
     @Nullable
     private Supplier<ChunkHolder.FullChunkStatus> f_62790_;
     @Nullable
-@@ -77,11 +_,240 @@
+@@ -77,11 +_,239 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -153,7 +156,6 @@
 +
 +   public void unloadCallback() {
 +      if (!this.loadedTicketLevel) { f_62771_.error("Double calling chunk unload!", new Throwable()); } // Paper
-+      net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Unload(this));
 +      ((ServerChunkCache) this.f_62776_.m_7726_()).removeLoadedChunk(this); // Paper
 +      // Paper start - neighbour cache
 +      int chunkX = this.f_187604_.f_45578_;
