@@ -1668,7 +1668,7 @@
        public boolean equals(Object p_140506_) {
           if (p_140506_ instanceof ChunkMap.TrackedEntity) {
              return ((ChunkMap.TrackedEntity)p_140506_).f_140472_.m_19879_() == this.f_140472_.m_19879_();
-@@ -1323,7 +_,7 @@
+@@ -1323,13 +_,14 @@
        public void m_140497_(ServerPlayer p_140498_) {
           if (p_140498_ != this.f_140472_) {
              Vec3 vec3 = p_140498_.m_20182_().m_82546_(this.f_140472_.m_20182_());
@@ -1677,6 +1677,13 @@
              double d1 = vec3.f_82479_ * vec3.f_82479_ + vec3.f_82481_ * vec3.f_82481_;
              double d2 = d0 * d0;
              boolean flag = d1 <= d2 && this.f_140472_.m_6459_(p_140498_);
+             if (flag) {
+                if (this.f_140475_.add(p_140498_.f_8906_)) {
+                   this.f_140471_.m_8541_(p_140498_);
++                  this.f_140471_.onPlayerAdd(); // Paper - fix desync when a player is added to the tracker
+                }
+             } else if (this.f_140475_.remove(p_140498_.f_8906_)) {
+                this.f_140471_.m_8534_(p_140498_);
 @@ -1342,15 +_,34 @@
           return ChunkMap.this.f_140133_.m_7654_().m_7186_(p_140484_);
        }

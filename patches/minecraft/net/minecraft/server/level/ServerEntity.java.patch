@@ -29,6 +29,20 @@
        this.f_8509_ = p_8528_;
        this.f_8513_ = p_8532_;
        this.f_8510_ = p_8529_;
+@@ -69,6 +_,13 @@
+       this.f_8525_ = p_8529_.m_20096_();
+    }
+ 
++   // Paper start - fix desync when a player is added to the tracker
++   private boolean forceStateResync;
++   public void onPlayerAdd() {
++      this.forceStateResync = true;
++   }
++   // Paper end - fix desync when a player is added to the tracker
++
+    public void m_8533_() {
+       List<Entity> list = this.f_8510_.m_20197_();
+       if (!list.equals(this.f_8523_)) {
 @@ -77,14 +_,14 @@
        }
  
@@ -50,7 +64,7 @@
                       mapitemsaveddata.m_77918_(serverplayer, itemstack);
                       Packet<?> packet = mapitemsaveddata.m_164796_(integer, serverplayer);
                       if (packet != null) {
-@@ -92,11 +_,12 @@
+@@ -92,13 +_,14 @@
                       }
                    }
                 }
@@ -59,11 +73,14 @@
              this.m_8543_();
           }
        }
-+
-+
  
-       if (this.f_8521_ % this.f_8511_ == 0 || this.f_8510_.f_19812_ || this.f_8510_.m_20088_().m_135352_()) {
+-      if (this.f_8521_ % this.f_8511_ == 0 || this.f_8510_.f_19812_ || this.f_8510_.m_20088_().m_135352_()) {
++
++
++      if (this.forceStateResync || this.f_8521_ % this.f_8511_ == 0 || this.f_8510_.f_19812_ || this.f_8510_.m_20088_().m_135352_()) { // Paper - fix desync when a player is added to the tracker
           if (this.f_8510_.m_20159_()) {
+             int i1 = Mth.m_14143_(this.f_8510_.m_146908_() * 256.0F / 360.0F);
+             int l1 = Mth.m_14143_(this.f_8510_.m_146909_() * 256.0F / 360.0F);
 @@ -117,16 +_,24 @@
              int l = Mth.m_14143_(this.f_8510_.m_146908_() * 256.0F / 360.0F);
              int k1 = Mth.m_14143_(this.f_8510_.m_146909_() * 256.0F / 360.0F);
@@ -81,13 +98,13 @@
              boolean flag3 = flag2 || this.f_8521_ % 60 == 0;
              boolean flag4 = Math.abs(l - this.f_8517_) >= 1 || Math.abs(k1 - this.f_8518_) >= 1;
 -            if (this.f_8521_ > 0 || this.f_8510_ instanceof AbstractArrow) {
-+            if (!(this.f_8510_ instanceof net.minecraft.world.entity.decoration.HangingEntity) || this.f_8521_ > 0 || this.f_8510_ instanceof AbstractArrow) { // Paper - Always update position
++            if (this.forceStateResync || !(this.f_8510_ instanceof net.minecraft.world.entity.decoration.HangingEntity) || this.f_8521_ > 0 || this.f_8510_ instanceof AbstractArrow) { // Paper - Always update position to fix first-tick teleports
                 long i = this.f_214995_.m_238025_(vec3);
                 long j = this.f_214995_.m_238027_(vec3);
                 long k = this.f_214995_.m_238029_(vec3);
                 boolean flag = i < -32768L || i > 32767L || j < -32768L || j > 32767L || k < -32768L || k > 32767L;
 -               if (!flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_()) {
-+               if (!flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_() && !(GoldenConfig.sendFullPosForHardCollidingEntities && this.f_8510_.hardCollides())) { // Paper - send full pos for hard colliding entities to prevent collision problems due to desync
++               if (!this.forceStateResync && !flag && this.f_8522_ <= 400 && !this.f_8524_ && this.f_8525_ == this.f_8510_.m_20096_() && !(GoldenConfig.sendFullPosForHardCollidingEntities && this.f_8510_.hardCollides())) { // Paper - send full pos for hard colliding entities to prevent collision problems due to desync
 +                  if (flag3 || flag4 || this.f_8510_ instanceof AbstractArrow) { // Pufferfish
                    if ((!flag3 || !flag4) && !(this.f_8510_ instanceof AbstractArrow)) {
                       if (flag3) {
@@ -100,6 +117,14 @@
                 } else {
                    this.f_8525_ = this.f_8510_.m_20096_();
                    this.f_8522_ = 0;
+@@ -176,6 +_,7 @@
+          }
+ 
+          this.f_8510_.f_19812_ = false;
++         this.forceStateResync = false; // Paper - fix desync when a player is added to the tracker
+       }
+ 
+       ++this.f_8521_;
 @@ -189,16 +_,19 @@
     public void m_8534_(ServerPlayer p_8535_) {
        this.f_8510_.m_6452_(p_8535_);
