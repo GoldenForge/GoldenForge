@@ -481,7 +481,7 @@
        int k = Mth.m_14107_(this.f_19825_.f_82481_);
        BlockPos blockpos = new BlockPos(i, j, k);
 -      if (this.f_19853_.m_8055_(blockpos).m_60795_()) {
-+      if (this.f_19853_.m_46859_(blockpos)) {
++      if (this.m_9236_().getChunkIfLoadedImmediately(blockpos) != null && this.f_19853_.m_46859_(blockpos)) { // Goldenforge - do not load chunks
           BlockPos blockpos1 = blockpos.m_7495_();
           BlockState blockstate = this.f_19853_.m_8055_(blockpos1);
 -         if (blockstate.m_204336_(BlockTags.f_13039_) || blockstate.m_204336_(BlockTags.f_13032_) || blockstate.m_60734_() instanceof FenceGateBlock) {
