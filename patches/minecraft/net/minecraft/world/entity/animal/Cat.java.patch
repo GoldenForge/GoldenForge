@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/entity/animal/Cat.java
 +++ b/net/minecraft/world/entity/animal/Cat.java
+@@ -343,7 +_,7 @@
+          this.m_218132_(p_218138_.m_203334_());
+       });
+       ServerLevel serverlevel = p_28134_.m_6018_();
+-      if (serverlevel.m_215010_().m_220491_(this.m_20183_(), StructureTags.f_215888_).m_73603_()) {
++      if (serverlevel.m_215010_().getStructureWithPieceAt(this.m_20183_(), StructureTags.f_215888_, p_28134_).m_73603_()) {// Paper - Fix swamp hut cat generation deadlock
+          this.m_218132_(CatVariant.f_218150_);
+          this.m_21530_();
+       }
 @@ -365,8 +_,8 @@
              if (this.m_21830_(p_28153_)) {
                 if (!(item instanceof DyeItem)) {

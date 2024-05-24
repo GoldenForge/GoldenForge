@@ -1,0 +1,39 @@
+--- a/net/minecraft/world/level/StructureManager.java
++++ b/net/minecraft/world/level/StructureManager.java
+@@ -43,7 +_,13 @@
+    }
+ 
+    public List<StructureStart> m_220477_(ChunkPos p_220478_, Predicate<Structure> p_220479_) {
+-      Map<Structure, LongSet> map = this.f_220460_.m_46819_(p_220478_.f_45578_, p_220478_.f_45579_, ChunkStatus.f_62316_).m_62769_();
++      // Paper start - Fix swamp hut cat generation deadlock
++      return this.startsForStructure(p_220478_, p_220479_, null);
++   }
++
++   public List<StructureStart> startsForStructure(ChunkPos p_220478_, Predicate<Structure> p_220479_, @Nullable ServerLevelAccessor levelAccessor) {
++      Map<Structure, LongSet> map = (levelAccessor == null ? this.f_220460_ : levelAccessor).m_46819_(p_220478_.f_45578_, p_220478_.f_45579_, ChunkStatus.f_62316_).m_62769_();
++      // Paper end - Fix swamp hut cat generation deadlock
+       ImmutableList.Builder<StructureStart> builder = ImmutableList.builder();
+ 
+       for(Map.Entry<Structure, LongSet> entry : map.entrySet()) {
+@@ -107,13 +_,19 @@
+    }
+ 
+    public StructureStart m_220491_(BlockPos p_220492_, TagKey<Structure> p_220493_) {
++      // Paper start - Fix swamp hut cat generation deadlock
++      return this.getStructureWithPieceAt(p_220492_, p_220493_, null);
++   }
++
++   public StructureStart getStructureWithPieceAt(BlockPos p_220492_, TagKey<Structure> p_220493_, @Nullable ServerLevelAccessor levelAccessor) {
++      // Paper end - Fix swamp hut cat generation deadlock
+       Registry<Structure> registry = this.m_220521_().m_175515_(Registry.f_235725_);
+ 
+-      for(StructureStart structurestart : this.m_220477_(new ChunkPos(p_220492_), (p_220503_) -> {
++      for(StructureStart structurestart : this.startsForStructure(new ChunkPos(p_220492_), (p_220503_) -> {
+          return registry.m_203300_(registry.m_7447_(p_220503_)).map((p_220472_) -> {
+             return p_220472_.m_203656_(p_220493_);
+          }).orElse(false);
+-      })) {
++      }, levelAccessor)) { // Paper
+          if (this.m_220497_(p_220492_, structurestart)) {
+             return structurestart;
+          }

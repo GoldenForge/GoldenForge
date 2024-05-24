@@ -62,7 +62,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -97,15 +_,93 @@
+@@ -97,15 +_,97 @@
     private final RandomSource f_220348_ = RandomSource.m_216337_();
     private final ResourceKey<DimensionType> f_220349_;
     private final Holder<DimensionType> f_204147_;
@@ -105,6 +105,10 @@
 +   }
 +   public final ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
 +      return ((ServerLevel)this).f_8547_.getChunkAtIfLoadedImmediately(x, z);
++   }
++
++   public final ChunkAccess getChunkIfLoadedImmediately(BlockPos pos) {
++      return this.getChunkIfLoadedImmediately(pos.m_123341_() >> 4, pos.m_123343_() >> 4);
 +   }
 +
 +   public final @Nullable LevelChunk getChunkIfLoaded(BlockPos blockposition) {
