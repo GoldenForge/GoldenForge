@@ -20,7 +20,7 @@ Using optimizations mods with goldenforge can result in undefined behaviour.
 
 Recommended mods :
 - canary (require custom config [here](https://github.com/GoldenForge/GoldenForge/tree/1.19.2/docs/configs/canary.properties))
-- goldenforge-fixes [here](https://github.com/GoldenForge/GoldenForge-Fixes)
+- goldenforge-fixes [Modrinth](https://modrinth.com/mod/goldenforge-fixes) | [Github](https://github.com/GoldenForge/GoldenForge-Fixes)
 
 Incompatible mods :
 - modernfix
