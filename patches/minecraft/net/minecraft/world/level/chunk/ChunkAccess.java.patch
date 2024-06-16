@@ -17,10 +17,11 @@
     private long f_187615_;
     /** @deprecated */
     @Nullable
-@@ -74,9 +_,63 @@
+@@ -74,9 +_,64 @@
     protected final Map<BlockPos, BlockEntity> f_187610_ = Maps.newHashMap();
     protected final LevelHeightAccessor f_187611_;
     protected final LevelChunkSection[] f_187612_;
++   @Nullable
 +   public ChunkSerializer.AsyncSaveData asyncsavedata;
 +
 +   // Paper start - rewrite light engine

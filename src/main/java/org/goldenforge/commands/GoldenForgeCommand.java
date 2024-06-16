@@ -9,6 +9,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import io.papermc.paper.chunk.system.ChunkSystem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -21,6 +22,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.NaturalSpawner;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraftforge.versions.forge.ForgeVersion;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.goldenforge.GoldenForge;
@@ -54,7 +56,7 @@ public class GoldenForgeCommand {
         dispatcher.register(Commands.literal("goldenforge")
                 .executes(GoldenForgeCommand::main)
                 .then(Commands.literal("chunkinfo").then(Commands.argument("world", DimensionArgument.dimension()).executes(GoldenForgeCommand::chunkInfos)))
-                .then(Commands.literal("syncloadinfo").executes(GoldenForgeCommand::logSyncload)));
+                .then(Commands.literal("syncloadinfo").executes(GoldenForgeCommand::logSyncload).then(Commands.literal("clear").executes(GoldenForgeCommand::clearSyncload))));
 
 
         dispatcher.register(Commands.literal("tpsmonitor")
@@ -99,6 +101,12 @@ public class GoldenForgeCommand {
             MinecraftServer.LOGGER.warn("Error occurred while dumping sync chunk load info", thr);
         }
 
+        return 0;
+    }
+
+    public static int clearSyncload(CommandContext<CommandSourceStack> ctx) {
+        SyncLoadFinder.clear();
+        ctx.getSource().sendSystemMessage(Component.literal("Sync load data cleared."));
         return 0;
     }
 

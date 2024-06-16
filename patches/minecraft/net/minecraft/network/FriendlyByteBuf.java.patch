@@ -9,6 +9,47 @@
     private static final int f_178335_ = 5;
     private static final int f_178336_ = 10;
     private static final int f_178337_ = 2097152;
+@@ -81,6 +_,18 @@
+    }
+ 
+    public static int m_130053_(int p_130054_) {
++      // Paper start - Optimize VarInts
++      return VARINT_EXACT_BYTE_LENGTHS[Integer.numberOfLeadingZeros(p_130054_)];
++   }
++   private static final int[] VARINT_EXACT_BYTE_LENGTHS = new int[33];
++   static {
++      for (int i = 0; i <= 32; ++i) {
++         VARINT_EXACT_BYTE_LENGTHS[i] = (int) Math.ceil((31d - (i - 1)) / 7d);
++      }
++      VARINT_EXACT_BYTE_LENGTHS[32] = 1; // Special case for the number 0.
++   }
++
++   public static int getVarIntSize_Old(int p_130054_) {
+       for(int i = 1; i < 5; ++i) {
+          if ((p_130054_ & -1 << i * 7) == 0) {
+             return i;
+@@ -456,6 +_,21 @@
+    }
+ 
+    public FriendlyByteBuf m_130130_(int p_130131_) {
++      // Paper start - Optimize VarInts
++      // Peel the one and two byte count cases explicitly as they are the most common VarInt sizes
++      // that the proxy will write, to improve inlining.
++      if ((p_130131_ & (0xFFFFFFFF << 7)) == 0) {
++         this.writeByte(p_130131_);
++      } else if ((p_130131_ & (0xFFFFFFFF << 14)) == 0) {
++         int w = (p_130131_ & 0x7F | 0x80) << 8 | (p_130131_ >>> 7);
++         this.writeShort(w);
++      } else {
++         writeVarInt_Old(p_130131_);
++      }
++      return this;
++   }
++
++   public FriendlyByteBuf writeVarInt_Old(int p_130131_) {
+       while((p_130131_ & -128) != 0) {
+          this.writeByte(p_130131_ & 127 | 128);
+          p_130131_ >>>= 7;
 @@ -517,6 +_,15 @@
     }
  

@@ -12,3 +12,12 @@
     }
  
     protected void m_7996_() {
+@@ -204,6 +_,8 @@
+    protected abstract void m_7604_();
+ 
+    protected void m_35277_(MerchantOffers p_35278_, VillagerTrades.ItemListing[] p_35279_, int p_35280_) {
++      if (!this.isValid)
++         return;
+       Set<Integer> set = Sets.newHashSet();
+       if (p_35279_.length > p_35280_) {
+          while(set.size() < p_35280_) {

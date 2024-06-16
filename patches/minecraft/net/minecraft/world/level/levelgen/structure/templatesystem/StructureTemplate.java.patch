@@ -34,7 +34,7 @@
     public boolean m_230328_(ServerLevelAccessor p_230329_, BlockPos p_230330_, BlockPos p_230331_, StructurePlaceSettings p_230332_, RandomSource p_230333_, int p_230334_) {
        if (this.f_74482_.isEmpty()) {
           return false;
-@@ -218,7 +_,7 @@
+@@ -218,14 +_,18 @@
              int i1 = Integer.MIN_VALUE;
              int j1 = Integer.MIN_VALUE;
  
@@ -43,7 +43,31 @@
                 BlockPos blockpos = structuretemplate$structureblockinfo.f_74675_;
                 if (boundingbox == null || boundingbox.m_71051_(blockpos)) {
                    FluidState fluidstate = p_230332_.m_74413_() ? p_230329_.m_6425_(blockpos) : null;
-@@ -330,7 +_,7 @@
+                   BlockState blockstate = structuretemplate$structureblockinfo.f_74676_.m_60715_(p_230332_.m_74401_()).m_60717_(p_230332_.m_74404_());
+                   if (structuretemplate$structureblockinfo.f_74677_ != null) {
+                      BlockEntity blockentity = p_230329_.m_7702_(blockpos);
+-                     Clearable.m_18908_(blockentity);
++                     // Paper start - Fix NBT pieces overriding a block entity during worldgen deadlock
++                     if (!(p_230329_ instanceof net.minecraft.world.level.WorldGenLevel)) {
++                        Clearable.m_18908_(blockentity);
++                     }
++                     // Paper end - Fix NBT pieces overriding a block entity during worldgen deadlock
+                      p_230329_.m_7731_(blockpos, Blocks.f_50375_.m_49966_(), 20);
+                   }
+ 
+@@ -323,14 +_,18 @@
+                   if (pair.getSecond() != null) {
+                      BlockEntity blockentity2 = p_230329_.m_7702_(blockpos4);
+                      if (blockentity2 != null) {
+-                        blockentity2.m_6596_();
++                        // Paper start - Fix NBT pieces overriding a block entity during worldgen deadlock
++                        if (!(p_230329_ instanceof net.minecraft.world.level.WorldGenLevel)) {
++                           blockentity2.m_6596_();
++                        }
++                        // Paper end - Fix NBT pieces overriding a block entity during worldgen deadlock
+                      }
+                   }
+                }
              }
  
              if (!p_230332_.m_74408_()) {

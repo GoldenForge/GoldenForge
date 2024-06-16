@@ -1,10 +1,11 @@
 --- a/net/minecraft/nbt/ListTag.java
 +++ b/net/minecraft/nbt/ListTag.java
-@@ -2,6 +_,8 @@
+@@ -2,6 +_,9 @@
  
  import com.google.common.collect.Iterables;
  import com.google.common.collect.Lists;
 +import it.unimi.dsi.fastutil.objects.ObjectArrayList;
++import org.goldenforge.GoldenForge;
 +
  import java.io.DataInput;
  import java.io.DataOutput;
@@ -28,6 +29,27 @@
     }
  
     public void m_6434_(DataOutput p_128734_) throws IOException {
+@@ -263,7 +_,9 @@
+    public Tag set(int p_128760_, Tag p_128761_) {
+       Tag tag = this.get(p_128760_);
+       if (!this.m_7615_(p_128760_, p_128761_)) {
+-         throw new UnsupportedOperationException(String.format(Locale.ROOT, "Trying to add tag of type %d to list of %d", p_128761_.m_7060_(), this.f_128717_));
++         GoldenForge.LOGGER.warn(String.format(Locale.ROOT, "Trying to add tag of type %d to list of %d", p_128761_.m_7060_(), this.f_128717_));
++         //throw new UnsupportedOperationException(String.format(Locale.ROOT, "Trying to add tag of type %d to list of %d", p_128761_.getId(), this.type));
++         return tag;
+       } else {
+          return tag;
+       }
+@@ -271,7 +_,8 @@
+ 
+    public void add(int p_128753_, Tag p_128754_) {
+       if (!this.m_7614_(p_128753_, p_128754_)) {
+-         throw new UnsupportedOperationException(String.format(Locale.ROOT, "Trying to add tag of type %d to list of %d", p_128754_.m_7060_(), this.f_128717_));
++         GoldenForge.LOGGER.warn(String.format(Locale.ROOT, "Trying to add tag of type %d to list of %d", p_128754_.m_7060_(), this.f_128717_));
++         //throw new UnsupportedOperationException(String.format(Locale.ROOT, "Trying to add tag of type %d to list of %d", p_128754_.getId(), this.type));
+       }
+    }
+ 
 @@ -305,8 +_,9 @@
     }
  

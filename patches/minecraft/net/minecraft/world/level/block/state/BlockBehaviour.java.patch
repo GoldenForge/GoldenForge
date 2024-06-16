@@ -176,9 +176,8 @@
        }
  
 -      public boolean m_60795_() {
--         return this.f_60596_;
 +      public final boolean m_60795_() { // Paper
-+         return this.m_60734_().isAir((BlockState)this);
+          return this.f_60596_;
        }
  
        public MaterialColor m_60780_(BlockGetter p_60781_, BlockPos p_60782_) {

@@ -1857,6 +1857,7 @@ public final class NewChunkHolder {
             try {
                 this.chunk.asyncsavedata = this.asyncSaveData;
                 toSerialize = ChunkSerializer.write(this.world, this.chunk);
+                this.chunk.asyncsavedata = null;
                 net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, toSerialize));
             } catch (final ThreadDeath death) {
                 throw death;
@@ -1874,6 +1875,7 @@ public final class NewChunkHolder {
                 try {
                     AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
                     synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
+                    AsyncChunkSerializeTask.this.chunk.asyncsavedata = null;
                     net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
                 } catch (final ThreadDeath death) {
                     throw death;
