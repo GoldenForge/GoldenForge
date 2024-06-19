@@ -1,0 +1,64 @@
+--- a/net/minecraft/world/entity/ai/gossip/GossipContainer.java
++++ b/net/minecraft/world/entity/ai/gossip/GossipContainer.java
+@@ -58,8 +_,22 @@
+       });
+    }
+ 
++   // Paper start - Perf: Remove streams from hot code
++   private List<GossipContainer.GossipEntry> decompress() {
++      List<GossipContainer.GossipEntry> list = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>();
++      for (Map.Entry<UUID, GossipContainer.EntityGossips> entry : this.f_26156_.entrySet()) {
++         for (GossipContainer.GossipEntry cur : entry.getValue().decompress(entry.getKey())) {
++            if (cur.m_26235_() != 0) {
++               list.add(cur);
++            }
++         }
++      }
++      return list;
++   }
++   // Paper end - Perf: Remove streams from hot code
++
+    private Collection<GossipContainer.GossipEntry> m_217759_(RandomSource p_217760_, int p_217761_) {
+-      List<GossipContainer.GossipEntry> list = this.m_26203_().collect(Collectors.toList());
++      List<GossipContainer.GossipEntry> list = this.decompress(); // Paper - Perf: Remove streams from hot code
+       if (list.isEmpty()) {
+          return Collections.emptyList();
+       } else {
+@@ -153,7 +_,7 @@
+    }
+ 
+    public <T> Dynamic<T> m_26179_(DynamicOps<T> p_26180_) {
+-      return new Dynamic<>(p_26180_, p_26180_.createList(this.m_26203_().map((p_26183_) -> {
++      return new Dynamic<>(p_26180_, p_26180_.createList(this.decompress().stream().map((p_26183_) -> { // Paper - Perf: Remove streams from hot code
+          return p_26183_.m_26238_(p_26180_);
+       }).map(Dynamic::getValue)));
+    }
+@@ -179,11 +_,23 @@
+       final Object2IntMap<GossipType> f_26204_ = new Object2IntOpenHashMap<>();
+ 
+       public int m_26220_(Predicate<GossipType> p_26221_) {
+-         return this.f_26204_.object2IntEntrySet().stream().filter((p_26224_) -> {
+-            return p_26221_.test(p_26224_.getKey());
+-         }).mapToInt((p_26214_) -> {
+-            return p_26214_.getIntValue() * (p_26214_.getKey()).f_26274_;
+-         }).sum();
++         // Paper start - Perf: Remove streams from hot code
++         int weight = 0;
++         for (Object2IntMap.Entry<GossipType> entry : f_26204_.object2IntEntrySet()) {
++            if (p_26221_.test(entry.getKey())) {
++               weight += entry.getIntValue() * entry.getKey().f_26274_;
++            }
++         }
++         return weight;
++      }
++
++      public List<GossipContainer.GossipEntry> decompress(UUID uuid) {
++         List<GossipContainer.GossipEntry> list = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>();
++         for (Object2IntMap.Entry<GossipType> entry : f_26204_.object2IntEntrySet()) {
++            list.add(new GossipContainer.GossipEntry(uuid, entry.getKey(), entry.getIntValue()));
++         }
++         return list;
++         // Paper end - Perf: Remove streams from hot code
+       }
+ 
+       public Stream<GossipContainer.GossipEntry> m_26215_(UUID p_26216_) {

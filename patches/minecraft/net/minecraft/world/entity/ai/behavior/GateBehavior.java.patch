@@ -14,7 +14,7 @@
     protected void m_6735_(ServerLevel p_22881_, E p_22882_, long p_22883_) {
        this.f_22869_.m_147527_(this.f_22871_);
 -      this.f_22870_.m_142144_(this.f_22871_.m_147932_(), p_22881_, p_22882_, p_22883_);
-+      this.f_22870_.apply(this.f_22871_.f_147917_, p_22881_, p_22882_, p_22883_);
++      this.f_22870_.apply(this.f_22871_, p_22881_, p_22882_, p_22883_);
     }
  
     protected void m_6725_(ServerLevel p_22916_, E p_22917_, long p_22918_) {
@@ -49,16 +49,15 @@
     }
  
     public String toString() {
-@@ -94,6 +_,17 @@
+@@ -94,6 +_,16 @@
                 return p_22963_.m_22554_(p_147538_, p_147539_, p_147540_);
              }).findFirst();
           }
 +
 +         // Paper start - remove streams
-+         public <E extends LivingEntity> void apply(List<ShufflingList.WeightedEntry<Behavior<? super E>>> tasks, ServerLevel world, E entity, long time) {
-+            for (ShufflingList.WeightedEntry<Behavior<? super E>> task : tasks) {
-+               final Behavior<? super E> behavior = task.m_147940_();
-+               if (behavior.m_22536_() == Behavior.Status.STOPPED && behavior.m_22554_(world, entity, time)) {
++         public <E extends LivingEntity> void apply(ShufflingList<Behavior<? super E>> tasks, ServerLevel world, E entity, long time) {
++            for (Behavior<? super E> task : tasks) {
++               if (task.m_22536_() == Behavior.Status.STOPPED && task.m_22554_(world, entity, time)) {
 +                  break;
 +               }
 +            }
@@ -67,16 +66,15 @@
        },
        TRY_ALL {
           public <E extends LivingEntity> void m_142144_(Stream<Behavior<? super E>> p_147542_, ServerLevel p_147543_, E p_147544_, long p_147545_) {
-@@ -103,8 +_,19 @@
+@@ -103,8 +_,18 @@
                 p_22978_.m_22554_(p_147543_, p_147544_, p_147545_);
              });
           }
 +         // Paper start - remove streams
-+         public <E extends LivingEntity> void apply(List<ShufflingList.WeightedEntry<Behavior<? super E>>> tasks, ServerLevel world, E entity, long time) {
-+            for (ShufflingList.WeightedEntry<Behavior<? super E>> task : tasks) {
-+               final Behavior<? super E> behavior = task.m_147940_();
-+               if (behavior.m_22536_() == Behavior.Status.STOPPED) {
-+                  behavior.m_22554_(world, entity, time);
++         public <E extends LivingEntity> void apply(ShufflingList<Behavior<? super E>> tasks, ServerLevel world, E entity, long time) {
++            for (Behavior<? super E> task : tasks) {
++               if (task.m_22536_() == Behavior.Status.STOPPED) {
++                  task.m_22554_(world, entity, time);
 +               }
 +            }
 +            // Paper end - remove streams
@@ -85,6 +83,6 @@
  
 -      public abstract <E extends LivingEntity> void m_142144_(Stream<Behavior<? super E>> p_147532_, ServerLevel p_147533_, E p_147534_, long p_147535_);
 +      public abstract <E extends LivingEntity> void m_142144_(Stream<Behavior<? super E>> p_147532_, ServerLevel p_147533_, E p_147534_, long p_147535_); // Goldenforge keep old impl if mods use it.
-+      public abstract <E extends LivingEntity> void apply(List<ShufflingList.WeightedEntry<Behavior<? super E>>> tasks, ServerLevel p_147533_, E p_147534_, long p_147535_);
++      public abstract <E extends LivingEntity> void apply(ShufflingList<Behavior<? super E>> tasks, ServerLevel p_147533_, E p_147534_, long p_147535_);
     }
  }
