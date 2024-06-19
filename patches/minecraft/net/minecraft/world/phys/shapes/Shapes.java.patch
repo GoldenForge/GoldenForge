@@ -180,3 +180,59 @@
        if (p_83146_ != m_83144_() && p_83147_ != m_83144_()) {
           if (p_83146_.m_83281_() && p_83147_.m_83281_()) {
              return false;
+@@ -247,23 +_,44 @@
+    }
+ 
+    @VisibleForTesting
+-   protected static IndexMerger m_83058_(int p_83059_, DoubleList p_83060_, DoubleList p_83061_, boolean p_83062_, boolean p_83063_) {
+-      int i = p_83060_.size() - 1;
+-      int j = p_83061_.size() - 1;
+-      if (p_83060_ instanceof CubePointRange && p_83061_ instanceof CubePointRange) {
+-         long k = m_83055_(i, j);
+-         if ((long)p_83059_ * k <= 256L) {
++   private static IndexMerger m_83058_(int p_83059_, DoubleList p_83060_, DoubleList p_83061_, boolean p_83062_, boolean p_83063_) { // Paper - private
++      // Paper start - fast track the most common scenario
++      // doublelist is usually a DoubleArrayList with Infinite head/tails that falls to the final else clause
++      // This is actually the most common path, so jump to it straight away
++      if (p_83060_.getDouble(0) == Double.NEGATIVE_INFINITY && p_83060_.getDouble(p_83060_.size() - 1) == Double.POSITIVE_INFINITY) {
++         return new IndirectMerger(p_83060_, p_83061_, p_83062_, p_83063_);
++      }
++      // Split out rest to hopefully inline the above
++      return lessCommonMerge(p_83059_, p_83060_, p_83061_, p_83062_, p_83063_);
++   }
++
++   private static IndexMerger lessCommonMerge(int size, DoubleList first, DoubleList second, boolean includeFirst, boolean includeSecond) {
++      int i = first.size() - 1;
++      int j = second.size() - 1;
++      // Paper note - Rewrite below as optimized order if instead of nasty ternary
++      if (first instanceof CubePointRange && second instanceof CubePointRange) {
++         long l = m_83055_(i, j);
++         if ((long)size * l <= 256L) {
+             return new DiscreteCubeMerger(i, j);
+          }
+       }
+ 
+-      if (p_83060_.getDouble(i) < p_83061_.getDouble(0) - 1.0E-7D) {
+-         return new NonOverlappingMerger(p_83060_, p_83061_, false);
+-      } else if (p_83061_.getDouble(j) < p_83060_.getDouble(0) - 1.0E-7D) {
+-         return new NonOverlappingMerger(p_83061_, p_83060_, true);
++      // Paper start - Identical happens more often than Disjoint
++      if (i == j && Objects.equals(first, second)) {
++         if (first instanceof IdenticalMerger) {
++            return (IndexMerger) first;
++         } else if (second instanceof IdenticalMerger) {
++            return (IndexMerger) second;
++         }
++         return new IdenticalMerger(first);
++      } else if (first.getDouble(i) < second.getDouble(0) - 1.0E-7) {
++         return new NonOverlappingMerger(first, second, false);
++      } else if (second.getDouble(j) < first.getDouble(0) - 1.0E-7) {
++         return new NonOverlappingMerger(second, first, true);
+       } else {
+-         return (IndexMerger)(i == j && Objects.equals(p_83060_, p_83061_) ? new IdenticalMerger(p_83060_) : new IndirectMerger(p_83060_, p_83061_, p_83062_, p_83063_));
++         return new IndirectMerger(first, second, includeFirst, includeSecond);
+       }
++      // Paper end
+    }
+ 
+    public interface DoubleLineConsumer {
