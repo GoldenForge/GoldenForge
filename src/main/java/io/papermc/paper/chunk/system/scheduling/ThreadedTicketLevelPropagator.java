@@ -2,7 +2,9 @@ package io.papermc.paper.chunk.system.scheduling;
 
 import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
 import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
+import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
 import it.unimi.dsi.fastutil.HashCommon;
 import it.unimi.dsi.fastutil.longs.Long2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.shorts.Short2ByteLinkedOpenHashMap;
@@ -30,10 +32,11 @@ public abstract class ThreadedTicketLevelPropagator {
     private static final int MAX_SOURCE_LEVEL = 62;
 
     private final UpdateQueue updateQueue;
-    private final ConcurrentHashMap<Coordinate, Section> sections = new ConcurrentHashMap<>();
+    private final ConcurrentLong2ReferenceChainedHashTable<Section> sections;
 
     public ThreadedTicketLevelPropagator() {
         this.updateQueue = new UpdateQueue();
+        this.sections = new ConcurrentLong2ReferenceChainedHashTable<>();
     }
 
     // must hold ticket lock for:
@@ -46,7 +49,7 @@ public abstract class ThreadedTicketLevelPropagator {
         final int sectionX = posX >> SECTION_SHIFT;
         final int sectionZ = posZ >> SECTION_SHIFT;
 
-        final Coordinate coordinate = new Coordinate(sectionX, sectionZ);
+        final long coordinate = CoordinateUtils.getChunkKey(sectionX, sectionZ);
         Section section = this.sections.get(coordinate);
         if (section == null) {
             if (null != this.sections.putIfAbsent(coordinate, section = new Section(sectionX, sectionZ))) {
@@ -78,7 +81,7 @@ public abstract class ThreadedTicketLevelPropagator {
         final int sectionX = posX >> SECTION_SHIFT;
         final int sectionZ = posZ >> SECTION_SHIFT;
 
-        final Coordinate coordinate = new Coordinate(sectionX, sectionZ);
+        final long coordinate = CoordinateUtils.getChunkKey(sectionX, sectionZ);
         final Section section = this.sections.get(coordinate);
 
         if (section == null) {
@@ -126,7 +129,7 @@ public abstract class ThreadedTicketLevelPropagator {
             return false;
         }
 
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
+        final long coordinate = CoordinateUtils.getChunkKey(sectionX, sectionZ);
         final Section section = this.sections.get(coordinate);
 
         if (section == null || section.queuedSources.isEmpty()) {
@@ -162,7 +165,7 @@ public abstract class ThreadedTicketLevelPropagator {
         final boolean ret;
         try {
             // first, check if this update was stolen
-            if (section != this.sections.get(new Coordinate(sectionX, sectionZ))) {
+            if (section != this.sections.get(CoordinateUtils.getChunkKey(sectionX, sectionZ))) {
                 // occurs when a stolen update deletes this section
                 // it is possible that another update is scheduled, but that one will have the correct section
                 if (node != null) {
@@ -239,9 +242,9 @@ public abstract class ThreadedTicketLevelPropagator {
                         }
                         final int offX = dx + sectionX;
                         final int offZ = dz + sectionZ;
-                        final Coordinate coordinate = new Coordinate(offX, offZ);
-                        final Section neighbour = this.sections.computeIfAbsent(coordinate, (final Coordinate keyInMap) -> {
-                            return new Section(Coordinate.x(keyInMap.key), Coordinate.z(keyInMap.key));
+                        final long coordinate = CoordinateUtils.getChunkKey(offX, offZ);
+                        final Section neighbour = this.sections.computeIfAbsent(coordinate, (final long keyInMap) -> {
+                            return new Section(CoordinateUtils.getChunkX(keyInMap), CoordinateUtils.getChunkZ(keyInMap));
                         });
 
                         // increase ref count
@@ -267,7 +270,7 @@ public abstract class ThreadedTicketLevelPropagator {
                     for (int dx = -1; dx <= 1; ++dx) {
                         final int offX = dx + sectionX;
                         final int offZ = dz + sectionZ;
-                        final Coordinate coordinate = new Coordinate(offX, offZ);
+                        final long coordinate = CoordinateUtils.getChunkKey(offX, offZ);
                         final Section neighbour = this.sections.get(coordinate);
 
                         if (neighbour == null) {
@@ -798,7 +801,7 @@ public abstract class ThreadedTicketLevelPropagator {
                 for (int dx = -rad; dx <= rad; ++dx) {
                     final int sectionX = centerSectionX + dx;
                     final int sectionZ = centerSectionZ + dz;
-                    final Coordinate coordinate = new Coordinate(sectionX, sectionZ);
+                    final long coordinate = CoordinateUtils.getChunkKey(sectionX, sectionZ);
                     final Section section = propagator.sections.get(coordinate);
 
                     if (section == null) {

@@ -1,11 +1,9 @@
 package ca.spottedleaf.concurrentutil.lock;
 
 import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
-import it.unimi.dsi.fastutil.HashCommon;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
+import ca.spottedleaf.concurrentutil.util.IntPairUtil;
+import java.util.Objects;
 import java.util.concurrent.locks.LockSupport;
 
 public final class ReentrantAreaLock {
@@ -13,7 +11,7 @@ public final class ReentrantAreaLock {
     public final int coordinateShift;
 
     // aggressive load factor to reduce contention
-    private final ConcurrentHashMap<Coordinate, Node> nodes = new ConcurrentHashMap<>(128, 0.2f);
+    private final ConcurrentLong2ReferenceChainedHashTable<Node> nodes = ConcurrentLong2ReferenceChainedHashTable.createWithCapacity(128, 0.2f);
 
     public ReentrantAreaLock(final int coordinateShift) {
         this.coordinateShift = coordinateShift;
@@ -25,7 +23,7 @@ public final class ReentrantAreaLock {
         final int sectionX = x >> shift;
         final int sectionZ = z >> shift;
 
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
+        final long coordinate = IntPairUtil.key(sectionX, sectionZ);
         final Node node = this.nodes.get(coordinate);
 
         return node != null && node.thread == currThread;
@@ -49,7 +47,7 @@ public final class ReentrantAreaLock {
 
         for (int currZ = fromSectionZ; currZ <= toSectionZ; ++currZ) {
             for (int currX = fromSectionX; currX <= toSectionX; ++currX) {
-                final Coordinate coordinate = new Coordinate(Coordinate.key(currX, currZ));
+                final long coordinate = IntPairUtil.key(currX, currZ);
 
                 final Node node = this.nodes.get(coordinate);
 
@@ -82,7 +80,8 @@ public final class ReentrantAreaLock {
         final int toSectionX = toX >> shift;
         final int toSectionZ = toZ >> shift;
 
-        final List<Coordinate> areaAffected = new ArrayList<>();
+        final long[] areaAffected = new long[(toSectionX - fromSectionX + 1) * (toSectionZ - fromSectionZ + 1)];
+        int areaAffectedLen = 0;
 
         final Node ret = new Node(this, areaAffected, currThread);
 
@@ -91,12 +90,12 @@ public final class ReentrantAreaLock {
         // try to fast acquire area
         for (int currZ = fromSectionZ; currZ <= toSectionZ; ++currZ) {
             for (int currX = fromSectionX; currX <= toSectionX; ++currX) {
-                final Coordinate coordinate = new Coordinate(Coordinate.key(currX, currZ));
+                final long coordinate = IntPairUtil.key(currX, currZ);
 
                 final Node prev = this.nodes.putIfAbsent(coordinate, ret);
 
                 if (prev == null) {
-                    areaAffected.add(coordinate);
+                    areaAffected[areaAffectedLen++] = coordinate;
                     continue;
                 }
 
@@ -112,16 +111,16 @@ public final class ReentrantAreaLock {
         }
 
         // failed, undo logic
-        if (!areaAffected.isEmpty()) {
-            for (int i = 0, len = areaAffected.size(); i < len; ++i) {
-                final Coordinate key = areaAffected.get(i);
+        if (areaAffectedLen != 0) {
+            for (int i = 0; i < areaAffectedLen; ++i) {
+                final long key = areaAffected[i];
 
                 if (this.nodes.remove(key) != ret) {
                     throw new IllegalStateException();
                 }
             }
 
-            areaAffected.clear();
+            areaAffectedLen = 0;
 
             // since we inserted, we need to drain waiters
             Thread unpark;
@@ -139,10 +138,11 @@ public final class ReentrantAreaLock {
         final int sectionX = x >> shift;
         final int sectionZ = z >> shift;
 
-        final List<Coordinate> areaAffected = new ArrayList<>(1);
+        final long coordinate = IntPairUtil.key(sectionX, sectionZ);
+        final long[] areaAffected = new long[1];
+        areaAffected[0] = coordinate;
 
         final Node ret = new Node(this, areaAffected, currThread);
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
 
         for (long failures = 0L;;) {
             final Node park;
@@ -152,12 +152,13 @@ public final class ReentrantAreaLock {
                 final Node prev = this.nodes.putIfAbsent(coordinate, ret);
 
                 if (prev == null) {
-                    areaAffected.add(coordinate);
+                    ret.areaAffectedLen = 1;
                     return ret;
                 } else if (prev.thread != currThread) {
                     park = prev;
                 } else {
                     // only one node we would want to acquire, and it's owned by this thread already
+                    // areaAffectedLen = 0 already
                     return ret;
                 }
             }
@@ -205,7 +206,8 @@ public final class ReentrantAreaLock {
             return this.lock(fromX, fromZ);
         }
 
-        final List<Coordinate> areaAffected = new ArrayList<>();
+        final long[] areaAffected = new long[(toSectionX - fromSectionX + 1) * (toSectionZ - fromSectionZ + 1)];
+        int areaAffectedLen = 0;
 
         final Node ret = new Node(this, areaAffected, currThread);
 
@@ -218,14 +220,14 @@ public final class ReentrantAreaLock {
             // try to fast acquire area
             for (int currZ = fromSectionZ; currZ <= toSectionZ; ++currZ) {
                 for (int currX = fromSectionX; currX <= toSectionX; ++currX) {
-                    final Coordinate coordinate = new Coordinate(Coordinate.key(currX, currZ));
+                    final long coordinate = IntPairUtil.key(currX, currZ);
 
                     final Node prev = this.nodes.putIfAbsent(coordinate, ret);
 
                     if (prev == null) {
                         addedToArea = true;
                         allOwned = false;
-                        areaAffected.add(coordinate);
+                        areaAffected[areaAffectedLen++] = coordinate;
                         continue;
                     }
 
@@ -237,24 +239,18 @@ public final class ReentrantAreaLock {
                 }
             }
 
-            if (park == null) {
-                if (alreadyOwned && !allOwned) {
-                    throw new IllegalStateException("Improper lock usage: Should never acquire intersecting areas");
-                }
-                return ret;
-            }
-
-            // failed, undo logic
-            if (addedToArea) {
-                for (int i = 0, len = areaAffected.size(); i < len; ++i) {
-                    final Coordinate key = areaAffected.get(i);
+            // check for failure
+            if ((park != null && addedToArea) || (park == null && alreadyOwned && !allOwned)) {
+                // failure to acquire: added and we need to block, or improper lock usage
+                for (int i = 0; i < areaAffectedLen; ++i) {
+                    final long key = areaAffected[i];
 
                     if (this.nodes.remove(key) != ret) {
                         throw new IllegalStateException();
                     }
                 }
 
-                areaAffected.clear();
+                areaAffectedLen = 0;
 
                 // since we inserted, we need to drain waiters
                 Thread unpark;
@@ -262,6 +258,16 @@ public final class ReentrantAreaLock {
                     LockSupport.unpark(unpark);
                 }
             }
+
+            if (park == null) {
+                if (alreadyOwned && !allOwned) {
+                    throw new IllegalStateException("Improper lock usage: Should never acquire intersecting areas");
+                }
+                ret.areaAffectedLen = areaAffectedLen;
+                return ret;
+            }
+
+            // failed
 
             ++failures;
 
@@ -296,17 +302,20 @@ public final class ReentrantAreaLock {
             throw new IllegalStateException("Unlock target lock mismatch");
         }
 
-        final List<Coordinate> areaAffected = node.areaAffected;
+        final long[] areaAffected = node.areaAffected;
+        final int areaAffectedLen = node.areaAffectedLen;
 
-        if (areaAffected.isEmpty()) {
+        if (areaAffectedLen == 0) {
             // here we are not in the node map, and so do not need to remove from the node map or unblock any waiters
             return;
         }
 
+        Objects.checkFromToIndex(0, areaAffectedLen, areaAffected.length);
+
         // remove from node map; allowing other threads to lock
-        for (int i = 0, len = areaAffected.size(); i < len; ++i) {
-            final Coordinate coordinate = areaAffected.get(i);
-            if (this.nodes.remove(coordinate) != node) {
+        for (int i = 0; i < areaAffectedLen; ++i) {
+            final long coordinate = areaAffected[i];
+            if (this.nodes.remove(coordinate, node) != node) {
                 throw new IllegalStateException();
             }
         }
@@ -320,11 +329,11 @@ public final class ReentrantAreaLock {
     public static final class Node extends MultiThreadedQueue<Thread> {
 
         private final ReentrantAreaLock lock;
-        private final List<Coordinate> areaAffected;
+        private final long[] areaAffected;
+        private int areaAffectedLen;
         private final Thread thread;
-        //private final Throwable WHO_CREATED_MY_ASS = new Throwable();
 
-        private Node(final ReentrantAreaLock lock, final List<Coordinate> areaAffected, final Thread thread) {
+        private Node(final ReentrantAreaLock lock, final long[] areaAffected, final Thread thread) {
             this.lock = lock;
             this.areaAffected = areaAffected;
             this.thread = thread;
@@ -333,64 +342,9 @@ public final class ReentrantAreaLock {
         @Override
         public String toString() {
             return "Node{" +
-                "areaAffected=" + this.areaAffected +
-                ", thread=" + this.thread +
-                '}';
-        }
-    }
-
-    private static final class Coordinate implements Comparable<Coordinate> {
-
-        public final long key;
-
-        public Coordinate(final long key) {
-            this.key = key;
-        }
-
-        public Coordinate(final int x, final int z) {
-            this.key = key(x, z);
-        }
-
-        public static long key(final int x, final int z) {
-            return ((long)z << 32) | (x & 0xFFFFFFFFL);
-        }
-
-        public static int x(final long key) {
-            return (int)key;
-        }
-
-        public static int z(final long key) {
-            return (int)(key >>> 32);
-        }
-
-        @Override
-        public int hashCode() {
-            return (int)HashCommon.mix(this.key);
-        }
-
-        @Override
-        public boolean equals(final Object obj) {
-            if (this == obj) {
-                return true;
-            }
-
-            if (!(obj instanceof Coordinate other)) {
-                return false;
-            }
-
-            return this.key == other.key;
-        }
-
-        // This class is intended for HashMap/ConcurrentHashMap usage, which do treeify bin nodes if the chain
-        // is too large. So we should implement compareTo to help.
-        @Override
-        public int compareTo(final Coordinate other) {
-            return Long.compare(this.key, other.key);
-        }
-
-        @Override
-        public String toString() {
-            return "[" + x(this.key) + "," + z(this.key) + "]";
+                    "areaAffected=" + IntPairUtil.toString(this.areaAffected, 0, this.areaAffectedLen) +
+                    ", thread=" + this.thread +
+                    '}';
         }
     }
 }

@@ -1,17 +1,6 @@
 --- a/net/minecraft/world/level/levelgen/Beardifier.java
 +++ b/net/minecraft/world/level/levelgen/Beardifier.java
-@@ -36,13 +_,19 @@
-       int j = p_223939_.m_45605_();
-       ObjectList<Beardifier.Rigid> objectlist = new ObjectArrayList<>(10);
-       ObjectList<JigsawJunction> objectlist1 = new ObjectArrayList<>(32);
--      p_223938_.m_220477_(p_223939_, (p_223941_) -> {
--         return p_223941_.m_226620_() != TerrainAdjustment.NONE;
--      }).forEach((p_223936_) -> {
-+      // Paper start - Perf: Remove streams from hot code
-+      for (net.minecraft.world.level.levelgen.structure.StructureStart p_223936_ : p_223938_.m_220477_(p_223939_, (structure) -> {
-+         return structure.m_226620_() != TerrainAdjustment.NONE;
-+      })) { // Paper end - Perf: Remove streams from hot code
-          TerrainAdjustment terrainadjustment = p_223936_.m_226861_().m_226620_();
+@@ -43,6 +_,11 @@
  
           for(StructurePiece structurepiece : p_223936_.m_73602_()) {
              if (structurepiece.m_73411_(p_223939_, 12)) {
@@ -23,12 +12,3 @@
                 if (structurepiece instanceof PoolElementStructurePiece) {
                    PoolElementStructurePiece poolelementstructurepiece = (PoolElementStructurePiece)structurepiece;
                    StructureTemplatePool.Projection structuretemplatepool$projection = poolelementstructurepiece.m_209918_().m_210539_();
-@@ -63,7 +_,7 @@
-             }
-          }
- 
--      });
-+      } // Paper - Perf: Remove streams from hot code
-       return new Beardifier(objectlist.iterator(), objectlist1.iterator());
-    }
- 

@@ -1,6 +1,12 @@
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -6,16 +_,15 @@
+@@ -1,21 +_,22 @@
+ package net.minecraft.server.level;
+ 
++import ca.spottedleaf.starlight.common.util.CoordinateUtils;
+ import com.google.common.annotations.VisibleForTesting;
+ import com.google.common.collect.Lists;
+ import com.mojang.datafixers.DataFixer;
  import com.mojang.datafixers.util.Either;
  import java.io.File;
  import java.io.IOException;
@@ -16,6 +22,7 @@
  import java.util.function.Supplier;
  import javax.annotation.Nullable;
 +
++import io.papermc.paper.chunk.system.scheduling.NewChunkHolder;
 +import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
  import net.minecraft.Util;
  import net.minecraft.core.BlockPos;
@@ -232,14 +239,15 @@
           ChunkAccess chunkaccess1 = completablefuture.join().map((p_8406_) -> {
              return p_8406_;
           }, (p_8423_) -> {
-@@ -144,38 +_,10 @@
+@@ -144,39 +_,16 @@
  
     @Nullable
     public LevelChunk m_7131_(int p_8357_, int p_8358_) {
 -      if (Thread.currentThread() != this.f_8330_) {
-+      if (!io.papermc.paper.util.TickThread.isTickThread()) { // Paper - rewrite chunk system
++      final NewChunkHolder newChunkHolder = this.f_8329_.chunkTaskScheduler.chunkHolderManager.getChunkHolder(CoordinateUtils.getChunkKey(p_8357_, p_8358_));
++      if (newChunkHolder == null || !newChunkHolder.isFullChunkReady()) {
           return null;
-       } else {
+-      } else {
 -         this.f_8329_.m_46473_().m_6174_("getChunkNow");
 -         long i = ChunkPos.m_45589_(p_8357_, p_8358_);
 -
@@ -269,10 +277,17 @@
 -               return null;
 -            }
 -         }
-+         return this.getChunkAtIfLoadedMainThread(p_8357_, p_8358_); // Paper - optimise for loaded chunks
-       }
+-      }
++      }
++
++      if (newChunkHolder.getCurrentChunk() instanceof LevelChunk levelChunk) {
++         return levelChunk;
++      }
++      // race condition: chunk unloaded, only happens off-main
++      return null;
     }
  
+    private void m_8488_() {
 @@ -186,7 +_,7 @@
     }
  
@@ -352,7 +367,7 @@
 -      ChunkHolder chunkholder = this.m_8364_((new ChunkPos(p_8429_, p_8430_)).m_45588_());
 -      int i = 33 + ChunkStatus.m_62370_(ChunkStatus.f_62326_);
 -      return !this.m_8416_(chunkholder, i);
-+      return this.getChunkAtIfLoadedImmediately(p_8429_, p_8430_) != null; // Paper - rewrite chunk system
++      return this.m_7131_(p_8429_, p_8430_) != null; // Paper - rewrite chunk system
     }
  
     public BlockGetter m_6196_(int p_8454_, int p_8455_) {
@@ -458,7 +473,7 @@
           this.m_8490_();
        }
  
-@@ -318,68 +_,224 @@
+@@ -318,70 +_,221 @@
     private void m_8490_() {
        long i = this.f_8329_.m_46467_();
        long j = i - this.f_8334_;
@@ -718,18 +733,16 @@
 -      ChunkHolder chunkholder = this.m_8364_(p_8371_);
 -      if (chunkholder != null) {
 -         chunkholder.m_140082_().getNow(ChunkHolder.f_139997_).left().ifPresent(p_8372_);
-+      ChunkHolder playerchunk = this.m_8364_(p_8371_);
-+
-+      if (playerchunk != null) {
-+         // Paper start - rewrite chunk system
-+         LevelChunk chunk = playerchunk.m_212234_();
-+         if (chunk != null) {
-+            p_8372_.accept(chunk);
-+         }
-+         // Paper end - rewrite chunk system
++      // Paper start - rewrite chunk system
++      final LevelChunk fullChunk = this.m_7131_(CoordinateUtils.getChunkX(p_8371_), CoordinateUtils.getChunkZ(p_8371_));
++      if (fullChunk != null) {
++         p_8372_.accept(fullChunk);
        }
- 
+-
++      // Paper end - rewrite chunk system
     }
+ 
+    public String m_6754_() {
 @@ -426,10 +_,16 @@
     }
  

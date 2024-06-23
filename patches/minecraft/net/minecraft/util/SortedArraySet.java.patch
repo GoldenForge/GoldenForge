@@ -1,6 +1,6 @@
 --- a/net/minecraft/util/SortedArraySet.java
 +++ b/net/minecraft/util/SortedArraySet.java
-@@ -14,6 +_,14 @@
+@@ -14,6 +_,23 @@
     T[] f_14241_;
     int f_14242_;
  
@@ -11,6 +11,15 @@
 +      this.f_14241_ = Arrays.copyOf(other.f_14241_, this.f_14242_);
 +   }
 +   // Paper end - rewrite chunk system
++
++   public final SortedArraySet<T> moonrise$copy() {
++      final SortedArraySet<T> ret = SortedArraySet.m_144978_(this.f_14240_, 0);
++
++      ret.f_14242_ = this.f_14242_;
++      ret.f_14241_ = Arrays.copyOf(this.f_14241_, this.f_14242_);
++
++      return ret;
++   }
 +
     private SortedArraySet(int p_14244_, Comparator<T> p_14245_) {
        this.f_14240_ = p_14245_;

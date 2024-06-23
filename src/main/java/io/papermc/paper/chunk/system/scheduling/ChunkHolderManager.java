@@ -1,6 +1,7 @@
 package io.papermc.paper.chunk.system.scheduling;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
+import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
 import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonArray;
@@ -34,12 +35,7 @@ import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -61,8 +57,8 @@ public final class ChunkHolderManager {
     private static final long PROBE_MARKER = Long.MIN_VALUE + 1;
     public final ReentrantAreaLock ticketLockArea;
 
-    private final ConcurrentHashMap<RegionFileIOThread.ChunkCoordinate, SortedArraySet<Ticket<?>>> tickets = new java.util.concurrent.ConcurrentHashMap<>();
-    private final ConcurrentHashMap<RegionFileIOThread.ChunkCoordinate, Long2IntOpenHashMap> sectionToChunkToExpireCount = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ConcurrentLong2ReferenceChainedHashTable<SortedArraySet<Ticket<?>>> tickets = new ConcurrentLong2ReferenceChainedHashTable<>();
+    private final ConcurrentLong2ReferenceChainedHashTable<Long2IntOpenHashMap> sectionToChunkToExpireCount = new ConcurrentLong2ReferenceChainedHashTable();
     final ChunkQueue unloadQueue;
 
     public boolean processTicketUpdates(final int posX, final int posZ) {
@@ -99,7 +95,7 @@ public final class ChunkHolderManager {
         );
     }
 
-    private final SWMRLong2ObjectHashTable<NewChunkHolder> chunkHolders = new SWMRLong2ObjectHashTable<>(16384, 0.25f);
+    private final ConcurrentLong2ReferenceChainedHashTable<NewChunkHolder> chunkHolders = ConcurrentLong2ReferenceChainedHashTable.createWithCapacity(16384, 0.25f);
     // what a disaster of a name
     // this is a map of removal tick to a map of chunks and the number of tickets a chunk has that are to expire that tick
     private final Long2ObjectOpenHashMap<Long2IntOpenHashMap> removeTickToChunkExpireTicketCount = new Long2ObjectOpenHashMap<>();
@@ -152,8 +148,10 @@ public final class ChunkHolderManager {
     }
 
     public List<NewChunkHolder> getChunkHolders() {
-        final List<NewChunkHolder> ret = new ArrayList<>(this.chunkHolders.size());
-        this.chunkHolders.forEachValue(ret::add);
+        final List<NewChunkHolder> ret = new ArrayList<>(this.chunkHolders.size() + 1);
+        for (final Iterator<NewChunkHolder> iterator = this.chunkHolders.valueIterator(); iterator.hasNext();) {
+            ret.add(iterator.next());
+        }
         return ret;
     }
 
@@ -373,7 +371,7 @@ public final class ChunkHolderManager {
     public String getTicketDebugString(final long coordinate) {
         final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(CoordinateUtils.getChunkX(coordinate), CoordinateUtils.getChunkZ(coordinate));
         try {
-            final SortedArraySet<Ticket<?>> tickets = this.tickets.get(new RegionFileIOThread.ChunkCoordinate(coordinate));
+            final SortedArraySet<Ticket<?>> tickets = this.tickets.get(coordinate);
 
             return tickets != null ? tickets.first().toString() : "no_ticket";
         } finally {
@@ -385,7 +383,7 @@ public final class ChunkHolderManager {
 
     public SortedArraySet<Ticket<?>> getTicketsSyncronised(long key) {
         synchronized (tickets) {
-            return this.tickets.getOrDefault( new RegionFileIOThread.ChunkCoordinate(key), SortedArraySet.create(4));
+            return this.tickets.getOrDefault(key, SortedArraySet.create(4));
         }
     }
 
@@ -396,38 +394,40 @@ public final class ChunkHolderManager {
 
     public Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> getTicketsCopy() {
         final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> ret = new Long2ObjectOpenHashMap<>();
-        final Long2ObjectOpenHashMap<List<RegionFileIOThread.ChunkCoordinate>> sections = new Long2ObjectOpenHashMap();
+        final Long2ObjectOpenHashMap<LongArrayList> sections = new Long2ObjectOpenHashMap<>();
         final int sectionShift = this.taskScheduler.getChunkSystemLockShift();
-        for (final RegionFileIOThread.ChunkCoordinate coord : this.tickets.keySet()) {
+        for (final PrimitiveIterator.OfLong iterator = this.tickets.keyIterator(); iterator.hasNext();) {
+            final long coord = iterator.nextLong();
             sections.computeIfAbsent(
                     CoordinateUtils.getChunkKey(
-                            CoordinateUtils.getChunkX(coord.key) >> sectionShift,
-                            CoordinateUtils.getChunkZ(coord.key) >> sectionShift
+                            CoordinateUtils.getChunkX(coord) >> sectionShift,
+                            CoordinateUtils.getChunkZ(coord) >> sectionShift
                     ),
                     (final long keyInMap) -> {
-                        return new ArrayList<>();
+                        return new LongArrayList();
                     }
             ).add(coord);
         }
 
-        for (final Iterator<Long2ObjectMap.Entry<List<RegionFileIOThread.ChunkCoordinate>>> iterator = sections.long2ObjectEntrySet().fastIterator();
+        for (final Iterator<Long2ObjectMap.Entry<LongArrayList>> iterator = sections.long2ObjectEntrySet().fastIterator();
              iterator.hasNext();) {
-            final Long2ObjectMap.Entry<List<RegionFileIOThread.ChunkCoordinate>> entry = iterator.next();
+            final Long2ObjectMap.Entry<LongArrayList> entry = iterator.next();
             final long sectionKey = entry.getLongKey();
-            final List<RegionFileIOThread.ChunkCoordinate> coordinates = entry.getValue();
+            final LongArrayList coordinates = entry.getValue();
 
             final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
                     CoordinateUtils.getChunkX(sectionKey) << sectionShift,
                     CoordinateUtils.getChunkZ(sectionKey) << sectionShift
             );
             try {
-                for (final RegionFileIOThread.ChunkCoordinate coord : coordinates) {
+                for (final LongIterator iterator2 = coordinates.iterator(); iterator2.hasNext();) {
+                    final long coord = iterator2.nextLong();
                     final SortedArraySet<Ticket<?>> tickets = this.tickets.get(coord);
                     if (tickets == null) {
                         // removed before we acquired lock
                         continue;
                     }
-                    ret.put(coord.key, new SortedArraySet<>(tickets));
+                    ret.put(coord, new SortedArraySet<>(tickets).moonrise$copy());
                 }
             } finally {
                 this.ticketLockArea.unlock(ticketLock);
@@ -464,12 +464,12 @@ public final class ChunkHolderManager {
         final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
         final int sectionShift = this.world.getRegionChunkShift();
-        final RegionFileIOThread.ChunkCoordinate sectionKey = new RegionFileIOThread.ChunkCoordinate(CoordinateUtils.getChunkKey(
+        final long sectionKey = CoordinateUtils.getChunkKey(
                 chunkX >> sectionShift,
                 chunkZ >> sectionShift
-        ));
+        );
 
-        this.sectionToChunkToExpireCount.computeIfAbsent(sectionKey, (final RegionFileIOThread.ChunkCoordinate keyInMap) -> {
+        this.sectionToChunkToExpireCount.computeIfAbsent(sectionKey, (final long keyInMap) -> {
             return new Long2IntOpenHashMap();
         }).addTo(chunkKey, 1);
     }
@@ -478,10 +478,10 @@ public final class ChunkHolderManager {
         final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
         final int sectionShift = this.world.getRegionChunkShift();
-        final RegionFileIOThread.ChunkCoordinate sectionKey = new RegionFileIOThread.ChunkCoordinate(CoordinateUtils.getChunkKey(
+        final long sectionKey = CoordinateUtils.getChunkKey(
                 chunkX >> sectionShift,
                 chunkZ >> sectionShift
-        ));
+        );
 
         final Long2IntOpenHashMap removeCounts = this.sectionToChunkToExpireCount.get(sectionKey);
         final int prevCount = removeCounts.addTo(chunkKey, -1);
@@ -513,7 +513,7 @@ public final class ChunkHolderManager {
 
         final ReentrantAreaLock.Node ticketLock = lock ? this.ticketLockArea.lock(chunkX, chunkZ) : null;
         try {
-            final SortedArraySet<Ticket<?>> ticketsAtChunk = this.tickets.computeIfAbsent(chunkCoord, (final RegionFileIOThread.ChunkCoordinate keyInMap) -> {
+            final SortedArraySet<Ticket<?>> ticketsAtChunk = this.tickets.computeIfAbsent(chunk, (final long keyInMap) -> {
                 return SortedArraySet.create(4);
             });
 
@@ -574,7 +574,7 @@ public final class ChunkHolderManager {
 
         final ReentrantAreaLock.Node ticketLock = lock ? this.ticketLockArea.lock(chunkX, chunkZ) : null;
         try {
-            final SortedArraySet<Ticket<?>> ticketsAtChunk = this.tickets.get(chunkCoord);
+            final SortedArraySet<Ticket<?>> ticketsAtChunk = this.tickets.get(chunk);
             if (ticketsAtChunk == null) {
                 return false;
             }
@@ -656,33 +656,35 @@ public final class ChunkHolderManager {
             return;
         }
 
-        final Long2ObjectOpenHashMap<List<RegionFileIOThread.ChunkCoordinate>> sections = new Long2ObjectOpenHashMap();
+        final Long2ObjectOpenHashMap<LongArrayList> sections = new Long2ObjectOpenHashMap<>();
         final int sectionShift = this.taskScheduler.getChunkSystemLockShift();
-        for (final RegionFileIOThread.ChunkCoordinate coord : this.tickets.keySet()) {
+        for (final PrimitiveIterator.OfLong iterator = this.tickets.keyIterator(); iterator.hasNext();) {
+            final long coord = iterator.nextLong();
             sections.computeIfAbsent(
                     CoordinateUtils.getChunkKey(
-                            CoordinateUtils.getChunkX(coord.key) >> sectionShift,
-                            CoordinateUtils.getChunkZ(coord.key) >> sectionShift
+                            CoordinateUtils.getChunkX(coord) >> sectionShift,
+                            CoordinateUtils.getChunkZ(coord) >> sectionShift
                     ),
                     (final long keyInMap) -> {
-                        return new ArrayList<>();
+                        return new LongArrayList();
                     }
             ).add(coord);
         }
 
-        for (final Iterator<Long2ObjectMap.Entry<List<RegionFileIOThread.ChunkCoordinate>>> iterator = sections.long2ObjectEntrySet().fastIterator();
+        for (final Iterator<Long2ObjectMap.Entry<LongArrayList>> iterator = sections.long2ObjectEntrySet().fastIterator();
              iterator.hasNext();) {
-            final Long2ObjectMap.Entry<List<RegionFileIOThread.ChunkCoordinate>> entry = iterator.next();
+            final Long2ObjectMap.Entry<LongArrayList> entry = iterator.next();
             final long sectionKey = entry.getLongKey();
-            final List<RegionFileIOThread.ChunkCoordinate> coordinates = entry.getValue();
+            final LongArrayList coordinates = entry.getValue();
 
             final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
                     CoordinateUtils.getChunkX(sectionKey) << sectionShift,
                     CoordinateUtils.getChunkZ(sectionKey) << sectionShift
             );
             try {
-                for (final RegionFileIOThread.ChunkCoordinate coord : coordinates) {
-                    this.removeTicketAtLevel(ticketType, coord.key, ticketLevel, ticketIdentifier, false);
+                for (final LongIterator iterator2 = coordinates.iterator(); iterator2.hasNext();) {
+                    final long coord = iterator2.nextLong();
+                    this.removeTicketAtLevel(ticketType, coord, ticketLevel, ticketIdentifier, false);
                 }
             } finally {
                 this.ticketLockArea.unlock(ticketLock);
@@ -700,11 +702,10 @@ public final class ChunkHolderManager {
             return --ticket.createdTick <= 0L;
         };
 
-        for (final Iterator<RegionFileIOThread.ChunkCoordinate> iterator = this.sectionToChunkToExpireCount.keySet().iterator(); iterator.hasNext();) {
-            final RegionFileIOThread.ChunkCoordinate section = iterator.next();
-            final long sectionKey = section.key;
+        for (final PrimitiveIterator.OfLong iterator = this.sectionToChunkToExpireCount.keyIterator(); iterator.hasNext();) {
+            final long sectionKey = iterator.nextLong();
 
-            if (!this.sectionToChunkToExpireCount.containsKey(section)) {
+            if (!this.sectionToChunkToExpireCount.containsKey(sectionKey)) {
                 // removed concurrently
                 continue;
             }
@@ -715,7 +716,7 @@ public final class ChunkHolderManager {
             );
 
             try {
-                final Long2IntOpenHashMap chunkToExpireCount = this.sectionToChunkToExpireCount.get(section);
+                final Long2IntOpenHashMap chunkToExpireCount = this.sectionToChunkToExpireCount.get(sectionKey);
                 if (chunkToExpireCount == null) {
                     // lost to some race
                     continue;
@@ -729,7 +730,7 @@ public final class ChunkHolderManager {
 
                     final RegionFileIOThread.ChunkCoordinate chunk = new RegionFileIOThread.ChunkCoordinate(chunkKey);
 
-                    final SortedArraySet<Ticket<?>> tickets = this.tickets.get(chunk);
+                    final SortedArraySet<Ticket<?>> tickets = this.tickets.get(chunkKey);
                     final int levelBefore = getTicketLevelAt(tickets);
 
                     final int sizeBefore = tickets.size();
@@ -738,7 +739,7 @@ public final class ChunkHolderManager {
                     final int levelAfter = getTicketLevelAt(tickets);
 
                     if (tickets.isEmpty()) {
-                        this.tickets.remove(chunk);
+                        this.tickets.remove(chunkKey);
                     }
                     if (levelBefore != levelAfter) {
                         this.updateTicketLevel(chunkKey, levelAfter);
@@ -758,7 +759,7 @@ public final class ChunkHolderManager {
                 }
 
                 if (chunkToExpireCount.isEmpty()) {
-                    this.sectionToChunkToExpireCount.remove(section);
+                    this.sectionToChunkToExpireCount.remove(sectionKey);
                 }
             } finally {
                 this.ticketLockArea.unlock(ticketLock);

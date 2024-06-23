@@ -1,9 +1,12 @@
 package io.papermc.paper.chunk.system.scheduling;
 
+import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
 import it.unimi.dsi.fastutil.HashCommon;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -13,7 +16,7 @@ public final class ChunkQueue {
 
     public final int coordinateShift;
     private final AtomicLong orderGenerator = new AtomicLong();
-    private final ConcurrentHashMap<Coordinate, UnloadSection> unloadSections = new ConcurrentHashMap<>();
+    private final ConcurrentLong2ReferenceChainedHashTable<UnloadSection> unloadSections = new ConcurrentLong2ReferenceChainedHashTable<>();
 
     /*
      * Note: write operations do not occur in parallel for any given section.
@@ -24,19 +27,19 @@ public final class ChunkQueue {
         this.coordinateShift = coordinateShift;
     }
 
-    public static record SectionToUnload(int sectionX, int sectionZ, Coordinate coord, long order, int count) {}
+    public static record SectionToUnload(int sectionX, int sectionZ, long order, int count) {}
 
     public List<SectionToUnload> retrieveForAllRegions() {
         final List<SectionToUnload> ret = new ArrayList<>();
 
-        for (final Map.Entry<Coordinate, UnloadSection> entry : this.unloadSections.entrySet()) {
-            final Coordinate coord = entry.getKey();
-            final long key = coord.key;
+        for (final Iterator<ConcurrentLong2ReferenceChainedHashTable.TableEntry<UnloadSection>> iterator = this.unloadSections.entryIterator(); iterator.hasNext();) {
+            final ConcurrentLong2ReferenceChainedHashTable.TableEntry<UnloadSection> entry = iterator.next();
+            final long key = entry.getKey();
             final UnloadSection section = entry.getValue();
             final int sectionX = Coordinate.x(key);
             final int sectionZ = Coordinate.z(key);
 
-            ret.add(new SectionToUnload(sectionX, sectionZ, coord, section.order, section.chunks.size()));
+            ret.add(new SectionToUnload(sectionX, sectionZ, section.order, section.chunks.size()));
         }
 
         ret.sort((final SectionToUnload s1, final SectionToUnload s2) -> {
@@ -47,28 +50,26 @@ public final class ChunkQueue {
     }
 
     public UnloadSection getSectionUnsynchronized(final int sectionX, final int sectionZ) {
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
-        return this.unloadSections.get(coordinate);
+        return this.unloadSections.get(CoordinateUtils.getChunkKey(sectionX, sectionZ));
     }
 
     public UnloadSection removeSection(final int sectionX, final int sectionZ) {
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
-        return this.unloadSections.remove(coordinate);
+        return this.unloadSections.remove(CoordinateUtils.getChunkKey(sectionX, sectionZ));
     }
 
     // write operation
     public boolean addChunk(final int chunkX, final int chunkZ) {
+        // write operations do not occur in parallel for a given section
         final int shift = this.coordinateShift;
         final int sectionX = chunkX >> shift;
         final int sectionZ = chunkZ >> shift;
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
-        final long chunkKey = Coordinate.key(chunkX, chunkZ);
+        final long sectionKey = CoordinateUtils.getChunkKey(sectionX, sectionZ);
+        final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
-        UnloadSection section = this.unloadSections.get(coordinate);
+        UnloadSection section = this.unloadSections.get(sectionKey);
         if (section == null) {
             section = new UnloadSection(this.orderGenerator.getAndIncrement());
-            // write operations do not occur in parallel for a given section
-            this.unloadSections.put(coordinate, section);
+            this.unloadSections.put(sectionKey, section);
         }
 
         return section.chunks.add(chunkKey);
@@ -76,13 +77,14 @@ public final class ChunkQueue {
 
     // write operation
     public boolean removeChunk(final int chunkX, final int chunkZ) {
+        // write operations do not occur in parallel for a given section
         final int shift = this.coordinateShift;
         final int sectionX = chunkX >> shift;
         final int sectionZ = chunkZ >> shift;
-        final Coordinate coordinate = new Coordinate(Coordinate.key(sectionX, sectionZ));
-        final long chunkKey = Coordinate.key(chunkX, chunkZ);
+        final long sectionKey = CoordinateUtils.getChunkKey(sectionX, sectionZ);
+        final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
-        final UnloadSection section = this.unloadSections.get(coordinate);
+        final UnloadSection section = this.unloadSections.get(sectionKey);
 
         if (section == null) {
             return false;
@@ -93,7 +95,7 @@ public final class ChunkQueue {
         }
 
         if (section.chunks.isEmpty()) {
-            this.unloadSections.remove(coordinate);
+            this.unloadSections.remove(sectionKey);
         }
 
         return true;
