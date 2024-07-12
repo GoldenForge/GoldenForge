@@ -693,6 +693,8 @@ public final class ChunkHolderManager {
     }
 
     public void tick() {
+        ++this.currentTick;
+
         final int sectionShift = this.world.getRegionChunkShift();
 
         final Predicate<Ticket<?>> expireNow = (final Ticket<?> ticket) -> {
