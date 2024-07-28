@@ -2,6 +2,7 @@ package io.papermc.paper.chunk.system;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import com.mojang.logging.LogUtils;
+import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.server.level.*;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -90,12 +91,21 @@ public final class ChunkSystem {
         }
     }
 
+    public static void onChunkPreBorder(final LevelChunk chunk, final ChunkHolder holder) {
+        ((ServerChunkCache) chunk.getLevel().getChunkSource()).moonrise$setFullChunk(chunk.getPos().x, chunk.getPos().z, chunk);
+    }
+
     public static void onChunkBorder(final LevelChunk chunk, final ChunkHolder holder) {
-        chunk.playerChunk = holder;
+
     }
 
     public static void onChunkNotBorder(final LevelChunk chunk, final ChunkHolder holder) {
 
+    }
+
+    public static void onChunkPostNotBorder(final LevelChunk chunk, final ChunkHolder holder) {
+        ((ServerChunkCache) chunk.getLevel().getChunkSource())
+                .moonrise$setFullChunk(chunk.getPos().x, chunk.getPos().z, null);
     }
 
     public static void onChunkTicking(final LevelChunk chunk, final ChunkHolder holder) {
@@ -125,6 +135,18 @@ public final class ChunkSystem {
 
     public static int getTickViewDistance(final ServerPlayer player) {
         return io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.getAPITickViewDistance(player);
+    }
+
+    public static void addPlayerToDistanceMaps(final ServerLevel world, final ServerPlayer player) {
+        world.moonrise$getPlayerChunkLoader().addPlayer(player);
+    }
+
+    public static void removePlayerFromDistanceMaps(final ServerLevel world, final ServerPlayer player) {
+        world.moonrise$getPlayerChunkLoader().removePlayer(player);
+    }
+
+    public static void updateMaps(final ServerLevel world, final ServerPlayer player) {
+        world.moonrise$getPlayerChunkLoader().updatePlayer(player);
     }
 
     private ChunkSystem() {

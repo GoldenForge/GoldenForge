@@ -5,11 +5,12 @@ import ca.spottedleaf.concurrentutil.executor.Cancellable;
 import ca.spottedleaf.concurrentutil.executor.standard.DelayedPrioritisedTask;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
-import com.mojang.logging.LogUtils;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
+import io.papermc.paper.util.WorldUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.lang.invoke.VarHandle;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,7 +19,7 @@ import java.util.function.BiConsumer;
 
 public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LoggerFactory.getLogger(GenericDataLoadTask.class);
 
     protected static final CompoundTag CANCELLED_DATA = new CompoundTag();
 
@@ -99,7 +100,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
 
     @Override
     public String toString() {
-        return "GenericDataLoadTask{class: " + this.getClass().getName() + ", world: " + this.world.getWorld().getName() +
+        return "GenericDataLoadTask{class: " + this.getClass().getName() + ", world: " + WorldUtil.getWorldName(this.world) +
                 ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
                 ", type: " + this.type.toString() + "}";
     }
@@ -240,10 +241,10 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         }
     }
 
-    protected final class DataLoadCallback implements BiConsumer<CompoundTag, Throwable> {
+    private final class DataLoadCallback implements BiConsumer<CompoundTag, Throwable> {
 
-        protected final ProcessOffMainTask offMainTask;
-        protected final ProcessOnMainTask onMainTask;
+        private final ProcessOffMainTask offMainTask;
+        private final ProcessOnMainTask onMainTask;
 
         public DataLoadCallback(final ProcessOffMainTask offMainTask, final ProcessOnMainTask onMainTask) {
             this.offMainTask = offMainTask;
@@ -276,23 +277,22 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                     this.onMainTask.throwable = throwable;
                     GenericDataLoadTask.this.processOnMain.queue();
                 }
-            } catch (final ThreadDeath death) {
-                throw death;
             } catch (final Throwable thr2) {
                 LOGGER.error("Failed I/O callback for task: " + GenericDataLoadTask.this.toString(), thr2);
                 GenericDataLoadTask.this.scheduler.unrecoverableChunkSystemFailure(
                         GenericDataLoadTask.this.chunkX, GenericDataLoadTask.this.chunkZ, Map.of(
                                 "Callback throwable", ChunkTaskScheduler.stringIfNull(throwable)
-                        ), thr2);
+                        ), thr2
+                );
             }
         }
     }
 
-    protected final class ProcessOffMainTask implements Runnable {
+    private final class ProcessOffMainTask implements Runnable {
 
-        protected CompoundTag data;
-        protected Throwable throwable;
-        protected final ProcessOnMainTask schedule;
+        private CompoundTag data;
+        private Throwable throwable;
+        private final ProcessOnMainTask schedule;
 
         public ProcessOffMainTask(final ProcessOnMainTask schedule) {
             this.schedule = schedule;
@@ -331,10 +331,10 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         }
     }
 
-    protected final class ProcessOnMainTask implements Runnable {
+    private final class ProcessOnMainTask implements Runnable {
 
-        protected OnMain data;
-        protected Throwable throwable;
+        private OnMain data;
+        private Throwable throwable;
 
         @Override
         public void run() {
@@ -348,30 +348,30 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         }
     }
 
-    public static final class LoadDataFromDiskTask {
+    protected static final class LoadDataFromDiskTask {
 
-        protected volatile int priority;
-        protected static final VarHandle PRIORITY_HANDLE = ConcurrentUtil.getVarHandle(LoadDataFromDiskTask.class, "priority", int.class);
+        private volatile int priority;
+        private static final VarHandle PRIORITY_HANDLE = ConcurrentUtil.getVarHandle(LoadDataFromDiskTask.class, "priority", int.class);
 
-        protected static final int PRIORITY_EXECUTED         = Integer.MIN_VALUE >>> 0;
-        protected static final int PRIORITY_LOAD_SCHEDULED   = Integer.MIN_VALUE >>> 1;
-        protected static final int PRIORITY_UNLOAD_SCHEDULED = Integer.MIN_VALUE >>> 2;
+        private static final int PRIORITY_EXECUTED         = Integer.MIN_VALUE >>> 0;
+        private static final int PRIORITY_LOAD_SCHEDULED   = Integer.MIN_VALUE >>> 1;
+        private static final int PRIORITY_UNLOAD_SCHEDULED = Integer.MIN_VALUE >>> 2;
 
-        protected static final int PRIORITY_FLAGS = ~Character.MAX_VALUE;
+        private static final int PRIORITY_FLAGS = ~Character.MAX_VALUE;
 
-        protected final int getPriorityVolatile() {
+        private final int getPriorityVolatile() {
             return (int)PRIORITY_HANDLE.getVolatile((LoadDataFromDiskTask)this);
         }
 
-        protected final int compareAndExchangePriorityVolatile(final int expect, final int update) {
+        private final int compareAndExchangePriorityVolatile(final int expect, final int update) {
             return (int)PRIORITY_HANDLE.compareAndExchange((LoadDataFromDiskTask)this, (int)expect, (int)update);
         }
 
-        protected final int getAndOrPriorityVolatile(final int val) {
+        private final int getAndOrPriorityVolatile(final int val) {
             return (int)PRIORITY_HANDLE.getAndBitwiseOr((LoadDataFromDiskTask)this, (int)val);
         }
 
-        protected final void setPriorityPlain(final int val) {
+        private final void setPriorityPlain(final int val) {
             PRIORITY_HANDLE.set((LoadDataFromDiskTask)this, (int)val);
         }
 
@@ -385,6 +385,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         private DelayedPrioritisedTask dataUnloadTask;
 
         private final BiConsumer<CompoundTag, Throwable> onComplete;
+        private final AtomicBoolean scheduled = new AtomicBoolean();
 
         // onComplete should be caller sensitive, it may complete synchronously with schedule() - which does
         // hold a priority lock.
@@ -411,17 +412,14 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                         "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable),
                         "Regionfile type", ChunkTaskScheduler.stringIfNull(this.type)
                 ), thr2);
-                if (thr2 instanceof ThreadDeath) {
-                    throw (ThreadDeath)thr2;
-                }
             }
         }
 
-        protected boolean markExecuting() {
+        private boolean markExecuting() {
             return (this.getAndOrPriorityVolatile(PRIORITY_EXECUTED) & PRIORITY_EXECUTED) == 0;
         }
 
-        protected boolean isMarkedExecuted() {
+        private boolean isMarkedExecuted() {
             return (this.getPriorityVolatile() & PRIORITY_EXECUTED) != 0;
         }
 
@@ -563,8 +561,6 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             this.complete(CANCELLED_DATA, null);
         }
 
-        private final AtomicBoolean scheduled = new AtomicBoolean();
-
         public void schedule() {
             if (this.scheduled.getAndSet(true)) {
                 throw new IllegalStateException("schedule() called twice");
@@ -670,77 +666,5 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 }
             }
         }
-
-        /*
-        private static final class LoadDataPriorityHolder extends PriorityHolder {
-
-            protected final LoadDataFromDiskTask task;
-
-            protected LoadDataPriorityHolder(final PrioritisedExecutor.Priority priority, final LoadDataFromDiskTask task) {
-                super(priority);
-                this.task = task;
-            }
-
-            @Override
-            protected void cancelScheduled() {
-                final Cancellable dataLoadTask = this.task.dataLoadTask;
-                if (dataLoadTask != null) {
-                    // OK if we miss the field read, the task cannot complete if the cancelled bit is set and
-                    // the write to dataLoadTask will check for the cancelled bit
-                    this.task.dataLoadTask.cancel();
-                }
-                this.task.complete(CANCELLED_DATA, null);
-            }
-
-            @Override
-            protected PrioritisedExecutor.Priority getScheduledPriority() {
-                final LoadDataFromDiskTask task = this.task;
-                return RegionFileIOThread.getPriority(task.world, task.chunkX, task.chunkZ, task.type);
-            }
-
-            @Override
-            protected void scheduleTask(final PrioritisedExecutor.Priority priority) {
-                final LoadDataFromDiskTask task = this.task;
-                final BiConsumer<CompoundTag, Throwable> consumer = (final CompoundTag data, final Throwable thr) -> {
-                    // because cancelScheduled() cannot actually stop this task from executing in every case, we need
-                    // to mark complete here to ensure we do not double complete
-                    if (LoadDataPriorityHolder.this.markExecuting()) {
-                        LoadDataPriorityHolder.this.task.complete(data, thr);
-                    } // else: cancelled
-                };
-                task.dataLoadTask = RegionFileIOThread.loadDataAsync(
-                    task.world, task.chunkX, task.chunkZ, task.type, consumer,
-                    priority.isHigherPriority(PrioritisedExecutor.Priority.NORMAL), priority
-                );
-                if (this.isMarkedExecuted()) {
-                    // if we are marked as completed, it could be:
-                    // 1. we were cancelled
-                    // 2. the consumer was completed
-                    // in the 2nd case, cancel() does nothing
-                    // in the 1st case, we ensure cancel() is called as it is possible for the cancelling thread
-                    // to miss the field write here
-                    task.dataLoadTask.cancel();
-                }
-            }
-
-            @Override
-            protected void lowerPriorityScheduled(final PrioritisedExecutor.Priority priority) {
-                final LoadDataFromDiskTask task = this.task;
-                RegionFileIOThread.lowerPriority(task.world, task.chunkX, task.chunkZ, task.type, priority);
-            }
-
-            @Override
-            protected void setPriorityScheduled(final PrioritisedExecutor.Priority priority) {
-                final LoadDataFromDiskTask task = this.task;
-                RegionFileIOThread.setPriority(task.world, task.chunkX, task.chunkZ, task.type, priority);
-            }
-
-            @Override
-            protected void raisePriorityScheduled(final PrioritisedExecutor.Priority priority) {
-                final LoadDataFromDiskTask task = this.task;
-                RegionFileIOThread.raisePriority(task.world, task.chunkX, task.chunkZ, task.type, priority);
-            }
-        }
-         */
     }
 }

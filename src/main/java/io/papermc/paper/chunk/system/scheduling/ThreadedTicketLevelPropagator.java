@@ -5,18 +5,16 @@ import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import ca.spottedleaf.starlight.common.util.CoordinateUtils;
-import it.unimi.dsi.fastutil.HashCommon;
 import it.unimi.dsi.fastutil.longs.Long2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.shorts.Short2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.shorts.Short2ByteMap;
 import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
-
 import java.lang.invoke.VarHandle;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.LockSupport;
 
 public abstract class ThreadedTicketLevelPropagator {
@@ -27,9 +25,13 @@ public abstract class ThreadedTicketLevelPropagator {
     private static final int LEVEL_BITS = SECTION_SHIFT;
     private static final int LEVEL_COUNT = 1 << LEVEL_BITS;
     private static final int MIN_SOURCE_LEVEL = 1;
-    // we limit the max source to 62 because the depropagation code _must_ attempt to depropagate
-    // a 1 level to 0; and if a source was 63 then it may cross more than 2 sections in depropagation
+    // we limit the max source to 62 because the de-propagation code _must_ attempt to de-propagate
+    // a 1 level to 0; and if a source was 63 then it may cross more than 2 sections in de-propagation
     private static final int MAX_SOURCE_LEVEL = 62;
+
+    private static int getMaxSchedulingRadius() {
+        return 2 * ChunkTaskScheduler.getMaxAccessRadius();
+    }
 
     private final UpdateQueue updateQueue;
     private final ConcurrentLong2ReferenceChainedHashTable<Section> sections;
@@ -139,7 +141,7 @@ public abstract class ThreadedTicketLevelPropagator {
 
         final Propagator propagator = Propagator.acquirePropagator();
         final boolean ret = this.performUpdate(section, null, propagator,
-            null, schedulingLock, scheduledTasks, changedFullStatus
+                null, schedulingLock, scheduledTasks, changedFullStatus
         );
         Propagator.returnPropagator(propagator);
         return ret;
@@ -201,21 +203,21 @@ public abstract class ThreadedTicketLevelPropagator {
                     // set current level and current source to new source
                     section.levels[pos] = (short)(newSource | (newSource << 8));
                     // must add to updated positions in case this is final
-                    propagator.updatedPositions.put(Coordinate.key(posX, posZ), (byte)newSource);
+                    propagator.updatedPositions.put(CoordinateUtils.getChunkKey(posX, posZ), (byte)newSource);
                     if (newSource != 0) {
                         // queue increase with new source level
                         propagator.appendToIncreaseQueue(
-                            ((long)(posX + (posZ << Propagator.COORDINATE_BITS) + coordinateOffset) & ((1L << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) - 1)) |
-                                ((newSource & (LEVEL_COUNT - 1L)) << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) |
-                                (Propagator.ALL_DIRECTIONS_BITSET << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS + LEVEL_BITS))
+                                ((long)(posX + (posZ << Propagator.COORDINATE_BITS) + coordinateOffset) & ((1L << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) - 1)) |
+                                        ((newSource & (LEVEL_COUNT - 1L)) << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) |
+                                        (Propagator.ALL_DIRECTIONS_BITSET << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS + LEVEL_BITS))
                         );
                     }
                     // queue decrease with previous level
                     if (newSource < currLevel) {
                         propagator.appendToDecreaseQueue(
-                            ((long)(posX + (posZ << Propagator.COORDINATE_BITS) + coordinateOffset) & ((1L << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) - 1)) |
-                                ((currLevel & (LEVEL_COUNT - 1L)) << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) |
-                                (Propagator.ALL_DIRECTIONS_BITSET << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS + LEVEL_BITS))
+                                ((long)(posX + (posZ << Propagator.COORDINATE_BITS) + coordinateOffset) & ((1L << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) - 1)) |
+                                        ((currLevel & (LEVEL_COUNT - 1L)) << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS)) |
+                                        (Propagator.ALL_DIRECTIONS_BITSET << (Propagator.COORDINATE_BITS + Propagator.COORDINATE_BITS + LEVEL_BITS))
                         );
                     }
                 }
@@ -275,7 +277,7 @@ public abstract class ThreadedTicketLevelPropagator {
 
                         if (neighbour == null) {
                             if (oldSourceSize == 0 && (dx | dz) != 0) {
-                                // since we don't have sources, this section is allowed to null
+                                // since we don't have sources, this section is allowed to be null
                                 continue;
                             }
                             throw new IllegalStateException("??");
@@ -307,12 +309,12 @@ public abstract class ThreadedTicketLevelPropagator {
 
                 if (!propagator.updatedPositions.isEmpty()) {
                     // now we can actually update the ticket levels in the chunk holders
-                    final int maxScheduleRadius = 2 * ChunkTaskScheduler.getMaxAccessRadius();
+                    final int maxScheduleRadius = getMaxSchedulingRadius();
 
                     // allow the chunkholders to process ticket level updates without needing to acquire the schedule lock every time
                     final ReentrantAreaLock.Node schedulingNode = schedulingLock.lock(
-                        rad1MinX - maxScheduleRadius, rad1MinZ - maxScheduleRadius,
-                        rad1MaxX + maxScheduleRadius, rad1MaxZ + maxScheduleRadius
+                            rad1MinX - maxScheduleRadius, rad1MinZ - maxScheduleRadius,
+                            rad1MaxX + maxScheduleRadius, rad1MaxZ + maxScheduleRadius
                     );
                     try {
                         this.processSchedulingUpdates(propagator.updatedPositions, scheduledTasks, changedFullStatus);
@@ -349,10 +351,8 @@ public abstract class ThreadedTicketLevelPropagator {
         Propagator propagator = null;
 
         for (;;) {
-            final UpdateQueue.UpdateQueueNode toUpdate = this.updateQueue.acquireNextToUpdate(maxOrder);
+            final UpdateQueue.UpdateQueueNode toUpdate = this.updateQueue.acquireNextOrWait(maxOrder);
             if (toUpdate == null) {
-                this.updateQueue.awaitFirst(maxOrder);
-
                 if (!this.updateQueue.hasRemainingUpdates(maxOrder)) {
                     if (propagator != null) {
                         Propagator.returnPropagator(propagator);
@@ -371,64 +371,54 @@ public abstract class ThreadedTicketLevelPropagator {
         }
     }
 
+    // Similar implementation of concurrent FIFO queue (See MTQ in ConcurrentUtil) which has an additional node pointer
+    // for the last update node being handled
     private static final class UpdateQueue {
 
         private volatile UpdateQueueNode head;
         private volatile UpdateQueueNode tail;
-        private volatile UpdateQueueNode lastUpdating;
 
-        protected static final VarHandle HEAD_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueue.class, "head", UpdateQueueNode.class);
-        protected static final VarHandle TAIL_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueue.class, "tail", UpdateQueueNode.class);
-        protected static final VarHandle LAST_UPDATING = ConcurrentUtil.getVarHandle(UpdateQueue.class, "lastUpdating", UpdateQueueNode.class);
+        private static final VarHandle HEAD_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueue.class, "head", UpdateQueueNode.class);
+        private static final VarHandle TAIL_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueue.class, "tail", UpdateQueueNode.class);
 
         /* head */
 
-        protected final void setHeadPlain(final UpdateQueueNode newHead) {
+        private final void setHeadPlain(final UpdateQueueNode newHead) {
             HEAD_HANDLE.set(this, newHead);
         }
 
-        protected final void setHeadOpaque(final UpdateQueueNode newHead) {
+        private final void setHeadOpaque(final UpdateQueueNode newHead) {
             HEAD_HANDLE.setOpaque(this, newHead);
         }
 
-        protected final UpdateQueueNode getHeadPlain() {
+        private final UpdateQueueNode getHeadPlain() {
             return (UpdateQueueNode)HEAD_HANDLE.get(this);
         }
 
-        protected final UpdateQueueNode getHeadOpaque() {
+        private final UpdateQueueNode getHeadOpaque() {
             return (UpdateQueueNode)HEAD_HANDLE.getOpaque(this);
         }
 
-        protected final UpdateQueueNode getHeadAcquire() {
+        private final UpdateQueueNode getHeadAcquire() {
             return (UpdateQueueNode)HEAD_HANDLE.getAcquire(this);
         }
 
         /* tail */
 
-        protected final void setTailPlain(final UpdateQueueNode newTail) {
+        private final void setTailPlain(final UpdateQueueNode newTail) {
             TAIL_HANDLE.set(this, newTail);
         }
 
-        protected final void setTailOpaque(final UpdateQueueNode newTail) {
+        private final void setTailOpaque(final UpdateQueueNode newTail) {
             TAIL_HANDLE.setOpaque(this, newTail);
         }
 
-        protected final UpdateQueueNode getTailPlain() {
+        private final UpdateQueueNode getTailPlain() {
             return (UpdateQueueNode)TAIL_HANDLE.get(this);
         }
 
-        protected final UpdateQueueNode getTailOpaque() {
+        private final UpdateQueueNode getTailOpaque() {
             return (UpdateQueueNode)TAIL_HANDLE.getOpaque(this);
-        }
-
-        /* lastUpdating */
-
-        protected final UpdateQueueNode getLastUpdatingVolatile() {
-            return (UpdateQueueNode)LAST_UPDATING.getVolatile(this);
-        }
-
-        protected final UpdateQueueNode compareAndExchangeLastUpdatingVolatile(final UpdateQueueNode expect, final UpdateQueueNode update) {
-            return (UpdateQueueNode)LAST_UPDATING.compareAndExchange(this, expect, update);
         }
 
         public UpdateQueue() {
@@ -463,44 +453,55 @@ public abstract class ThreadedTicketLevelPropagator {
             }
         }
 
-        public UpdateQueueNode acquireNextToUpdate(final long maxOrder) {
-            int failures = 0;
-            for (UpdateQueueNode prev = this.getLastUpdatingVolatile();;) {
-                UpdateQueueNode next = prev == null ? this.peek() : prev.next;
-
-                if (next == null || next.order > maxOrder) {
-                    return null;
-                }
-
-                for (int i = 0; i < failures; ++i) {
-                    ConcurrentUtil.backoff();
-                }
-
-                if (prev == (prev = this.compareAndExchangeLastUpdatingVolatile(prev, next))) {
-                    return next;
-                }
-
-                ++failures;
-            }
-        }
-
-        public void awaitFirst(final long maxOrder) {
-            final UpdateQueueNode earliest = this.peek();
-            if (earliest == null || earliest.order > maxOrder) {
-                return;
-            }
-
+        private static void await(final UpdateQueueNode node) {
             final Thread currThread = Thread.currentThread();
             // we do not use add-blocking because we use the nullability of the section to block
             // remove() does not begin to poll from the wait queue until the section is null'd,
             // and so provided we check the nullability before parking there is no ordering of these operations
             // such that remove() finishes polling from the wait queue while section is not null
-            earliest.add(currThread);
+            node.add(currThread);
 
             // wait until completed
-            while (earliest.getSectionVolatile() != null) {
+            while (node.getSectionVolatile() != null) {
                 LockSupport.park();
             }
+        }
+
+        public UpdateQueueNode acquireNextOrWait(final long maxOrder) {
+            final List<UpdateQueueNode> blocking = new ArrayList<>();
+
+            node_search:
+            for (UpdateQueueNode curr = this.peek(); curr != null && curr.order <= maxOrder; curr = curr.getNextVolatile()) {
+                if (curr.getSectionVolatile() == null) {
+                    continue;
+                }
+
+                if (curr.getUpdatingVolatile()) {
+                    blocking.add(curr);
+                    continue;
+                }
+
+                for (int i = 0, len = blocking.size(); i < len; ++i) {
+                    final UpdateQueueNode node = blocking.get(i);
+
+                    if (node.intersects(curr)) {
+                        continue node_search;
+                    }
+                }
+
+                if (curr.getAndSetUpdatingVolatile(true)) {
+                    blocking.add(curr);
+                    continue;
+                }
+
+                return curr;
+            }
+
+            if (!blocking.isEmpty()) {
+                await(blocking.get(0));
+            }
+
+            return null;
         }
 
         public UpdateQueueNode peek() {
@@ -587,76 +588,105 @@ public abstract class ThreadedTicketLevelPropagator {
         // each node also represents a set of waiters, represented by the MTQ
         // if the queue is add-blocked, then the update is complete
         private static final class UpdateQueueNode extends MultiThreadedQueue<Thread> {
-            private long order;
-            private Section section;
-            private volatile UpdateQueueNode next;
+            private final int sectionX;
+            private final int sectionZ;
 
-            protected static final VarHandle SECTION_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueueNode.class, "section", Section.class);
-            protected static final VarHandle NEXT_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueueNode.class, "next", UpdateQueueNode.class);
+            private long order;
+            private volatile Section section;
+            private volatile UpdateQueueNode next;
+            private volatile boolean updating;
+
+            private static final VarHandle SECTION_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueueNode.class, "section", Section.class);
+            private static final VarHandle NEXT_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueueNode.class, "next", UpdateQueueNode.class);
+            private static final VarHandle UPDATING_HANDLE = ConcurrentUtil.getVarHandle(UpdateQueueNode.class, "updating", boolean.class);
 
             public UpdateQueueNode(final Section section, final UpdateQueueNode next) {
+                if (section == null) {
+                    this.sectionX = this.sectionZ = 0;
+                } else {
+                    this.sectionX = section.sectionX;
+                    this.sectionZ = section.sectionZ;
+                }
+
                 SECTION_HANDLE.set(this, section);
                 NEXT_HANDLE.set(this, next);
             }
 
+            public boolean intersects(final UpdateQueueNode other) {
+                final int dist = Math.max(Math.abs(this.sectionX - other.sectionX), Math.abs(this.sectionZ - other.sectionZ));
+
+                // intersection radius is ticket update radius (1) + scheduling radius
+                return dist <= (1 + ((getMaxSchedulingRadius() + (SECTION_SIZE - 1)) >> SECTION_SHIFT));
+            }
+
             /* section */
 
-            protected final Section getSectionPlain() {
+            private final Section getSectionPlain() {
                 return (Section)SECTION_HANDLE.get(this);
             }
 
-            protected final Section getSectionVolatile() {
+            private final Section getSectionVolatile() {
                 return (Section)SECTION_HANDLE.getVolatile(this);
             }
 
-            protected final void setSectionPlain(final Section update) {
+            private final void setSectionPlain(final Section update) {
                 SECTION_HANDLE.set(this, update);
             }
 
-            protected final void setSectionOpaque(final Section update) {
+            private final void setSectionOpaque(final Section update) {
                 SECTION_HANDLE.setOpaque(this, update);
             }
 
-            protected final void setSectionVolatile(final Section update) {
+            private final void setSectionVolatile(final Section update) {
                 SECTION_HANDLE.setVolatile(this, update);
             }
 
-            protected final Section getAndSetSectionVolatile(final Section update) {
+            private final Section getAndSetSectionVolatile(final Section update) {
                 return (Section)SECTION_HANDLE.getAndSet(this, update);
             }
 
-            protected final Section compareExchangeSectionVolatile(final Section expect, final Section update) {
+            private final Section compareExchangeSectionVolatile(final Section expect, final Section update) {
                 return (Section)SECTION_HANDLE.compareAndExchange(this, expect, update);
             }
 
             /* next */
 
-            protected final UpdateQueueNode getNextPlain() {
+            private final UpdateQueueNode getNextPlain() {
                 return (UpdateQueueNode)NEXT_HANDLE.get(this);
             }
 
-            protected final UpdateQueueNode getNextOpaque() {
+            private final UpdateQueueNode getNextOpaque() {
                 return (UpdateQueueNode)NEXT_HANDLE.getOpaque(this);
             }
 
-            protected final UpdateQueueNode getNextAcquire() {
+            private final UpdateQueueNode getNextAcquire() {
                 return (UpdateQueueNode)NEXT_HANDLE.getAcquire(this);
             }
 
-            protected final UpdateQueueNode getNextVolatile() {
+            private final UpdateQueueNode getNextVolatile() {
                 return (UpdateQueueNode)NEXT_HANDLE.getVolatile(this);
             }
 
-            protected final void setNextPlain(final UpdateQueueNode next) {
+            private final void setNextPlain(final UpdateQueueNode next) {
                 NEXT_HANDLE.set(this, next);
             }
 
-            protected final void setNextVolatile(final UpdateQueueNode next) {
+            private final void setNextVolatile(final UpdateQueueNode next) {
                 NEXT_HANDLE.setVolatile(this, next);
             }
 
-            protected final UpdateQueueNode compareExchangeNextVolatile(final UpdateQueueNode expect, final UpdateQueueNode set) {
+            private final UpdateQueueNode compareExchangeNextVolatile(final UpdateQueueNode expect, final UpdateQueueNode set) {
                 return (UpdateQueueNode)NEXT_HANDLE.compareAndExchange(this, expect, set);
+            }
+
+            /* updating */
+
+            private final boolean getUpdatingVolatile() {
+                return (boolean)UPDATING_HANDLE.getVolatile(this);
+            }
+
+            private final boolean getAndSetUpdatingVolatile(final boolean value) {
+                return (boolean)UPDATING_HANDLE.getAndSet(this, value);
             }
         }
     }
@@ -770,7 +800,7 @@ public abstract class ThreadedTicketLevelPropagator {
             return this.decreaseQueueInitialLength != 0 || this.increaseQueueInitialLength != 0;
         }
 
-        protected final void setupEncodeOffset(final int centerSectionX, final int centerSectionZ) {
+        private final void setupEncodeOffset(final int centerSectionX, final int centerSectionZ) {
             final int maxCoordinate = (SECTION_RADIUS * SECTION_SIZE - 1);
             // must have that encoded >= 0
             // coordinates can range from [-maxCoordinate + centerSection*SECTION_SIZE, maxCoordinate + centerSection*SECTION_SIZE]
@@ -794,9 +824,9 @@ public abstract class ThreadedTicketLevelPropagator {
 
         // must hold ticket lock for (centerSectionX,centerSectionZ) in radius rad
         // must call setupEncodeOffset
-        protected final void setupCaches(final ThreadedTicketLevelPropagator propagator,
-                                         final int centerSectionX, final int centerSectionZ,
-                                         final int rad) {
+        private final void setupCaches(final ThreadedTicketLevelPropagator propagator,
+                                       final int centerSectionX, final int centerSectionZ,
+                                       final int rad) {
             for (int dz = -rad; dz <= rad; ++dz) {
                 for (int dx = -rad; dx <= rad; ++dx) {
                     final int sectionX = centerSectionX + dx;
@@ -813,15 +843,15 @@ public abstract class ThreadedTicketLevelPropagator {
             }
         }
 
-        protected final void setSectionInCache(final int sectionX, final int sectionZ, final Section section) {
+        private final void setSectionInCache(final int sectionX, final int sectionZ, final Section section) {
             this.sections[sectionX + SECTION_CACHE_WIDTH*sectionZ + this.sectionIndexOffset] = section;
         }
 
-        protected final Section getSection(final int sectionX, final int sectionZ) {
+        private final Section getSection(final int sectionX, final int sectionZ) {
             return this.sections[sectionX + SECTION_CACHE_WIDTH*sectionZ + this.sectionIndexOffset];
         }
 
-        protected final int getLevel(final int posX, final int posZ) {
+        private final int getLevel(final int posX, final int posZ) {
             final Section section = this.sections[(posX >> SECTION_SHIFT) + SECTION_CACHE_WIDTH*(posZ >> SECTION_SHIFT) + this.sectionIndexOffset];
             if (section != null) {
                 return (int)section.levels[(posX & (SECTION_SIZE - 1)) | ((posZ & (SECTION_SIZE - 1)) << SECTION_SHIFT)] & 0xFF;
@@ -830,17 +860,17 @@ public abstract class ThreadedTicketLevelPropagator {
             return 0;
         }
 
-        protected final void setLevel(final int posX, final int posZ, final int to) {
+        private final void setLevel(final int posX, final int posZ, final int to) {
             final Section section = this.sections[(posX >> SECTION_SHIFT) + SECTION_CACHE_WIDTH*(posZ >> SECTION_SHIFT) + this.sectionIndexOffset];
             if (section != null) {
                 final int index = (posX & (SECTION_SIZE - 1)) | ((posZ & (SECTION_SIZE - 1)) << SECTION_SHIFT);
                 final short level = section.levels[index];
                 section.levels[index] = (short)((level & ~0xFF) | (to & 0xFF));
-                this.updatedPositions.put(Coordinate.key(posX, posZ), (byte)to);
+                this.updatedPositions.put(CoordinateUtils.getChunkKey(posX, posZ), (byte)to);
             }
         }
 
-        protected final void destroyCaches() {
+        private final void destroyCaches() {
             Arrays.fill(this.sections, null);
         }
 
@@ -848,21 +878,21 @@ public abstract class ThreadedTicketLevelPropagator {
         // lower (COORDINATE_BITS(9) + COORDINATE_BITS(9) = 18) bits encoded position: (x | (z << COORDINATE_BITS))
         // next LEVEL_BITS (6) bits: propagated level [0, 63]
         // propagation directions bitset (16 bits):
-        protected static final long ALL_DIRECTIONS_BITSET = (
+        private static final long ALL_DIRECTIONS_BITSET = (
                 // z = -1
                 (1L << ((1 - 1) | ((1 - 1) << 2))) |
-                (1L << ((1 + 0) | ((1 - 1) << 2))) |
-                (1L << ((1 + 1) | ((1 - 1) << 2))) |
+                        (1L << ((1 + 0) | ((1 - 1) << 2))) |
+                        (1L << ((1 + 1) | ((1 - 1) << 2))) |
 
-                // z = 0
-                (1L << ((1 - 1) | ((1 + 0) << 2))) |
-                //(1L << ((1 + 0) | ((1 + 0) << 2))) | // exclude (0,0)
-                (1L << ((1 + 1) | ((1 + 0) << 2))) |
+                        // z = 0
+                        (1L << ((1 - 1) | ((1 + 0) << 2))) |
+                        //(1L << ((1 + 0) | ((1 + 0) << 2))) | // exclude (0,0)
+                        (1L << ((1 + 1) | ((1 + 0) << 2))) |
 
-                // z = 1
-                (1L << ((1 - 1) | ((1 + 1) << 2))) |
-                (1L << ((1 + 0) | ((1 + 1) << 2))) |
-                (1L << ((1 + 1) | ((1 + 1) << 2)))
+                        // z = 1
+                        (1L << ((1 - 1) | ((1 + 1) << 2))) |
+                        (1L << ((1 + 0) | ((1 + 1) << 2))) |
+                        (1L << ((1 + 1) | ((1 + 1) << 2)))
         );
 
         private void ex(int bitset) {
@@ -912,27 +942,27 @@ public abstract class ThreadedTicketLevelPropagator {
 
         // whether the increase propagator needs to write the propagated level to the position, used to avoid cascading
         // updates for sources
-        protected static final long FLAG_WRITE_LEVEL = Long.MIN_VALUE >>> 1;
+        private static final long FLAG_WRITE_LEVEL = Long.MIN_VALUE >>> 1;
         // whether the propagation needs to check if its current level is equal to the expected level
         // used only in increase propagation
-        protected static final long FLAG_RECHECK_LEVEL = Long.MIN_VALUE >>> 0;
+        private static final long FLAG_RECHECK_LEVEL = Long.MIN_VALUE >>> 0;
 
-        protected long[] increaseQueue = new long[SECTION_SIZE * SECTION_SIZE * 2];
-        protected int increaseQueueInitialLength;
-        protected long[] decreaseQueue = new long[SECTION_SIZE * SECTION_SIZE * 2];
-        protected int decreaseQueueInitialLength;
+        private long[] increaseQueue = new long[SECTION_SIZE * SECTION_SIZE * 2];
+        private int increaseQueueInitialLength;
+        private long[] decreaseQueue = new long[SECTION_SIZE * SECTION_SIZE * 2];
+        private int decreaseQueueInitialLength;
 
-        protected final Long2ByteLinkedOpenHashMap updatedPositions = new Long2ByteLinkedOpenHashMap();
+        private final Long2ByteLinkedOpenHashMap updatedPositions = new Long2ByteLinkedOpenHashMap();
 
-        protected final long[] resizeIncreaseQueue() {
+        private final long[] resizeIncreaseQueue() {
             return this.increaseQueue = Arrays.copyOf(this.increaseQueue, this.increaseQueue.length * 2);
         }
 
-        protected final long[] resizeDecreaseQueue() {
+        private final long[] resizeDecreaseQueue() {
             return this.decreaseQueue = Arrays.copyOf(this.decreaseQueue, this.decreaseQueue.length * 2);
         }
 
-        protected final void appendToIncreaseQueue(final long value) {
+        private final void appendToIncreaseQueue(final long value) {
             final int idx = this.increaseQueueInitialLength++;
             long[] queue = this.increaseQueue;
             if (idx >= queue.length) {
@@ -945,7 +975,7 @@ public abstract class ThreadedTicketLevelPropagator {
             }
         }
 
-        protected final void appendToDecreaseQueue(final long value) {
+        private final void appendToDecreaseQueue(final long value) {
             final int idx = this.decreaseQueueInitialLength++;
             long[] queue = this.decreaseQueue;
             if (idx >= queue.length) {
@@ -958,7 +988,7 @@ public abstract class ThreadedTicketLevelPropagator {
             }
         }
 
-        protected final void performIncrease() {
+        private final void performIncrease() {
             long[] queue = this.increaseQueue;
             int queueReadIndex = 0;
             int queueLength = this.increaseQueueInitialLength;
@@ -1005,18 +1035,18 @@ public abstract class ThreadedTicketLevelPropagator {
                 long currentPropagation = ~(
                         // z = -1
                         (1L << ((2 - 1) | ((2 - 1) << 3))) |
-                        (1L << ((2 + 0) | ((2 - 1) << 3))) |
-                        (1L << ((2 + 1) | ((2 - 1) << 3))) |
+                                (1L << ((2 + 0) | ((2 - 1) << 3))) |
+                                (1L << ((2 + 1) | ((2 - 1) << 3))) |
 
-                        // z = 0
-                        (1L << ((2 - 1) | ((2 + 0) << 3))) |
-                        (1L << ((2 + 0) | ((2 + 0) << 3))) |
-                        (1L << ((2 + 1) | ((2 + 0) << 3))) |
+                                // z = 0
+                                (1L << ((2 - 1) | ((2 + 0) << 3))) |
+                                (1L << ((2 + 0) | ((2 + 0) << 3))) |
+                                (1L << ((2 + 1) | ((2 + 0) << 3))) |
 
-                        // z = 1
-                        (1L << ((2 - 1) | ((2 + 1) << 3))) |
-                        (1L << ((2 + 0) | ((2 + 1) << 3))) |
-                        (1L << ((2 + 1) | ((2 + 1) << 3)))
+                                // z = 1
+                                (1L << ((2 - 1) | ((2 + 1) << 3))) |
+                                (1L << ((2 + 0) | ((2 + 1) << 3))) |
+                                (1L << ((2 + 1) | ((2 + 1) << 3)))
                 );
 
                 final int toPropagate = propagatedLevel - 1;
@@ -1074,7 +1104,7 @@ public abstract class ThreadedTicketLevelPropagator {
 
                     // update level
                     section.levels[localIndex] = (short)((currentStoredLevel & ~0xFF) | (toPropagate & 0xFF));
-                    updatedPositions.putAndMoveToLast(Coordinate.key(offX, offZ), (byte)toPropagate);
+                    updatedPositions.putAndMoveToLast(CoordinateUtils.getChunkKey(offX, offZ), (byte)toPropagate);
 
                     // queue next
                     if (toPropagate > 1) {
@@ -1083,8 +1113,8 @@ public abstract class ThreadedTicketLevelPropagator {
                         // add the propagation bitset offset to each line to make it easy to OR it into the propagation queue value
                         final long childPropagation =
                                 ((bitsetLine1 >>> (start)) << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)) | // z = -1
-                                ((bitsetLine2 >>> (start + 8)) << (4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)) | // z = 0
-                                ((bitsetLine3 >>> (start + (8 + 8))) << (4 + 4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)); // z = 1
+                                        ((bitsetLine2 >>> (start + 8)) << (4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)) | // z = 0
+                                        ((bitsetLine3 >>> (start + (8 + 8))) << (4 + 4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)); // z = 1
 
                         // don't queue update if toPropagate cannot propagate anything to neighbours
                         // (for increase, propagating 0 to neighbours is useless)
@@ -1093,8 +1123,8 @@ public abstract class ThreadedTicketLevelPropagator {
                         }
                         queue[queueLength++] =
                                 ((long)(offX + (offZ << COORDINATE_BITS) + encodeOffset) & ((1L << (COORDINATE_BITS + COORDINATE_BITS)) - 1)) |
-                                ((toPropagate & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
-                                childPropagation; //(ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS));
+                                        ((toPropagate & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
+                                        childPropagation; //(ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS));
                         continue;
                     }
                     continue;
@@ -1102,7 +1132,7 @@ public abstract class ThreadedTicketLevelPropagator {
             }
         }
 
-        protected final void performDecrease() {
+        private final void performDecrease() {
             long[] queue = this.decreaseQueue;
             long[] increaseQueue = this.increaseQueue;
             int queueReadIndex = 0;
@@ -1141,18 +1171,18 @@ public abstract class ThreadedTicketLevelPropagator {
                 long currentPropagation = ~(
                         // z = -1
                         (1L << ((2 - 1) | ((2 - 1) << 3))) |
-                        (1L << ((2 + 0) | ((2 - 1) << 3))) |
-                        (1L << ((2 + 1) | ((2 - 1) << 3))) |
+                                (1L << ((2 + 0) | ((2 - 1) << 3))) |
+                                (1L << ((2 + 1) | ((2 - 1) << 3))) |
 
-                        // z = 0
-                        (1L << ((2 - 1) | ((2 + 0) << 3))) |
-                        (1L << ((2 + 0) | ((2 + 0) << 3))) |
-                        (1L << ((2 + 1) | ((2 + 0) << 3))) |
+                                // z = 0
+                                (1L << ((2 - 1) | ((2 + 0) << 3))) |
+                                (1L << ((2 + 0) | ((2 + 0) << 3))) |
+                                (1L << ((2 + 1) | ((2 + 0) << 3))) |
 
-                        // z = 1
-                        (1L << ((2 - 1) | ((2 + 1) << 3))) |
-                        (1L << ((2 + 0) | ((2 + 1) << 3))) |
-                        (1L << ((2 + 1) | ((2 + 1) << 3)))
+                                // z = 1
+                                (1L << ((2 - 1) | ((2 + 1) << 3))) |
+                                (1L << ((2 + 0) | ((2 + 1) << 3))) |
+                                (1L << ((2 + 1) | ((2 + 1) << 3)))
                 );
 
                 final int toPropagate = propagatedLevel - 1;
@@ -1214,8 +1244,8 @@ public abstract class ThreadedTicketLevelPropagator {
                         }
                         increaseQueue[increaseQueueLength++] =
                                 ((long)(offX + (offZ << COORDINATE_BITS) + encodeOffset) & ((1L << (COORDINATE_BITS + COORDINATE_BITS)) - 1)) |
-                                ((currentLevel & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
-                                (FLAG_RECHECK_LEVEL | (ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)));
+                                        ((currentLevel & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
+                                        (FLAG_RECHECK_LEVEL | (ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)));
                         continue;
                     }
 
@@ -1225,7 +1255,7 @@ public abstract class ThreadedTicketLevelPropagator {
 
                     // update level
                     section.levels[localIndex] = (short)((currentStoredLevel & ~0xFF));
-                    updatedPositions.putAndMoveToLast(Coordinate.key(offX, offZ), (byte)0);
+                    updatedPositions.putAndMoveToLast(CoordinateUtils.getChunkKey(offX, offZ), (byte)0);
 
                     if (sourceLevel != 0) {
                         // re-propagate source
@@ -1235,8 +1265,8 @@ public abstract class ThreadedTicketLevelPropagator {
                         }
                         increaseQueue[increaseQueueLength++] =
                                 ((long)(offX + (offZ << COORDINATE_BITS) + encodeOffset) & ((1L << (COORDINATE_BITS + COORDINATE_BITS)) - 1)) |
-                                ((sourceLevel & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
-                                (FLAG_WRITE_LEVEL | (ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)));
+                                        ((sourceLevel & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
+                                        (FLAG_WRITE_LEVEL | (ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)));
                     }
 
                     // queue next
@@ -1246,8 +1276,8 @@ public abstract class ThreadedTicketLevelPropagator {
                     // add the propagation bitset offset to each line to make it easy to OR it into the propagation queue value
                     final long childPropagation =
                             ((bitsetLine1 >>> (start)) << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)) | // z = -1
-                            ((bitsetLine2 >>> (start + 8)) << (4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)) | // z = 0
-                            ((bitsetLine3 >>> (start + (8 + 8))) << (4 + 4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)); // z = 1
+                                    ((bitsetLine2 >>> (start + 8)) << (4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)) | // z = 0
+                                    ((bitsetLine3 >>> (start + (8 + 8))) << (4 + 4 + COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)); // z = 1
 
                     // don't queue update if toPropagate cannot propagate anything to neighbours
                     // (for increase, propagating 0 to neighbours is useless)
@@ -1256,8 +1286,8 @@ public abstract class ThreadedTicketLevelPropagator {
                     }
                     queue[queueLength++] =
                             ((long)(offX + (offZ << COORDINATE_BITS) + encodeOffset) & ((1L << (COORDINATE_BITS + COORDINATE_BITS)) - 1)) |
-                            ((toPropagate & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
-                            (ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)); //childPropagation;
+                                    ((toPropagate & (LEVEL_COUNT - 1L)) << (COORDINATE_BITS + COORDINATE_BITS)) |
+                                    (ALL_DIRECTIONS_BITSET << (COORDINATE_BITS + COORDINATE_BITS + LEVEL_BITS)); //childPropagation;
                     continue;
                 }
             }
@@ -1265,61 +1295,6 @@ public abstract class ThreadedTicketLevelPropagator {
             // propagate sources we clobbered
             this.increaseQueueInitialLength = increaseQueueLength;
             this.performIncrease();
-        }
-    }
-
-    private static final class Coordinate implements Comparable<Coordinate> {
-
-        public final long key;
-
-        public Coordinate(final long key) {
-            this.key = key;
-        }
-
-        public Coordinate(final int x, final int z) {
-            this.key = key(x, z);
-        }
-
-        public static long key(final int x, final int z) {
-            return ((long)z << 32) | (x & 0xFFFFFFFFL);
-        }
-
-        public static int x(final long key) {
-            return (int)key;
-        }
-
-        public static int z(final long key) {
-            return (int)(key >>> 32);
-        }
-
-        @Override
-        public int hashCode() {
-            return (int)HashCommon.mix(this.key);
-        }
-
-        @Override
-        public boolean equals(final Object obj) {
-            if (this == obj) {
-                return true;
-            }
-
-            if (!(obj instanceof Coordinate other)) {
-                return false;
-            }
-
-            return this.key == other.key;
-        }
-
-        // This class is intended for HashMap/ConcurrentHashMap usage, which do treeify bin nodes if the chain
-        // is too large. So we should implement compareTo to help.
-        @Override
-        public int compareTo(final Coordinate other) {
-            return Long.compare(this.key, other.key);
-        }
-
-        @Override
-        public String toString() {
-            return "[" + x(this.key) + "," + z(this.key) + "]";
         }
     }
 

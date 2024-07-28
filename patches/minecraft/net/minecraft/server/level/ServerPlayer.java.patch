@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
-@@ -1,13 +_,12 @@
+@@ -1,14 +_,15 @@
  package net.minecraft.server.level;
  
 +import com.google.common.base.Preconditions;
@@ -15,8 +15,11 @@
 +
 +import java.util.*;
  import javax.annotation.Nullable;
++
++import io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader;
  import net.minecraft.BlockUtil;
  import net.minecraft.ChatFormatting;
+ import net.minecraft.CrashReport;
 @@ -88,6 +_,7 @@
  import net.minecraft.world.Container;
  import net.minecraft.world.InteractionHand;
@@ -56,7 +59,7 @@
     private final ContainerSynchronizer f_143379_ = new ContainerSynchronizer() {
        public void m_142589_(AbstractContainerMenu p_143448_, NonNullList<ItemStack> p_143449_, ItemStack p_143450_, int[] p_143451_) {
           ServerPlayer.this.f_8906_.m_9829_(new ClientboundContainerSetContentPacket(p_143448_.f_38840_, p_143448_.m_182425_(), p_143449_, p_143450_));
-@@ -234,6 +_,87 @@
+@@ -234,6 +_,71 @@
     public int f_8940_;
     public int f_8943_;
     public boolean f_8944_;
@@ -72,47 +75,31 @@
 +   }
 +   // Paper end
 +
-+   private final java.util.concurrent.atomic.AtomicReference<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> viewDistances = new java.util.concurrent.atomic.AtomicReference<>(new io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances(-1, -1, -1));
-+   public io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.PlayerChunkLoaderData chunkLoader;
++   // Paper start - rewrite chunk system
++   private RegionizedPlayerChunkLoader.PlayerChunkLoaderData chunkLoader;
++   private final RegionizedPlayerChunkLoader.ViewDistanceHolder viewDistanceHolder = new RegionizedPlayerChunkLoader.ViewDistanceHolder();
 +
-+   public io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances getViewDistances() {
-+      return this.viewDistances.get();
++   public final boolean moonrise$isRealPlayer() {
++      return this.isRealPlayer;
 +   }
 +
-+   private void updateViewDistance(final java.util.function.Function<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances, io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> update) {
-+      for (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances curr = this.viewDistances.get();;) {
-+         if (this.viewDistances.compareAndSet(curr, update.apply(curr))) {
-+            return;
-+         }
-+      }
++   public final void moonrise$setRealPlayer(final boolean real) {
++      this.isRealPlayer = real;
 +   }
 +
-+   public void setTickViewDistance(final int distance) {
-+      if ((distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE)) {
-+         throw new IllegalArgumentException("Tick view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE) + ", got: " + distance);
-+      }
-+      this.updateViewDistance((input) -> {
-+         return input.setTickViewDistance(distance);
-+      });
++   public final RegionizedPlayerChunkLoader.PlayerChunkLoaderData moonrise$getChunkLoader() {
++      return this.chunkLoader;
 +   }
 +
-+   public void setLoadViewDistance(final int distance) {
-+      if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
-+         throw new IllegalArgumentException("Load view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
-+      }
-+      this.updateViewDistance((input) -> {
-+         return input.setLoadViewDistance(distance);
-+      });
++   public final void moonrise$setChunkLoader(final RegionizedPlayerChunkLoader.PlayerChunkLoaderData loader) {
++      this.chunkLoader = loader;
 +   }
 +
-+   public void setSendViewDistance(final int distance) {
-+      if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
-+         throw new IllegalArgumentException("Send view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
-+      }
-+      this.updateViewDistance((input) -> {
-+         return input.setSendViewDistance(distance);
-+      });
++
++   public final RegionizedPlayerChunkLoader.ViewDistanceHolder moonrise$getViewDistanceHolder() {
++      return this.viewDistanceHolder;
 +   }
++   // Paper end - rewrite chunk system
 +
 +   // Goldenforge API
 +//   public boolean teleport(Location location) {
@@ -419,9 +406,14 @@
     }
  
     protected void m_142540_(MobEffectInstance p_143393_, @Nullable Entity p_143394_) {
-@@ -1189,6 +_,8 @@
+@@ -1188,7 +_,13 @@
+       return (ServerLevel)this.f_19853_;
     }
  
++   public ServerLevel serverLevel() {
++      return (ServerLevel)this.f_19853_;
++   }
++
     public boolean m_143403_(GameType p_143404_) {
 +      p_143404_ = net.minecraftforge.common.ForgeHooks.onChangeGameType(this, this.f_8941_.m_9290_(), p_143404_);
 +      if (p_143404_ == null) return false;

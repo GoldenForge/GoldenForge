@@ -43,7 +43,10 @@
     final Long2ObjectMap<ObjectSet<ServerPlayer>> f_140760_ = new Long2ObjectOpenHashMap<>();
 -   final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> f_140761_ = new Long2ObjectOpenHashMap<>();
 -   private final DistanceManager.ChunkTicketTracker f_140762_ = new DistanceManager.ChunkTicketTracker();
--   private final DistanceManager.FixedPlayerDistanceChunkTracker f_140763_ = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
++   //final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>();
++   //private final DistanceManager.ChunkTicketTracker ticketTracker = new DistanceManager.ChunkTicketTracker();
++   public static final int MOB_SPAWN_RANGE = 8;
+    private final DistanceManager.FixedPlayerDistanceChunkTracker f_140763_ = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
 -   private final TickingTracker f_183901_ = new TickingTracker();
 -   private final DistanceManager.PlayerTicketTracker f_140764_ = new DistanceManager.PlayerTicketTracker(33);
 -   final Set<ChunkHolder> f_140765_ = Sets.newHashSet();
@@ -56,10 +59,6 @@
 -   private int f_183902_ = 10;
 -
 -   protected DistanceManager(Executor p_140774_, Executor p_140775_) {
-+   //final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>();
-+   //private final DistanceManager.ChunkTicketTracker ticketTracker = new DistanceManager.ChunkTicketTracker();
-+   public static final int MOB_SPAWN_RANGE = 8;
-+   //private final DistanceManager.FixedPlayerDistanceChunkTracker naturalSpawnChunkCounter = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
 +   //private final TickingTracker tickingTicketsTracker = new TickingTracker();
 +   //private final DistanceManager.PlayerTicketTracker playerTicketManager = new DistanceManager.PlayerTicketTracker(33);
 +   //final Set<ChunkHolder> chunksToUpdateFutures = Sets.newHashSet();
@@ -265,7 +264,7 @@
        }
  
     }
-@@ -225,176 +_,139 @@
+@@ -225,51 +_,54 @@
        this.f_140760_.computeIfAbsent(i, (p_183921_) -> {
           return new ObjectOpenHashSet();
        }).add(p_140804_);
@@ -337,29 +336,11 @@
 -         this.f_183902_ = p_183912_;
 -         this.f_183901_.m_184146_(this.m_183918_());
 -      }
--
--   }
-+      this.chunkMap.f_140133_.playerChunkLoader.setTickDistance(p_183912_); // Paper - route to player chunk manager
-+
-+   }
-+
-+
-+   // Paper start
-+   public int getSimulationDistance() {
-+      return this.chunkMap.f_140133_.playerChunkLoader.getAPITickDistance();
-+   }
-+   // Paper end
++      (this.chunkMap.f_140133_).moonrise$getPlayerChunkLoader().setTickDistance(p_183912_); // Paper - rewrite chunk system
  
-    public int m_140816_() {
--      this.f_140763_.m_6410_();
--      return this.f_140763_.f_140886_.size();
-+      return this.chunkMap.playerMobSpawnMap.size(); // Paper - optimise chunk tick iteration
     }
  
-    public boolean m_140847_(long p_140848_) {
--      this.f_140763_.m_6410_();
--      return this.f_140763_.f_140886_.containsKey(p_140848_);
-+      return this.chunkMap.playerMobSpawnMap.getObjectsInRange(p_140848_) != null; // Paper - optimise chunk tick iteration
+@@ -284,117 +_,72 @@
     }
  
     public String m_140837_() {

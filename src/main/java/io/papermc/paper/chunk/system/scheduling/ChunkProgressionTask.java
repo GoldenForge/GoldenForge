@@ -3,6 +3,7 @@ package io.papermc.paper.chunk.system.scheduling;
 import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import io.papermc.paper.util.WorldUtil;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
@@ -61,12 +62,9 @@ public abstract class ChunkProgressionTask {
                 onComplete.accept(this.completedChunk, this.completedThrowable);
             } catch (final Throwable throwable) {
                 this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                    "Consumer", ChunkTaskScheduler.stringIfNull(onComplete),
-                    "Completed throwable", ChunkTaskScheduler.stringIfNull(this.completedThrowable)
+                        "Consumer", ChunkTaskScheduler.stringIfNull(onComplete),
+                        "Completed throwable", ChunkTaskScheduler.stringIfNull(this.completedThrowable)
                 ), throwable);
-                if (throwable instanceof ThreadDeath) {
-                    throw (ThreadDeath)throwable;
-                }
             }
         }
     }
@@ -76,11 +74,8 @@ public abstract class ChunkProgressionTask {
             this.complete0(chunk, throwable);
         } catch (final Throwable thr2) {
             this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable)
+                    "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable)
             ), thr2);
-            if (thr2 instanceof ThreadDeath) {
-                throw (ThreadDeath)thr2;
-            }
         }
     }
 
@@ -99,8 +94,8 @@ public abstract class ChunkProgressionTask {
 
     @Override
     public String toString() {
-        return "ChunkProgressionTask{class: " + this.getClass().getName() + ", for world: " + this.world.getWorld().getName() +
-            ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
-            ", status: " + this.getTargetStatus().toString() + ", scheduled: " + this.isScheduled() + "}";
+        return "ChunkProgressionTask{class: " + this.getClass().getName() + ", for world: " + WorldUtil.getWorldName(this.world) +
+                ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
+                ", status: " + this.getTargetStatus().toString() + ", scheduled: " + this.isScheduled() + "}";
     }
 }

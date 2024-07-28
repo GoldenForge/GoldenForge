@@ -1,67 +1,94 @@
 package io.papermc.paper.chunk.system.entity;
 
+import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
+import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
+import ca.spottedleaf.starlight.common.util.WorldUtil;
 import com.destroystokyo.paper.util.maplist.EntityList;
-import com.mojang.logging.LogUtils;
-import io.papermc.paper.chunk.system.ChunkSystem;
-import io.papermc.paper.util.CoordinateUtils;
-import io.papermc.paper.util.TickThread;
-import io.papermc.paper.util.WorldUtil;
 import io.papermc.paper.world.ChunkEntitySlices;
-import it.unimi.dsi.fastutil.ints.Int2ReferenceOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Object2ReferenceOpenHashMap;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ChunkHolder;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.entity.*;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.entity.EntityInLevelCallback;
+import net.minecraft.world.level.entity.EntityTypeTest;
+import net.minecraft.world.level.entity.LevelCallback;
+import net.minecraft.world.level.entity.LevelEntityGetter;
+import net.minecraft.world.level.entity.Visibility;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
-
-import java.util.*;
-import java.util.concurrent.locks.StampedLock;
+import org.slf4j.LoggerFactory;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-public final class EntityLookup implements LevelEntityGetter<Entity> {
+public abstract class EntityLookup implements LevelEntityGetter<Entity> {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LoggerFactory.getLogger(EntityLookup.class);
 
     protected static final int REGION_SHIFT = 5;
     protected static final int REGION_MASK = (1 << REGION_SHIFT) - 1;
     protected static final int REGION_SIZE = 1 << REGION_SHIFT;
 
-    public final ServerLevel world;
+    public final Level world;
 
-    private final StampedLock stateLock = new StampedLock();
-    protected final Long2ObjectOpenHashMap<ChunkSlicesRegion> regions = new Long2ObjectOpenHashMap<>(128, 0.5f);
+    protected final SWMRLong2ObjectHashTable<ChunkSlicesRegion> regions = new SWMRLong2ObjectHashTable<>(128, 0.5f);
 
-    private final int minSection; // inclusive
-    private final int maxSection; // inclusive
-    private final LevelCallback<Entity> worldCallback;
+    protected final int minSection; // inclusive
+    protected final int maxSection; // inclusive
+    protected final LevelCallback<Entity> worldCallback;
 
-    private final StampedLock entityByLock = new StampedLock();
-    private final Int2ReferenceOpenHashMap<Entity> entityById = new Int2ReferenceOpenHashMap<>();
-    private final Object2ReferenceOpenHashMap<UUID, Entity> entityByUUID = new Object2ReferenceOpenHashMap<>();
-    private final EntityList accessibleEntities = new EntityList();
+    protected final ConcurrentLong2ReferenceChainedHashTable<Entity> entityById = new ConcurrentLong2ReferenceChainedHashTable<>();
+    protected final ConcurrentHashMap<UUID, Entity> entityByUUID = new ConcurrentHashMap<>();
+    protected final EntityList accessibleEntities = new EntityList();
 
-    public int count() {
-        return entityByUUID.size();
-    }
-
-    public EntityLookup(final ServerLevel world, final LevelCallback<Entity> worldCallback) {
+    public EntityLookup(final Level world, final LevelCallback<Entity> worldCallback) {
         this.world = world;
         this.minSection = WorldUtil.getMinSection(world);
         this.maxSection = WorldUtil.getMaxSection(world);
         this.worldCallback = worldCallback;
     }
+
+    protected abstract Boolean blockTicketUpdates();
+
+    protected abstract void setBlockTicketUpdates(final Boolean value);
+
+    protected abstract void checkThread(final int chunkX, final int chunkZ, final String reason);
+
+    protected abstract void checkThread(final Entity entity, final String reason);
+
+    protected abstract ChunkEntitySlices createEntityChunk(final int chunkX, final int chunkZ, final boolean transientChunk);
+
+    protected abstract void onEmptySlices(final int chunkX, final int chunkZ);
+
+    protected abstract void entitySectionChangeCallback(
+            final Entity entity,
+            final int oldSectionX, final int oldSectionY, final int oldSectionZ,
+            final int newSectionX, final int newSectionY, final int newSectionZ
+    );
+
+    protected abstract void addEntityCallback(final Entity entity);
+
+    protected abstract void removeEntityCallback(final Entity entity);
+
+    protected abstract void entityStartLoaded(final Entity entity);
+
+    protected abstract void entityEndLoaded(final Entity entity);
+
+    protected abstract void entityStartTicking(final Entity entity);
+
+    protected abstract void entityEndTicking(final Entity entity);
 
     private static Entity maskNonAccessible(final Entity entity) {
         if (entity == null) {
@@ -71,56 +98,14 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         return visibility.isAccessible() ? entity : null;
     }
 
-    @Nullable
     @Override
     public Entity get(final int id) {
-        final long attempt = this.entityByLock.tryOptimisticRead();
-        if (attempt != 0L) {
-            try {
-                final Entity ret = this.entityById.get(id);
-
-                if (this.entityByLock.validate(attempt)) {
-                    return maskNonAccessible(ret);
-                }
-            } catch (final Error error) {
-                throw error;
-            } catch (final Throwable thr) {
-                // ignore
-            }
-        }
-
-        this.entityByLock.readLock();
-        try {
-            return maskNonAccessible(this.entityById.get(id));
-        } finally {
-            this.entityByLock.tryUnlockRead();
-        }
+        return maskNonAccessible(this.entityById.get((long)id));
     }
 
-    @Nullable
     @Override
     public Entity get(final UUID id) {
-        final long attempt = this.entityByLock.tryOptimisticRead();
-        if (attempt != 0L) {
-            try {
-                final Entity ret = this.entityByUUID.get(id);
-
-                if (this.entityByLock.validate(attempt)) {
-                    return maskNonAccessible(ret);
-                }
-            } catch (final Error error) {
-                throw error;
-            } catch (final Throwable thr) {
-                // ignore
-            }
-        }
-
-        this.entityByLock.readLock();
-        try {
-            return maskNonAccessible(this.entityByUUID.get(id));
-        } finally {
-            this.entityByLock.tryUnlockRead();
-        }
+        return maskNonAccessible(id == null ? null : this.entityByUUID.get(id));
     }
 
     public boolean hasEntity(final UUID uuid) {
@@ -128,10 +113,10 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     }
 
     public String getDebugInfo() {
-        return "count_id:" + this.entityById.size() + ",count_uuid:" + this.entityByUUID.size() + ",region_count:" + this.regions.size();
+        return "count_id:" + this.entityById.size() + ",count_uuid:" + this.entityByUUID.size() + ",count_accessible:" + this.getEntityCount() + ",region_count:" + this.regions.size();
     }
 
-    static final class ArrayIterable<T> implements Iterable<T> {
+    protected static final class ArrayIterable<T> implements Iterable<T> {
 
         private final T[] array;
         private final int off;
@@ -146,13 +131,12 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             }
         }
 
-        @NotNull
         @Override
         public Iterator<T> iterator() {
             return new ArrayIterator<>(this.array, this.off, this.length);
         }
 
-        static final class ArrayIterator<T> implements Iterator<T> {
+        protected static final class ArrayIterator<T> implements Iterator<T> {
 
             private final T[] array;
             private int off;
@@ -186,20 +170,32 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
 
     @Override
     public Iterable<Entity> getAll() {
-        return new ArrayIterable<>(this.accessibleEntities.getRawData(), 0, this.accessibleEntities.size());
+        synchronized (this.accessibleEntities) {
+            final int len = this.accessibleEntities.size();
+            final Entity[] cpy = Arrays.copyOf(this.accessibleEntities.getRawData(), len, Entity[].class);
+
+            Objects.checkFromToIndex(0, len, cpy.length);
+
+            return new ArrayIterable<>(cpy, 0, len);
+        }
+    }
+
+    public int getEntityCount() {
+        synchronized (this.accessibleEntities) {
+            return this.accessibleEntities.size();
+        }
+    }
+
+    public Entity[] getAllCopy() {
+        synchronized (this.accessibleEntities) {
+            return Arrays.copyOf(this.accessibleEntities.getRawData(), this.accessibleEntities.size(), Entity[].class);
+        }
     }
 
     @Override
     public <U extends Entity> void get(final EntityTypeTest<Entity, U> filter, final Consumer<U> action) {
-        final Int2ReferenceOpenHashMap<Entity> entityCopy;
-
-        this.entityByLock.readLock();
-        try {
-            entityCopy = this.entityById.clone();
-        } finally {
-            this.entityByLock.tryUnlockRead();
-        }
-        for (final Entity entity : entityCopy.values()) {
+        for (final Iterator<Entity> iterator = this.entityById.valueIterator(); iterator.hasNext();) {
+            final Entity entity = iterator.next();
             final Visibility visibility = EntityLookup.getEntityStatus(entity);
             if (!visibility.isAccessible()) {
                 continue;
@@ -210,7 +206,6 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             }
         }
     }
-
 
     @Override
     public void get(final AABB box, final Consumer<Entity> action) {
@@ -235,7 +230,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
 
     public void entityStatusChange(final Entity entity, final ChunkEntitySlices slices, final Visibility oldVisibility, final Visibility newVisibility, final boolean moved,
                                    final boolean created, final boolean destroyed) {
-        TickThread.ensureTickThread(entity, "Entity status change must only happen on the main thread");
+        this.checkThread(entity, "Entity status change must only happen on the main thread");
 
         if (entity.updatingSectionStatus) {
             // recursive status update
@@ -251,17 +246,21 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         }
 
         try {
-            final Boolean ticketBlockBefore = this.world.chunkTaskScheduler.chunkHolderManager.blockTicketUpdates();
+            final Boolean ticketBlockBefore = this.blockTicketUpdates();
             try {
                 entity.updatingSectionStatus = true;
                 try {
                     if (created) {
-                        EntityLookup.this.worldCallback.onCreated(entity);
+                        if (EntityLookup.this.worldCallback != null) {
+                            EntityLookup.this.worldCallback.onCreated(entity);
+                        }
                     }
 
                     if (oldVisibility == newVisibility) {
                         if (moved && newVisibility.isAccessible()) {
-                            EntityLookup.this.worldCallback.onSectionChange(entity);
+                            if (EntityLookup.this.worldCallback != null) {
+                                EntityLookup.this.worldCallback.onSectionChange(entity);
+                            }
                         }
                         return;
                     }
@@ -269,37 +268,57 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
                     if (newVisibility.ordinal() > oldVisibility.ordinal()) {
                         // status upgrade
                         if (!oldVisibility.isAccessible() && newVisibility.isAccessible()) {
-                            this.accessibleEntities.add(entity);
-                            EntityLookup.this.worldCallback.onTrackingStart(entity);
+                            EntityLookup.this.entityStartLoaded(entity);
+                            synchronized (this.accessibleEntities) {
+                                this.accessibleEntities.add(entity);
+                            }
+                            if (EntityLookup.this.worldCallback != null) {
+                                EntityLookup.this.worldCallback.onTrackingStart(entity);
+                            }
                         }
 
                         if (!oldVisibility.isTicking() && newVisibility.isTicking()) {
-                            EntityLookup.this.worldCallback.onTickingStart(entity);
+                            EntityLookup.this.entityStartTicking(entity);
+                            if (EntityLookup.this.worldCallback != null) {
+                                EntityLookup.this.worldCallback.onTickingStart(entity);
+                            }
                         }
                     } else {
                         // status downgrade
                         if (oldVisibility.isTicking() && !newVisibility.isTicking()) {
-                            EntityLookup.this.worldCallback.onTickingEnd(entity);
+                            EntityLookup.this.entityEndTicking(entity);
+                            if (EntityLookup.this.worldCallback != null) {
+                                EntityLookup.this.worldCallback.onTickingEnd(entity);
+                            }
                         }
 
                         if (oldVisibility.isAccessible() && !newVisibility.isAccessible()) {
-                            this.accessibleEntities.remove(entity);
-                            EntityLookup.this.worldCallback.onTrackingEnd(entity);
+                            EntityLookup.this.entityEndLoaded(entity);
+                            synchronized (this.accessibleEntities) {
+                                this.accessibleEntities.remove(entity);
+                            }
+                            if (EntityLookup.this.worldCallback != null) {
+                                EntityLookup.this.worldCallback.onTrackingEnd(entity);
+                            }
                         }
                     }
 
                     if (moved && newVisibility.isAccessible()) {
-                        EntityLookup.this.worldCallback.onSectionChange(entity);
+                        if (EntityLookup.this.worldCallback != null) {
+                            EntityLookup.this.worldCallback.onSectionChange(entity);
+                        }
                     }
 
                     if (destroyed) {
-                        EntityLookup.this.worldCallback.onDestroyed(entity);
+                        if (EntityLookup.this.worldCallback != null) {
+                            EntityLookup.this.worldCallback.onDestroyed(entity);
+                        }
                     }
                 } finally {
                     entity.updatingSectionStatus = false;
                 }
             } finally {
-                this.world.chunkTaskScheduler.chunkHolderManager.unblockTicketUpdates(ticketBlockBefore);
+                this.setBlockTicketUpdates(ticketBlockBefore);
             }
         } finally {
             if (slices != null) {
@@ -311,7 +330,6 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     public void chunkStatusChange(final int x, final int z, final ChunkHolder.FullChunkStatus newStatus) {
         this.getChunk(x, z).updateStatus(newStatus, this);
     }
-
 
     public void addLegacyChunkEntities(final List<Entity> entities, final ChunkPos forChunk) {
         this.addEntityChunk(entities, forChunk, true);
@@ -325,7 +343,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         this.addEntityChunk(entities, forChunk, false);
     }
 
-    private void addRecursivelySafe(final Entity root, final boolean fromDisk) {
+    protected void addRecursivelySafe(final Entity root, final boolean fromDisk) {
         if (!this.addEntity(root, fromDisk)) {
             // possible we are a passenger, and so should dismount from any valid entity in the world
             root.stopRiding();
@@ -336,14 +354,14 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         }
     }
 
-    private void addEntityChunk(final List<Entity> entities, final ChunkPos forChunk, final boolean fromDisk) {
+    protected void addEntityChunk(final List<Entity> entities, final ChunkPos forChunk, final boolean fromDisk) {
         for (int i = 0, len = entities.size(); i < len; ++i) {
             final Entity entity = entities.get(i);
             if (entity.isPassenger()) {
                 continue;
             }
 
-            if (!entity.chunkPosition().equals(forChunk)) {
+            if (forChunk != null && !entity.chunkPosition().equals(forChunk)) {
                 LOGGER.warn("Root entity " + entity + " is outside of serialized chunk " + forChunk);
                 // can't set removed here, as we may not own the chunk position
                 // skip the entity
@@ -355,7 +373,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             // always adjust positions before adding passengers in case plugins access the entity, and so that
             // they are added to the right entity chunk
             for (final Entity passenger : entity.getIndirectPassengers()) {
-                if (!passenger.chunkPosition().equals(forChunk)) {
+                if (forChunk != null && !passenger.chunkPosition().equals(forChunk)) {
                     passenger.setPosRaw(rootPosition.x, rootPosition.y, rootPosition.z);
                 }
             }
@@ -376,13 +394,12 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         return Visibility.fromFullChunkStatus(entityStatus == null ? ChunkHolder.FullChunkStatus.INACCESSIBLE : entityStatus);
     }
 
-    private boolean addEntity(final Entity entity, final boolean fromDisk) {
-        if (net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.entity.EntityJoinLevelEvent(entity, entity.level, fromDisk))) return false;
+    protected boolean addEntity(final Entity entity, final boolean fromDisk) {
         final BlockPos pos = entity.blockPosition();
         final int sectionX = pos.getX() >> 4;
         final int sectionY = Mth.clamp(pos.getY() >> 4, this.minSection, this.maxSection);
         final int sectionZ = pos.getZ() >> 4;
-        TickThread.ensureTickThread(this.world, sectionX, sectionZ, "Cannot add entity off-main thread");
+        this.checkThread(sectionX, sectionZ, "Cannot add entity off-main thread");
 
         if (entity.isRemoved()) {
             LOGGER.warn("Refusing to add removed entity: " + entity);
@@ -394,28 +411,18 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
             return false;
         }
 
-        if (fromDisk) {
-            ChunkSystem.onEntityPreAdd(this.world, entity);
-            if (entity.isRemoved()) {
-                // removed from checkDupeUUID call
-                return false;
-            }
+        Entity currentlyMapped = this.entityById.putIfAbsent((long)entity.getId(), entity);
+        if (currentlyMapped != null) {
+            LOGGER.warn("Entity id already exists: " + entity.getId() + ", mapped to " + currentlyMapped + ", can't add " + entity);
+            return false;
         }
 
-        this.entityByLock.writeLock();
-        try {
-            if (this.entityById.containsKey(entity.getId())) {
-                LOGGER.warn("Entity id already exists: " + entity.getId() + ", mapped to " + this.entityById.get(entity.getId()) + ", can't add " + entity);
-                return false;
-            }
-            if (this.entityByUUID.containsKey(entity.getUUID())) {
-                LOGGER.warn("Entity uuid already exists: " + entity.getUUID() + ", mapped to " + this.entityByUUID.get(entity.getUUID()) + ", can't add " + entity);
-                return false;
-            }
-            this.entityById.put(entity.getId(), entity);
-            this.entityByUUID.put(entity.getUUID(), entity);
-        } finally {
-            this.entityByLock.tryUnlockWrite();
+        currentlyMapped = this.entityByUUID.putIfAbsent(entity.getUUID(), entity);
+        if (currentlyMapped != null) {
+            // need to remove mapping for id
+            this.entityById.remove((long)entity.getId(), entity);
+            LOGGER.warn("Entity uuid already exists: " + entity.getUUID() + ", mapped to " + currentlyMapped + ", can't add " + entity);
+            return false;
         }
 
         entity.sectionX = sectionX;
@@ -423,12 +430,15 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         entity.sectionZ = sectionZ;
         final ChunkEntitySlices slices = this.getOrCreateChunk(sectionX, sectionZ);
         if (!slices.addEntity(entity, sectionY)) {
-            LOGGER.warn("Entity " + entity + " added to world '" + this.world.dimension() + "', but was already contained in entity chunk (" + sectionX + "," + sectionZ + ")");
+            LOGGER.warn("Entity " + entity + " added to world '" + WorldUtil.getWorldName(this.world) + "', but was already contained in entity chunk (" + sectionX + "," + sectionZ + ")");
         }
 
         entity.setLevelCallback(new EntityCallback(entity));
 
+        this.addEntityCallback(entity);
+
         this.entityStatusChange(entity, slices, Visibility.HIDDEN, getEntityStatus(entity), false, !fromDisk, false);
+
         return true;
     }
 
@@ -443,11 +453,11 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         return slices == null || !slices.isPreventingStatusUpdates();
     }
 
-    private void removeEntity(final Entity entity) {
+    protected void removeEntity(final Entity entity) {
         final int sectionX = entity.sectionX;
         final int sectionY = entity.sectionY;
         final int sectionZ = entity.sectionZ;
-        TickThread.ensureTickThread(this.world, sectionX, sectionZ, "Cannot remove entity off-main");
+        this.checkThread(sectionX, sectionZ, "Cannot remove entity off-main");
         if (!entity.isRemoved()) {
             throw new IllegalStateException("Only call Entity#setRemoved to remove an entity");
         }
@@ -465,43 +475,58 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         }
         entity.sectionX = entity.sectionY = entity.sectionZ = Integer.MIN_VALUE;
 
-        this.entityByLock.writeLock();
-        try {
-            if (!this.entityById.remove(entity.getId(), entity)) {
-                LOGGER.warn("Failed to remove entity " + entity + " by id, current entity mapped: " + this.entityById.get(entity.getId()));
+        Entity currentlyMapped;
+        if ((currentlyMapped = this.entityById.remove(entity.getId(), entity)) != entity) {
+            LOGGER.warn("Failed to remove entity " + entity + " by id, current entity mapped: " + currentlyMapped);
+        }
+
+        Entity[] currentlyMappedArr = new Entity[1];
+
+        // need reference equality
+        this.entityByUUID.compute(entity.getUUID(), (final UUID keyInMap, final Entity valueInMap) -> {
+            currentlyMappedArr[0] = valueInMap;
+            if (valueInMap != entity) {
+                return valueInMap;
             }
-            if (!this.entityByUUID.remove(entity.getUUID(), entity)) {
-                LOGGER.warn("Failed to remove entity " + entity + " by uuid, current entity mapped: " + this.entityByUUID.get(entity.getUUID()));
-            }
-        } finally {
-            this.entityByLock.tryUnlockWrite();
+            return null;
+        });
+
+        if (currentlyMappedArr[0] != entity) {
+            LOGGER.warn("Failed to remove entity " + entity + " by uuid, current entity mapped: " + currentlyMappedArr[0]);
+        }
+
+        if (slices != null && slices.isEmpty()) {
+            this.onEmptySlices(sectionX, sectionZ);
         }
     }
 
-    private ChunkEntitySlices moveEntity(final Entity entity) {
+    protected ChunkEntitySlices moveEntity(final Entity entity) {
         // ensure we own the entity
-        TickThread.ensureTickThread(entity, "Cannot move entity off-main");
+        this.checkThread(entity, "Cannot move entity off-main");
 
+        final int sectionX = entity.sectionX;
+        final int sectionY = entity.sectionY;
+        final int sectionZ = entity.sectionZ;
         final BlockPos newPos = entity.blockPosition();
         final int newSectionX = newPos.getX() >> 4;
         final int newSectionY = Mth.clamp(newPos.getY() >> 4, this.minSection, this.maxSection);
         final int newSectionZ = newPos.getZ() >> 4;
 
-        if (newSectionX == entity.sectionX && newSectionY == entity.sectionY && newSectionZ == entity.sectionZ) {
+        if (newSectionX == sectionX && newSectionY == sectionY && newSectionZ == sectionZ) {
             return null;
         }
 
         // ensure the new section is owned by this tick thread
-        TickThread.ensureTickThread(this.world, newSectionX, newSectionZ, "Cannot move entity off-main");
+        this.checkThread(newSectionX, newSectionZ, "Cannot move entity off-main");
 
         // ensure the old section is owned by this tick thread
-        TickThread.ensureTickThread(this.world, entity.sectionX, entity.sectionZ, "Cannot move entity off-main");
+        this.checkThread(sectionX, sectionZ, "Cannot move entity off-main");
 
-        final ChunkEntitySlices old = this.getChunk(entity.sectionX, entity.sectionZ);
+        final ChunkEntitySlices old = this.getChunk(sectionX, sectionZ);
         final ChunkEntitySlices slices = this.getOrCreateChunk(newSectionX, newSectionZ);
 
-        if (!old.removeEntity(entity, entity.sectionY)) {
-            LOGGER.warn("Could not remove entity " + entity + " from its old chunk section (" + entity.sectionX + "," + entity.sectionY + "," + entity.sectionZ + ") since it was not contained in the section");
+        if (!old.removeEntity(entity, sectionY)) {
+            LOGGER.warn("Could not remove entity " + entity + " from its old chunk section (" + sectionX + "," + sectionY + "," + sectionZ + ") since it was not contained in the section");
         }
 
         if (!slices.addEntity(entity, newSectionY)) {
@@ -511,6 +536,16 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         entity.sectionX = newSectionX;
         entity.sectionY = newSectionY;
         entity.sectionZ = newSectionZ;
+
+        if (old.isEmpty()) {
+            this.onEmptySlices(sectionX, sectionZ);
+        }
+
+        this.entitySectionChangeCallback(
+                entity,
+                sectionX, sectionY, sectionZ,
+                newSectionX, newSectionY, newSectionZ
+        );
 
         return slices;
     }
@@ -713,8 +748,178 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         }
     }
 
+    //////// Limited ////////
+
+    public void getEntitiesWithoutDragonParts(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
+                                              final int maxCount) {
+        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
+        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
+        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
+        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
+
+        final int minRegionX = minChunkX >> REGION_SHIFT;
+        final int minRegionZ = minChunkZ >> REGION_SHIFT;
+        final int maxRegionX = maxChunkX >> REGION_SHIFT;
+        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
+
+        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
+            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
+            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
+
+            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
+                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
+
+                if (region == null) {
+                    continue;
+                }
+
+                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
+                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
+
+                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
+                    for (int currX = minX; currX <= maxX; ++currX) {
+                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
+                        if (chunk == null || !chunk.status.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
+                            continue;
+                        }
+
+                        if (chunk.getEntitiesWithoutDragonParts(except, box, into, predicate, maxCount)) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public void getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
+                            final int maxCount) {
+        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
+        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
+        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
+        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
+
+        final int minRegionX = minChunkX >> REGION_SHIFT;
+        final int minRegionZ = minChunkZ >> REGION_SHIFT;
+        final int maxRegionX = maxChunkX >> REGION_SHIFT;
+        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
+
+        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
+            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
+            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
+
+            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
+                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
+
+                if (region == null) {
+                    continue;
+                }
+
+                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
+                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
+
+                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
+                    for (int currX = minX; currX <= maxX; ++currX) {
+                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
+                        if (chunk == null || !chunk.status.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
+                            continue;
+                        }
+
+                        if (chunk.getEntities(except, box, into, predicate, maxCount)) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public <T extends Entity> void getEntities(final EntityType<?> type, final AABB box, final List<? super T> into,
+                                               final Predicate<? super T> predicate, final int maxCount) {
+        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
+        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
+        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
+        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
+
+        final int minRegionX = minChunkX >> REGION_SHIFT;
+        final int minRegionZ = minChunkZ >> REGION_SHIFT;
+        final int maxRegionX = maxChunkX >> REGION_SHIFT;
+        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
+
+        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
+            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
+            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
+
+            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
+                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
+
+                if (region == null) {
+                    continue;
+                }
+
+                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
+                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
+
+                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
+                    for (int currX = minX; currX <= maxX; ++currX) {
+                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
+                        if (chunk == null || !chunk.status.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
+                            continue;
+                        }
+
+                        if (chunk.getEntities(type, box, (List)into, (Predicate)predicate, maxCount)) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public <T extends Entity> void getEntities(final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
+                                               final Predicate<? super T> predicate, final int maxCount) {
+        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
+        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
+        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
+        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
+
+        final int minRegionX = minChunkX >> REGION_SHIFT;
+        final int minRegionZ = minChunkZ >> REGION_SHIFT;
+        final int maxRegionX = maxChunkX >> REGION_SHIFT;
+        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
+
+        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
+            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
+            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
+
+            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
+                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
+
+                if (region == null) {
+                    continue;
+                }
+
+                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
+                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
+
+                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
+                    for (int currX = minX; currX <= maxX; ++currX) {
+                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
+                        if (chunk == null || !chunk.status.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
+                            continue;
+                        }
+
+                        if (chunk.getEntities(clazz, except, box, into, predicate, maxCount)) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public void entitySectionLoad(final int chunkX, final int chunkZ, final ChunkEntitySlices slices) {
-        TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Cannot load in entity section off-main");
+        this.checkThread(chunkX, chunkZ, "Cannot load in entity section off-main");
         synchronized (this) {
             final ChunkEntitySlices curr = this.getChunk(chunkX, chunkZ);
             if (curr != null) {
@@ -730,7 +935,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
     }
 
     public void entitySectionUnload(final int chunkX, final int chunkZ) {
-        TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Cannot unload entity section off-main");
+        this.checkThread(chunkX, chunkZ, "Cannot unload entity section off-main");
         this.removeChunk(chunkX, chunkZ);
     }
 
@@ -747,8 +952,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         final ChunkSlicesRegion region = this.getRegion(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT);
         ChunkEntitySlices ret;
         if (region == null || (ret = region.get((chunkX & REGION_MASK) | ((chunkZ & REGION_MASK) << REGION_SHIFT))) == null) {
-            // loadInEntityChunk will call addChunk for us
-            return this.world.chunkTaskScheduler.chunkHolderManager.getOrCreateEntityChunk(chunkX, chunkZ, true);
+            return this.createEntityChunk(chunkX, chunkZ, true);
         }
 
         return ret;
@@ -756,30 +960,11 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
 
     public ChunkSlicesRegion getRegion(final int regionX, final int regionZ) {
         final long key = CoordinateUtils.getChunkKey(regionX, regionZ);
-        final long attempt = this.stateLock.tryOptimisticRead();
-        if (attempt != 0L) {
-            try {
-                final ChunkSlicesRegion ret = this.regions.get(key);
 
-                if (this.stateLock.validate(attempt)) {
-                    return ret;
-                }
-            } catch (final Error error) {
-                throw error;
-            } catch (final Throwable thr) {
-                // ignore
-            }
-        }
-
-        this.stateLock.readLock();
-        try {
-            return this.regions.get(key);
-        } finally {
-            this.stateLock.tryUnlockRead();
-        }
+        return this.regions.get(key);
     }
 
-    private synchronized void removeChunk(final int chunkX, final int chunkZ) {
+    protected synchronized void removeChunk(final int chunkX, final int chunkZ) {
         final long key = CoordinateUtils.getChunkKey(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT);
         final int relIndex = (chunkX & REGION_MASK) | ((chunkZ & REGION_MASK) << REGION_SHIFT);
 
@@ -787,12 +972,7 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         final int remaining = region.remove(relIndex);
 
         if (remaining == 0) {
-            this.stateLock.writeLock();
-            try {
-                this.regions.remove(key);
-            } finally {
-                this.stateLock.tryUnlockWrite();
-            }
+            this.regions.remove(key);
         }
     }
 
@@ -806,19 +986,14 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         } else {
             region = new ChunkSlicesRegion();
             region.add(relIndex, slices);
-            this.stateLock.writeLock();
-            try {
-                this.regions.put(key, region);
-            } finally {
-                this.stateLock.tryUnlockWrite();
-            }
+            this.regions.put(key, region);
         }
     }
 
     public static final class ChunkSlicesRegion {
 
-        protected final ChunkEntitySlices[] slices = new ChunkEntitySlices[REGION_SIZE * REGION_SIZE];
-        protected int sliceCount;
+        private final ChunkEntitySlices[] slices = new ChunkEntitySlices[REGION_SIZE * REGION_SIZE];
+        private int sliceCount;
 
         public ChunkEntitySlices get(final int index) {
             return this.slices[index];
@@ -847,10 +1022,9 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
         }
     }
 
-    private final class EntityCallback implements EntityInLevelCallback {
+    protected final class EntityCallback implements EntityInLevelCallback {
 
         public final Entity entity;
-        private long currentSectionKey;
 
         public EntityCallback(final Entity entity) {
             this.entity = entity;
@@ -865,34 +1039,29 @@ public final class EntityLookup implements LevelEntityGetter<Entity> {
                 // no new section, so didn't change sections
                 return;
             }
+
             final Visibility newVisibility = getEntityStatus(entity);
 
             EntityLookup.this.entityStatusChange(entity, newSlices, oldVisibility, newVisibility, true, false, false);
-
-
-            // Goldenforge: forge event
-            BlockPos blockpos = this.entity.blockPosition();
-            long i = SectionPos.asLong(blockpos);
-            long oldSectionKey = currentSectionKey;
-            this.currentSectionKey = i;
-            net.minecraftforge.common.ForgeHooks.onEntityEnterSection(entity, oldSectionKey ,i);
         }
 
         @Override
         public void onRemove(final Entity.RemovalReason reason) {
             final Entity entity = this.entity;
-            TickThread.ensureTickThread(entity, "Cannot remove entity off-main"); // Paper - rewrite chunk system
+            EntityLookup.this.checkThread(entity, "Cannot remove entity off-main"); // Paper - rewrite chunk system
             final Visibility tickingState = EntityLookup.getEntityStatus(entity);
 
             EntityLookup.this.removeEntity(entity);
 
             EntityLookup.this.entityStatusChange(entity, null, tickingState, Visibility.HIDDEN, false, false, reason.shouldDestroy());
 
+            EntityLookup.this.removeEntityCallback(entity);
+
             this.entity.setLevelCallback(NoOpCallback.INSTANCE);
         }
     }
 
-    private static final class NoOpCallback implements EntityInLevelCallback {
+    protected static final class NoOpCallback implements EntityInLevelCallback {
 
         public static final NoOpCallback INSTANCE = new NoOpCallback();
 

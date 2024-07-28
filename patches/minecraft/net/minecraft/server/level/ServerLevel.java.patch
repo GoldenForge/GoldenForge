@@ -1,6 +1,19 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -9,24 +_,13 @@
+@@ -1,32 +_,26 @@
+ package net.minecraft.server.level;
+ 
++import ca.spottedleaf.starlight.common.util.CoordinateUtils;
+ import com.google.common.annotations.VisibleForTesting;
+ import com.google.common.collect.Lists;
+ import com.mojang.datafixers.DataFixer;
+ import com.mojang.datafixers.util.Pair;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader;
++import io.papermc.paper.chunk.system.entity.server.ServerEntityLookup;
++import io.papermc.paper.chunk.system.scheduling.NewChunkHolder;
++import io.papermc.paper.util.player.NearbyPlayers;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
  import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
  import it.unimi.dsi.fastutil.longs.LongSet;
  import it.unimi.dsi.fastutil.longs.LongSets;
@@ -67,7 +80,7 @@
     public boolean f_8564_;
     private final SleepStatus f_143245_;
     private int f_8551_;
-@@ -184,10 +_,384 @@
+@@ -184,10 +_,374 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
     private final EndDragonFight f_8559_;
@@ -80,6 +93,27 @@
 +   private net.minecraftforge.common.util.LevelCapabilityData capabilityData;
 +
 +   // Paper start - rewrite chunk system
++   public final LevelChunk moonrise$getFullChunkIfLoaded(final int chunkX, final int chunkZ) {
++      final NewChunkHolder newChunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(CoordinateUtils.getChunkKey(chunkX, chunkZ));
++      if (newChunkHolder == null || !newChunkHolder.isFullChunkReady()) {
++         return null;
++      }
++
++      if (newChunkHolder.getCurrentChunk() instanceof LevelChunk levelChunk) {
++         return levelChunk;
++      }
++      // race condition: chunk unloaded, only happens off-main
++      return null;
++   }
++
++   public final ChunkAccess moonrise$getAnyChunkIfLoaded(final int chunkX, final int chunkZ) {
++      final NewChunkHolder newChunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(CoordinateUtils.getChunkKey(chunkX, chunkZ));
++      if (newChunkHolder == null) {
++         return null;
++      }
++      final NewChunkHolder.ChunkCompletion lastCompletion = newChunkHolder.getLastChunkCompletion();
++      return lastCompletion == null ? null : lastCompletion.chunk();
++   }
 +
 +   public final io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler chunkTaskScheduler;
 +   public final io.papermc.paper.chunk.system.io.RegionFileIOThread.ChunkDataController chunkDataControllerNew
@@ -176,10 +210,6 @@
 +      return this.entityStorage.m_63706_(new ChunkPos(chunkX, chunkZ));
 +   }
 +
-+   private final io.papermc.paper.chunk.system.entity.EntityLookup entityLookup;
-+   public final io.papermc.paper.chunk.system.entity.EntityLookup getEntityLookup() {
-+      return this.entityLookup;
-+   }
 +   // Paper end - rewrite chunk system
 +   private final java.util.concurrent.atomic.AtomicLong nonFullSyncLoadIdGenerator = new java.util.concurrent.atomic.AtomicLong();
 +
@@ -236,47 +266,20 @@
 +      return io.papermc.paper.threadedregions.TickRegions.getRegionChunkShift();
 +   }
 +   // Paper end - rewrite chunk system
++   private final RegionizedPlayerChunkLoader.ViewDistanceHolder viewDistanceHolder = new RegionizedPlayerChunkLoader.ViewDistanceHolder();
++   private final RegionizedPlayerChunkLoader chunkLoader = new RegionizedPlayerChunkLoader((ServerLevel)(Object)this);
++   private final NearbyPlayers nearbyPlayers = new NearbyPlayers((ServerLevel)(Object)this);
 +
-+   public final io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader playerChunkLoader = new io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader(this);
-+   private final java.util.concurrent.atomic.AtomicReference<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> viewDistances = new java.util.concurrent.atomic.AtomicReference<>(new io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances(-1, -1, -1));
-+
-+   public io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances getViewDistances() {
-+      return this.viewDistances.get();
++   public final RegionizedPlayerChunkLoader.ViewDistanceHolder moonrise$getViewDistanceHolder() {
++      return this.viewDistanceHolder;
 +   }
 +
-+   private void updateViewDistance(final java.util.function.Function<io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances, io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances> update) {
-+      for (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.ViewDistances curr = this.viewDistances.get();;) {
-+         if (this.viewDistances.compareAndSet(curr, update.apply(curr))) {
-+            return;
-+         }
-+      }
++   public final RegionizedPlayerChunkLoader moonrise$getPlayerChunkLoader() {
++      return this.chunkLoader;
 +   }
 +
-+   public void setTickViewDistance(final int distance) {
-+      if ((distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE)) {
-+         throw new IllegalArgumentException("Tick view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE) + ", got: " + distance);
-+      }
-+      this.updateViewDistance((input) -> {
-+         return input.setTickViewDistance(distance);
-+      });
-+   }
-+
-+   public void setLoadViewDistance(final int distance) {
-+      if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
-+         throw new IllegalArgumentException("Load view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
-+      }
-+      this.updateViewDistance((input) -> {
-+         return input.setLoadViewDistance(distance);
-+      });
-+   }
-+
-+   public void setSendViewDistance(final int distance) {
-+      if (distance != -1 && (distance < io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE || distance > io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1)) {
-+         throw new IllegalArgumentException("Send view distance must be a number between " + io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MIN_VIEW_DISTANCE + " and " + (io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader.MAX_VIEW_DISTANCE + 1) + " or -1, got: " + distance);
-+      }
-+      this.updateViewDistance((input) -> {
-+         return input.setSendViewDistance(distance);
-+      });
++   public final NearbyPlayers moonrise$getNearbyPlayers() {
++      return this.nearbyPlayers;
 +   }
 +
 +   // Paper start - lag compensation
@@ -305,7 +308,7 @@
 +   @Override
 +   public Player m_5788_(double x, double y, double z, double maxDistance, @Nullable Predicate<Entity> targetPredicate) {
 +      if (maxDistance > 0.0D) {
-+         io.papermc.paper.util.player.NearbyPlayers players = this.f_8547_.f_8325_.getNearbyPlayers();
++         io.papermc.paper.util.player.NearbyPlayers players = this.moonrise$getNearbyPlayers();
 +
 +         com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> nearby = players.getPlayersByBlock(
 +                 io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(x),
@@ -364,7 +367,7 @@
 +                                  double x, double y, double z) {
 +      double range = targetPredicate.f_26873_;
 +      if (range > 0.0D) {
-+         io.papermc.paper.util.player.NearbyPlayers players = this.f_8547_.f_8325_.getNearbyPlayers();
++         io.papermc.paper.util.player.NearbyPlayers players = this.moonrise$getNearbyPlayers();
 +
 +         com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> nearby = players.getPlayersByBlock(
 +                 io.papermc.paper.util.CoordinateUtils.getBlockCoordinate(x),
@@ -469,13 +472,14 @@
           return p_214999_.m_129783_().m_8895_();
        });
        chunkgenerator.m_223100_(this.f_8547_.m_214994_());
-@@ -227,6 +_,9 @@
+@@ -227,6 +_,10 @@
        }
  
        this.f_143245_ = new SleepStatus();
 +      this.initCapabilities();
 +      this.chunkTaskScheduler = new io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler(this, io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.workerThreads); // Paper - rewrite chunk system
-+      this.entityLookup = new io.papermc.paper.chunk.system.entity.EntityLookup(this, new EntityCallbacks()); // Paper - rewrite chunk system
++      this.moonrise$setEntityLookup(new ServerEntityLookup((ServerLevel)(Object)this, ((ServerLevel)(Object)this).new EntityCallbacks()));
++
     }
  
     public void m_8606_(int p_8607_, int p_8608_, boolean p_8609_, boolean p_8610_) {
@@ -794,7 +798,7 @@
        }
  
 -      this.f_143244_.m_157533_(p_8854_);
-+      this.entityLookup.addNewEntity(p_8854_); // Paper - rewite chunk system
++      this.moonrise$getEntityLookup().addNewEntity(p_8854_); // Paper - rewite chunk system
 +      p_8854_.onAddedToWorld();
     }
  
@@ -843,13 +847,13 @@
 +         } else {
 +            if (p_8873_ instanceof net.minecraft.world.entity.item.ItemEntity itemEntity && itemEntity.m_32055_().m_41619_()) return false; // Paper - Prevent empty items from being added
 +
-+            return this.entityLookup.addNewEntity(p_8873_); // Paper - rewrite chunk system
++            return this.moonrise$getEntityLookup().addNewEntity(p_8873_); // Paper - rewrite chunk system
 +         }
     }
  
     public boolean m_8860_(Entity p_8861_) {
 -      if (p_8861_.m_20199_().map(Entity::m_20148_).anyMatch(this.f_143244_::m_157550_)) {
-+      if (p_8861_.m_20199_().map(Entity::m_20148_).anyMatch(this.entityLookup::hasEntity)) { // Paper - rewrite chunk system
++      if (p_8861_.m_20199_().map(Entity::m_20148_).anyMatch(this.moonrise$getEntityLookup()::hasEntity)) { // Paper - rewrite chunk system
           return false;
        } else {
           this.m_47205_(p_8861_);
@@ -973,7 +977,7 @@
           }
  
 -         writer.write(String.format(Locale.ROOT, "entities: %s\n", this.f_143244_.m_157572_()));
-+         writer.write(String.format(Locale.ROOT, "entities: %s\n", this.entityLookup.getDebugInfo()));
++         writer.write(String.format(Locale.ROOT, "entities: %s\n", this.moonrise$getEntityLookup().getDebugInfo()));
           writer.write(String.format(Locale.ROOT, "block_entity_tickers: %d\n", this.f_151512_.size()));
           writer.write(String.format(Locale.ROOT, "block_ticks: %d\n", this.m_183326_().m_183574_()));
           writer.write(String.format(Locale.ROOT, "fluid_ticks: %d\n", this.m_183324_().m_183574_()));
@@ -991,7 +995,7 @@
     @VisibleForTesting
     public String m_8590_() {
 -      return String.format(Locale.ROOT, "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s", this.f_8546_.size(), this.f_143244_.m_157572_(), m_143301_(this.f_143244_.m_157567_().m_142273_(), (p_207585_) -> {
-+      return String.format(Locale.ROOT, "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s", this.f_8546_.size(), this.entityLookup.getDebugInfo(), m_143301_(this.entityLookup.m_142273_(), (p_207585_) -> {
++      return String.format(Locale.ROOT, "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s", this.f_8546_.size(), this.moonrise$getEntityLookup().getDebugInfo(), m_143301_(this.moonrise$getEntityLookup().m_142273_(), (p_207585_) -> {
           return Registry.f_122826_.m_7981_(p_207585_.m_6095_()).toString();
        }), this.f_151512_.size(), m_143301_(this.f_151512_, TickingBlockEntity::m_142280_), this.m_183326_().m_183574_(), this.m_183324_().m_183574_(), this.m_46464_());
     }
@@ -1015,15 +1019,15 @@
 -
 -   public void m_143327_(Stream<Entity> p_143328_) {
 -      this.f_143244_.m_157559_(p_143328_);
-+      return this.entityLookup; // Paper - rewrite chunk system
++      return this.moonrise$getEntityLookup(); // Paper - rewrite chunk system
 +   }
 +
 +   public void addLegacyChunkEntities(Stream<Entity> p_143312_, ChunkPos forChunk) { // Paper - rewrite chunk system
-+      this.entityLookup.addLegacyChunkEntities(p_143312_.toList(), forChunk); // Paper - rewrite chunk system
++      this.moonrise$getEntityLookup().addLegacyChunkEntities(p_143312_.toList(), forChunk); // Paper - rewrite chunk system
 +   }
 +
 +   public void addWorldGenChunkEntities(Stream<Entity> p_143328_, ChunkPos forChunk) { // Paper - rewrite chunk system) {
-+      this.entityLookup.addWorldGenChunkEntities(p_143328_.toList(), forChunk); // Paper - rewrite chunk system
++      this.moonrise$getEntityLookup().addWorldGenChunkEntities(p_143328_.toList(), forChunk); // Paper - rewrite chunk system
     }
  
     public void m_184102_(LevelChunk p_184103_) {
@@ -1037,7 +1041,7 @@
  
     public String m_46464_() {
 -      return "Chunks[S] W: " + this.f_8547_.m_6754_() + " E: " + this.f_143244_.m_157572_();
-+      return "Chunks[S] W: " + this.f_8547_.m_6754_() + " E: " + this.entityLookup.getDebugInfo();
++      return "Chunks[S] W: " + this.f_8547_.m_6754_() + " E: " + this.moonrise$getEntityLookup().getDebugInfo();
     }
  
     public boolean m_143319_(long p_143320_) {

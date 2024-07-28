@@ -8,7 +8,7 @@
 -         return p_26741_.m_19950_(p_26744_, 16.0D);
 -      }).sorted(Comparator.comparingDouble(p_26741_::m_20280_)).collect(Collectors.toList());
 +      // Paper start - remove streams
-+      io.papermc.paper.util.player.NearbyPlayers nearbyPlayers = p_26740_.f_8547_.f_8325_.getNearbyPlayers();
++      io.papermc.paper.util.player.NearbyPlayers nearbyPlayers = p_26740_.moonrise$getNearbyPlayers();
 +      net.minecraft.world.phys.Vec3 entityPos = p_26741_.m_20182_();
 +      com.destroystokyo.paper.util.maplist.ReferenceList<net.minecraft.server.level.ServerPlayer> nearby = nearbyPlayers.getPlayersByChunk(
 +              p_26741_.m_146902_().f_45578_,

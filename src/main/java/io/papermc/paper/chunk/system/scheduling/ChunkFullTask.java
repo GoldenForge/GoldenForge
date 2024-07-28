@@ -84,9 +84,10 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
                 chunk = new LevelChunk(this.world, protoChunk, (final LevelChunk unused) -> {
                     ChunkMap.postLoadProtoChunk(world, protoChunk.getEntities(), protoChunk.getPos()); // Paper - rewrite chunk system
                 });
+                this.chunkHolder.replaceProtoChunk(new ImposterProtoChunk(chunk, false));
             }
 
-            chunk.setChunkHolder(this.scheduler.chunkHolderManager.getChunkHolder(this.chunkX, this.chunkZ)); // replaces setFullStatus
+            chunk.setFullStatus(chunkHolder::getChunkStatus);
             chunk.runPostLoad();
             // Unlike Vanilla, we load the entity chunk here, as we load the NBT in empty status (unlike Vanilla)
             // This brings entity addition back in line with older versions of the game
@@ -106,10 +107,6 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
             }
         } catch (final Throwable throwable) {
             this.complete(null, throwable);
-
-            if (throwable instanceof ThreadDeath) {
-                throw (ThreadDeath)throwable;
-            }
             return;
         }
         this.complete(chunk, null);

@@ -46,6 +46,10 @@ public final class ChunkTaskScheduler {
 
     private static boolean initialised = false;
 
+    public static int getTicketLevel(final ChunkStatus status) {
+        return 33 + ChunkStatus.getDistance(status);
+    }
+
     public static void init() {
         if (initialised) {
             return;
@@ -601,7 +605,7 @@ public final class ChunkTaskScheduler {
 
     ChunkProgressionTask schedule(final int chunkX, final int chunkZ, final ChunkStatus targetStatus, final NewChunkHolder chunkHolder,
                                   final List<ChunkProgressionTask> allTasks) {
-        return this.schedule(chunkX, chunkZ, targetStatus, chunkHolder, allTasks, chunkHolder.getEffectivePriority());
+        return this.schedule(chunkX, chunkZ, targetStatus, chunkHolder, allTasks, chunkHolder.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL));
     }
 
     // rets new task scheduled for the _specified_ chunk
@@ -620,7 +624,7 @@ public final class ChunkTaskScheduler {
             return null;
         }
 
-        final PrioritisedExecutor.Priority requestedPriority = PrioritisedExecutor.Priority.max(minPriority, chunkHolder.getEffectivePriority());
+        final PrioritisedExecutor.Priority requestedPriority = PrioritisedExecutor.Priority.max(minPriority, chunkHolder.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL));
         final ChunkStatus currentGenStatus = chunkHolder.getCurrentGenStatus();
         final ChunkAccess chunk = chunkHolder.getCurrentChunk();
 
@@ -714,7 +718,7 @@ public final class ChunkTaskScheduler {
             }
         }
 
-        final ChunkProgressionTask task = this.createTask(chunkX, chunkZ, chunk, chunkHolder, neighbours, toStatus, chunkHolder.getEffectivePriority());
+        final ChunkProgressionTask task = this.createTask(chunkX, chunkZ, chunk, chunkHolder, neighbours, toStatus, chunkHolder.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL));
         allTasks.add(task);
 
         chunkHolder.setGenerationTask(task, toStatus, chunkHolderNeighbours);

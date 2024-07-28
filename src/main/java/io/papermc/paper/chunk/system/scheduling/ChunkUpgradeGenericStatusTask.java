@@ -3,7 +3,7 @@ package io.papermc.paper.chunk.system.scheduling;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import com.mojang.datafixers.util.Either;
-import com.mojang.logging.LogUtils;
+import io.papermc.paper.util.WorldUtil;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerChunkCache;
@@ -12,7 +12,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import org.slf4j.Logger;
-
+import org.slf4j.LoggerFactory;
 import java.lang.invoke.VarHandle;
 import java.util.List;
 import java.util.Map;
@@ -20,14 +20,14 @@ import java.util.concurrent.CompletableFuture;
 
 public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask implements Runnable {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LoggerFactory.getLogger(ChunkUpgradeGenericStatusTask.class);
 
-    protected final ChunkAccess fromChunk;
-    protected final ChunkStatus fromStatus;
-    protected final ChunkStatus toStatus;
+    private final ChunkAccess fromChunk;
+    private final ChunkStatus fromStatus;
+    private final ChunkStatus toStatus;
     protected final List<ChunkAccess> neighbours;
 
-    protected final PrioritisedExecutor.PrioritisedTask generateTask;
+    private final PrioritisedExecutor.PrioritisedTask generateTask;
 
     public ChunkUpgradeGenericStatusTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
                                          final int chunkZ, final ChunkAccess chunk, final List<ChunkAccess> neighbours,
@@ -43,7 +43,12 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
         if (this.toStatus.isParallelCapable) {
             this.generateTask = this.scheduler.parallelGenExecutor.createTask(this, priority);
         } else {
-            this.generateTask = this.scheduler.radiusAwareScheduler.createTask(chunkX, chunkZ, this.toStatus.writeRadius, this, priority);
+            final int writeRadius = this.toStatus.writeRadius;
+            if (writeRadius < 0) {
+                this.generateTask = this.scheduler.radiusAwareScheduler.createInfiniteRadiusTask(this, priority);
+            } else {
+                this.generateTask = this.scheduler.radiusAwareScheduler.createTask(chunkX, chunkZ, writeRadius, this, priority);
+            }
         }
     }
 
@@ -62,7 +67,7 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
     public void run() {
         final ChunkAccess chunk = this.fromChunk;
 
-        final ServerChunkCache serverChunkCache = this.world.chunkSource;
+        final ServerChunkCache serverChunkCache = this.world.getChunkSource();
         final ChunkMap chunkMap = serverChunkCache.chunkMap;
 
         final CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> completeFuture;
@@ -104,25 +109,21 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
         } catch (final Throwable throwable) {
             if (!completing) {
                 this.complete(null, throwable);
-
-                if (throwable instanceof ThreadDeath) {
-                    throw (ThreadDeath)throwable;
-                }
                 return;
             }
 
             this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                "Target status", ChunkTaskScheduler.stringIfNull(this.toStatus),
-                "From status", ChunkTaskScheduler.stringIfNull(this.fromStatus),
-                "Generation task", this
+                    "Target status", ChunkTaskScheduler.stringIfNull(this.toStatus),
+                    "From status", ChunkTaskScheduler.stringIfNull(this.fromStatus),
+                    "Generation task", this
             ), throwable);
 
-            if (!(throwable instanceof ThreadDeath)) {
-                LOGGER.error("Failed to complete status for chunk: status:" + this.toStatus + ", chunk: (" + this.chunkX + "," + this.chunkZ + "), world: " + this.world.getWorld().getName(), throwable);
-            } else {
-                // ensure the chunk system can respond, then die
-                throw (ThreadDeath)throwable;
-            }
+            LOGGER.error(
+                    "Failed to complete status for chunk: status:" + this.toStatus + ", chunk: (" + this.chunkX +
+                            "," + this.chunkZ + "), world: " + WorldUtil.getWorldName(this.world),
+                    throwable
+            );
+
             return;
         }
 
@@ -138,23 +139,24 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
             newChunk = (either == null) ? null : either.left().orElse(null);
         } catch (final Throwable throwable) {
             this.complete(null, throwable);
-            // ensure the chunk system can respond, then die
-            if (throwable instanceof ThreadDeath) {
-                throw (ThreadDeath)throwable;
-            }
             return;
         }
 
         if (newChunk == null) {
-            this.complete(null, new IllegalStateException("Chunk for status: " + ChunkUpgradeGenericStatusTask.this.toStatus.toString() + ", generation: " + generation + " should not be null! Either: " + either).fillInStackTrace());
+            this.complete(null,
+                    new IllegalStateException(
+                            "Chunk for status: " + ChunkUpgradeGenericStatusTask.this.toStatus.toString()
+                                    + ", generation: " + generation + " should not be null! Future: " + completeFuture
+                    ).fillInStackTrace()
+            );
             return;
         }
 
         this.complete(newChunk, null);
     }
 
-    protected volatile boolean scheduled;
-    protected static final VarHandle SCHEDULED_HANDLE = ConcurrentUtil.getVarHandle(ChunkUpgradeGenericStatusTask.class, "scheduled", boolean.class);
+    private volatile boolean scheduled;
+    private static final VarHandle SCHEDULED_HANDLE = ConcurrentUtil.getVarHandle(ChunkUpgradeGenericStatusTask.class, "scheduled", boolean.class);
 
     @Override
     public boolean isScheduled() {

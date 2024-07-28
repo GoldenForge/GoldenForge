@@ -1,8 +1,8 @@
 package io.papermc.paper.util.player;
 
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
 import com.destroystokyo.paper.util.maplist.ReferenceList;
 import io.papermc.paper.chunk.system.ChunkSystem;
-import io.papermc.paper.util.CoordinateUtils;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -17,22 +17,20 @@ public final class NearbyPlayers {
         GENERAL_SMALL,
         GENERAL_REALLY_SMALL,
         TICK_VIEW_DISTANCE,
-        VIEW_DISTANCE, // Paper - optimise chunk iteration
-        SPAWN_RANGE, // Paper - optimise chunk iteration
+        VIEW_DISTANCE,
+        SPAWN_RANGE,
     }
 
-    private static final NearbyMapType[] MOB_TYPES = NearbyMapType.values();
-    public static final int TOTAL_MAP_TYPES = MOB_TYPES.length;
+    private static final NearbyMapType[] MAP_TYPES = NearbyMapType.values();
+    public static final int TOTAL_MAP_TYPES = MAP_TYPES.length;
 
     private static final int GENERAL_AREA_VIEW_DISTANCE = 33;
     private static final int GENERAL_SMALL_VIEW_DISTANCE = 10;
     private static final int GENERAL_REALLY_SMALL_VIEW_DISTANCE = 3;
-    private static final int SPAWN_RANGE_VIEW_DISTANCE = net.minecraft.server.level.DistanceManager.MOB_SPAWN_RANGE; // Paper - optimise chunk iteration
 
     public static final int GENERAL_AREA_VIEW_DISTANCE_BLOCKS = (GENERAL_AREA_VIEW_DISTANCE << 4);
     public static final int GENERAL_SMALL_AREA_VIEW_DISTANCE_BLOCKS = (GENERAL_SMALL_VIEW_DISTANCE << 4);
     public static final int GENERAL_REALLY_SMALL_AREA_VIEW_DISTANCE_BLOCKS = (GENERAL_REALLY_SMALL_VIEW_DISTANCE << 4);
-    public static final int SPAWN_RANGE_VIEW_DISTANCE_BLOCKS = (SPAWN_RANGE_VIEW_DISTANCE << 4); // Paper - optimise chunk iteration
 
     private final ServerLevel world;
     private final Reference2ReferenceOpenHashMap<ServerPlayer, TrackedPlayer[]> players = new Reference2ReferenceOpenHashMap<>();
@@ -52,7 +50,7 @@ public final class NearbyPlayers {
 
         for (int i = 0; i < TOTAL_MAP_TYPES; ++i) {
             // use 0 for default, will be updated by tickPlayer
-            (newTrackers[i] = new TrackedPlayer(player, MOB_TYPES[i])).add(chunk.x, chunk.z, 0);
+            (newTrackers[i] = new TrackedPlayer(player, MAP_TYPES[i])).add(chunk.x, chunk.z, 0);
         }
 
         // update view distances
@@ -83,7 +81,6 @@ public final class NearbyPlayers {
         players[NearbyMapType.GENERAL_REALLY_SMALL.ordinal()].update(chunk.x, chunk.z, GENERAL_REALLY_SMALL_VIEW_DISTANCE);
         players[NearbyMapType.TICK_VIEW_DISTANCE.ordinal()].update(chunk.x, chunk.z, ChunkSystem.getTickViewDistance(player));
         players[NearbyMapType.VIEW_DISTANCE.ordinal()].update(chunk.x, chunk.z, ChunkSystem.getLoadViewDistance(player));
-        players[NearbyMapType.SPAWN_RANGE.ordinal()].update(chunk.x, chunk.z, SPAWN_RANGE_VIEW_DISTANCE);
     }
 
     public TrackedChunk getChunk(final ChunkPos pos) {
@@ -120,15 +117,17 @@ public final class NearbyPlayers {
 
     public static final class TrackedChunk {
 
-        public final ReferenceList<ServerPlayer>[] players = new ReferenceList[TOTAL_MAP_TYPES];
+        private static final ServerPlayer[] EMPTY_PLAYERS_ARRAY = new ServerPlayer[0];
+
+        private final ReferenceList<ServerPlayer>[] players = new ReferenceList[TOTAL_MAP_TYPES];
         private int nonEmptyLists;
-        private int updateCount;
+        private long updateCount;
 
         public boolean isEmpty() {
             return this.nonEmptyLists == 0;
         }
 
-        public int getUpdateCount() {
+        public long getUpdateCount() {
             return this.updateCount;
         }
 
@@ -138,11 +137,12 @@ public final class NearbyPlayers {
 
         public void addPlayer(final ServerPlayer player, final NearbyMapType type) {
             ++this.updateCount;
+
             final int idx = type.ordinal();
             final ReferenceList<ServerPlayer> list = this.players[idx];
             if (list == null) {
                 ++this.nonEmptyLists;
-                (this.players[idx] = new ReferenceList<>()).add(player);
+                (this.players[idx] = new ReferenceList<>(EMPTY_PLAYERS_ARRAY, 0)).add(player);
                 return;
             }
 
@@ -153,6 +153,7 @@ public final class NearbyPlayers {
 
         public void removePlayer(final ServerPlayer player, final NearbyMapType type) {
             ++this.updateCount;
+
             final int idx = type.ordinal();
             final ReferenceList<ServerPlayer> list = this.players[idx];
             if (list == null) {
@@ -172,7 +173,7 @@ public final class NearbyPlayers {
 
     private final class TrackedPlayer extends SingleUserAreaMap<ServerPlayer> {
 
-        final NearbyMapType type;
+        private final NearbyMapType type;
 
         public TrackedPlayer(final ServerPlayer player, final NearbyMapType type) {
             super(player);

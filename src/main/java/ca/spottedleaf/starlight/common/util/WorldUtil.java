@@ -1,5 +1,6 @@
 package ca.spottedleaf.starlight.common.util;
 
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelHeightAccessor;
 
 public final class WorldUtil {
@@ -40,8 +41,14 @@ public final class WorldUtil {
         return (getMaxSection(world) << 4) | 15;
     }
 
+    public static String getWorldName(final Level world) {
+        if (world == null) {
+            return "null world";
+        }
+        return world.getWorld().getName();
+    }
+
     private WorldUtil() {
         throw new RuntimeException();
     }
-
 }

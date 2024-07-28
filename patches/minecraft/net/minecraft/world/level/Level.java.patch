@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
-@@ -3,12 +_,14 @@
+@@ -3,12 +_,16 @@
  import com.google.common.collect.Lists;
  import com.mojang.serialization.Codec;
  import java.io.IOException;
@@ -13,6 +13,8 @@
  import java.util.function.Supplier;
  import javax.annotation.Nullable;
 +
++import io.papermc.paper.chunk.system.entity.DefaultEntityLookup;
++import io.papermc.paper.chunk.system.entity.EntityLookup;
  import net.minecraft.CrashReport;
  import net.minecraft.CrashReportCategory;
  import net.minecraft.ReportedException;
@@ -62,7 +64,7 @@
     private final boolean f_46424_;
     private int f_46425_;
     protected int f_46435_ = RandomSource.m_216327_().m_188502_();
-@@ -97,15 +_,97 @@
+@@ -97,15 +_,117 @@
     private final RandomSource f_220348_ = RandomSource.m_216337_();
     private final ResourceKey<DimensionType> f_220349_;
     private final Holder<DimensionType> f_204147_;
@@ -94,6 +96,19 @@
 +      }
 +   }
 +
++   private EntityLookup entityLookup;
++
++   public final EntityLookup moonrise$getEntityLookup() {
++      return this.entityLookup;
++   }
++
++   public void moonrise$setEntityLookup(final EntityLookup entityLookup) {
++      if (this.entityLookup != null && !(this.entityLookup instanceof DefaultEntityLookup)) {
++         throw new IllegalStateException("Entity lookup already initialised");
++      }
++      this.entityLookup = entityLookup;
++   }
++
 +   protected final io.papermc.paper.util.math.ThreadUnsafeRandom randomTickRandom = new io.papermc.paper.util.math.ThreadUnsafeRandom(java.util.concurrent.ThreadLocalRandom.current().nextLong()); public net.minecraft.util.RandomSource getThreadUnsafeRandom() { return this.randomTickRandom; } // Pufferfish - move thread unsafe random initialization // Pufferfish - getter
 +
 +   public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
@@ -113,6 +128,13 @@
 +
 +   public final @Nullable LevelChunk getChunkIfLoaded(BlockPos blockposition) {
 +      return ((ServerLevel) this).m_7726_().getChunkAtIfLoadedImmediately(blockposition.m_123341_() >> 4, blockposition.m_123343_() >> 4);
++   }
++
++   public LevelChunk moonrise$getFullChunkIfLoaded(final int chunkX, final int chunkZ) {
++      return this.m_7726_().m_62227_(chunkX, chunkZ, false);
++   }
++   public ChunkAccess moonrise$getAnyChunkIfLoaded(final int chunkX, final int chunkZ) {
++      return this.m_7726_().m_7587_(chunkX, chunkZ, ChunkStatus.f_62314_, false);
 +   }
 +
 +   // Paper start
@@ -161,6 +183,15 @@
        this.f_46446_ = p_220355_;
        this.f_46442_ = p_220352_;
        this.f_204147_ = p_220354_;
+@@ -133,6 +_,8 @@
+       this.f_46420_ = new BiomeManager(this, p_220358_);
+       this.f_46424_ = p_220357_;
+       this.f_220350_ = new CollectingNeighborUpdater(this, p_220359_);
++
++      this.entityLookup = new DefaultEntityLookup(this); // Paper - rewrite chunk system
+    }
+ 
+    public boolean m_5776_() {
 @@ -145,7 +_,7 @@
     }
  
@@ -184,7 +215,7 @@
 +         // Paper start - make sure loaded chunks get the inlined variant of this function
 +         net.minecraft.server.level.ServerChunkCache cps = serverLevel.m_7726_();
 +         if (cps.f_8330_ == Thread.currentThread()) {
-+            LevelChunk ifLoaded = cps.getChunkAtIfLoadedMainThread(p_46727_, p_46728_);
++            LevelChunk ifLoaded = cps.getChunkAtIfLoadedImmediately(p_46727_, p_46728_);
 +            if (ifLoaded != null) {
 +               return ifLoaded;
 +            }
@@ -284,12 +315,12 @@
  
 +   @Override
 +   public void getEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {
-+      ((ServerLevel)this).getEntityLookup().getEntities(except, box, into, predicate);
++      this.moonrise$getEntityLookup().getEntities(except, box, into, predicate);
 +   }
 +
 +   @Override
 +   public void getHardCollidingEntities(Entity except, AABB box, Predicate<? super Entity> predicate, List<Entity> into) {
-+      ((ServerLevel)this).getEntityLookup().getHardCollidingEntities(except, box, into, predicate);
++      this.moonrise$getEntityLookup().getHardCollidingEntities(except, box, into, predicate);
 +   }
 +
 +   @Override
@@ -440,7 +471,7 @@
 -         }
 -
 -      });
-+      ((ServerLevel)this).getEntityLookup().getEntities(p_46536_, p_46537_, list, p_46538_); // Paper - optimise this call
++      this.moonrise$getEntityLookup().getEntities(p_46536_, p_46537_, list, p_46538_); // Paper - optimise this call
        return list;
     }
  
@@ -476,7 +507,7 @@
 +      // Paper start - optimise this call
 +      //TODO use limit
 +      if (filter instanceof net.minecraft.world.entity.EntityType entityTypeTest) {
-+         ((ServerLevel) this).getEntityLookup().getEntities(entityTypeTest, box, result, predicate);
++         this.moonrise$getEntityLookup().getEntities(entityTypeTest, box, result, predicate);
 +      } else {
 +         Predicate<? super T> test = (obj) -> {
 +            return filter.m_141992_(obj) != null;
@@ -484,9 +515,9 @@
 +         predicate = predicate == null ? test : test.and((Predicate) predicate);
 +         Class base;
 +         if (filter == null || (base = filter.m_142225_()) == null || base == Entity.class) {
-+            ((ServerLevel) this).getEntityLookup().getEntities((Entity) null, box, (List) result, (Predicate)predicate);
++            this.moonrise$getEntityLookup().getEntities((Entity) null, box, (List) result, (Predicate)predicate);
 +         } else {
-+            ((ServerLevel) this).getEntityLookup().getEntities(base, null, box, (List) result, (Predicate)predicate); // Paper - optimise this call
++            this.moonrise$getEntityLookup().getEntities(base, null, box, (List) result, (Predicate)predicate); // Paper - optimise this call
 +         }
 +      }
 +      // Paper end - optimise this call

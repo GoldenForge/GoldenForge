@@ -1,0 +1,17 @@
+--- a/net/minecraft/nbt/NbtUtils.java
++++ b/net/minecraft/nbt/NbtUtils.java
+@@ -638,4 +_,14 @@
+       compoundtag.m_128359_("Name", s);
+       return compoundtag;
+    }
++
++   public static CompoundTag addCurrentDataVersion(CompoundTag nbt) {
++      int i = SharedConstants.m_183709_().m_183476_().m_193006_();
++      return addDataVersion(nbt, i);
++   }
++
++   public static CompoundTag addDataVersion(CompoundTag nbt, int dataVersion) {
++      nbt.m_128405_("DataVersion", dataVersion);
++      return nbt;
++   }
+ }

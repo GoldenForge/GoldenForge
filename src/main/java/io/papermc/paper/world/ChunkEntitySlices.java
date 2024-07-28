@@ -1,11 +1,14 @@
 package io.papermc.paper.world;
 
 import com.destroystokyo.paper.util.maplist.EntityList;
+import com.google.common.collect.ImmutableList;
 import io.papermc.paper.chunk.system.entity.EntityLookup;
-import io.papermc.paper.util.TickThread;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
@@ -14,6 +17,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.boss.EnderDragonPart;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.storage.EntityStorage;
 import net.minecraft.world.level.entity.Visibility;
 import net.minecraft.world.phys.AABB;
@@ -25,20 +29,21 @@ import java.util.function.Predicate;
 
 public final class ChunkEntitySlices {
 
-    protected final int minSection;
-    protected final int maxSection;
+    public final int minSection;
+    public final int maxSection;
     public final int chunkX;
     public final int chunkZ;
-    protected final ServerLevel world;
+    public final Level world;
 
-    protected final EntityCollectionBySection allEntities;
-    protected final EntityCollectionBySection hardCollidingEntities;
-    protected final Reference2ObjectOpenHashMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
-    protected final EntityList entities = new EntityList();
+    private final EntityCollectionBySection allEntities;
+    private final EntityCollectionBySection hardCollidingEntities;
+    private final Reference2ObjectOpenHashMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
+    private final Reference2ObjectOpenHashMap<EntityType<?>, EntityCollectionBySection> entitiesByType;
+    private final EntityList entities = new EntityList();
 
     public ChunkHolder.FullChunkStatus status;
 
-    protected boolean isTransient;
+    private boolean isTransient;
 
     public boolean isTransient() {
         return this.isTransient;
@@ -48,9 +53,7 @@ public final class ChunkEntitySlices {
         this.isTransient = value;
     }
 
-    // TODO implement container search optimisations
-
-    public ChunkEntitySlices(final ServerLevel world, final int chunkX, final int chunkZ, final ChunkHolder.FullChunkStatus status,
+    public ChunkEntitySlices(final Level world, final int chunkX, final int chunkZ, final ChunkHolder.FullChunkStatus status,
                              final int minSection, final int maxSection) { // inclusive, inclusive
         this.minSection = minSection;
         this.maxSection = maxSection;
@@ -61,8 +64,63 @@ public final class ChunkEntitySlices {
         this.allEntities = new EntityCollectionBySection(this);
         this.hardCollidingEntities = new EntityCollectionBySection(this);
         this.entitiesByClass = new Reference2ObjectOpenHashMap<>();
+        this.entitiesByType = new Reference2ObjectOpenHashMap<>();
 
         this.status = status;
+    }
+
+    public static List<Entity> readEntities(final ServerLevel world, final CompoundTag compoundTag) {
+        // TODO check this and below on update for format changes
+        return EntityType.loadEntitiesRecursive(compoundTag.getList("Entities", 10), world).collect(ImmutableList.toImmutableList());
+    }
+
+    // Paper start - rewrite chunk system
+    public static void copyEntities(final CompoundTag from, final CompoundTag into) {
+        if (from == null) {
+            return;
+        }
+        final ListTag entitiesFrom = from.getList("Entities", Tag.TAG_COMPOUND);
+        if (entitiesFrom == null || entitiesFrom.isEmpty()) {
+            return;
+        }
+
+        final ListTag entitiesInto = into.getList("Entities", Tag.TAG_COMPOUND);
+        into.put("Entities", entitiesInto); // this is in case into doesn't have any entities
+        entitiesInto.addAll(0, entitiesFrom);
+    }
+
+    public static CompoundTag saveEntityChunk(final List<Entity> entities, final ChunkPos chunkPos, final ServerLevel world) {
+        return saveEntityChunk0(entities, chunkPos, world, false);
+    }
+
+    public static CompoundTag saveEntityChunk0(final List<Entity> entities, final ChunkPos chunkPos, final ServerLevel world, final boolean force) {
+        if (!force && entities.isEmpty()) {
+            return null;
+        }
+
+        final ListTag entitiesTag = new ListTag();
+        //final java.util.Map<net.minecraft.world.entity.EntityType<?>, Integer> savedEntityCounts = new java.util.HashMap<>(); // Paper - Entity load/save limit per chunk
+        for (final Entity entity : entities) {
+//            // Paper start - Entity load/save limit per chunk
+//            final EntityType<?> entityType = entity.getType();
+//            final int saveLimit = world.paperConfig().chunks.entityPerChunkSaveLimit.getOrDefault(entityType, -1);
+//            if (saveLimit > -1) {
+//                if (savedEntityCounts.getOrDefault(entityType, 0) >= saveLimit) {
+//                    break;
+//                }
+//                savedEntityCounts.merge(entityType, 1, Integer::sum);
+//            }
+//            // Paper end - Entity load/save limit per chunk
+            CompoundTag compoundTag = new CompoundTag();
+            if (entity.save(compoundTag)) {
+                entitiesTag.add(compoundTag);
+            }
+        }
+        final CompoundTag ret = NbtUtils.addCurrentDataVersion(new CompoundTag());
+        ret.put("Entities", entitiesTag);
+        EntityStorage.writeChunkPos(ret, chunkPos);
+
+        return !force && entitiesTag.isEmpty() ? null : ret;
     }
 
     public CompoundTag save() {
@@ -84,7 +142,7 @@ public final class ChunkEntitySlices {
             return null;
         }
 
-        return EntityStorage.saveEntityChunk(collectedEntities, new ChunkPos(this.chunkX, this.chunkZ), this.world);
+        return saveEntityChunk(collectedEntities, new ChunkPos(this.chunkX, this.chunkZ), (ServerLevel)this.world);
     }
 
     // returns true if this chunk has transient entities remaining
@@ -193,6 +251,14 @@ public final class ChunkEntitySlices {
             }
         }
 
+        EntityCollectionBySection byType = this.entitiesByType.get(entity.getType());
+        if (byType != null) {
+            byType.addEntity(entity, sectionIndex);
+        } else {
+            this.entitiesByType.put(entity.getType(), byType = new EntityCollectionBySection(this));
+            byType.addEntity(entity, sectionIndex);
+        }
+
         return true;
     }
 
@@ -218,6 +284,9 @@ public final class ChunkEntitySlices {
             }
         }
 
+        final EntityCollectionBySection byType = this.entitiesByType.get(entity.getType());
+        byType.removeEntity(entity, sectionIndex);
+
         return true;
     }
 
@@ -233,9 +302,35 @@ public final class ChunkEntitySlices {
         this.allEntities.getEntities(except, box, into, predicate);
     }
 
+
+    public boolean getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
+                               final int maxCount) {
+        return this.allEntities.getEntitiesWithEnderDragonPartsLimited(except, box, into, predicate, maxCount);
+    }
+
+    public boolean getEntitiesWithoutDragonParts(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
+                                                 final int maxCount) {
+        return this.allEntities.getEntitiesLimited(except, box, into, predicate, maxCount);
+    }
+
     public <T extends Entity> void getEntities(final EntityType<?> type, final AABB box, final List<? super T> into,
                                                final Predicate<? super T> predicate) {
-        this.allEntities.getEntities(type, box, (List)into, (Predicate)predicate);
+        final EntityCollectionBySection byType = this.entitiesByType.get(type);
+
+        if (byType != null) {
+            byType.getEntities((Entity)null, box, (List)into, (Predicate) predicate);
+        }
+    }
+
+    public <T extends Entity> boolean getEntities(final EntityType<?> type, final AABB box, final List<? super T> into,
+                                                  final Predicate<? super T> predicate, final int maxCount) {
+        final EntityCollectionBySection byType = this.entitiesByType.get(type);
+
+        if (byType != null) {
+            return byType.getEntitiesLimited((Entity)null, box, (List)into, (Predicate)predicate, maxCount);
+        }
+
+        return false;
     }
 
     protected EntityCollectionBySection initClass(final Class<? extends Entity> clazz) {
@@ -267,18 +362,29 @@ public final class ChunkEntitySlices {
         if (collection != null) {
             collection.getEntitiesWithEnderDragonParts(except, clazz, box, (List)into, (Predicate)predicate);
         } else {
-            this.entitiesByClass.putIfAbsent(clazz, collection = this.initClass(clazz));
+            this.entitiesByClass.put(clazz, collection = this.initClass(clazz));
             collection.getEntitiesWithEnderDragonParts(except, clazz, box, (List)into, (Predicate)predicate);
         }
     }
 
-    protected static final class BasicEntityList<E extends Entity> {
+    public <T extends Entity> boolean getEntities(final Class<? extends T> clazz, final Entity except, final AABB box, final List<? super T> into,
+                                                  final Predicate<? super T> predicate, final int maxCount) {
+        EntityCollectionBySection collection = this.entitiesByClass.get(clazz);
+        if (collection != null) {
+            return collection.getEntitiesWithEnderDragonPartsLimited(except, clazz, box, (List)into, (Predicate)predicate, maxCount);
+        } else {
+            this.entitiesByClass.put(clazz, collection = this.initClass(clazz));
+            return collection.getEntitiesWithEnderDragonPartsLimited(except, clazz, box, (List)into, (Predicate)predicate, maxCount);
+        }
+    }
 
-        protected static final Entity[] EMPTY = new Entity[0];
-        protected static final int DEFAULT_CAPACITY = 4;
+    private static final class BasicEntityList<E extends Entity> {
 
-        protected E[] storage;
-        protected int size;
+        private static final Entity[] EMPTY = new Entity[0];
+        private static final int DEFAULT_CAPACITY = 4;
+
+        private E[] storage;
+        private int size;
 
         public BasicEntityList() {
             this(0);
@@ -348,19 +454,17 @@ public final class ChunkEntitySlices {
         }
     }
 
-    protected static final class EntityCollectionBySection {
+    private static final class EntityCollectionBySection {
 
-        protected final ChunkEntitySlices manager;
-        protected final long[] nonEmptyBitset;
-        protected final BasicEntityList<Entity>[] entitiesBySection;
-        protected int count;
+        private final ChunkEntitySlices slices;
+        private final BasicEntityList<Entity>[] entitiesBySection;
+        private int count;
 
-        public EntityCollectionBySection(final ChunkEntitySlices manager) {
-            this.manager = manager;
+        public EntityCollectionBySection(final ChunkEntitySlices slices) {
+            this.slices = slices;
 
-            final int sectionCount = manager.maxSection - manager.minSection + 1;
+            final int sectionCount = slices.maxSection - slices.minSection + 1;
 
-            this.nonEmptyBitset = new long[(sectionCount + (Long.SIZE - 1)) >>> 6]; // (sectionCount + (Long.SIZE - 1)) / Long.SIZE
             this.entitiesBySection = new BasicEntityList[sectionCount];
         }
 
@@ -373,7 +477,6 @@ public final class ChunkEntitySlices {
 
             if (list == null) {
                 this.entitiesBySection[sectionIndex] = list = new BasicEntityList<>();
-                this.nonEmptyBitset[sectionIndex >>> 6] |= (1L << (sectionIndex & (Long.SIZE - 1)));
             }
 
             list.add(entity);
@@ -391,7 +494,6 @@ public final class ChunkEntitySlices {
 
             if (list.isEmpty()) {
                 this.entitiesBySection[sectionIndex] = null;
-                this.nonEmptyBitset[sectionIndex >>> 6] ^= (1L << (sectionIndex & (Long.SIZE - 1)));
             }
         }
 
@@ -400,8 +502,8 @@ public final class ChunkEntitySlices {
                 return;
             }
 
-            final int minSection = this.manager.minSection;
-            final int maxSection = this.manager.maxSection;
+            final int minSection = this.slices.minSection;
+            final int maxSection = this.slices.maxSection;
 
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
@@ -433,14 +535,58 @@ public final class ChunkEntitySlices {
             }
         }
 
+        public boolean getEntitiesLimited(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
+                                          final int maxCount) {
+            if (this.count == 0) {
+                return false;
+            }
+
+            final int minSection = this.slices.minSection;
+            final int maxSection = this.slices.maxSection;
+
+            final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
+            final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
+
+            final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
+
+            for (int section = min; section <= max; ++section) {
+                final BasicEntityList<Entity> list = entitiesBySection[section - minSection];
+
+                if (list == null) {
+                    continue;
+                }
+
+                final Entity[] storage = list.storage;
+
+                for (int i = 0, len = Math.min(storage.length, list.size()); i < len; ++i) {
+                    final Entity entity = storage[i];
+
+                    if (entity == null || entity == except || !entity.getBoundingBox().intersects(box)) {
+                        continue;
+                    }
+
+                    if (predicate != null && !predicate.test(entity)) {
+                        continue;
+                    }
+
+                    into.add(entity);
+                    if (into.size() >= maxCount) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         public void getEntitiesWithEnderDragonParts(final Entity except, final AABB box, final List<Entity> into,
                                                     final Predicate<? super Entity> predicate) {
             if (this.count == 0) {
                 return;
             }
 
-            final int minSection = this.manager.minSection;
-            final int maxSection = this.manager.maxSection;
+            final int minSection = this.slices.minSection;
+            final int maxSection = this.slices.maxSection;
 
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
@@ -468,7 +614,7 @@ public final class ChunkEntitySlices {
                     } // else: continue to test the ender dragon parts
 
                     if (entity instanceof EnderDragon) {
-                        for (final EnderDragonPart part : ((EnderDragon)entity).subEntities) {
+                        for (final EnderDragonPart part : ((EnderDragon)entity).getSubEntities()) {
                             if (part == except || !part.getBoundingBox().intersects(box)) {
                                 continue;
                             }
@@ -484,14 +630,73 @@ public final class ChunkEntitySlices {
             }
         }
 
+        public boolean getEntitiesWithEnderDragonPartsLimited(final Entity except, final AABB box, final List<Entity> into,
+                                                              final Predicate<? super Entity> predicate, final int maxCount) {
+            if (this.count == 0) {
+                return false;
+            }
+
+            final int minSection = this.slices.minSection;
+            final int maxSection = this.slices.maxSection;
+
+            final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
+            final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
+
+            final BasicEntityList<Entity>[] entitiesBySection = this.entitiesBySection;
+
+            for (int section = min; section <= max; ++section) {
+                final BasicEntityList<Entity> list = entitiesBySection[section - minSection];
+
+                if (list == null) {
+                    continue;
+                }
+
+                final Entity[] storage = list.storage;
+
+                for (int i = 0, len = Math.min(storage.length, list.size()); i < len; ++i) {
+                    final Entity entity = storage[i];
+
+                    if (entity == null || entity == except || !entity.getBoundingBox().intersects(box)) {
+                        continue;
+                    }
+
+                    if (predicate == null || predicate.test(entity)) {
+                        into.add(entity);
+                        if (into.size() >= maxCount) {
+                            return true;
+                        }
+                    } // else: continue to test the ender dragon parts
+
+                    if (entity instanceof EnderDragon) {
+                        for (final EnderDragonPart part : ((EnderDragon)entity).getSubEntities()) {
+                            if (part == except || !part.getBoundingBox().intersects(box)) {
+                                continue;
+                            }
+
+                            if (predicate != null && !predicate.test(part)) {
+                                continue;
+                            }
+
+                            into.add(part);
+                            if (into.size() >= maxCount) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
         public void getEntitiesWithEnderDragonParts(final Entity except, final Class<?> clazz, final AABB box, final List<Entity> into,
                                                     final Predicate<? super Entity> predicate) {
             if (this.count == 0) {
                 return;
             }
 
-            final int minSection = this.manager.minSection;
-            final int maxSection = this.manager.maxSection;
+            final int minSection = this.slices.minSection;
+            final int maxSection = this.slices.maxSection;
 
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
@@ -519,7 +724,7 @@ public final class ChunkEntitySlices {
                     } // else: continue to test the ender dragon parts
 
                     if (entity instanceof EnderDragon) {
-                        for (final EnderDragonPart part : ((EnderDragon)entity).subEntities) {
+                        for (final EnderDragonPart part : ((EnderDragon)entity).getSubEntities()) {
                             if (part == except || !part.getBoundingBox().intersects(box) || !clazz.isInstance(part)) {
                                 continue;
                             }
@@ -535,14 +740,14 @@ public final class ChunkEntitySlices {
             }
         }
 
-        public <T extends Entity> void getEntities(final EntityType<?> type, final AABB box, final List<? super T> into,
-                                                   final Predicate<? super T> predicate) {
+        public boolean getEntitiesWithEnderDragonPartsLimited(final Entity except, final Class<?> clazz, final AABB box, final List<Entity> into,
+                                                              final Predicate<? super Entity> predicate, final int maxCount) {
             if (this.count == 0) {
-                return;
+                return false;
             }
 
-            final int minSection = this.manager.minSection;
-            final int maxSection = this.manager.maxSection;
+            final int minSection = this.slices.minSection;
+            final int maxSection = this.slices.maxSection;
 
             final int min = Mth.clamp(Mth.floor(box.minY - 2.0) >> 4, minSection, maxSection);
             final int max = Mth.clamp(Mth.floor(box.maxY + 2.0) >> 4, minSection, maxSection);
@@ -561,17 +766,37 @@ public final class ChunkEntitySlices {
                 for (int i = 0, len = Math.min(storage.length, list.size()); i < len; ++i) {
                     final Entity entity = storage[i];
 
-                    if (entity == null || (type != null && entity.getType() != type) || !entity.getBoundingBox().intersects(box)) {
+                    if (entity == null || entity == except || !entity.getBoundingBox().intersects(box)) {
                         continue;
                     }
 
-                    if (predicate != null && !predicate.test((T)entity)) {
-                        continue;
-                    }
+                    if (predicate == null || predicate.test(entity)) {
+                        into.add(entity);
+                        if (into.size() >= maxCount) {
+                            return true;
+                        }
+                    } // else: continue to test the ender dragon parts
 
-                    into.add((T)entity);
+                    if (entity instanceof EnderDragon) {
+                        for (final EnderDragonPart part : ((EnderDragon)entity).getSubEntities()) {
+                            if (part == except || !part.getBoundingBox().intersects(box) || !clazz.isInstance(part)) {
+                                continue;
+                            }
+
+                            if (predicate != null && !predicate.test(part)) {
+                                continue;
+                            }
+
+                            into.add(part);
+                            if (into.size() >= maxCount) {
+                                return true;
+                            }
+                        }
+                    }
                 }
             }
+
+            return false;
         }
     }
 }

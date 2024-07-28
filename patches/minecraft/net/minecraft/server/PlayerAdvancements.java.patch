@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/PlayerAdvancements.java
 +++ b/net/minecraft/server/PlayerAdvancements.java
+@@ -66,6 +_,7 @@
+    @Nullable
+    private Advancement f_135969_;
+    private boolean f_135970_ = true;
++   public final Map<net.minecraft.advancements.critereon.SimpleCriterionTrigger<?>, Set<CriterionTrigger.Listener<?>>> criterionData = new java.util.IdentityHashMap<>(); // Paper - fix advancement data player leakage
+ 
+    public PlayerAdvancements(DataFixer p_135973_, PlayerList p_135974_, ServerAdvancementManager p_135975_, File p_135976_, ServerPlayer p_135977_) {
+       this.f_135961_ = p_135973_;
 @@ -178,6 +_,10 @@
        }
  

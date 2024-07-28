@@ -11,6 +11,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import com.mojang.logging.LogUtils;
+import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
 import io.papermc.paper.util.CoordinateUtils;
@@ -72,6 +73,32 @@ public final class NewChunkHolder {
     // entity chunk that is loaded, but not yet deserialized
     private CompoundTag pendingEntityChunk;
 
+    private static final ChunkStatus[] ALL_STATUSES = ChunkStatus.getStatusList().toArray(new ChunkStatus[0]);
+    public static final record ChunkCompletion(ChunkAccess chunk, ChunkStatus genStatus) {};
+    private static final VarHandle CHUNK_COMPLETION_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(ChunkCompletion[].class);
+    private final ChunkCompletion[] chunkCompletions = new ChunkCompletion[ALL_STATUSES.length];
+
+    public void replaceProtoChunk(final ImposterProtoChunk imposterProtoChunk) {
+        for (int i = 0, max = ChunkStatus.FULL.getIndex(); i < max; ++i) {
+            CHUNK_COMPLETION_ARRAY_HANDLE.setVolatile(this.chunkCompletions, i, new ChunkCompletion(imposterProtoChunk, ALL_STATUSES[i]));
+        }
+    }
+
+    public ChunkAccess getChunkIfPresentUnchecked(final ChunkStatus status) {
+        final ChunkCompletion completion = (ChunkCompletion)CHUNK_COMPLETION_ARRAY_HANDLE.getVolatile(this.chunkCompletions, status.getIndex());
+        return completion == null ? null : completion.chunk;
+    }
+
+    public ChunkAccess getChunkIfPresent(final ChunkStatus status) {
+        final ChunkStatus maxStatus = ChunkHolder.getStatus(this.getTicketLevel());
+
+        if (maxStatus == null || status.isOrAfter(maxStatus)) {
+            return null;
+        }
+
+        return this.getChunkIfPresentUnchecked(status);
+    }
+
     ChunkEntitySlices loadInEntityChunk(final boolean transientChunk) {
         TickThread.ensureTickThread(this.world, this.chunkX, this.chunkZ, "Cannot sync load entity data off-main");
         final CompoundTag entityChunk;
@@ -94,7 +121,7 @@ public final class NewChunkHolder {
 
                 ret.setTransient(transientChunk);
 
-                this.world.getEntityLookup().entitySectionLoad(this.chunkX, this.chunkZ, ret);
+                this.world.moonrise$getEntityLookup().entitySectionLoad(this.chunkX, this.chunkZ, ret);
             } else {
                 // transientChunk = false here
                 ret = this.entityChunk;
@@ -115,7 +142,7 @@ public final class NewChunkHolder {
             if (entityChunk != null) {
                 final List<Entity> entities = EntityStorage.readEntities(this.world, entityChunk);
 
-                this.world.getEntityLookup().addEntityChunkEntities(entities, new ChunkPos(this.chunkX, this.chunkZ));
+                this.world.moonrise$getEntityLookup().addEntityChunkEntities(entities, new ChunkPos(this.chunkX, this.chunkZ));
             }
         }
 
@@ -173,7 +200,7 @@ public final class NewChunkHolder {
                     // no tasks to schedule _for_
                 } else {
                     entityDataLoadTask = this.entityDataLoadTask = new ChunkLoadTask.EntityDataLoadTask(
-                            this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                            this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL)
                     );
                     entityDataLoadTask.addCallback(this::completeEntityLoad);
                     // need one schedule() per waiter
@@ -220,7 +247,7 @@ public final class NewChunkHolder {
 
         if (this.entityDataLoadTask == null) {
             this.entityDataLoadTask = new ChunkLoadTask.EntityDataLoadTask(
-                    this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                    this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL)
             );
             this.entityDataLoadTask.addCallback(this::completeEntityLoad);
             this.entityDataLoadTaskWaiters = new ArrayList<>();
@@ -294,7 +321,7 @@ public final class NewChunkHolder {
                     // no tasks to schedule _for_
                 } else {
                     poiDataLoadTask = this.poiDataLoadTask = new ChunkLoadTask.PoiDataLoadTask(
-                            this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                            this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL)
                     );
                     poiDataLoadTask.addCallback(this::completePoiLoad);
                     // need one schedule() per waiter
@@ -340,7 +367,7 @@ public final class NewChunkHolder {
 
         if (this.poiDataLoadTask == null) {
             this.poiDataLoadTask = new ChunkLoadTask.PoiDataLoadTask(
-                    this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority()
+                    this.scheduler, this.world, this.chunkX, this.chunkZ, this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL)
             );
             this.poiDataLoadTask.addCallback(this::completePoiLoad);
             this.poiDataLoadTaskWaiters = new ArrayList<>();
@@ -459,8 +486,6 @@ public final class NewChunkHolder {
         return this.lastChunkCompletion;
     }
 
-    public static final record ChunkCompletion(ChunkAccess chunk, ChunkStatus genStatus) {};
-
     /**
      * The target final chunk status the chunk system will bring the chunk to.
      */
@@ -494,35 +519,44 @@ public final class NewChunkHolder {
     // priority state
 
     // the target priority for this chunk to generate at
-    // TODO this will screw over scheduling at lower priorities to neighbours, fix
     private PrioritisedExecutor.Priority priority = PrioritisedExecutor.Priority.NORMAL;
     private boolean priorityLocked;
 
     // the priority neighbouring chunks have requested this chunk generate at
     private PrioritisedExecutor.Priority neighbourRequestedPriority = PrioritisedExecutor.Priority.IDLE;
 
-    public PrioritisedExecutor.Priority getEffectivePriority() {
-        return PrioritisedExecutor.Priority.max(this.priority, this.neighbourRequestedPriority);
+    public PrioritisedExecutor.Priority getEffectivePriority(final PrioritisedExecutor.Priority dfl) {
+        final PrioritisedExecutor.Priority neighbour = this.neighbourRequestedPriority;
+        final PrioritisedExecutor.Priority us = this.priority;
+
+        if (neighbour == null) {
+            return us == null ? dfl : us;
+        }
+        if (us == null) {
+            return dfl;
+        }
+
+        return PrioritisedExecutor.Priority.max(us, neighbour);
     }
 
-    protected void recalculateNeighbourRequestedPriority() {
+    private void recalculateNeighbourRequestedPriority() {
         if (this.neighboursWaitingForUs.isEmpty()) {
-            this.neighbourRequestedPriority = PrioritisedExecutor.Priority.IDLE;
+            this.neighbourRequestedPriority = null;
             return;
         }
 
-        PrioritisedExecutor.Priority max = PrioritisedExecutor.Priority.IDLE;
+        PrioritisedExecutor.Priority max = null;
 
         for (final NewChunkHolder holder : this.neighboursWaitingForUs.keySet()) {
-            final PrioritisedExecutor.Priority neighbourPriority = holder.getEffectivePriority();
-            if (neighbourPriority.isHigherPriority(max)) {
+            final PrioritisedExecutor.Priority neighbourPriority = holder.getEffectivePriority(null);
+            if (neighbourPriority != null && (max == null || neighbourPriority.isHigherPriority(max))) {
                 max = neighbourPriority;
             }
         }
 
-        final PrioritisedExecutor.Priority current = this.getEffectivePriority();
+        final PrioritisedExecutor.Priority current = this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL);
         this.neighbourRequestedPriority = max;
-        final PrioritisedExecutor.Priority next = this.getEffectivePriority();
+        final PrioritisedExecutor.Priority next = this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL);
 
         if (current == next) {
             return;
@@ -561,9 +595,9 @@ public final class NewChunkHolder {
         if (this.priorityLocked) {
             return;
         }
-        final PrioritisedExecutor.Priority old = this.getEffectivePriority();
+        final PrioritisedExecutor.Priority old = this.getEffectivePriority(null);
         this.priority = priority;
-        final PrioritisedExecutor.Priority newPriority = this.getEffectivePriority();
+        final PrioritisedExecutor.Priority newPriority = this.getEffectivePriority(PrioritisedExecutor.Priority.NORMAL);
 
         if (old != newPriority) {
             if (this.generationTask != null) {
@@ -776,6 +810,9 @@ public final class NewChunkHolder {
         this.currentGenStatus = null;
         this.wrappedChunkForNeighbour = null;
         this.lastChunkCompletion = null;
+        for (int i = 0; i < this.chunkCompletions.length; ++i) {
+            CHUNK_COMPLETION_ARRAY_HANDLE.setVolatile(this.chunkCompletions, i, (ChunkCompletion)null);
+        }
         // entity chunk state
         this.entityChunk = null;
         this.pendingEntityChunk = null;
@@ -857,7 +894,7 @@ public final class NewChunkHolder {
                     this.scheduler.schedulingLockArea.unlock(schedulingLock);
                 }
             } else {
-                this.world.getEntityLookup().entitySectionUnload(this.chunkX, this.chunkZ);
+                this.world.moonrise$getEntityLookup().entitySectionUnload(this.chunkX, this.chunkZ);
             }
             // we need to delay the callback until after determining transience, otherwise a potential loader could
             // set entityChunk before we do
@@ -1261,7 +1298,7 @@ public final class NewChunkHolder {
     }
 
     private void changeEntityChunkStatus(final ChunkHolder.FullChunkStatus toStatus) {
-        this.world.getEntityLookup().chunkStatusChange(this.chunkX, this.chunkZ, toStatus);
+        this.world.moonrise$getEntityLookup().chunkStatusChange(this.chunkX, this.chunkZ, toStatus);
     }
 
     private boolean processingFullStatus = false;
@@ -1334,8 +1371,8 @@ public final class NewChunkHolder {
                     // state upgrade
                     if (!currState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && nextState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
                         nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.BORDER);
+                        ChunkSystem.onChunkPreBorder(chunk, this.vanillaChunkHolder);
                         holderManager.ensureInAutosave(this);
-                        chunk.pushChunkIntoLoadedMap();
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.BORDER);
                         chunk.onChunkLoad(this);
                         this.onFullChunkLoadChange(true, changedFullStatus);
@@ -1372,6 +1409,8 @@ public final class NewChunkHolder {
                         this.onFullChunkLoadChange(false, changedFullStatus);
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.INACCESSIBLE);
                         chunk.onChunkUnload(this);
+                        ChunkSystem.onChunkNotBorder(chunk, this.vanillaChunkHolder);
+                        ChunkSystem.onChunkPostNotBorder(chunk, this.vanillaChunkHolder);
                         nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.INACCESSIBLE);
                     }
                 }
@@ -1569,7 +1608,9 @@ public final class NewChunkHolder {
 
         this.currentChunk = newChunk;
         this.currentGenStatus = newStatus;
-        this.lastChunkCompletion = new ChunkCompletion(newChunk, newStatus);
+        final ChunkCompletion completion = new ChunkCompletion(newChunk, newStatus);
+        CHUNK_COMPLETION_ARRAY_HANDLE.setVolatile(this.chunkCompletions, newStatus.getIndex(), completion);
+        this.lastChunkCompletion = completion;
 
         final ChunkStatus requestedGenStatus = this.requestedGenStatus;
 
@@ -2066,7 +2107,7 @@ public final class NewChunkHolder {
                 ", priority=" + this.priority +
                 ", priorityLocked=" + this.priorityLocked +
                 ", neighbourRequestedPriority=" + this.neighbourRequestedPriority +
-                ", effective_priority=" + this.getEffectivePriority() +
+                ", effective_priority=" + this.getEffectivePriority(null) +
                 ", oldTicketLevel=" + this.oldTicketLevel +
                 ", currentTicketLevel=" + this.currentTicketLevel +
                 ", totalNeighboursUsingThisChunk=" + this.totalNeighboursUsingThisChunk +

@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/EntityStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/EntityStorage.java
-@@ -44,29 +_,23 @@
+@@ -44,34 +_,28 @@
     }
  
     public CompletableFuture<ChunkEntities<Entity>> m_141930_(ChunkPos p_156551_) {
@@ -47,6 +47,12 @@
        int[] aint = p_156571_.m_128465_("Position");
        return new ChunkPos(aint[0], aint[1]);
     }
+ 
+-   private static void m_156562_(CompoundTag p_156563_, ChunkPos p_156564_) {
++   public static void m_156562_(CompoundTag p_156563_, ChunkPos p_156564_) {
+       p_156563_.m_128365_("Position", new IntArrayTag(new int[]{p_156564_.f_45578_, p_156564_.f_45579_}));
+    }
+ 
 @@ -79,42 +_,65 @@
        return new ChunkEntities<>(p_156569_, ImmutableList.of());
     }

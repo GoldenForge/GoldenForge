@@ -87,7 +87,7 @@
 +         if (GoldenForgeConfig.Server.perPlayerMobSpawns.get()) {
 +            int minDiff = Integer.MAX_VALUE;
 +            final com.destroystokyo.paper.util.maplist.ReferenceList<net.minecraft.server.level.ServerPlayer> inRange =
-+                    p_47030_.f_8547_.f_8325_.getNearbyPlayers().getPlayers(p_47031_.m_7697_(), io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.TICK_VIEW_DISTANCE);
++                    p_47030_.moonrise$getNearbyPlayers().getPlayers(p_47031_.m_7697_(), io.papermc.paper.util.player.NearbyPlayers.NearbyMapType.TICK_VIEW_DISTANCE);
 +            if (inRange != null) {
 +               final Object[] backingSet = inRange.getRawData();
 +               for (int k = 0, len = inRange.size(); k < len; k++) {

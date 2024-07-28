@@ -1,0 +1,53 @@
+--- a/net/minecraft/advancements/critereon/SimpleCriterionTrigger.java
++++ b/net/minecraft/advancements/critereon/SimpleCriterionTrigger.java
+@@ -14,27 +_,27 @@
+ import net.minecraft.world.level.storage.loot.LootContext;
+ 
+ public abstract class SimpleCriterionTrigger<T extends AbstractCriterionTriggerInstance> implements CriterionTrigger<T> {
+-   private final Map<PlayerAdvancements, Set<CriterionTrigger.Listener<T>>> f_66232_ = Maps.newIdentityHashMap();
++   //private final Map<PlayerAdvancements, Set<CriterionTrigger.Listener<T>>> players = Maps.newIdentityHashMap();
+ 
+    public final void m_6467_(PlayerAdvancements p_66243_, CriterionTrigger.Listener<T> p_66244_) {
+-      this.f_66232_.computeIfAbsent(p_66243_, (p_66252_) -> {
++      p_66243_.criterionData.computeIfAbsent(this, (p_66252_) -> { // Paper - fix AdvancementDataPlayer leak
+          return Sets.newHashSet();
+       }).add(p_66244_);
+    }
+ 
+    public final void m_6468_(PlayerAdvancements p_66254_, CriterionTrigger.Listener<T> p_66255_) {
+-      Set<CriterionTrigger.Listener<T>> set = this.f_66232_.get(p_66254_);
++      Set<CriterionTrigger.Listener<T>> set = (Set) p_66254_.criterionData.get(this); // Paper - fix AdvancementDataPlayer leak
+       if (set != null) {
+          set.remove(p_66255_);
+          if (set.isEmpty()) {
+-            this.f_66232_.remove(p_66254_);
++            p_66254_.criterionData.remove(this); // Paper - fix AdvancementDataPlayer leak
+          }
+       }
+ 
+    }
+ 
+    public final void m_5656_(PlayerAdvancements p_66241_) {
+-      this.f_66232_.remove(p_66241_);
++      p_66241_.criterionData.remove(this); // Paper - fix AdvancementDataPlayer leak
+    }
+ 
+    protected abstract T m_7214_(JsonObject p_66248_, EntityPredicate.Composite p_66249_, DeserializationContext p_66250_);
+@@ -46,14 +_,14 @@
+ 
+    protected void m_66234_(ServerPlayer p_66235_, Predicate<T> p_66236_) {
+       PlayerAdvancements playeradvancements = p_66235_.m_8960_();
+-      Set<CriterionTrigger.Listener<T>> set = this.f_66232_.get(playeradvancements);
++      Set<CriterionTrigger.Listener<T>> set = (Set) playeradvancements.criterionData.get(this); // Paper - fix AdvancementDataPlayer leak
+       if (set != null && !set.isEmpty()) {
+-         LootContext lootcontext = EntityPredicate.m_36616_(p_66235_, p_66235_);
++         LootContext lootcontext = null; // EntityPredicate.createContext(p_66235_, p_66235_); // Paper - Perf: lazily create LootContext for criterions
+          List<CriterionTrigger.Listener<T>> list = null;
+ 
+          for(CriterionTrigger.Listener<T> listener : set) {
+             T t = listener.m_13685_();
+-            if (p_66236_.test(t) && t.m_16980_().m_36681_(lootcontext)) {
++            if (p_66236_.test(t) && t.m_16980_().m_36681_(lootcontext = (lootcontext == null ? EntityPredicate.m_36616_(p_66235_, p_66235_) : lootcontext))) { // Paper - Perf: lazily create LootContext for criterions
+                if (list == null) {
+                   list = Lists.newArrayList();
+                }

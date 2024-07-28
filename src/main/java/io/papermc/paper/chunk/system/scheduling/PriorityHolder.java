@@ -2,7 +2,6 @@ package io.papermc.paper.chunk.system.scheduling;
 
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
-
 import java.lang.invoke.VarHandle;
 
 public abstract class PriorityHolder {
@@ -42,11 +41,11 @@ public abstract class PriorityHolder {
     }
 
     // returns false if cancelled
-    protected boolean markExecuting() {
+    public boolean markExecuting() {
         return (this.getAndOrPriorityVolatile(PRIORITY_EXECUTED) & PRIORITY_EXECUTED) == 0;
     }
 
-    protected boolean isMarkedExecuted() {
+    public boolean isMarkedExecuted() {
         return (this.getPriorityVolatile() & PRIORITY_EXECUTED) != 0;
     }
 

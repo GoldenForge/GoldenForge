@@ -38,7 +38,7 @@
     @Nullable
     private Supplier<ChunkHolder.FullChunkStatus> f_62790_;
     @Nullable
-@@ -77,11 +_,239 @@
+@@ -77,11 +_,59 @@
     private final Int2ObjectMap<GameEventDispatcher> f_156363_;
     private final LevelChunkTicks<Block> f_62784_;
     private final LevelChunkTicks<Fluid> f_187943_;
@@ -57,49 +57,12 @@
     }
  
 +
-+   // Paper start - new load callbacks
-+   private io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder;
-+   public io.papermc.paper.chunk.system.scheduling.NewChunkHolder getChunkHolder() {
-+      return this.chunkHolder;
-+   }
-+
-+   public void setChunkHolder(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
-+      if (chunkHolder == null) {
-+         throw new NullPointerException("Chunkholder cannot be null");
-+      }
-+      if (this.chunkHolder != null) {
-+         throw new IllegalStateException("Already have chunkholder: " + this.chunkHolder + ", cannot replace with " + chunkHolder);
-+      }
-+      this.chunkHolder = chunkHolder;
-+      this.playerChunk = chunkHolder.vanillaChunkHolder;
-+   }
-+
-+   /* Note: We skip the light neighbour chunk loading done for the vanilla full chunk */
-+   /* Starlight does not need these chunks for lighting purposes because of edge checks */
-+   public void pushChunkIntoLoadedMap() {
-+      int chunkX = this.f_187604_.f_45578_;
-+      int chunkZ = this.f_187604_.f_45579_;
-+      ServerChunkCache chunkProvider = ((ServerChunkCache) this.f_62776_.m_7726_());
-+      for (int dx = -NEIGHBOUR_CACHE_RADIUS; dx <= NEIGHBOUR_CACHE_RADIUS; ++dx) {
-+         for (int dz = -NEIGHBOUR_CACHE_RADIUS; dz <= NEIGHBOUR_CACHE_RADIUS; ++dz) {
-+            LevelChunk neighbour = chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
-+            if (neighbour != null) {
-+               neighbour.setNeighbourLoaded(-dx, -dz, this);
-+               // should be in cached already
-+               this.setNeighbourLoaded(dx, dz, neighbour);
-+            }
-+         }
-+      }
-+      this.setNeighbourLoaded(0, 0, this);
-+      ((ServerChunkCache) this.f_62776_.m_7726_()).addLoadedChunk(this);
-+   }
 +
 +   public void onChunkLoad(io.papermc.paper.chunk.system.scheduling.NewChunkHolder chunkHolder) {
 +      // figure out how this should interface with:
 +      // the entity chunk load event // -> moved to the FULL status
 +      // the chunk load event // -> stays here
 +      // any entity add to world events // -> in FULL status
-+      this.loadCallback();
 +      io.papermc.paper.chunk.system.ChunkSystem.onChunkBorder(this, chunkHolder.vanillaChunkHolder);
 +   }
 +
@@ -109,7 +72,6 @@
 +      // the chunk load event // -> stays here
 +      // any entity add to world events // -> goes into the unload logic, it will completely explode
 +      // etc later
-+      this.unloadCallback();
 +      io.papermc.paper.chunk.system.ChunkSystem.onChunkNotBorder(this, chunkHolder.vanillaChunkHolder);
 +   }
 +
@@ -131,148 +93,6 @@
 +      io.papermc.paper.chunk.system.ChunkSystem.onChunkNotEntityTicking(this, chunkHolder.vanillaChunkHolder);
 +   }
 +   // Paper end - new load callbacks
-+
-+   public void loadCallback() {
-+      if (this.loadedTicketLevel) { f_62771_.error("Double calling chunk load!", new Throwable()); } // Paper
-+      this.loadedTicketLevel = true;
-+      // Paper start - neighbour cache
-+      int chunkX = this.f_187604_.f_45578_;
-+      int chunkZ = this.f_187604_.f_45579_;
-+      ServerChunkCache chunkProvider = ((ServerChunkCache) this.f_62776_.m_7726_());
-+      for (int dx = -NEIGHBOUR_CACHE_RADIUS; dx <= NEIGHBOUR_CACHE_RADIUS; ++dx) {
-+         for (int dz = -NEIGHBOUR_CACHE_RADIUS; dz <= NEIGHBOUR_CACHE_RADIUS; ++dz) {
-+            LevelChunk neighbour = chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
-+            if (neighbour != null) {
-+               neighbour.setNeighbourLoaded(-dx, -dz, this);
-+               // should be in cached already
-+               this.setNeighbourLoaded(dx, dz, neighbour);
-+            }
-+         }
-+      }
-+      this.setNeighbourLoaded(0, 0, this);
-+      // Paper end - neighbour cache
-+      ((ServerChunkCache) this.f_62776_.m_7726_()).addLoadedChunk(this); // Paper
-+   }
-+
-+   public void unloadCallback() {
-+      if (!this.loadedTicketLevel) { f_62771_.error("Double calling chunk unload!", new Throwable()); } // Paper
-+      ((ServerChunkCache) this.f_62776_.m_7726_()).removeLoadedChunk(this); // Paper
-+      // Paper start - neighbour cache
-+      int chunkX = this.f_187604_.f_45578_;
-+      int chunkZ = this.f_187604_.f_45579_;
-+      ServerChunkCache chunkProvider = ((ServerChunkCache) this.f_62776_.m_7726_());
-+      for (int dx = -NEIGHBOUR_CACHE_RADIUS; dx <= NEIGHBOUR_CACHE_RADIUS; ++dx) {
-+         for (int dz = -NEIGHBOUR_CACHE_RADIUS; dz <= NEIGHBOUR_CACHE_RADIUS; ++dz) {
-+            LevelChunk neighbour = chunkProvider.getChunkAtIfLoadedMainThreadNoCache(chunkX + dx, chunkZ + dz);
-+            if (neighbour != null) {
-+               neighbour.setNeighbourUnloaded(-dx, -dz);
-+            }
-+         }
-+      }
-+      this.loadedTicketLevel = false;
-+      this.resetNeighbours();
-+      // Paper end
-+   }
-+
-+    // Paper start
-+   public @Nullable ChunkHolder playerChunk;
-+
-+   static final int NEIGHBOUR_CACHE_RADIUS = 3;
-+   public static int getNeighbourCacheRadius() {
-+      return NEIGHBOUR_CACHE_RADIUS;
-+   }
-+
-+   private long neighbourChunksLoadedBitset;
-+   private final LevelChunk[] loadedNeighbourChunks = new LevelChunk[(NEIGHBOUR_CACHE_RADIUS * 2 + 1) * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)];
-+
-+   private static int getNeighbourIndex(final int relativeX, final int relativeZ) {
-+      // index = (relativeX + NEIGHBOUR_CACHE_RADIUS) + (relativeZ + NEIGHBOUR_CACHE_RADIUS) * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)
-+      // optimised variant of the above by moving some of the ops to compile time
-+      return relativeX + (relativeZ * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)) + (NEIGHBOUR_CACHE_RADIUS + NEIGHBOUR_CACHE_RADIUS * ((NEIGHBOUR_CACHE_RADIUS * 2 + 1)));
-+   }
-+
-+   public final LevelChunk getRelativeNeighbourIfLoaded(final int relativeX, final int relativeZ) {
-+      return this.loadedNeighbourChunks[getNeighbourIndex(relativeX, relativeZ)];
-+   }
-+
-+   public final boolean isNeighbourLoaded(final int relativeX, final int relativeZ) {
-+      return (this.neighbourChunksLoadedBitset & (1L << getNeighbourIndex(relativeX, relativeZ))) != 0;
-+   }
-+
-+   public final void setNeighbourLoaded(final int relativeX, final int relativeZ, final LevelChunk chunk) {
-+      if (chunk == null) {
-+         throw new IllegalArgumentException("Chunk must be non-null, neighbour: (" + relativeX + "," + relativeZ + "), chunk: " + this.f_187604_);
-+      }
-+      final long before = this.neighbourChunksLoadedBitset;
-+      final int index = getNeighbourIndex(relativeX, relativeZ);
-+      this.loadedNeighbourChunks[index] = chunk;
-+      this.neighbourChunksLoadedBitset |= (1L << index);
-+      this.onNeighbourChange(before, this.neighbourChunksLoadedBitset);
-+   }
-+
-+   public final void setNeighbourUnloaded(final int relativeX, final int relativeZ) {
-+      final long before = this.neighbourChunksLoadedBitset;
-+      final int index = getNeighbourIndex(relativeX, relativeZ);
-+      this.loadedNeighbourChunks[index] = null;
-+      this.neighbourChunksLoadedBitset &= ~(1L << index);
-+      this.onNeighbourChange(before, this.neighbourChunksLoadedBitset);
-+   }
-+
-+   public final void resetNeighbours() {
-+      final long before = this.neighbourChunksLoadedBitset;
-+      this.neighbourChunksLoadedBitset = 0L;
-+      java.util.Arrays.fill(this.loadedNeighbourChunks, null);
-+      this.onNeighbourChange(before, 0L);
-+   }
-+
-+   protected void onNeighbourChange(final long bitsetBefore, final long bitsetAfter) {
-+   }
-+
-+   public final boolean isAnyNeighborsLoaded() {
-+      return neighbourChunksLoadedBitset != 0;
-+   }
-+   public final boolean areNeighboursLoaded(final int radius) {
-+      return LevelChunk.areNeighboursLoaded(this.neighbourChunksLoadedBitset, radius);
-+   }
-+
-+   public static boolean areNeighboursLoaded(final long bitset, final int radius) {
-+      // index = relativeX + (relativeZ * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)) + (NEIGHBOUR_CACHE_RADIUS + NEIGHBOUR_CACHE_RADIUS * ((NEIGHBOUR_CACHE_RADIUS * 2 + 1)))
-+      switch (radius) {
-+         case 0: {
-+            return (bitset & (1L << getNeighbourIndex(0, 0))) != 0;
-+         }
-+         case 1: {
-+            long mask = 0L;
-+            for (int dx = -1; dx <= 1; ++dx) {
-+               for (int dz = -1; dz <= 1; ++dz) {
-+                  mask |= (1L << getNeighbourIndex(dx, dz));
-+               }
-+            }
-+            return (bitset & mask) == mask;
-+         }
-+         case 2: {
-+            long mask = 0L;
-+            for (int dx = -2; dx <= 2; ++dx) {
-+               for (int dz = -2; dz <= 2; ++dz) {
-+                  mask |= (1L << getNeighbourIndex(dx, dz));
-+               }
-+            }
-+            return (bitset & mask) == mask;
-+         }
-+         case 3: {
-+            long mask = 0L;
-+            for (int dx = -3; dx <= 3; ++dx) {
-+               for (int dz = -3; dz <= 3; ++dz) {
-+                  mask |= (1L << getNeighbourIndex(dx, dz));
-+               }
-+            }
-+            return (bitset & mask) == mask;
-+         }
-+
-+         default:
-+            throw new IllegalArgumentException("Radius not recognized: " + radius);
-+      }
-+   }
 +   // Paper end
 +
     public LevelChunk(Level p_196854_, ChunkPos p_196855_, UpgradeData p_196856_, LevelChunkTicks<Block> p_196857_, LevelChunkTicks<Fluid> p_196858_, long p_196859_, @Nullable LevelChunkSection[] p_196860_, @Nullable LevelChunk.PostLoadProcessor p_196861_, @Nullable BlendingData p_196862_) {
@@ -540,7 +360,7 @@
  
     public ChunkHolder.FullChunkStatus m_6708_() {
 -      return this.f_62790_ == null ? ChunkHolder.FullChunkStatus.BORDER : this.f_62790_.get();
-+      return this.chunkHolder == null ? ChunkHolder.FullChunkStatus.INACCESSIBLE : this.chunkHolder.getChunkStatus(); // Paper - rewrite chunk system
++      return this.f_62790_ == null ? ChunkHolder.FullChunkStatus.BORDER : (ChunkHolder.FullChunkStatus) this.f_62790_.get();
     }
  
     public void m_62879_(Supplier<ChunkHolder.FullChunkStatus> p_62880_) {

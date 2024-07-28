@@ -4,6 +4,7 @@ import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.starlight.common.light.StarLightEngine;
 import ca.spottedleaf.starlight.common.light.StarLightInterface;
 import io.papermc.paper.chunk.system.light.LightQueue;
+import io.papermc.paper.util.WorldUtil;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -11,14 +12,13 @@ import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-
 import java.util.function.BooleanSupplier;
 
 public final class ChunkLightTask extends ChunkProgressionTask {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    protected final ChunkAccess fromChunk;
+    private final ChunkAccess fromChunk;
 
     private final LightTaskPriorityHolder priorityHolder;
 
@@ -74,9 +74,9 @@ public final class ChunkLightTask extends ChunkProgressionTask {
 
     private static final class LightTaskPriorityHolder extends PriorityHolder {
 
-        protected final ChunkLightTask task;
+        private final ChunkLightTask task;
 
-        protected LightTaskPriorityHolder(final PrioritisedExecutor.Priority priority, final ChunkLightTask task) {
+        private LightTaskPriorityHolder(final PrioritisedExecutor.Priority priority, final ChunkLightTask task) {
             super(priority);
             this.task = task;
         }
@@ -129,8 +129,8 @@ public final class ChunkLightTask extends ChunkProgressionTask {
 
     private static final class LightTask implements BooleanSupplier {
 
-        protected final StarLightInterface lightEngine;
-        protected final ChunkLightTask task;
+        private final StarLightInterface lightEngine;
+        private final ChunkLightTask task;
 
         public LightTask(final StarLightInterface lightEngine, final ChunkLightTask task) {
             this.lightEngine = lightEngine;
@@ -162,15 +162,12 @@ public final class ChunkLightTask extends ChunkProgressionTask {
                     chunk.setStatus(ChunkStatus.LIGHT);
                 }
             } catch (final Throwable thr) {
-                if (!(thr instanceof ThreadDeath)) {
-                    LOGGER.fatal("Failed to light chunk " + task.fromChunk.getPos().toString() + " in world '" + this.lightEngine.getWorld().getWorld().getName() + "'", thr);
-                }
+                LOGGER.fatal(
+                        "Failed to light chunk " + task.fromChunk.getPos().toString()
+                                + " in world '" + WorldUtil.getWorldName(this.lightEngine.getWorld()) + "'", thr
+                );
 
                 task.complete(null, thr);
-
-                if (thr instanceof ThreadDeath) {
-                    throw (ThreadDeath)thr;
-                }
 
                 return true;
             }

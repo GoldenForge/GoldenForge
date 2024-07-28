@@ -1,10 +1,13 @@
 --- a/net/minecraft/server/level/ChunkHolder.java
 +++ b/net/minecraft/server/level/ChunkHolder.java
-@@ -2,6 +_,7 @@
+@@ -2,6 +_,10 @@
  
  import com.mojang.datafixers.util.Either;
  import com.mojang.datafixers.util.Pair;
 +import io.papermc.paper.ConfigTemp;
++import io.papermc.paper.chunk.system.scheduling.ChunkHolderManager;
++import io.papermc.paper.chunk.system.scheduling.NewChunkHolder;
++import io.papermc.paper.util.WorldUtil;
  import it.unimi.dsi.fastutil.shorts.ShortOpenHashSet;
  import it.unimi.dsi.fastutil.shorts.ShortSet;
  import java.util.ArrayList;
@@ -58,7 +61,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,201 @@
+@@ -65,97 +_,213 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -74,17 +77,6 @@
 +   private final ChunkMap chunkMap; // Paper
 +   long lastAutoSaveTime; // Paper - incremental autosave
 +   long inactiveTimeStart; // Paper - incremental autosave
-+
-+   // Paper start - optimize chunk status progression without jumping through thread pool
-+   public final LevelChunk getSendingChunk() {
-+      // it's important that we use getChunkAtIfLoadedImmediately to mirror the chunk sending logic used
-+      // in Chunk's neighbour callback
-+      LevelChunk ret = this.chunkMap.f_140133_.m_7726_().getChunkAtIfLoadedImmediately(this.f_140009_.f_45578_, this.f_140009_.f_45579_);
-+      if (ret != null && ret.areNeighboursLoaded(1)) {
-+         return ret;
-+      }
-+      return null;
-+   }
 +
 +
 +   public @Nullable ChunkAccess getAvailableChunkNow() {
@@ -114,11 +106,6 @@
 +   }
 +   // Paper end - optimise chunk tick iteration
 +
-+   // cached here to avoid a map lookup
-+   com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> playersInMobSpawnRange;
-+   com.destroystokyo.paper.util.misc.PooledLinkedHashSets.PooledObjectLinkedOpenHashSet<ServerPlayer> playersInChunkTickRange;
-+   // Paper end - optimise anyPlayerCloseEnoughForSpawning
-+
 +   public void onChunkAdd() {
 +      // Paper start - optimise chunk tick iteration
 +      if (this.needsBroadcastChanges()) {
@@ -137,22 +124,18 @@
 +
 +   private final com.destroystokyo.paper.util.maplist.ReferenceList<ServerPlayer> playersSentChunkTo = new com.destroystokyo.paper.util.maplist.ReferenceList<>();
 +
-+   public void addPlayer(ServerPlayer player) {
++   public final void moonrise$addReceivedChunk(final ServerPlayer player) {
 +      if (!this.playersSentChunkTo.add(player)) {
-+         // Kaiiju start - Kick player instead of crashing
-+         String errorMsg = "Already sent chunk " + this.f_140009_ + " in world " + this.chunkMap.f_140133_.getWorld().getName();
-+         player.f_8906_.m_9942_(Component.m_237113_(errorMsg));
-+         GoldenForge.LOGGER.error(errorMsg);
-+         //throw new IllegalStateException("Already sent chunk " + this.pos + " in world '" + this.chunkMap.level.getWorld().getName() + "' to player " + player);
-+         // Kaiiju end
++         throw new IllegalStateException("Already sent chunk " + this.f_140009_ + " in world '" + WorldUtil.getWorldName(this.chunkMap.f_140133_) + "' to player " + player);
 +      }
 +   }
 +
-+   public void removePlayer(ServerPlayer player) {
++   public final void moonrise$removeReceivedChunk(final ServerPlayer player) {
 +      if (!this.playersSentChunkTo.remove(player)) {
-+         throw new IllegalStateException("Have not sent chunk " + this.f_140009_ + " in world '" + this.chunkMap.f_140133_.getWorld().getName() + "' to player " + player);
++         throw new IllegalStateException("Already sent chunk " + this.f_140009_ + " in world '" + WorldUtil.getWorldName(this.chunkMap.f_140133_) + "' to player " + player);
 +      }
 +   }
++
 +   public final io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder; // Paper - rewrite chunk system
 +   public ChunkHolder(ChunkPos p_142986_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.PlayerProvider p_142991_, io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder) { // Paper - rewrite chunk system) {
 +      this.newChunkHolder = newChunkHolder; // Paper - rewrite chunk system
@@ -249,12 +232,34 @@
 +
 +   @Nullable
 +   public final LevelChunk m_212234_() { // Paper - final for inline
-+      // Paper start - rewrite chunk system
-+      if (!this.isFullChunkReady()) {
-+         return null;
++      if (this.newChunkHolder.isFullChunkReady()) {
++         if (this.newChunkHolder.getCurrentChunk() instanceof LevelChunk levelChunk) {
++            return levelChunk;
++         } // else: race condition: chunk unload
 +      }
-+      return (LevelChunk)this.getAvailableChunkNow();
-+      // Paper end - rewrite chunk system
++      return null;
++   }
++
++   private boolean isRadiusLoaded(final int radius) {
++      final ChunkHolderManager manager = chunkMap.f_140133_.chunkTaskScheduler.chunkHolderManager;
++      final ChunkPos pos = this.f_140009_;
++      final int chunkX = pos.f_45578_;
++      final int chunkZ = pos.f_45579_;
++      for (int dz = -radius; dz <= radius; ++dz) {
++         for (int dx = -radius; dx <= radius; ++dx) {
++            if ((dx | dz) == 0) {
++               continue;
++            }
++
++            final NewChunkHolder holder = manager.getChunkHolder(dx + chunkX, dz + chunkZ);
++
++            if (holder == null || !holder.isFullChunkReady()) {
++               return false;
++            }
++         }
++      }
++
++      return true;
     }
  
     @Nullable
@@ -287,17 +292,23 @@
 -               return optional.get();
 -            }
 -         }
--      }
--
--      return null;
--   }
--
--   public CompletableFuture<ChunkAccess> m_140090_() {
--      return this.f_140005_;
--   }
 +      return this.newChunkHolder.getCurrentChunk(); // Paper - rewrite chunk system
 +   }
 +
++   public LevelChunk getChunkToSend() {
++      // Paper start - rewrite chunk system
++      final LevelChunk ret = this.m_212234_();
++      if (ret != null && this.isRadiusLoaded(1)) {
++         return ret;
+       }
+-
+       return null;
++      // Paper end - rewrite chunk system
+    }
+ 
+-   public CompletableFuture<ChunkAccess> m_140090_() {
+-      return this.f_140005_;
+-   }
 +   // Paper - rewrite chunk system
  
     public void m_140056_(BlockPos p_140057_) {
@@ -307,7 +318,7 @@
 +         return;
 +      }
 +      // Paper end - replace player chunk loader
-+      LevelChunk levelchunk = this.getSendingChunk(); // Paper - no-tick view distance
++      LevelChunk levelchunk = this.getChunkToSend(); // Paper - no-tick view distance
        if (levelchunk != null) {
           int i = this.f_142983_.m_151564_(p_140057_.m_123342_());
           if (this.f_140011_[i] == null) {
@@ -338,7 +349,7 @@
 +
 +         if (ichunkaccess != null) {
 +            ichunkaccess.m_8092_(true);
-+            LevelChunk chunk = this.getSendingChunk();
++            LevelChunk chunk = this.getChunkToSend();
 +            // Paper end - no-tick view distance
 +
 +            if (this.playersSentChunkTo.size() != 0 && chunk != null) { // Paper - replace player chunk loader
@@ -505,7 +516,7 @@
 +      List<ServerPlayer> ret = new java.util.ArrayList<>();
 +      for (int i = 0, len = this.playersSentChunkTo.size(); i < len; ++i) {
 +         ServerPlayer player = this.playersSentChunkTo.getUnchecked(i);
-+         if (onlyOnWatchDistanceEdge && !this.chunkMap.f_140133_.playerChunkLoader.isChunkSent(player, this.f_140009_.f_45578_, this.f_140009_.f_45579_, onlyOnWatchDistanceEdge)) {
++         if (onlyOnWatchDistanceEdge && !(this.chunkMap.f_140133_.moonrise$getPlayerChunkLoader().isChunkSent(player, this.f_140009_.f_45578_, this.f_140009_.f_45579_, onlyOnWatchDistanceEdge))) {
 +            continue;
 +         }
 +         ret.add(player);

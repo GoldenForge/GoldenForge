@@ -1,21 +1,25 @@
 package io.papermc.paper.chunk.system;
 
-import ca.spottedleaf.concurrentutil.collection.SRSWLinkedQueue;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
+import com.google.gson.JsonObject;
+import io.papermc.paper.chunk.system.misc.AllocatingRateLimiter;
+import io.papermc.paper.chunk.system.misc.SingleUserAreaMap;
 import io.papermc.paper.chunk.system.scheduling.ChunkHolderManager;
-import io.papermc.paper.util.CoordinateUtils;
-import io.papermc.paper.util.IntegerUtil;
-import io.papermc.paper.util.TickThread;
-import it.unimi.dsi.fastutil.longs.*;
+import io.papermc.paper.util.ParallelSearchRadiusIteration;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongComparator;
+import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
-import net.minecraft.network.protocol.game.ClientboundSetChunkCacheRadiusPacket;
-import net.minecraft.network.protocol.game.ClientboundSetSimulationDistancePacket;
+import net.minecraft.network.protocol.game.*;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -23,23 +27,81 @@ import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
 import org.apache.commons.lang3.mutable.MutableObject;
+import org.goldenforge.GoldenForge;
 import org.goldenforge.config.GoldenForgeConfig;
 
 import java.lang.invoke.VarHandle;
 import java.util.ArrayDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
-public class RegionizedPlayerChunkLoader {
+public final class RegionizedPlayerChunkLoader {
 
-    public static final TicketType<Long> REGION_PLAYER_TICKET = TicketType.create("region_player_ticket", Long::compareTo);
+    public static final TicketType<Long> PLAYER_TICKET         = TicketType.create("chunk_system:player_ticket", Long::compareTo);
+    public static final TicketType<Long> PLAYER_TICKET_DELAYED = TicketType.create("chunk_system:player_ticket_delayed", Long::compareTo, 5 * 20);
 
     public static final int MIN_VIEW_DISTANCE = 2;
     public static final int MAX_VIEW_DISTANCE = 32;
 
     public static final int TICK_TICKET_LEVEL = 31;
-    public static final int GENERATED_TICKET_LEVEL = 33 + ChunkStatus.getDistance(ChunkStatus.FULL);
+    //public static final int GENERATED_TICKET_LEVEL = 33 + ChunkStatus.getDistance(ChunkStatus.FULL);
+    public static final int GENERATED_TICKET_LEVEL = 33;
     public static final int LOADED_TICKET_LEVEL = 33 + ChunkStatus.getDistance(ChunkStatus.EMPTY);
+
+    public static final class ViewDistanceHolder {
+
+        private volatile ViewDistances viewDistances;
+        private static final VarHandle VIEW_DISTANCES_HANDLE = ConcurrentUtil.getVarHandle(ViewDistanceHolder.class, "viewDistances", ViewDistances.class);
+
+        public ViewDistanceHolder() {
+            VIEW_DISTANCES_HANDLE.setVolatile(this, new ViewDistances(-1, -1, -1));
+        }
+
+        public ViewDistances getViewDistances() {
+            return (ViewDistances)VIEW_DISTANCES_HANDLE.getVolatile(this);
+        }
+
+        public ViewDistances compareAndExchangeViewDistance(final ViewDistances expect, final ViewDistances update) {
+            return (ViewDistances)VIEW_DISTANCES_HANDLE.compareAndExchange(this, expect, update);
+        }
+
+        public void updateViewDistance(final Function<ViewDistances, ViewDistances> update) {
+            int failures = 0;
+            for (ViewDistances curr = this.getViewDistances();;) {
+                for (int i = 0; i < failures; ++i) {
+                    ConcurrentUtil.backoff();
+                }
+
+                if (curr == (curr = this.compareAndExchangeViewDistance(curr, update.apply(curr)))) {
+                    return;
+                }
+                ++failures;
+            }
+        }
+
+        public void setTickViewDistance(final int distance) {
+            this.updateViewDistance((final ViewDistances param) -> {
+                return param.setTickViewDistance(distance);
+            });
+        }
+
+        public void setLoadViewDistance(final int distance) {
+            this.updateViewDistance((final ViewDistances param) -> {
+                return param.setLoadViewDistance(distance);
+            });
+        }
+
+        public void setSendViewDistance(final int distance) {
+            this.updateViewDistance((final ViewDistances param) -> {
+                return param.setTickViewDistance(distance);
+            });
+        }
+
+        public JsonObject toJson() {
+            return this.getViewDistances().toJson();
+        }
+    }
 
     public static final record ViewDistances(
             int tickViewDistance,
@@ -54,111 +116,134 @@ public class RegionizedPlayerChunkLoader {
             return new ViewDistances(this.tickViewDistance, distance, this.sendViewDistance);
         }
 
-
         public ViewDistances setSendViewDistance(final int distance) {
             return new ViewDistances(this.tickViewDistance, this.loadViewDistance, distance);
         }
+
+        public JsonObject toJson() {
+            final JsonObject ret = new JsonObject();
+
+            ret.addProperty("tick-view-distance", this.tickViewDistance);
+            ret.addProperty("load-view-distance", this.loadViewDistance);
+            ret.addProperty("send-view-distance", this.sendViewDistance);
+
+            return ret;
+        }
+    }
+
+    public static int getAPITickViewDistance(final ServerPlayer player) {
+        final ServerLevel level = player.serverLevel();
+        final PlayerChunkLoaderData data = player.moonrise$getChunkLoader();
+        if (data == null) {
+            return level.moonrise$getPlayerChunkLoader().getAPITickDistance();
+        }
+        return data.lastTickDistance;
     }
 
     public static int getAPIViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.level;
-        final PlayerChunkLoaderData data = player.chunkLoader;
+        final ServerLevel level = player.serverLevel();
+        final PlayerChunkLoaderData data = player.moonrise$getChunkLoader();
         if (data == null) {
-            return level.playerChunkLoader.getAPIViewDistance();
+            return level.moonrise$getPlayerChunkLoader().getAPIViewDistance();
         }
         // view distance = load distance + 1
         return data.lastLoadDistance - 1;
     }
 
     public static int getLoadViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.level;
-        final PlayerChunkLoaderData data = player.chunkLoader;
+        final ServerLevel level = player.serverLevel();
+        final PlayerChunkLoaderData data = player.moonrise$getChunkLoader();
         if (data == null) {
-            return level.playerChunkLoader.getAPIViewDistance();
+            return level.moonrise$getPlayerChunkLoader().getAPIViewDistance();
         }
         // view distance = load distance + 1
         return data.lastLoadDistance - 1;
     }
 
-    private final ServerLevel world;
-
     public static int getAPISendViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.level;
-        final PlayerChunkLoaderData data = player.chunkLoader;
+        final ServerLevel level = player.serverLevel();
+        final PlayerChunkLoaderData data = player.moonrise$getChunkLoader();
         if (data == null) {
-            return level.playerChunkLoader.getAPISendViewDistance();
+            return level.moonrise$getPlayerChunkLoader().getAPISendViewDistance();
         }
         return data.lastSendDistance;
     }
 
-    public static int getAPITickViewDistance(final ServerPlayer player) {
-        final ServerLevel level = (ServerLevel)player.level;
-        final PlayerChunkLoaderData data = player.chunkLoader;
-        if (data == null) {
-            return level.playerChunkLoader.getAPITickDistance();
-        }
-        return data.lastTickDistance;
-    }
+    private final ServerLevel world;
 
     public RegionizedPlayerChunkLoader(final ServerLevel world) {
         this.world = world;
     }
 
     public void addPlayer(final ServerPlayer player) {
-        TickThread.ensureTickThread(player, "Cannot add player to player chunk loader async");
+        io.papermc.paper.util.TickThread.ensureTickThread(player, "Cannot add player to player chunk loader async");
+        if (!player.isRealPlayer) {
+            return;
+        }
 
-        if (player.chunkLoader != null) {
+        if ((player).moonrise$getChunkLoader() != null) {
             throw new IllegalStateException("Player is already added to player chunk loader");
         }
 
         final PlayerChunkLoaderData loader = new PlayerChunkLoaderData(this.world, player);
 
-        player.chunkLoader = loader;
+        (player).moonrise$setChunkLoader(loader);
         loader.add();
     }
 
     public void updatePlayer(final ServerPlayer player) {
-        final PlayerChunkLoaderData loader = player.chunkLoader;
+        final PlayerChunkLoaderData loader = (player).moonrise$getChunkLoader();
         if (loader != null) {
             loader.update();
+            // update view distances for nearby players
+            (loader.world).moonrise$getNearbyPlayers().tickPlayer(player);
         }
     }
 
     public void removePlayer(final ServerPlayer player) {
-        TickThread.ensureTickThread(player, "Cannot remove player from player chunk loader async");
+        io.papermc.paper.util.TickThread.ensureTickThread(player, "Cannot remove player from player chunk loader async");
+        if (!(player).moonrise$isRealPlayer()) {
+            return;
+        }
 
-        final PlayerChunkLoaderData loader = player.chunkLoader;
+        final PlayerChunkLoaderData loader = (player).moonrise$getChunkLoader();
 
         if (loader == null) {
             return;
         }
 
         loader.remove();
-        player.chunkLoader = null;
+        (player).moonrise$setChunkLoader(null);
     }
 
     public void setSendDistance(final int distance) {
-        this.world.setSendViewDistance(distance);
+        (this.world).moonrise$getViewDistanceHolder().setSendViewDistance(distance);
     }
 
     public void setLoadDistance(final int distance) {
-        this.world.setLoadViewDistance(distance);
+        (this.world).moonrise$getViewDistanceHolder().setLoadViewDistance(distance);
     }
 
     public void setTickDistance(final int distance) {
-        this.world.setTickViewDistance(distance);
+        (this.world).moonrise$getViewDistanceHolder().setTickViewDistance(distance);
     }
 
     // Note: follow the player chunk loader so everything stays consistent...
     public int getAPITickDistance() {
-        final ViewDistances distances = this.world.getViewDistances();
-        final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(-1, distances.tickViewDistance);
+        final ViewDistances distances = (this.world).moonrise$getViewDistanceHolder().getViewDistances();
+        final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(
+                -1, distances.tickViewDistance,
+                -1, distances.loadViewDistance
+        );
         return tickViewDistance;
     }
 
     public int getAPIViewDistance() {
-        final ViewDistances distances = this.world.getViewDistances();
-        final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(-1, distances.tickViewDistance);
+        final ViewDistances distances = (this.world).moonrise$getViewDistanceHolder().getViewDistances();
+        final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(
+                -1, distances.tickViewDistance,
+                -1, distances.loadViewDistance
+        );
         final int loadDistance = PlayerChunkLoaderData.getLoadViewDistance(tickViewDistance, -1, distances.loadViewDistance);
 
         // loadDistance = api view distance + 1
@@ -166,8 +251,11 @@ public class RegionizedPlayerChunkLoader {
     }
 
     public int getAPISendViewDistance() {
-        final ViewDistances distances = this.world.getViewDistances();
-        final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(-1, distances.tickViewDistance);
+        final ViewDistances distances = (this.world).moonrise$getViewDistanceHolder().getViewDistances();
+        final int tickViewDistance = PlayerChunkLoaderData.getTickDistance(
+                -1, distances.tickViewDistance,
+                -1, distances.loadViewDistance
+        );
         final int loadDistance = PlayerChunkLoaderData.getLoadViewDistance(tickViewDistance, -1, distances.loadViewDistance);
         final int sendViewDistance = PlayerChunkLoaderData.getSendViewDistance(
                 loadDistance, -1, -1, distances.sendViewDistance
@@ -181,7 +269,7 @@ public class RegionizedPlayerChunkLoader {
     }
 
     public boolean isChunkSent(final ServerPlayer player, final int chunkX, final int chunkZ) {
-        final PlayerChunkLoaderData loader = player.chunkLoader;
+        final PlayerChunkLoaderData loader = (player).moonrise$getChunkLoader();
         if (loader == null) {
             return false;
         }
@@ -190,7 +278,7 @@ public class RegionizedPlayerChunkLoader {
     }
 
     public boolean isChunkSentBorderOnly(final ServerPlayer player, final int chunkX, final int chunkZ) {
-        final PlayerChunkLoaderData loader = player.chunkLoader;
+        final PlayerChunkLoaderData loader = (player).moonrise$getChunkLoader();
         if (loader == null) {
             return false;
         }
@@ -207,11 +295,11 @@ public class RegionizedPlayerChunkLoader {
     }
 
     public void tick() {
-        TickThread.ensureTickThread("Cannot tick player chunk loader async");
+        io.papermc.paper.util.TickThread.ensureTickThread("Cannot tick player chunk loader async");
         long currTime = System.nanoTime();
-        for (final ServerPlayer player : new java.util.ArrayList<>(this.world.players())) { // Folia - region threding
-            final PlayerChunkLoaderData loader = player.chunkLoader;
-            if (loader == null || loader.world != this.world) {
+        for (final ServerPlayer player : new java.util.ArrayList<>(this.world.players())) {
+            final PlayerChunkLoaderData loader = (player).moonrise$getChunkLoader();
+            if (loader == null || loader.removed || loader.world != this.world) {
                 // not our problem anymore
                 continue;
             }
@@ -220,150 +308,11 @@ public class RegionizedPlayerChunkLoader {
         }
     }
 
-    private static long[] generateBFSOrder(final int radius) {
-        final LongArrayList chunks = new LongArrayList();
-        final LongArrayFIFOQueue queue = new LongArrayFIFOQueue();
-        final LongOpenHashSet seen = new LongOpenHashSet();
-
-        seen.add(CoordinateUtils.getChunkKey(0, 0));
-        queue.enqueue(CoordinateUtils.getChunkKey(0, 0));
-        while (!queue.isEmpty()) {
-            final long chunk = queue.dequeueLong();
-            final int chunkX = CoordinateUtils.getChunkX(chunk);
-            final int chunkZ = CoordinateUtils.getChunkZ(chunk);
-
-            // important that the addition to the list is here, rather than when enqueueing neighbours
-            // ensures the order is actually kept
-            chunks.add(chunk);
-
-            // -x
-            final long n1 = CoordinateUtils.getChunkKey(chunkX - 1, chunkZ);
-            // -z
-            final long n2 = CoordinateUtils.getChunkKey(chunkX, chunkZ - 1);
-            // +x
-            final long n3 = CoordinateUtils.getChunkKey(chunkX + 1, chunkZ);
-            // +z
-            final long n4 = CoordinateUtils.getChunkKey(chunkX, chunkZ + 1);
-
-            final long[] list = new long[] {n1, n2, n3, n4};
-
-            for (final long neighbour : list) {
-                final int neighbourX = CoordinateUtils.getChunkX(neighbour);
-                final int neighbourZ = CoordinateUtils.getChunkZ(neighbour);
-                if (Math.max(Math.abs(neighbourX), Math.abs(neighbourZ)) > radius) {
-                    // don't enqueue out of range
-                    continue;
-                }
-                if (!seen.add(neighbour)) {
-                    continue;
-                }
-                queue.enqueue(neighbour);
-            }
-        }
-
-        // to increase generation parallelism, we want to space the chunks out so that they are not nearby when generating
-        // this also means we are minimising locality
-        // but, we need to maintain sorted order by manhatten distance
-
-        // first, build a map of manhatten distance -> chunks
-        final java.util.List<LongArrayList> byDistance = new java.util.ArrayList<>();
-        for (final it.unimi.dsi.fastutil.longs.LongIterator iterator = chunks.iterator(); iterator.hasNext();) {
-            final long chunkKey = iterator.nextLong();
-
-            final int chunkX = CoordinateUtils.getChunkX(chunkKey);
-            final int chunkZ = CoordinateUtils.getChunkZ(chunkKey);
-
-            final int dist = Math.abs(chunkX) + Math.abs(chunkZ);
-            if (dist == byDistance.size()) {
-                final LongArrayList list = new LongArrayList();
-                list.add(chunkKey);
-                byDistance.add(list);
-                continue;
-            }
-
-            byDistance.get(dist).add(chunkKey);
-        }
-
-        // per distance we transform the chunk list so that each element is maximally spaced out from each other
-        for (int i = 0, len = byDistance.size(); i < len; ++i) {
-            final LongArrayList notAdded = byDistance.get(i).clone();
-            final LongArrayList added = new LongArrayList();
-
-            while (!notAdded.isEmpty()) {
-                if (added.isEmpty()) {
-                    added.add(notAdded.removeLong(notAdded.size() - 1));
-                    continue;
-                }
-
-                long maxChunk = -1L;
-                int maxDist = 0;
-
-                // select the chunk from the not yet added set that has the largest minimum distance from
-                // the current set of added chunks
-
-                for (final it.unimi.dsi.fastutil.longs.LongIterator iterator = notAdded.iterator(); iterator.hasNext();) {
-                    final long chunkKey = iterator.nextLong();
-                    final int chunkX = CoordinateUtils.getChunkX(chunkKey);
-                    final int chunkZ = CoordinateUtils.getChunkZ(chunkKey);
-
-                    int minDist = Integer.MAX_VALUE;
-
-                    for (final it.unimi.dsi.fastutil.longs.LongIterator iterator2 = added.iterator(); iterator2.hasNext();) {
-                        final long addedKey = iterator2.nextLong();
-                        final int addedX = CoordinateUtils.getChunkX(addedKey);
-                        final int addedZ = CoordinateUtils.getChunkZ(addedKey);
-
-                        // here we use square distance because chunk generation uses neighbours in a square radius
-                        final int dist = Math.max(Math.abs(addedX - chunkX), Math.abs(addedZ - chunkZ));
-
-                        if (dist < minDist) {
-                            minDist = dist;
-                        }
-                    }
-
-                    if (minDist > maxDist) {
-                        maxDist = minDist;
-                        maxChunk = chunkKey;
-                    }
-                }
-
-                // move the selected chunk from the not added set to the added set
-
-                if (!notAdded.rem(maxChunk)) {
-                    throw new IllegalStateException();
-                }
-
-                added.add(maxChunk);
-            }
-
-            byDistance.set(i, added);
-        }
-
-        // now, rebuild the list so that it still maintains manhatten distance order
-        final LongArrayList ret = new LongArrayList(chunks.size());
-
-        for (final LongArrayList dist : byDistance) {
-            ret.addAll(dist);
-        }
-
-        return ret.toLongArray();
-    }
-
     public static final class PlayerChunkLoaderData {
 
         private static final AtomicLong ID_GENERATOR = new AtomicLong();
         private final long id = ID_GENERATOR.incrementAndGet();
         private final Long idBoxed = Long.valueOf(this.id);
-
-        // expected that this list returns for a given radius, the set of chunks ordered
-        // by manhattan distance
-        private static final long[][] SEARCH_RADIUS_ITERATION_LIST = new long[65][];
-        static {
-            for (int i = 0; i < SEARCH_RADIUS_ITERATION_LIST.length; ++i) {
-                // a BFS around -x, -z, +x, +z will give increasing manhatten distance
-                SEARCH_RADIUS_ITERATION_LIST[i] = generateBFSOrder(i);
-            }
-        }
 
         private static final long MAX_RATE = 10_000L;
 
@@ -408,9 +357,10 @@ public class RegionizedPlayerChunkLoader {
         }
 
         // rate limiting
-        private final AllocatingRateLimiter chunkSendLimiter = new AllocatingRateLimiter();
-        private final AllocatingRateLimiter chunkLoadTicketLimiter = new AllocatingRateLimiter();
-        private final AllocatingRateLimiter chunkGenerateTicketLimiter = new AllocatingRateLimiter();
+        private static final long ALLOCATION_GRANULARITY = TimeUnit.SECONDS.toNanos(1L);
+        private final AllocatingRateLimiter chunkSendLimiter = new AllocatingRateLimiter(ALLOCATION_GRANULARITY);
+        private final AllocatingRateLimiter chunkLoadTicketLimiter = new AllocatingRateLimiter(ALLOCATION_GRANULARITY);
+        private final AllocatingRateLimiter chunkGenerateTicketLimiter = new AllocatingRateLimiter(ALLOCATION_GRANULARITY);
 
         // queues
         private final LongComparator CLOSEST_MANHATTAN_DIST = (final long c1, final long c2) -> {
@@ -446,7 +396,7 @@ public class RegionizedPlayerChunkLoader {
             if (this.delayedTicketOps.isEmpty()) {
                 return;
             }
-            this.world.chunkTaskScheduler.chunkHolderManager.performTicketUpdates(this.delayedTicketOps);
+            (this.world).chunkTaskScheduler.chunkHolderManager.performTicketUpdates(this.delayedTicketOps);
             this.delayedTicketOps.clear();
         }
 
@@ -456,6 +406,7 @@ public class RegionizedPlayerChunkLoader {
 
         private void sendChunk(final int chunkX, final int chunkZ) {
             if (this.sentChunks.add(CoordinateUtils.getChunkKey(chunkX, chunkZ))) {
+                this.world.chunkTaskScheduler.chunkHolderManager.getChunkHolder(chunkX, chunkZ).vanillaChunkHolder.moonrise$addReceivedChunk(this.player);
                 this.world.getChunkSource().chunkMap.updateChunkTracking(this.player,
                         new ChunkPos(chunkX, chunkZ), new MutableObject<>(), false, true); // unloaded, loaded
                 return;
@@ -471,8 +422,10 @@ public class RegionizedPlayerChunkLoader {
         }
 
         private void sendUnloadChunkRaw(final int chunkX, final int chunkZ) {
-            this.player.getLevel().getChunkSource().chunkMap.updateChunkTracking(this.player,
-                    new ChunkPos(chunkX, chunkZ), null, true, false); // unloaded, loaded
+            // Note: Check PlayerChunkSender#dropChunk for other logic
+            // Note: drop isAlive() check so that chunks properly unload client-side when the player dies
+            this.world.chunkTaskScheduler.chunkHolderManager.getChunkHolder(chunkX, chunkZ).vanillaChunkHolder.moonrise$removeReceivedChunk(this.player);
+            this.player.connection.send(new ClientboundForgetLevelChunkPacket(chunkX, chunkZ));
         }
 
         private final SingleUserAreaMap<PlayerChunkLoaderData> broadcastMap = new SingleUserAreaMap<>(this) {
@@ -503,8 +456,8 @@ public class RegionizedPlayerChunkLoader {
 
                 parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addAndRemove(
                         chunk,
-                        TicketType.UNKNOWN, level, new ChunkPos(chunkX, chunkZ),
-                        REGION_PLAYER_TICKET, level, parameter.idBoxed
+                        PLAYER_TICKET_DELAYED, level, parameter.idBoxed,
+                        PLAYER_TICKET, level, parameter.idBoxed
                 ));
             }
         };
@@ -523,17 +476,16 @@ public class RegionizedPlayerChunkLoader {
                     return;
                 }
 
-                // Since we are possibly downgrading the ticket level, we add an unknown ticket so that
-                // the level is kept until tick().
+                // Since we are possibly downgrading the ticket level, we add the delayed unload ticket so that
+                // the level is kept for a short period of time
                 parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addAndRemove(
                         chunk,
-                        TicketType.UNKNOWN, TICK_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
-                        REGION_PLAYER_TICKET, TICK_TICKET_LEVEL, parameter.idBoxed
+                        PLAYER_TICKET_DELAYED, TICK_TICKET_LEVEL, parameter.idBoxed,
+                        PLAYER_TICKET, TICK_TICKET_LEVEL, parameter.idBoxed
                 ));
                 // keep chunk at new generated level
                 parameter.pushDelayedTicketOp(ChunkHolderManager.TicketOperation.addOp(
-                        chunk,
-                        REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, parameter.idBoxed
+                        chunk, PLAYER_TICKET, GENERATED_TICKET_LEVEL, parameter.idBoxed
                 ));
             }
         };
@@ -549,8 +501,12 @@ public class RegionizedPlayerChunkLoader {
             return vd == null ? -1 : Math.max(0, vd.intValue());
         }
 
-        private static int getTickDistance(final int playerTickViewDistance, final int worldTickViewDistance) {
-            return playerTickViewDistance < 0 ? worldTickViewDistance : playerTickViewDistance;
+        private static int getTickDistance(final int playerTickViewDistance, final int worldTickViewDistance,
+                                           final int playerLoadViewDistance, final int worldLoadViewDistance) {
+            return Math.min(
+                    playerTickViewDistance < 0 ? worldTickViewDistance : playerTickViewDistance,
+                    playerLoadViewDistance < 0 ? worldLoadViewDistance : playerLoadViewDistance
+            );
         }
 
         private static int getLoadViewDistance(final int tickViewDistance, final int playerLoadViewDistance,
@@ -589,19 +545,19 @@ public class RegionizedPlayerChunkLoader {
         private double getMaxChunkLoadRate() {
             final double configRate = GoldenForgeConfig.Server.playerMaxChunkLoadRate.get();
 
-            return configRate < 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
+            return configRate <= 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private double getMaxChunkGenRate() {
             final double configRate =  GoldenForgeConfig.Server.playerMaxChunkGenerateRate.get();
 
-            return configRate < 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
+            return configRate <= 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private double getMaxChunkSendRate() {
             final double configRate =  GoldenForgeConfig.Server.playerMaxChunkSendRate.get();
 
-            return configRate < 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
+            return configRate <= 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private long getMaxChunkLoads() {
@@ -636,7 +592,7 @@ public class RegionizedPlayerChunkLoader {
             final int dx = this.lastChunkX - chunkX;
             final int dz = this.lastChunkZ - chunkZ;
             return (Math.max(Math.abs(dx), Math.abs(dz)) <= (this.lastSendDistance + 1)) && wantChunkLoaded(
-                this.lastChunkX, this.lastChunkZ, chunkX, chunkZ, this.lastSendDistance
+                    this.lastChunkX, this.lastChunkZ, chunkX, chunkZ, this.lastSendDistance
             );
         }
 
@@ -646,8 +602,27 @@ public class RegionizedPlayerChunkLoader {
             return Math.max(Math.abs(dx), Math.abs(dz)) <= this.lastTickDistance;
         }
 
+        private boolean areNeighboursGenerated(final int chunkX, final int chunkZ, final int radius) {
+            for (int dz = -radius; dz <= radius; ++dz) {
+                for (int dx = -radius; dx <= radius; ++dx) {
+                    if ((dx | dz) == 0) {
+                        continue;
+                    }
+
+                    final long neighbour = CoordinateUtils.getChunkKey(dx + chunkX, dz + chunkZ);
+                    final byte stage = this.chunkTicketStage.get(neighbour);
+
+                    if (stage != CHUNK_TICKET_STAGE_GENERATED && stage != CHUNK_TICKET_STAGE_TICK) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
         void updateQueues(final long time) {
-            TickThread.ensureTickThread(this.player, "Cannot tick player chunk loader async");
+            io.papermc.paper.util.TickThread.ensureTickThread(this.player, "Cannot tick player chunk loader async");
             if (this.removed) {
                 throw new IllegalStateException("Ticking removed player chunk loader");
             }
@@ -665,7 +640,7 @@ public class RegionizedPlayerChunkLoader {
                 final long pendingLoadChunk = this.loadingQueue.firstLong();
                 final int pendingChunkX = CoordinateUtils.getChunkX(pendingLoadChunk);
                 final int pendingChunkZ = CoordinateUtils.getChunkZ(pendingLoadChunk);
-                final ChunkAccess pending = this.world.chunkSource.getChunkAtImmediately(pendingChunkX, pendingChunkZ);
+                final ChunkAccess pending = this.world.moonrise$getAnyChunkIfLoaded(pendingChunkX, pendingChunkZ);
                 if (pending == null) {
                     // nothing to do here
                     break;
@@ -698,7 +673,7 @@ public class RegionizedPlayerChunkLoader {
                     this.pushDelayedTicketOp(
                             ChunkHolderManager.TicketOperation.addOp(
                                     chunk,
-                                    REGION_PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
+                                    PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
                             )
                     );
                     chunks.add(chunk);
@@ -711,7 +686,7 @@ public class RegionizedPlayerChunkLoader {
                 // load - only generate ticket levels start anything, but they start generation...
                 // propagate levels
                 // Note: this CAN call plugin logic, so it is VITAL that our bookkeeping logic is completely done by the time this is invoked
-                this.world.chunkTaskScheduler.chunkHolderManager.processTicketUpdates();
+                (this.world).chunkTaskScheduler.chunkHolderManager.processTicketUpdates();
 
                 if (this.removed) {
                     // process ticket updates may invoke plugin logic, which may remove this player
@@ -722,7 +697,7 @@ public class RegionizedPlayerChunkLoader {
                     final long queuedLoadChunk = chunks.getLong(i);
                     final int queuedChunkX = CoordinateUtils.getChunkX(queuedLoadChunk);
                     final int queuedChunkZ = CoordinateUtils.getChunkZ(queuedLoadChunk);
-                    this.world.chunkTaskScheduler.scheduleChunkLoad(
+                    (this.world).chunkTaskScheduler.scheduleChunkLoad(
                             queuedChunkX, queuedChunkZ, ChunkStatus.EMPTY, false, PrioritisedExecutor.Priority.NORMAL, null
                     );
                     if (this.removed) {
@@ -736,7 +711,7 @@ public class RegionizedPlayerChunkLoader {
                 final long pendingGenChunk = this.generatingQueue.firstLong();
                 final int pendingChunkX = CoordinateUtils.getChunkX(pendingGenChunk);
                 final int pendingChunkZ = CoordinateUtils.getChunkZ(pendingGenChunk);
-                final LevelChunk pending = this.world.chunkSource.getChunkAtIfLoadedMainThreadNoCache(pendingChunkX, pendingChunkZ);
+                final LevelChunk pending = (this.world).moonrise$getFullChunkIfLoaded(pendingChunkX, pendingChunkZ);
                 if (pending == null) {
                     // nothing to do here
                     break;
@@ -762,53 +737,61 @@ public class RegionizedPlayerChunkLoader {
 
             // try to push more chunk generations
             final long maxGens = Math.max(0L, Math.min(MAX_RATE, Math.min(this.genQueue.size(), this.getMaxChunkGenerates())));
-            final int maxGensThisTick = (int)this.chunkGenerateTicketLimiter.takeAllocation(time, genRate, maxGens);
-            for (int i = 0; i < maxGensThisTick; ++i) {
-                final long chunk = this.genQueue.dequeueLong();
-                final byte prev = this.chunkTicketStage.put(chunk, CHUNK_TICKET_STAGE_GENERATING);
+            // preview the allocations, as we may not actually utilise all of them
+            final long maxGensThisTick = this.chunkGenerateTicketLimiter.previewAllocation(time, genRate, maxGens);
+            long ratedGensThisTick = 0L;
+            while (!this.genQueue.isEmpty()) {
+                final long chunkKey = this.genQueue.firstLong();
+                final int chunkX = CoordinateUtils.getChunkX(chunkKey);
+                final int chunkZ = CoordinateUtils.getChunkZ(chunkKey);
+                final ChunkAccess chunk = (this.world).moonrise$getAnyChunkIfLoaded(chunkX, chunkZ);
+                if (chunk.getStatus() != ChunkStatus.FULL) {
+                    // only rate limit actual generations
+                    if ((ratedGensThisTick + 1L) > maxGensThisTick) {
+                        break;
+                    }
+                    ++ratedGensThisTick;
+                }
+
+                this.genQueue.dequeueLong();
+
+                final byte prev = this.chunkTicketStage.put(chunkKey, CHUNK_TICKET_STAGE_GENERATING);
                 if (prev != CHUNK_TICKET_STAGE_LOADED) {
                     throw new IllegalStateException("Previous state should be " + CHUNK_TICKET_STAGE_LOADED + ", not " + prev);
                 }
                 this.pushDelayedTicketOp(
                         ChunkHolderManager.TicketOperation.addAndRemove(
-                                chunk,
-                                REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed,
-                                REGION_PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
+                                chunkKey,
+                                PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed,
+                                PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
                         )
                 );
-                this.generatingQueue.enqueue(chunk);
+                this.generatingQueue.enqueue(chunkKey);
             }
+            // take the allocations we actually used
+            this.chunkGenerateTicketLimiter.takeAllocation(time, genRate, ratedGensThisTick);
 
             // try to pull ticking chunks
-            tick_check_outer:
             while (!this.tickingQueue.isEmpty()) {
                 final long pendingTicking = this.tickingQueue.firstLong();
                 final int pendingChunkX = CoordinateUtils.getChunkX(pendingTicking);
                 final int pendingChunkZ = CoordinateUtils.getChunkZ(pendingTicking);
 
-                final int tickingReq = 2;
-                for (int dz = -tickingReq; dz <= tickingReq; ++dz) {
-                    for (int dx = -tickingReq; dx <= tickingReq; ++dx) {
-                        if ((dx | dz) == 0) {
-                            continue;
-                        }
-                        final long neighbour = CoordinateUtils.getChunkKey(dx + pendingChunkX, dz + pendingChunkZ);
-                        final byte stage = this.chunkTicketStage.get(neighbour);
-                        if (stage != CHUNK_TICKET_STAGE_GENERATED && stage != CHUNK_TICKET_STAGE_TICK) {
-                            break tick_check_outer;
-                        }
-                    }
+                if (!this.areNeighboursGenerated(pendingChunkX, pendingChunkZ,
+                        ChunkHolderManager.FULL_LOADED_TICKET_LEVEL - ChunkHolderManager.ENTITY_TICKING_TICKET_LEVEL)) {
+                    break;
                 }
+
                 // only gets here if all neighbours were marked as generated or ticking themselves
                 this.tickingQueue.dequeueLong();
                 this.pushDelayedTicketOp(
                         ChunkHolderManager.TicketOperation.addAndRemove(
                                 pendingTicking,
-                                REGION_PLAYER_TICKET, TICK_TICKET_LEVEL, this.idBoxed,
-                                REGION_PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed
+                                PLAYER_TICKET, TICK_TICKET_LEVEL, this.idBoxed,
+                                PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed
                         )
                 );
-                // there is no queue to add after ticking
+                // note: there is no queue to add after ticking
                 final byte prev = this.chunkTicketStage.put(pendingTicking, CHUNK_TICKET_STAGE_TICK);
                 if (prev != CHUNK_TICKET_STAGE_GENERATED) {
                     throw new IllegalStateException("Previous state should be " + CHUNK_TICKET_STAGE_GENERATED + ", not " + prev);
@@ -816,20 +799,20 @@ public class RegionizedPlayerChunkLoader {
             }
 
             // try to pull sending chunks
-            final long maxSends = Math.max(0L, Math.min(MAX_RATE, Integer.MAX_VALUE)); // no logic to track concurrent sends
+            final long maxSends = Math.max(0L, Math.min(MAX_RATE, Integer.MAX_VALUE)); // note: no logic to track concurrent sends
             final int maxSendsThisTick = Math.min((int)this.chunkSendLimiter.takeAllocation(time, sendRate, maxSends), this.sendQueue.size());
             // we do not return sends that we took from the allocation back because we want to limit the max send rate, not target it
             for (int i = 0; i < maxSendsThisTick; ++i) {
                 final long pendingSend = this.sendQueue.firstLong();
                 final int pendingSendX = CoordinateUtils.getChunkX(pendingSend);
                 final int pendingSendZ = CoordinateUtils.getChunkZ(pendingSend);
-                final LevelChunk chunk = this.world.chunkSource.getChunkAtIfLoadedMainThreadNoCache(pendingSendX, pendingSendZ);
-                if (!chunk.areNeighboursLoaded(1) || !TickThread.isTickThreadFor(this.world, pendingSendX, pendingSendZ)) {
+                final LevelChunk chunk = (this.world).moonrise$getFullChunkIfLoaded(pendingSendX, pendingSendZ);
+                if (!this.areNeighboursGenerated(pendingSendX, pendingSendZ, 1) || !io.papermc.paper.util.TickThread.isTickThreadFor(this.world, pendingSendX, pendingSendZ)) {
                     // nothing to do
                     // the target chunk may not be owned by this region, but this should be resolved in the future
                     break;
                 }
-                if (!chunk.isPostProcessingDone) {
+                if (!(chunk).isPostProcessingDone) {
                     // not yet post-processed, need to do this so that tile entities can properly be sent to clients
                     chunk.postProcessGeneration();
                     // check if there was any recursive action
@@ -840,6 +823,7 @@ public class RegionizedPlayerChunkLoader {
                 this.sendQueue.dequeueLong();
 
                 this.sendChunk(pendingSendX, pendingSendZ);
+
                 if (this.removed) {
                     // sendChunk may invoke plugin logic
                     return;
@@ -847,26 +831,29 @@ public class RegionizedPlayerChunkLoader {
             }
 
             this.flushDelayedTicketOps();
-            // we assume propagate ticket levels happens after this call
         }
 
         void add() {
-            TickThread.ensureTickThread(this.player, "Cannot add player asynchronously");
+            io.papermc.paper.util.TickThread.ensureTickThread(this.player, "Cannot add player asynchronously");
             if (this.removed) {
                 throw new IllegalStateException("Adding removed player chunk loader");
             }
-            final ViewDistances playerDistances = this.player.getViewDistances();
-            final ViewDistances worldDistances = this.world.getViewDistances();
+            final ViewDistances playerDistances = (this.player).moonrise$getViewDistanceHolder().getViewDistances();
+            final ViewDistances worldDistances = (this.world).moonrise$getViewDistanceHolder().getViewDistances();
             final int chunkX = this.player.chunkPosition().x;
             final int chunkZ = this.player.chunkPosition().z;
 
-            final int tickViewDistance = getTickDistance(playerDistances.tickViewDistance, worldDistances.tickViewDistance);
+            final int tickViewDistance = getTickDistance(
+                    playerDistances.tickViewDistance, worldDistances.tickViewDistance,
+                    playerDistances.loadViewDistance, worldDistances.loadViewDistance
+            );
             // load view cannot be less-than tick view + 1
             final int loadViewDistance = getLoadViewDistance(tickViewDistance, playerDistances.loadViewDistance, worldDistances.loadViewDistance);
             // send view cannot be greater-than load view
             final int clientViewDistance = getClientViewDistance(this.player);
             final int sendViewDistance = getSendViewDistance(loadViewDistance, clientViewDistance, playerDistances.sendViewDistance, worldDistances.sendViewDistance);
 
+            // TODO check PlayerList diff in paper chunk system patch
             // send view distances
             this.player.connection.send(this.updateClientChunkRadius(sendViewDistance));
             this.player.connection.send(this.updateClientSimulationDistance(tickViewDistance));
@@ -879,32 +866,41 @@ public class RegionizedPlayerChunkLoader {
             // update chunk center
             this.player.connection.send(this.updateClientChunkCenter(chunkX, chunkZ));
 
+            // reset limiters, they will start at a zero allocation
+            final long time = System.nanoTime();
+            this.chunkLoadTicketLimiter.reset(time);
+            this.chunkGenerateTicketLimiter.reset(time);
+            this.chunkSendLimiter.reset(time);
+
             // now we can update
             this.update();
         }
 
         private boolean isLoadedChunkGeneratable(final int chunkX, final int chunkZ) {
-            return this.isLoadedChunkGeneratable(this.world.chunkSource.getChunkAtImmediately(chunkX, chunkZ));
+            return this.isLoadedChunkGeneratable((this.world).moonrise$getAnyChunkIfLoaded(chunkX, chunkZ));
         }
 
         private boolean isLoadedChunkGeneratable(final ChunkAccess chunkAccess) {
             final BelowZeroRetrogen belowZeroRetrogen;
             // see PortalForcer#findPortalAround
             return chunkAccess != null && (
-                chunkAccess.getStatus() == ChunkStatus.FULL ||
-                    ((belowZeroRetrogen = chunkAccess.getBelowZeroRetrogen()) != null && belowZeroRetrogen.targetStatus().isOrAfter(ChunkStatus.SPAWN))
+                    chunkAccess.getStatus() == ChunkStatus.FULL ||
+                            ((belowZeroRetrogen = chunkAccess.getBelowZeroRetrogen()) != null && belowZeroRetrogen.targetStatus().isOrAfter(ChunkStatus.SPAWN))
             );
         }
 
         void update() {
-            TickThread.ensureTickThread(this.player, "Cannot update player asynchronously");
+            io.papermc.paper.util.TickThread.ensureTickThread(this.player, "Cannot update player asynchronously");
             if (this.removed) {
                 throw new IllegalStateException("Updating removed player chunk loader");
             }
-            final ViewDistances playerDistances = this.player.getViewDistances();
-            final ViewDistances worldDistances = this.world.getViewDistances();
+            final ViewDistances playerDistances = (this.player).moonrise$getViewDistanceHolder().getViewDistances();
+            final ViewDistances worldDistances = (this.world).moonrise$getViewDistanceHolder().getViewDistances();
 
-            final int tickViewDistance = getTickDistance(playerDistances.tickViewDistance, worldDistances.tickViewDistance);
+            final int tickViewDistance = getTickDistance(
+                    playerDistances.tickViewDistance, worldDistances.tickViewDistance,
+                    playerDistances.loadViewDistance, worldDistances.loadViewDistance
+            );
             // load view cannot be less-than tick view + 1
             final int loadViewDistance = getLoadViewDistance(tickViewDistance, playerDistances.loadViewDistance, worldDistances.loadViewDistance);
             // send view cannot be greater-than load view
@@ -968,7 +964,7 @@ public class RegionizedPlayerChunkLoader {
             this.canGenerateChunks = canGenerateChunks;
 
             // +1 since we need to load chunks +1 around the load view distance...
-            final long[] toIterate = SEARCH_RADIUS_ITERATION_LIST[loadViewDistance + 1];
+            final long[] toIterate = ParallelSearchRadiusIteration.getSearchIteration(loadViewDistance + 1);
             // the iteration order is by increasing manhattan distance - so, we do NOT need to
             // sort anything in the queue!
             for (final long deltaChunk : toIterate) {
@@ -978,14 +974,14 @@ public class RegionizedPlayerChunkLoader {
                 final int chunkZ = dz + currentChunkZ;
                 final long chunk = CoordinateUtils.getChunkKey(chunkX, chunkZ);
                 final int squareDistance = Math.max(Math.abs(dx), Math.abs(dz));
-                //final int manhattanDistance = Math.abs(dx) + Math.abs(dz);
+                final int manhattanDistance = Math.abs(dx) + Math.abs(dz);
 
                 // since chunk sending is not by radius alone, we need an extra check here to account for
                 // everything <= sendDistance
                 // Note: Vanilla may want to send chunks outside the send view distance, so we do need
                 // the dist <= view check
                 final boolean sendChunk = (squareDistance <= (sendViewDistance + 1))
-                    && wantChunkLoaded(currentChunkX, currentChunkZ, chunkX, chunkZ, sendViewDistance);
+                        && wantChunkLoaded(currentChunkX, currentChunkZ, chunkX, chunkZ, sendViewDistance);
                 final boolean sentChunk = sendChunk ? this.sentChunks.contains(chunk) : this.sentChunks.remove(chunk);
 
                 if (!sendChunk && sentChunk) {
@@ -1046,7 +1042,7 @@ public class RegionizedPlayerChunkLoader {
         }
 
         void remove() {
-            TickThread.ensureTickThread(this.player, "Cannot add player asynchronously");
+            io.papermc.paper.util.TickThread.ensureTickThread(this.player, "Cannot add player asynchronously");
             if (this.removed) {
                 throw new IllegalStateException("Removing removed player chunk loader");
             }
@@ -1071,331 +1067,10 @@ public class RegionizedPlayerChunkLoader {
 
             // now all tickets should be removed, which is all of our external state
         }
-    }
 
-    // TODO rebase into util patch
-    private static final class AllocatingRateLimiter {
-
-        // max difference granularity in ns
-        private static final long MAX_GRANULARITY = TimeUnit.SECONDS.toNanos(1L);
-
-        private double allocation;
-        private long lastAllocationUpdate;
-        private double takeCarry;
-        private long lastTakeUpdate;
-
-        // rate in units/s, and time in ns
-        public void tickAllocation(final long time, final double rate, final double maxAllocation) {
-            final long diff = Math.min(MAX_GRANULARITY, time - this.lastAllocationUpdate);
-            this.lastAllocationUpdate = time;
-
-            this.allocation = Math.min(maxAllocation - this.takeCarry, this.allocation + rate * (diff*1.0E-9D));
-        }
-
-        // rate in units/s, and time in ns
-        public long takeAllocation(final long time, final double rate, final long maxTake) {
-            if (maxTake < 1L) {
-                return 0L;
-            }
-
-            double ret = this.takeCarry;
-            final long diff = Math.min(MAX_GRANULARITY, time - this.lastTakeUpdate);
-            this.lastTakeUpdate = time;
-
-            // note: abs(takeCarry) <= 1.0
-            final double take = Math.min(Math.min((double)maxTake - this.takeCarry, this.allocation), rate * (diff*1.0E-9));
-
-            ret += take;
-            this.allocation -= take;
-
-            final long retInteger = (long)Math.floor(ret);
-            this.takeCarry = ret - (double)retInteger;
-
-            return retInteger;
-        }
-    }
-
-    public static abstract class SingleUserAreaMap<T> {
-
-        private static final int NOT_SET = Integer.MIN_VALUE;
-
-        private final T parameter;
-        private int lastChunkX = NOT_SET;
-        private int lastChunkZ = NOT_SET;
-        private int distance = NOT_SET;
-
-        public SingleUserAreaMap(final T parameter) {
-            this.parameter = parameter;
-        }
-
-        /* math sign function except 0 returns 1 */
-        protected static int sign(int val) {
-            return 1 | (val >> (Integer.SIZE - 1));
-        }
-
-        protected abstract void addCallback(final T parameter, final int chunkX, final int chunkZ);
-
-        protected abstract void removeCallback(final T parameter, final int chunkX, final int chunkZ);
-
-        private void addToNew(final T parameter, final int chunkX, final int chunkZ, final int distance) {
-            final int maxX = chunkX + distance;
-            final int maxZ = chunkZ + distance;
-
-            for (int cx = chunkX - distance; cx <= maxX; ++cx) {
-                for (int cz = chunkZ - distance; cz <= maxZ; ++cz) {
-                    this.addCallback(parameter, cx, cz);
-                }
-            }
-        }
-
-        private void removeFromOld(final T parameter, final int chunkX, final int chunkZ, final int distance) {
-            final int maxX = chunkX + distance;
-            final int maxZ = chunkZ + distance;
-
-            for (int cx = chunkX - distance; cx <= maxX; ++cx) {
-                for (int cz = chunkZ - distance; cz <= maxZ; ++cz) {
-                    this.removeCallback(parameter, cx, cz);
-                }
-            }
-        }
-
-        public final boolean add(final int chunkX, final int chunkZ, final int distance) {
-            if (distance < 0) {
-                throw new IllegalArgumentException(Integer.toString(distance));
-            }
-            if (this.lastChunkX != NOT_SET) {
-                return false;
-            }
-            this.lastChunkX = chunkX;
-            this.lastChunkZ = chunkZ;
-            this.distance = distance;
-
-            this.addToNew(this.parameter, chunkX, chunkZ, distance);
-
-            return true;
-        }
-
-        public final boolean update(final int toX, final int toZ, final int newViewDistance) {
-            if (newViewDistance < 0) {
-                throw new IllegalArgumentException(Integer.toString(newViewDistance));
-            }
-            final int fromX = this.lastChunkX;
-            final int fromZ = this.lastChunkZ;
-            final int oldViewDistance = this.distance;
-            if (fromX == NOT_SET) {
-                return false;
-            }
-
-            this.lastChunkX = toX;
-            this.lastChunkZ = toZ;
-            this.distance = newViewDistance;
-
-            final T parameter = this.parameter;
-
-
-            final int dx = toX - fromX;
-            final int dz = toZ - fromZ;
-
-            final int totalX = IntegerUtil.branchlessAbs(fromX - toX);
-            final int totalZ = IntegerUtil.branchlessAbs(fromZ - toZ);
-
-            if (Math.max(totalX, totalZ) > (2 * Math.max(newViewDistance, oldViewDistance))) {
-                // teleported?
-                this.removeFromOld(parameter, fromX, fromZ, oldViewDistance);
-                this.addToNew(parameter, toX, toZ, newViewDistance);
-                return true;
-            }
-
-            if (oldViewDistance != newViewDistance) {
-                // remove loop
-
-                final int oldMinX = fromX - oldViewDistance;
-                final int oldMinZ = fromZ - oldViewDistance;
-                final int oldMaxX = fromX + oldViewDistance;
-                final int oldMaxZ = fromZ + oldViewDistance;
-                for (int currX = oldMinX; currX <= oldMaxX; ++currX) {
-                    for (int currZ = oldMinZ; currZ <= oldMaxZ; ++currZ) {
-
-                        // only remove if we're outside the new view distance...
-                        if (Math.max(IntegerUtil.branchlessAbs(currX - toX), IntegerUtil.branchlessAbs(currZ - toZ)) > newViewDistance) {
-                            this.removeCallback(parameter, currX, currZ);
-                        }
-                    }
-                }
-
-                // add loop
-
-                final int newMinX = toX - newViewDistance;
-                final int newMinZ = toZ - newViewDistance;
-                final int newMaxX = toX + newViewDistance;
-                final int newMaxZ = toZ + newViewDistance;
-                for (int currX = newMinX; currX <= newMaxX; ++currX) {
-                    for (int currZ = newMinZ; currZ <= newMaxZ; ++currZ) {
-
-                        // only add if we're outside the old view distance...
-                        if (Math.max(IntegerUtil.branchlessAbs(currX - fromX), IntegerUtil.branchlessAbs(currZ - fromZ)) > oldViewDistance) {
-                            this.addCallback(parameter, currX, currZ);
-                        }
-                    }
-                }
-
-                return true;
-            }
-
-            // x axis is width
-            // z axis is height
-            // right refers to the x axis of where we moved
-            // top refers to the z axis of where we moved
-
-            // same view distance
-
-            // used for relative positioning
-            final int up = sign(dz); // 1 if dz >= 0, -1 otherwise
-            final int right = sign(dx); // 1 if dx >= 0, -1 otherwise
-
-            // The area excluded by overlapping the two view distance squares creates four rectangles:
-            // Two on the left, and two on the right. The ones on the left we consider the "removed" section
-            // and on the right the "added" section.
-            // https://i.imgur.com/MrnOBgI.png is a reference image. Note that the outside border is not actually
-            // exclusive to the regions they surround.
-
-            // 4 points of the rectangle
-            int maxX; // exclusive
-            int minX; // inclusive
-            int maxZ; // exclusive
-            int minZ; // inclusive
-
-            if (dx != 0) {
-                // handle right addition
-
-                maxX = toX + (oldViewDistance * right) + right; // exclusive
-                minX = fromX + (oldViewDistance * right) + right; // inclusive
-                maxZ = fromZ + (oldViewDistance * up) + up; // exclusive
-                minZ = toZ - (oldViewDistance * up); // inclusive
-
-                for (int currX = minX; currX != maxX; currX += right) {
-                    for (int currZ = minZ; currZ != maxZ; currZ += up) {
-                        this.addCallback(parameter, currX, currZ);
-                    }
-                }
-            }
-
-            if (dz != 0) {
-                // handle up addition
-
-                maxX = toX + (oldViewDistance * right) + right; // exclusive
-                minX = toX - (oldViewDistance * right); // inclusive
-                maxZ = toZ + (oldViewDistance * up) + up; // exclusive
-                minZ = fromZ + (oldViewDistance * up) + up; // inclusive
-
-                for (int currX = minX; currX != maxX; currX += right) {
-                    for (int currZ = minZ; currZ != maxZ; currZ += up) {
-                        this.addCallback(parameter, currX, currZ);
-                    }
-                }
-            }
-
-            if (dx != 0) {
-                // handle left removal
-
-                maxX = toX - (oldViewDistance * right); // exclusive
-                minX = fromX - (oldViewDistance * right); // inclusive
-                maxZ = fromZ + (oldViewDistance * up) + up; // exclusive
-                minZ = toZ - (oldViewDistance * up); // inclusive
-
-                for (int currX = minX; currX != maxX; currX += right) {
-                    for (int currZ = minZ; currZ != maxZ; currZ += up) {
-                        this.removeCallback(parameter, currX, currZ);
-                    }
-                }
-            }
-
-            if (dz != 0) {
-                // handle down removal
-
-                maxX = fromX + (oldViewDistance * right) + right; // exclusive
-                minX = fromX - (oldViewDistance * right); // inclusive
-                maxZ = toZ - (oldViewDistance * up); // exclusive
-                minZ = fromZ - (oldViewDistance * up); // inclusive
-
-                for (int currX = minX; currX != maxX; currX += right) {
-                    for (int currZ = minZ; currZ != maxZ; currZ += up) {
-                        this.removeCallback(parameter, currX, currZ);
-                    }
-                }
-            }
-
-            return true;
-        }
-
-        public final boolean remove() {
-            final int chunkX = this.lastChunkX;
-            final int chunkZ = this.lastChunkZ;
-            final int distance = this.distance;
-            if (chunkX == NOT_SET) {
-                return false;
-            }
-
-            this.lastChunkX = this.lastChunkZ = this.distance = NOT_SET;
-
-            this.removeFromOld(this.parameter, chunkX, chunkZ, distance);
-
-            return true;
-        }
-    }
-
-    static final class CountedSRSWLinkedQueue<E> {
-
-        private final SRSWLinkedQueue<E> queue = new SRSWLinkedQueue<>();
-        private volatile long countAdded;
-        private volatile long countRemoved;
-
-        private static final VarHandle COUNT_ADDED_HANDLE = ConcurrentUtil.getVarHandle(CountedSRSWLinkedQueue.class, "countAdded", long.class);
-        private static final VarHandle COUNT_REMOVED_HANDLE = ConcurrentUtil.getVarHandle(CountedSRSWLinkedQueue.class, "countRemoved", long.class);
-
-        private long getCountAddedPlain() {
-            return (long)COUNT_ADDED_HANDLE.get(this);
-        }
-
-        private long getCountAddedAcquire() {
-            return (long)COUNT_ADDED_HANDLE.getAcquire(this);
-        }
-
-        private void setCountAddedRelease(final long to) {
-            COUNT_ADDED_HANDLE.setRelease(this, to);
-        }
-
-        private long getCountRemovedPlain() {
-            return (long)COUNT_REMOVED_HANDLE.get(this);
-        }
-
-        private long getCountRemovedAcquire() {
-            return (long)COUNT_REMOVED_HANDLE.getAcquire(this);
-        }
-
-        private void setCountRemovedRelease(final long to) {
-            COUNT_REMOVED_HANDLE.setRelease(this, to);
-        }
-
-        public void add(final E element) {
-            this.setCountAddedRelease(this.getCountAddedPlain() + 1L);
-            this.queue.addLast(element);
-        }
-
-        public E poll() {
-            final E ret = this.queue.poll();
-            if (ret != null) {
-                this.setCountRemovedRelease(this.getCountRemovedPlain() + 1L);
-            }
-
-            return ret;
-        }
-
-        public long size() {
-            final long removed = this.getCountRemovedAcquire();
-            final long added = this.getCountAddedAcquire();
-
-            return added - removed;
+        // For external checks
+        public it.unimi.dsi.fastutil.longs.LongOpenHashSet getSentChunksRaw() {
+            return this.sentChunks;
         }
     }
 }

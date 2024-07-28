@@ -595,7 +595,7 @@ public final class ChunkHolderManager {
                 final long delayTimeout = GoldenForgeConfig.Server.delayChunkUnloadsBy.get() * 20;
                 final TicketType<ChunkPos> toAdd;
                 final long timeout;
-                if (type == RegionizedPlayerChunkLoader.REGION_PLAYER_TICKET && delayTimeout > 0) {
+                if (type == RegionizedPlayerChunkLoader.PLAYER_TICKET && delayTimeout > 0) {
                     toAdd = TicketType.DELAY_UNLOAD;
                     timeout = delayTimeout;
                 } else {
