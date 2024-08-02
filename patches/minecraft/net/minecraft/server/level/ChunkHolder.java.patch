@@ -61,7 +61,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,213 @@
+@@ -65,97 +_,216 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -136,9 +136,12 @@
 +      }
 +   }
 +
-+   public final io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder; // Paper - rewrite chunk system
-+   public ChunkHolder(ChunkPos p_142986_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.PlayerProvider p_142991_, io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder) { // Paper - rewrite chunk system) {
-+      this.newChunkHolder = newChunkHolder; // Paper - rewrite chunk system
++   public io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder; // Paper - rewrite chunk system
++   public final void moonrise$setRealChunkHolder(final io.papermc.paper.chunk.system.scheduling.NewChunkHolder newChunkHolder) {
++      this.newChunkHolder = newChunkHolder;
++   }
++
++   public ChunkHolder(ChunkPos p_142986_, LevelHeightAccessor p_142988_, LevelLightEngine p_142989_, ChunkHolder.PlayerProvider p_142991_) {
 +
        this.f_140009_ = p_142986_;
        this.f_142983_ = p_142988_;

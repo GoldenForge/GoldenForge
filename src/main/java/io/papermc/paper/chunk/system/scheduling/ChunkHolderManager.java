@@ -1,22 +1,20 @@
 package io.papermc.paper.chunk.system.scheduling;
+
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
-import ca.spottedleaf.concurrentutil.map.SWMRLong2ObjectHashTable;
-import com.google.common.collect.ImmutableList;
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
+import ca.spottedleaf.starlight.common.util.WorldUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.logging.LogUtils;
-import io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader;
+import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
-import io.papermc.paper.threadedregions.TickRegions;
-import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.TickThread;
 import io.papermc.paper.world.ChunkEntitySlices;
 import it.unimi.dsi.fastutil.longs.Long2ByteLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ByteMap;
-import it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
@@ -25,8 +23,6 @@ import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.objects.ObjectRBTreeSet;
 import net.minecraft.nbt.CompoundTag;
-import io.papermc.paper.chunk.system.ChunkSystem;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.*;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.util.Unit;
@@ -35,11 +31,15 @@ import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
 import java.io.IOException;
 import java.text.DecimalFormat;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Objects;
+import java.util.PrimitiveIterator;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Predicate;
@@ -53,13 +53,49 @@ public final class ChunkHolderManager {
     public static final int ENTITY_TICKING_TICKET_LEVEL = 31;
     public static final int MAX_TICKET_LEVEL = ChunkMap.MAX_CHUNK_DISTANCE; // inclusive
 
+    public static final TicketType<Unit> UNLOAD_COOLDOWN = TicketType.create("unload_cooldown", (u1, u2) -> 0, 5 * 20);
+
     private static final long NO_TIMEOUT_MARKER = Long.MIN_VALUE;
     private static final long PROBE_MARKER = Long.MIN_VALUE + 1;
     public final ReentrantAreaLock ticketLockArea;
 
     private final ConcurrentLong2ReferenceChainedHashTable<SortedArraySet<Ticket<?>>> tickets = new ConcurrentLong2ReferenceChainedHashTable<>();
-    private final ConcurrentLong2ReferenceChainedHashTable<Long2IntOpenHashMap> sectionToChunkToExpireCount = new ConcurrentLong2ReferenceChainedHashTable();
+    private final ConcurrentLong2ReferenceChainedHashTable<Long2IntOpenHashMap> sectionToChunkToExpireCount = new ConcurrentLong2ReferenceChainedHashTable<>();
     final ChunkQueue unloadQueue;
+
+    private final ConcurrentLong2ReferenceChainedHashTable<NewChunkHolder> chunkHolders = ConcurrentLong2ReferenceChainedHashTable.createWithCapacity(16384, 0.25f);
+    private final ServerLevel world;
+    private final ChunkTaskScheduler taskScheduler;
+    private long currentTick;
+
+    private final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = new ArrayDeque<>();
+    private final ObjectRBTreeSet<NewChunkHolder> autoSaveQueue = new ObjectRBTreeSet<>((final NewChunkHolder c1, final NewChunkHolder c2) -> {
+        if (c1 == c2) {
+            return 0;
+        }
+
+        final int saveTickCompare = Long.compare(c1.lastAutoSave, c2.lastAutoSave);
+
+        if (saveTickCompare != 0) {
+            return saveTickCompare;
+        }
+
+        final long coord1 = CoordinateUtils.getChunkKey(c1.chunkX, c1.chunkZ);
+        final long coord2 = CoordinateUtils.getChunkKey(c2.chunkX, c2.chunkZ);
+
+        if (coord1 == coord2) {
+            throw new IllegalStateException("Duplicate chunkholder in auto save queue");
+        }
+
+        return Long.compare(coord1, coord2);
+    });
+
+    public ChunkHolderManager(final ServerLevel world, final ChunkTaskScheduler taskScheduler) {
+        this.world = world;
+        this.taskScheduler = taskScheduler;
+        this.ticketLockArea = new ReentrantAreaLock(taskScheduler.getChunkSystemLockShift());
+        this.unloadQueue = new ChunkQueue(world.getRegionChunkShift());
+    }
 
     public boolean processTicketUpdates(final int posX, final int posZ) {
         final int ticketShift = ThreadedTicketLevelPropagator.SECTION_SHIFT;
@@ -95,54 +131,10 @@ public final class ChunkHolderManager {
         );
     }
 
-    private final ConcurrentLong2ReferenceChainedHashTable<NewChunkHolder> chunkHolders = ConcurrentLong2ReferenceChainedHashTable.createWithCapacity(16384, 0.25f);
-    // what a disaster of a name
-    // this is a map of removal tick to a map of chunks and the number of tickets a chunk has that are to expire that tick
-    private final Long2ObjectOpenHashMap<Long2IntOpenHashMap> removeTickToChunkExpireTicketCount = new Long2ObjectOpenHashMap<>();
-    private final ServerLevel world;
-    private final ChunkTaskScheduler taskScheduler;
-    private long currentTick;
-
-    private final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = new ArrayDeque<>();
-    private final ObjectRBTreeSet<NewChunkHolder> autoSaveQueue = new ObjectRBTreeSet<>((final NewChunkHolder c1, final NewChunkHolder c2) -> {
-        if (c1 == c2) {
-            return 0;
-        }
-
-        final int saveTickCompare = Long.compare(c1.lastAutoSave, c2.lastAutoSave);
-
-        if (saveTickCompare != 0) {
-            return saveTickCompare;
-        }
-
-        final long coord1 = CoordinateUtils.getChunkKey(c1.chunkX, c1.chunkZ);
-        final long coord2 = CoordinateUtils.getChunkKey(c2.chunkX, c2.chunkZ);
-
-        if (coord1 == coord2) {
-            throw new IllegalStateException("Duplicate chunkholder in auto save queue");
-        }
-
-        return Long.compare(coord1, coord2);
-    });
-
-    public ChunkHolderManager(final ServerLevel world, final ChunkTaskScheduler taskScheduler) {
-        this.world = world;
-        this.taskScheduler = taskScheduler;
-        this.ticketLockArea = new ReentrantAreaLock(taskScheduler.getChunkSystemLockShift());
-        this.unloadQueue = new ChunkQueue(TickRegions.getRegionChunkShift());
-    }
-
-    private final AtomicLong statusUpgradeId = new AtomicLong();
-
-    long getNextStatusUpgradeId() {
-        return this.statusUpgradeId.incrementAndGet();
-    }
-
     public List<ChunkHolder> getOldChunkHolders() {
-        final List<NewChunkHolder> holders = this.getChunkHolders();
-        final List<ChunkHolder> ret = new ArrayList<>(holders.size());
-        for (final NewChunkHolder holder : holders) {
-            ret.add(holder.vanillaChunkHolder);
+        final List<ChunkHolder> ret = new ArrayList<>(this.chunkHolders.size() + 1);
+        for (final Iterator<NewChunkHolder> iterator = this.chunkHolders.valueIterator(); iterator.hasNext();) {
+            ret.add(iterator.next().vanillaChunkHolder);
         }
         return ret;
     }
@@ -159,14 +151,35 @@ public final class ChunkHolderManager {
         return this.chunkHolders.size();
     }
 
+    // TODO replace the need for this, specifically: optimise ServerChunkCache#tickChunks
+    public Iterable<ChunkHolder> getOldChunkHoldersIterable() {
+        return new Iterable<ChunkHolder>() {
+            @Override
+            public Iterator<ChunkHolder> iterator() {
+                final Iterator<NewChunkHolder> iterator = ChunkHolderManager.this.chunkHolders.valueIterator();
+                return new Iterator<ChunkHolder>() {
+                    @Override
+                    public boolean hasNext() {
+                        return iterator.hasNext();
+                    }
+
+                    @Override
+                    public ChunkHolder next() {
+                        return iterator.next().vanillaChunkHolder;
+                    }
+                };
+            }
+        };
+    }
+
     public void close(final boolean save, final boolean halt) {
         TickThread.ensureTickThread("Closing world off-main");
         if (halt) {
-            LOGGER.info("Waiting 60s for chunk system to halt for world '" + this.world.getWorld().getName() + "'");
+            LOGGER.info("Waiting 60s for chunk system to halt for world '" + WorldUtil.getWorldName(this.world) + "'");
             if (!this.taskScheduler.halt(true, TimeUnit.SECONDS.toNanos(60L))) {
-                LOGGER.warn("Failed to halt world generation/loading tasks for world '" + this.world.getWorld().getName() + "'");
+                LOGGER.warn("Failed to halt world generation/loading tasks for world '" + WorldUtil.getWorldName(this.world) + "'");
             } else {
-                LOGGER.info("Halted chunk system for world '" + this.world.getWorld().getName() + "'");
+                LOGGER.info("Halted chunk system for world '" + WorldUtil.getWorldName(this.world) + "'");
             }
         }
 
@@ -174,40 +187,40 @@ public final class ChunkHolderManager {
             this.saveAllChunks(true, true, true);
         }
 
-        if (this.world.chunkDataControllerNew.hasTasks() || this.world.entityDataControllerNew.hasTasks() || this.world.poiDataControllerNew.hasTasks()) {
+        boolean hasTasks = false;
+        for (final RegionFileIOThread.RegionFileType type : RegionFileIOThread.RegionFileType.values()) {
+            if (RegionFileIOThread.getControllerFor(this.world, type).hasTasks()) {
+                hasTasks = true;
+                break;
+            }
+        }
+        if (hasTasks) {
             RegionFileIOThread.flush();
         }
 
         // kill regionfile cache
-        try {
-            this.world.chunkDataControllerNew.getCache().close();
-        } catch (final IOException ex) {
-            LOGGER.error("Failed to close chunk regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
-        }
-        try {
-            this.world.entityDataControllerNew.getCache().close();
-        } catch (final IOException ex) {
-            LOGGER.error("Failed to close entity regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
-        }
-        try {
-            this.world.poiDataControllerNew.getCache().close();
-        } catch (final IOException ex) {
-            LOGGER.error("Failed to close poi regionfile cache for world '" + this.world.getWorld().getName() + "'", ex);
+        for (final RegionFileIOThread.RegionFileType type : RegionFileIOThread.RegionFileType.values()) {
+            try {
+                RegionFileIOThread.getControllerFor(this.world, type).getCache().close();
+            } catch (final IOException ex) {
+                LOGGER.error("Failed to close '" + type.name() + "' regionfile cache for world '" + WorldUtil.getWorldName(this.world) + "'", ex);
+            }
         }
     }
 
     void ensureInAutosave(final NewChunkHolder holder) {
         if (!this.autoSaveQueue.contains(holder)) {
-            holder.lastAutoSave = MinecraftServer.currentTick;
+            holder.lastAutoSave = this.currentTick;
             this.autoSaveQueue.add(holder);
         }
     }
 
     public void autoSave() {
         final List<NewChunkHolder> reschedule = new ArrayList<>();
-        final long currentTick = MinecraftServer.currentTickLong;
+        final long currentTick = this.currentTick;
         final long maxSaveTime = currentTick - GoldenForgeConfig.Server.autoSaveInterval.get();
-        for (int autoSaved = 0; autoSaved < GoldenForgeConfig.Server.maxAutoSaveChunksPerTick.get() && !this.autoSaveQueue.isEmpty();) {
+        final int maxToSave =  GoldenForgeConfig.Server.maxAutoSaveChunksPerTick.get();
+        for (int autoSaved = 0; autoSaved < maxToSave && !this.autoSaveQueue.isEmpty();) {
             final NewChunkHolder holder = this.autoSaveQueue.first();
 
             if (holder.lastAutoSave > maxSaveTime) {
@@ -217,7 +230,7 @@ public final class ChunkHolderManager {
             this.autoSaveQueue.remove(holder);
 
             holder.lastAutoSave = currentTick;
-            if (holder.save(false, false) != null) {
+            if (holder.save(false) != null) {
                 ++autoSaved;
             }
 
@@ -237,7 +250,7 @@ public final class ChunkHolderManager {
         final List<NewChunkHolder> holders = this.getChunkHolders();
 
         if (logProgress) {
-            LOGGER.info("Saving all chunkholders for world '" + this.world.getWorld().getName() + "'");
+            LOGGER.info("Saving all chunkholders for world '" + WorldUtil.getWorldName(this.world) + "'");
         }
 
         final DecimalFormat format = new DecimalFormat("#0.00");
@@ -256,7 +269,7 @@ public final class ChunkHolderManager {
         for (int i = 0, len = holders.size(); i < len; ++i) {
             final NewChunkHolder holder = holders.get(i);
             try {
-                final NewChunkHolder.SaveStat saveStat = holder.save(shutdown, false);
+                final NewChunkHolder.SaveStat saveStat = holder.save(shutdown);
                 if (saveStat != null) {
                     ++saved;
                     needsFlush = flush;
@@ -270,10 +283,8 @@ public final class ChunkHolderManager {
                         ++savedPoi;
                     }
                 }
-            } catch (final ThreadDeath thr) {
-                throw thr;
             } catch (final Throwable thr) {
-                LOGGER.error("Failed to save chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + this.world.getWorld().getName() + "'", thr);
+                LOGGER.error("Failed to save chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
             }
             if (needsFlush && (saved % flushInterval) == 0) {
                 needsFlush = false;
@@ -283,26 +294,24 @@ public final class ChunkHolderManager {
                 final long currTime = System.nanoTime();
                 if ((currTime - lastLog) > TimeUnit.SECONDS.toNanos(10L)) {
                     lastLog = currTime;
-                    LOGGER.info("Saved " + saved + " chunks (" + format.format((double)(i+1)/(double)len * 100.0) + "%) in world '" + this.world.getWorld().getName() + "'");
+                    LOGGER.info("Saved " + saved + " chunks (" + format.format((double)(i+1)/(double)len * 100.0) + "%) in world '" + WorldUtil.getWorldName(this.world) + "'");
                 }
             }
         }
         if (flush) {
             RegionFileIOThread.flush();
-            if (/*this.world.paperConfig().chunks.flushRegionsOnSave*/ false) {
-                try {
-                    this.world.chunkSource.chunkMap.regionFileCache.flush();
-                } catch (IOException ex) {
-                    LOGGER.error("Exception when flushing regions in world {}", this.world.getWorld().getName(), ex);
-                }
+            try {
+                RegionFileIOThread.flushRegionStorages(this.world);
+            } catch (final IOException ex) {
+                LOGGER.error("Exception when flushing regions in world '" + WorldUtil.getWorldName(this.world) + "'", ex);
             }
         }
         if (logProgress) {
-            LOGGER.info("Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi + " poi chunks in world '" + this.world.getWorld().getName() + "' in " + format.format(1.0E-9 * (System.nanoTime() - start)) + "s");
+            LOGGER.info("Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi + " poi chunks in world '" + WorldUtil.getWorldName(this.world) + "' in " + format.format(1.0E-9 * (System.nanoTime() - start)) + "s");
         }
     }
 
-    protected final ThreadedTicketLevelPropagator ticketLevelPropagator = new ThreadedTicketLevelPropagator() {
+    private final ThreadedTicketLevelPropagator ticketLevelPropagator = new ThreadedTicketLevelPropagator() {
         @Override
         protected void processLevelUpdates(final Long2ByteLinkedOpenHashMap updates) {
             // first the necessary chunkholders must be created, so just update the ticket levels
@@ -328,9 +337,7 @@ public final class ChunkHolderManager {
                 if (current == null) {
                     // must create
                     current = ChunkHolderManager.this.createChunkHolder(key);
-                    synchronized (ChunkHolderManager.this.chunkHolders) {
-                        ChunkHolderManager.this.chunkHolders.put(key, current);
-                    }
+                    ChunkHolderManager.this.chunkHolders.put(key, current);
                     current.updateTicketLevel(newLevel);
                 } else {
                     current.updateTicketLevel(newLevel);
@@ -427,7 +434,7 @@ public final class ChunkHolderManager {
                         // removed before we acquired lock
                         continue;
                     }
-                    ret.put(coord, new SortedArraySet<>(tickets).moonrise$copy());
+                    ret.put(coord, tickets.moonrise$copy());
                 }
             } finally {
                 this.ticketLockArea.unlock(ticketLock);
@@ -508,7 +515,6 @@ public final class ChunkHolderManager {
 
         final int chunkX = CoordinateUtils.getChunkX(chunk);
         final int chunkZ = CoordinateUtils.getChunkZ(chunk);
-        final RegionFileIOThread.ChunkCoordinate chunkCoord = new RegionFileIOThread.ChunkCoordinate(chunk);
         final Ticket<T> ticket = new Ticket<>(type, level, identifier, removeDelay);
 
         final ReentrantAreaLock.Node ticketLock = lock ? this.ticketLockArea.lock(chunkX, chunkZ) : null;
@@ -541,7 +547,6 @@ public final class ChunkHolderManager {
                 this.updateTicketLevel(chunk, levelAfter);
             }
 
-            //net.minecraftforge.event.ForgeEventFactory.fireChunkTicketLevelUpdated(this.world, chunk, levelBefore, levelAfter, this.getChunkHolder(chunk).vanillaChunkHolder);
             return current == ticket;
         } finally {
             if (ticketLock != null) {
@@ -569,7 +574,6 @@ public final class ChunkHolderManager {
 
         final int chunkX = CoordinateUtils.getChunkX(chunk);
         final int chunkZ = CoordinateUtils.getChunkZ(chunk);
-        final RegionFileIOThread.ChunkCoordinate chunkCoord = new RegionFileIOThread.ChunkCoordinate(chunk);
         final Ticket<T> probe = new Ticket<>(type, level, identifier, PROBE_MARKER);
 
         final ReentrantAreaLock.Node ticketLock = lock ? this.ticketLockArea.lock(chunkX, chunkZ) : null;
@@ -589,21 +593,7 @@ public final class ChunkHolderManager {
             final int newLevel = getTicketLevelAt(ticketsAtChunk);
             // we should not change the ticket levels while the target region may be ticking
             if (oldLevel != newLevel) {
-                // Delay unload chunk patch originally by Aikar, updated to 1.20 by jpenilla
-                // these days, the patch is mostly useful to keep chunks ticking when players teleport
-                // so that their pets can teleport with them as well.
-                final long delayTimeout = GoldenForgeConfig.Server.delayChunkUnloadsBy.get() * 20;
-                final TicketType<ChunkPos> toAdd;
-                final long timeout;
-                if (type == RegionizedPlayerChunkLoader.PLAYER_TICKET && delayTimeout > 0) {
-                    toAdd = TicketType.DELAY_UNLOAD;
-                    timeout = delayTimeout;
-                } else {
-                    toAdd = TicketType.UNKNOWN;
-                    // always expect UNKNOWN to be > 1, but just in case
-                    timeout = Math.max(1, toAdd.timeout);
-                }
-                final Ticket<ChunkPos> unknownTicket = new Ticket<>(toAdd, level, new ChunkPos(chunk), timeout);
+                final Ticket<ChunkPos> unknownTicket = new Ticket<>(TicketType.UNKNOWN, level, new ChunkPos(chunk), Math.max(1, TicketType.UNKNOWN.timeout));
                 if (ticketsAtChunk.add(unknownTicket)) {
                     this.addExpireCount(chunkX, chunkZ);
                 } else {
@@ -698,10 +688,13 @@ public final class ChunkHolderManager {
         final int sectionShift = this.world.getRegionChunkShift();
 
         final Predicate<Ticket<?>> expireNow = (final Ticket<?> ticket) -> {
-            if (ticket.createdTick == NO_TIMEOUT_MARKER) {
+            long removeDelay = ticket.createdTick;
+            if (removeDelay == NO_TIMEOUT_MARKER) {
                 return false;
             }
-            return --ticket.createdTick <= 0L;
+            --removeDelay;
+            ticket.createdTick = removeDelay;
+            return removeDelay <= 0L;
         };
 
         for (final PrimitiveIterator.OfLong iterator = this.sectionToChunkToExpireCount.keyIterator(); iterator.hasNext();) {
@@ -729,8 +722,6 @@ public final class ChunkHolderManager {
 
                     final long chunkKey = entry.getLongKey();
                     final int expireCount = entry.getIntValue();
-
-                    final RegionFileIOThread.ChunkCoordinate chunk = new RegionFileIOThread.ChunkCoordinate(chunkKey);
 
                     final SortedArraySet<Ticket<?>> tickets = this.tickets.get(chunkKey);
                     final int levelBefore = getTicketLevelAt(tickets);
@@ -804,7 +795,6 @@ public final class ChunkHolderManager {
         final NewChunkHolder ret = new NewChunkHolder(this.world, CoordinateUtils.getChunkX(position), CoordinateUtils.getChunkZ(position), this.taskScheduler);
 
         ChunkSystem.onChunkHolderCreate(this.world, ret.vanillaChunkHolder);
-        ret.vanillaChunkHolder.onChunkAdd();
 
         return ret;
     }
@@ -836,14 +826,11 @@ public final class ChunkHolderManager {
         }
 
         current = this.createChunkHolder(position);
-        synchronized (this.chunkHolders) {
-            this.chunkHolders.put(position, current);
-        }
+        this.chunkHolders.put(position, current);
+
 
         return current;
     }
-
-    private final AtomicLong entityLoadCounter = new AtomicLong();
 
     public ChunkEntitySlices getOrCreateEntityChunk(final int chunkX, final int chunkZ, final boolean transientChunk) {
         TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Cannot create entity chunk off-main");
@@ -856,32 +843,32 @@ public final class ChunkHolderManager {
 
         final AtomicBoolean isCompleted = new AtomicBoolean();
         final Thread waiter = Thread.currentThread();
-        final Long entityLoadId = Long.valueOf(this.entityLoadCounter.getAndIncrement());
+        final Long entityLoadId = ChunkTaskScheduler.getNextEntityLoadId();
         NewChunkHolder.GenericDataLoadTaskCallback loadTask = null;
         final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(chunkX, chunkZ);
         try {
-            this.addTicketAtLevel(TicketType.ENTITY_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, entityLoadId);
+            this.addTicketAtLevel(ChunkTaskScheduler.ENTITY_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, entityLoadId);
             final ReentrantAreaLock.Node schedulingLock = this.taskScheduler.schedulingLockArea.lock(chunkX, chunkZ);
             try {
                 current = this.getOrCreateChunkHolder(chunkX, chunkZ);
                 if ((ret = current.getEntityChunk()) != null && (transientChunk || !ret.isTransient())) {
-                    this.removeTicketAtLevel(TicketType.ENTITY_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, entityLoadId);
+                    this.removeTicketAtLevel(ChunkTaskScheduler.ENTITY_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, entityLoadId);
                     return ret;
                 }
 
-                if (current.isEntityChunkNBTLoaded()) {
-                    isCompleted.setPlain(true);
-                } else {
-                    loadTask = current.getOrLoadEntityData((final GenericDataLoadTask.TaskResult<CompoundTag, Throwable> result) -> {
-                        if (!transientChunk) {
+                if (!transientChunk) {
+                    if (current.isEntityChunkNBTLoaded()) {
+                        isCompleted.setPlain(true);
+                    } else {
+                        loadTask = current.getOrLoadEntityData((final GenericDataLoadTask.TaskResult<CompoundTag, Throwable> result) -> {
                             isCompleted.set(true);
                             LockSupport.unpark(waiter);
-                        }
-                    });
-                    final ChunkLoadTask.EntityDataLoadTask entityLoad = current.getEntityDataLoadTask();
+                        });
+                        final ChunkLoadTask.EntityDataLoadTask entityLoad = current.getEntityDataLoadTask();
 
-                    if (entityLoad != null && !transientChunk) {
-                        entityLoad.raisePriority(PrioritisedExecutor.Priority.BLOCKING);
+                        if (entityLoad != null) {
+                            entityLoad.raisePriority(PrioritisedExecutor.Priority.BLOCKING);
+                        }
                     }
                 }
             } finally {
@@ -912,11 +899,7 @@ public final class ChunkHolderManager {
 
         ret = current.loadInEntityChunk(transientChunk);
 
-        final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
-        this.addAndRemoveTickets(chunkKey,
-                TicketType.UNKNOWN, MAX_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
-                TicketType.ENTITY_LOAD, MAX_TICKET_LEVEL, entityLoadId
-        );
+        this.removeTicketAtLevel(ChunkTaskScheduler.ENTITY_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, entityLoadId);
 
         return ret;
     }
@@ -930,79 +913,67 @@ public final class ChunkHolderManager {
         return null;
     }
 
-    private final AtomicLong poiLoadCounter = new AtomicLong();
-
     public PoiChunk loadPoiChunk(final int chunkX, final int chunkZ) {
         TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Cannot create poi chunk off-main");
         PoiChunk ret;
 
         NewChunkHolder current = this.getChunkHolder(chunkX, chunkZ);
         if (current != null && (ret = current.getPoiChunk()) != null) {
-            if (!ret.isLoaded()) {
-                ret.load();
-            }
+            ret.load();
             return ret;
         }
 
         final AtomicReference<PoiChunk> completed = new AtomicReference<>();
         final AtomicBoolean isCompleted = new AtomicBoolean();
         final Thread waiter = Thread.currentThread();
-        final Long poiLoadId = Long.valueOf(this.poiLoadCounter.getAndIncrement());
+        final Long poiLoadId = ChunkTaskScheduler.getNextPoiLoadId();
         NewChunkHolder.GenericDataLoadTaskCallback loadTask = null;
-        final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(chunkX, chunkZ); // Folia - use area based lock to reduce contention
+        final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(chunkX, chunkZ);
         try {
-            // Folia - use area based lock to reduce contention
-            this.addTicketAtLevel(TicketType.POI_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, poiLoadId);
-            final ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock.Node schedulingLock = this.taskScheduler.schedulingLockArea.lock(chunkX, chunkZ); // Folia - use area based lock to reduce contention
+            this.addTicketAtLevel(ChunkTaskScheduler.POI_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, poiLoadId);
+            final ReentrantAreaLock.Node schedulingLock = this.taskScheduler.schedulingLockArea.lock(chunkX, chunkZ);
             try {
                 current = this.getOrCreateChunkHolder(chunkX, chunkZ);
-                if (current.isPoiChunkLoaded()) {
-                    this.removeTicketAtLevel(TicketType.POI_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, poiLoadId);
-                    return current.getPoiChunk();
-                }
+                if (null == (ret = current.getPoiChunk())) {
+                    loadTask = current.getOrLoadPoiData((final GenericDataLoadTask.TaskResult<PoiChunk, Throwable> result) -> {
+                        completed.setPlain(result.left());
+                        isCompleted.set(true);
+                        LockSupport.unpark(waiter);
+                    });
+                    final ChunkLoadTask.PoiDataLoadTask poiLoad = current.getPoiDataLoadTask();
 
-                loadTask = current.getOrLoadPoiData((final GenericDataLoadTask.TaskResult<PoiChunk, Throwable> result) -> {
-                    completed.setPlain(result.left());
-                    isCompleted.set(true);
-                    LockSupport.unpark(waiter);
-                });
-                final ChunkLoadTask.PoiDataLoadTask poiLoad = current.getPoiDataLoadTask();
-
-                if (poiLoad != null) {
-                    poiLoad.raisePriority(PrioritisedExecutor.Priority.BLOCKING);
+                    if (poiLoad != null) {
+                        poiLoad.raisePriority(PrioritisedExecutor.Priority.BLOCKING);
+                    }
                 }
             } finally {
-                this.taskScheduler.schedulingLockArea.unlock(schedulingLock); // Folia - use area based lock to reduce contention
+                this.taskScheduler.schedulingLockArea.unlock(schedulingLock);
             }
         } finally {
-            this.ticketLockArea.unlock(ticketLock); // Folia - use area based lock to reduce contention
+            this.ticketLockArea.unlock(ticketLock);
         }
 
         if (loadTask != null) {
             loadTask.schedule();
-        }
 
-        // Note: no need to busy wait on the chunk queue, poi load will complete off-main
+            // Note: no need to busy wait on the chunk queue, poi load will complete off-main
 
-        boolean interrupted = false;
-        while (!isCompleted.get()) {
-            interrupted |= Thread.interrupted();
-            LockSupport.park();
-        }
+            boolean interrupted = false;
+            while (!isCompleted.get()) {
+                interrupted |= Thread.interrupted();
+                LockSupport.park();
+            }
 
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
 
-        ret = completed.getPlain();
+            ret = completed.getPlain();
+        } // else: became loaded during the scheduling attempt, need to ensure load() is invoked
 
         ret.load();
 
-        final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
-        this.addAndRemoveTickets(chunkKey,
-                TicketType.UNKNOWN, MAX_TICKET_LEVEL, new ChunkPos(chunkX, chunkZ),
-                TicketType.POI_LOAD, MAX_TICKET_LEVEL, poiLoadId
-        );
+        this.removeTicketAtLevel(ChunkTaskScheduler.POI_LOAD, chunkX, chunkZ, MAX_TICKET_LEVEL, poiLoadId);
 
         return ret;
     }
@@ -1029,13 +1000,11 @@ public final class ChunkHolderManager {
     }
 
     private void removeChunkHolder(final NewChunkHolder holder) {
-        holder.killed = true;
-        holder.vanillaChunkHolder.onChunkRemove();
+        holder.markUnloaded();
         this.autoSaveQueue.remove(holder);
         ChunkSystem.onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
-        synchronized (this.chunkHolders) {
-            this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
-        }
+        this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
+
     }
 
     // note: never call while inside the chunk system, this will absolutely break everything
@@ -1068,8 +1037,7 @@ public final class ChunkHolderManager {
             return;
         }
 
-        // Note: The behaviour that we process ticket updates while holding the lock has been dropped here, as it is racey behavior.
-        // But, we do need to process updates here so that any add ticket that is synchronised before this call does not go missed.
+        // We do need to process updates here so that any addTicket that is synchronised before this call does not go missed.
         this.processTicketUpdates();
 
         final int toUnloadCount = Math.max(50, (int)(unloadCountTentative * 0.05));
@@ -1126,6 +1094,7 @@ public final class ChunkHolderManager {
                     // run stage 1
                     for (int i = 0, len = stage1.size(); i < len; ++i) {
                         final NewChunkHolder chunkHolder = stage1.get(i);
+                        chunkHolder.removeFromUnloadQueue();
                         if (chunkHolder.isSafeToUnload() != null) {
                             LOGGER.error("Chunkholder " + chunkHolder + " is not safe to unload but is inside the unload queue?");
                             continue;
@@ -1173,7 +1142,7 @@ public final class ChunkHolderManager {
                             this.removeChunkHolder(holder);
                         } else {
                             // add cooldown so the next unload check is not immediately next tick
-                            this.addTicketAtLevel(TicketType.UNLOAD_COOLDOWN, CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ), MAX_TICKET_LEVEL, Unit.INSTANCE, false);
+                            this.addTicketAtLevel(UNLOAD_COOLDOWN, CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ), MAX_TICKET_LEVEL, Unit.INSTANCE, false);
                         }
                     }
                 } finally {
@@ -1249,7 +1218,7 @@ public final class ChunkHolderManager {
         }
     }
 
-    private boolean processTicketOp(TicketOperation operation) {
+    private <T, V> boolean processTicketOp(TicketOperation<T, V> operation) {
         boolean ret = false;
         switch (operation.op) {
             case ADD: {
@@ -1307,7 +1276,7 @@ public final class ChunkHolderManager {
     }
 
     public boolean processTicketUpdates() {
-        return this.processTicketUpdates(true, true, null);
+        return this.processTicketUpdates(true, null);
     }
 
     private static final ThreadLocal<List<ChunkProgressionTask>> CURRENT_TICKET_UPDATE_SCHEDULING = new ThreadLocal<>();
@@ -1316,13 +1285,9 @@ public final class ChunkHolderManager {
         return CURRENT_TICKET_UPDATE_SCHEDULING.get();
     }
 
-    private boolean processTicketUpdates(final boolean checkLocks, final boolean processFullUpdates, List<ChunkProgressionTask> scheduledTasks) {
-        TickThread.ensureTickThread("Cannot process ticket levels off-main");
+    private boolean processTicketUpdates(final boolean processFullUpdates, List<ChunkProgressionTask> scheduledTasks) {
         if (BLOCK_TICKET_UPDATES.get() == Boolean.TRUE) {
-            //throw new IllegalStateException("Cannot update ticket level while unloading chunks or updating entity manager");
-            LOGGER.error("Cannot update ticket level while unloading chunks or updating entity manager. This is likely caused by a bad mod behaviour");
-            new Exception().printStackTrace();
-            return false;
+            throw new IllegalStateException("Cannot update ticket level while unloading chunks or updating entity manager");
         }
 
         List<NewChunkHolder> changedFullStatus = null;
@@ -1363,12 +1328,12 @@ public final class ChunkHolderManager {
     }
 
     // only call on tick thread
-    protected final boolean processPendingFullUpdate() {
+    private boolean processPendingFullUpdate() {
         final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = this.pendingFullLoadUpdate;
 
         boolean ret = false;
 
-        List<NewChunkHolder> changedFullStatus = new ArrayList<>();
+        final List<NewChunkHolder> changedFullStatus = new ArrayList<>();
 
         NewChunkHolder holder;
         while ((holder = pendingFullLoadUpdate.poll()) != null) {
@@ -1385,40 +1350,10 @@ public final class ChunkHolderManager {
         return ret;
     }
 
-    public JsonObject getDebugJsonForWatchdog() {
-        return this.getDebugJsonNoLock();
-    }
-
-    private JsonObject getDebugJsonNoLock() {
+    public JsonObject getDebugJson() {
         final JsonObject ret = new JsonObject();
-        ret.addProperty("current_tick", Long.valueOf(this.currentTick));
 
-        final JsonArray unloadQueue = new JsonArray();
-        ret.add("unload_queue", unloadQueue);
-        ret.addProperty("lock_shift", Integer.valueOf(this.taskScheduler.getChunkSystemLockShift()));
-        ret.addProperty("ticket_shift", Integer.valueOf(ThreadedTicketLevelPropagator.SECTION_SHIFT));
-        ret.addProperty("region_shift", Integer.valueOf(this.world.getRegionChunkShift()));
-        for (final ChunkQueue.SectionToUnload section : this.unloadQueue.retrieveForAllRegions()) {
-            final JsonObject sectionJson = new JsonObject();
-            unloadQueue.add(sectionJson);
-            sectionJson.addProperty("sectionX", section.sectionX());
-            sectionJson.addProperty("sectionZ", section.sectionX());
-            sectionJson.addProperty("order", section.order());
-
-            final JsonArray coordinates = new JsonArray();
-            sectionJson.add("coordinates", coordinates);
-
-            final ChunkQueue.UnloadSection actualSection = this.unloadQueue.getSectionUnsynchronized(section.sectionX(), section.sectionZ());
-            for (final LongIterator iterator = actualSection.chunks.iterator(); iterator.hasNext();) {
-                final long coordinate = iterator.nextLong();
-
-                final JsonObject coordinateJson = new JsonObject();
-                coordinates.add(coordinateJson);
-
-                coordinateJson.addProperty("chunkX", Integer.valueOf(CoordinateUtils.getChunkX(coordinate)));
-                coordinateJson.addProperty("chunkZ", Integer.valueOf(CoordinateUtils.getChunkZ(coordinate)));
-            }
-        }
+        //ret.add("unload_queue", this.unloadQueue.toDebugJson());
 
         final JsonArray holders = new JsonArray();
         ret.add("chunkholders", holders);
@@ -1427,41 +1362,13 @@ public final class ChunkHolderManager {
             holders.add(holder.getDebugJson());
         }
 
-        // TODO
-        /*
-        final JsonArray removeTickToChunkExpireTicketCount = new JsonArray();
-        ret.add("remove_tick_to_chunk_expire_ticket_count", removeTickToChunkExpireTicketCount);
-
-        for (final Long2ObjectMap.Entry<Long2IntOpenHashMap> tickEntry : this.removeTickToChunkExpireTicketCount.long2ObjectEntrySet()) {
-            final long tick = tickEntry.getLongKey();
-            final Long2IntOpenHashMap coordinateToCount = tickEntry.getValue();
-
-            final JsonObject tickJson = new JsonObject();
-            removeTickToChunkExpireTicketCount.add(tickJson);
-
-            tickJson.addProperty("tick", Long.valueOf(tick));
-
-            final JsonArray tickEntries = new JsonArray();
-            tickJson.add("entries", tickEntries);
-
-            for (final Long2IntMap.Entry entry : coordinateToCount.long2IntEntrySet()) {
-                final long coordinate = entry.getLongKey();
-                final int count = entry.getIntValue();
-
-                final JsonObject entryJson = new JsonObject();
-                tickEntries.add(entryJson);
-
-                entryJson.addProperty("chunkX", Long.valueOf(CoordinateUtils.getChunkX(coordinate)));
-                entryJson.addProperty("chunkZ", Long.valueOf(CoordinateUtils.getChunkZ(coordinate)));
-                entryJson.addProperty("count", Integer.valueOf(count));
-            }
-        }
-
         final JsonArray allTicketsJson = new JsonArray();
         ret.add("tickets", allTicketsJson);
 
-        for (final Long2ObjectMap.Entry<SortedArraySet<Ticket<?>>> coordinateTickets : this.tickets.long2ObjectEntrySet()) {
-            final long coordinate = coordinateTickets.getLongKey();
+        for (final Iterator<ConcurrentLong2ReferenceChainedHashTable.TableEntry<SortedArraySet<Ticket<?>>>> iterator = this.tickets.entryIterator();
+             iterator.hasNext();) {
+            final ConcurrentLong2ReferenceChainedHashTable.TableEntry<SortedArraySet<Ticket<?>>> coordinateTickets = iterator.next();
+            final long coordinate = coordinateTickets.getKey();
             final SortedArraySet<Ticket<?>> tickets = coordinateTickets.getValue();
 
             final JsonObject coordinateJson = new JsonObject();
@@ -1473,22 +1380,25 @@ public final class ChunkHolderManager {
             final JsonArray ticketsSerialized = new JsonArray();
             coordinateJson.add("tickets", ticketsSerialized);
 
-            for (final Ticket<?> ticket : tickets) {
-                final JsonObject ticketSerialized = new JsonObject();
-                ticketsSerialized.add(ticketSerialized);
-
-                ticketSerialized.addProperty("type", ticket.getType().toString());
-                ticketSerialized.addProperty("level", Integer.valueOf(ticket.getTicketLevel()));
-                ticketSerialized.addProperty("identifier", Objects.toString(ticket.key));
-                ticketSerialized.addProperty("remove_tick", Long.valueOf(ticket.removalTick));
-            }
+            // note: by using a copy of the backing array, we can avoid explicit exceptions we may trip when iterating
+            // directly over the set using the iterator
+            // however, it also means we need to null-check the values, and there is a possibility that we _miss_ an
+            // entry OR iterate over an entry multiple times
+//            for (final Object ticketUncasted : tickets.moonrise$copyBackingArray()) {
+//                if (ticketUncasted == null) {
+//                    continue;
+//                }
+//                final Ticket<?> ticket = (Ticket<?>)ticketUncasted;
+//                final JsonObject ticketSerialized = new JsonObject();
+//                ticketsSerialized.add(ticketSerialized);
+//
+//                ticketSerialized.addProperty("type", ticket.getType().toString());
+//                ticketSerialized.addProperty("level", Integer.valueOf(ticket.getTicketLevel()));
+//                ticketSerialized.addProperty("identifier", Objects.toString(ticket.key));
+//                ticketSerialized.addProperty("remove_tick", Long.valueOf(((ChunkSystemTicket<?>)(Object)ticket).moonrise$getRemoveDelay()));
+//            }
         }
-         */
 
         return ret;
-    }
-
-    public JsonObject getDebugJson() {
-        return this.getDebugJsonNoLock(); // Folia - use area based lock to reduce contention
     }
 }

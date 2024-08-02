@@ -1,6 +1,10 @@
 --- a/net/minecraft/world/level/chunk/storage/ChunkSerializer.java
 +++ b/net/minecraft/world/level/chunk/storage/ChunkSerializer.java
-@@ -7,10 +_,8 @@
+@@ -4,13 +_,12 @@
+ import com.mojang.logging.LogUtils;
+ import com.mojang.serialization.Codec;
+ import com.mojang.serialization.Dynamic;
++import io.papermc.paper.async_save.AsyncChunkSaveData;
  import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
  import it.unimi.dsi.fastutil.longs.LongSet;
  import it.unimi.dsi.fastutil.shorts.ShortList;
@@ -290,7 +294,7 @@
  
           CompoundTag compoundtag4 = p_188234_.m_128469_("CarvingMasks");
  
-@@ -252,10 +_,44 @@
+@@ -252,10 +_,36 @@
              protochunk1.m_188186_(generationstep$carving, new CarvingMask(compoundtag4.m_128467_(s1), chunkaccess.m_141937_()));
           }
  
@@ -300,16 +304,8 @@
     }
  
 +   // Paper start - async chunk save for unload
-+   public record AsyncSaveData(
-+           Tag blockTickList, // non-null if we had to go to the server's tick list
-+           Tag fluidTickList, // non-null if we had to go to the server's tick list
-+           ListTag blockEntities,
-+           long worldTime
-+   ) {}
-+
-+
 +   // must be called sync
-+   public static AsyncSaveData getAsyncSaveData(ServerLevel world, ChunkAccess chunk) {
++   public static AsyncChunkSaveData getAsyncSaveData(ServerLevel world, ChunkAccess chunk) {
 +      org.spigotmc.AsyncCatcher.catchOp("preparation of chunk data for async save");
 +
 +      final CompoundTag tickLists = new CompoundTag();
@@ -323,7 +319,7 @@
 +         }
 +      }
 +
-+      return new AsyncSaveData(
++      return new AsyncChunkSaveData(
 +              tickLists.m_128423_(f_188228_),
 +              tickLists.m_128423_(f_188229_),
 +              blockEntitiesSerialized,
@@ -347,13 +343,13 @@
 +      ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] skyNibbles = p_63456_.getSkyNibbles();
 +      // Paper end - rewrite light impl
 +
-+      AsyncSaveData asyncsavedata = p_63456_.asyncsavedata;
++      AsyncChunkSaveData asyncsavedata = p_63456_.asyncsavedata;
        compoundtag.m_128405_("DataVersion", SharedConstants.m_183709_().getWorldVersion());
        compoundtag.m_128405_("xPos", chunkpos.f_45578_);
        compoundtag.m_128405_("yPos", p_63456_.m_151560_());
        compoundtag.m_128405_("zPos", chunkpos.f_45579_);
 -      compoundtag.m_128356_("LastUpdate", p_63455_.m_46467_());
-+      compoundtag.m_128356_("LastUpdate", asyncsavedata != null ? asyncsavedata.worldTime : p_63455_.m_46467_()); // Paper - async chunk unloading
++      compoundtag.m_128356_("LastUpdate", asyncsavedata != null ? asyncsavedata.worldTime() : p_63455_.m_46467_()); // Paper - async chunk unloading
        compoundtag.m_128356_("InhabitedTime", p_63456_.m_6319_());
        compoundtag.m_128359_("Status", p_63456_.m_6415_().m_62467_());
        BlendingData blendingdata = p_63456_.m_183407_();
@@ -432,7 +428,7 @@
 +      ListTag nbttaglist1;
 +      Iterator<BlockPos> iterator;
 +      if (asyncsavedata != null) {
-+         nbttaglist1 = asyncsavedata.blockEntities;
++         nbttaglist1 = asyncsavedata.blockEntities();
 +         iterator = java.util.Collections.emptyIterator();
 +      } else {
 +         nbttaglist1 = new ListTag();
@@ -472,8 +468,8 @@
 +
 +      // Paper start
 +      if (asyncsavedata != null) {
-+         compoundtag.m_128365_(f_188228_, asyncsavedata.blockTickList);
-+         compoundtag.m_128365_(f_188229_, asyncsavedata.fluidTickList);
++         compoundtag.m_128365_(f_188228_, asyncsavedata.blockTickList());
++         compoundtag.m_128365_(f_188229_, asyncsavedata.fluidTickList());
 +      } else {
 +         ChunkSerializer.m_188235_(p_63455_, compoundtag, p_63456_.m_183568_());
 +      }

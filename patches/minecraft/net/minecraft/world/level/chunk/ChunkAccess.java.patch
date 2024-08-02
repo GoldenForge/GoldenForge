@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/level/chunk/ChunkAccess.java
 +++ b/net/minecraft/world/level/chunk/ChunkAccess.java
+@@ -3,6 +_,7 @@
+ import com.google.common.collect.Maps;
+ import com.google.common.collect.Sets;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.async_save.AsyncChunkSaveData;
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import it.unimi.dsi.fastutil.shorts.ShortArrayList;
 @@ -38,6 +_,7 @@
  import net.minecraft.world.level.block.Block;
  import net.minecraft.world.level.block.entity.BlockEntity;
@@ -22,7 +30,7 @@
     protected final LevelHeightAccessor f_187611_;
     protected final LevelChunkSection[] f_187612_;
 +   @Nullable
-+   public ChunkSerializer.AsyncSaveData asyncsavedata;
++   public AsyncChunkSaveData asyncsavedata;
 +
 +   // Paper start - rewrite light engine
 +   private volatile ca.spottedleaf.starlight.common.light.SWMRNibbleArray[] blockNibbles;

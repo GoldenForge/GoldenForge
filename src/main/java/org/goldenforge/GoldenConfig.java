@@ -44,10 +44,11 @@ public class GoldenConfig {
     public static boolean ignoreSpectatorActivation = false;
 
     // Tracking range
-    public static int playerTrackingRange = 48;
-    public static int animalTrackingRange = 48;
-    public static int monsterTrackingRange = 48;
-    public static int miscTrackingRange = 32;
+    public static int playerTrackingRange = 128;
+    public static int animalTrackingRange = 96;
+    public static int monsterTrackingRange = 96;
+    public static int miscTrackingRange = 96;
+    public static int displayTrackingRange = 128;
     public static int otherTrackingRange = 64;
 
 }

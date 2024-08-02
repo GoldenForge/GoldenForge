@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/ChunkStatus.java
 +++ b/net/minecraft/world/level/chunk/ChunkStatus.java
-@@ -28,6 +_,31 @@
+@@ -28,6 +_,35 @@
  import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
  
  public class ChunkStatus {
@@ -9,7 +9,7 @@
 +   public boolean isParallelCapable; // Paper
 +   public int writeRadius = -1;
 +   public int loadRange = 0;
-+
++   private boolean emptyLoadTask;
 +   protected static final java.util.List<ChunkStatus> statuses = new java.util.ArrayList<>();
 +
 +   private ChunkStatus nextStatus;
@@ -18,12 +18,16 @@
 +      return this.nextStatus;
 +   }
 +
-+   public final boolean isEmptyLoadStatus() {
-+      return this.f_62336_ == f_62329_;
++   public final boolean moonrise$isEmptyLoadStatus() {
++      return this.emptyLoadTask;
++   }
++
++   public void moonrise$setEmptyLoadStatus(final boolean value) {
++      this.emptyLoadTask = value;
 +   }
 +
 +   public final boolean isEmptyGenStatus() {
-+      return this == ChunkStatus.f_62314_ || this == ChunkStatus.f_62325_ || this == ChunkStatus.f_62321_;
++      return this == ChunkStatus.f_62314_;
 +   }
 +
 +   public final java.util.concurrent.atomic.AtomicBoolean warnedAboutNoImmediateComplete = new java.util.concurrent.atomic.AtomicBoolean();

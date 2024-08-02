@@ -1,16 +1,23 @@
 package ca.spottedleaf.concurrentutil.map;
 
 import ca.spottedleaf.concurrentutil.function.BiLong1Function;
-import ca.spottedleaf.concurrentutil.util.*;
-import ca.spottedleaf.dataconverter.util.IntegerUtil;
-
+import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.HashUtil;
+import ca.spottedleaf.concurrentutil.util.IntegerUtil;
+import ca.spottedleaf.concurrentutil.util.ThrowUtil;
+import ca.spottedleaf.concurrentutil.util.Validate;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.PrimitiveIterator;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.function.*;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongConsumer;
+import java.util.function.LongFunction;
+import java.util.function.Predicate;
 
 /**
  * Concurrent hashtable implementation supporting mapping arbitrary {@code long} values onto non-null {@code Object}
@@ -149,7 +156,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> {
 
     protected static <V> TableEntry<V> getAtIndexVolatile(final TableEntry<V>[] table, final int index) {
         //noinspection unchecked
-        return (TableEntry<V>) TableEntry.TABLE_ENTRY_ARRAY_HANDLE.getVolatile(table, index);
+        return (TableEntry<V>)TableEntry.TABLE_ENTRY_ARRAY_HANDLE.getVolatile(table, index);
     }
 
     protected static <V> void setAtIndexRelease(final TableEntry<V>[] table, final int index, final TableEntry<V> value) {
@@ -163,7 +170,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> {
     protected static <V> TableEntry<V> compareAndExchangeAtIndexVolatile(final TableEntry<V>[] table, final int index,
                                                                          final TableEntry<V> expect, final TableEntry<V> update) {
         //noinspection unchecked
-        return (TableEntry<V>) TableEntry.TABLE_ENTRY_ARRAY_HANDLE.compareAndExchange(table, index, expect, update);
+        return (TableEntry<V>)TableEntry.TABLE_ENTRY_ARRAY_HANDLE.compareAndExchange(table, index, expect, update);
     }
 
     /**
@@ -1448,23 +1455,27 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> {
                 this.currentTable = null;
                 return null;
             }
-            final TableEntry<V>[] newTable = resizeChain.table;
-            if (newTable == null) {
+
+            final ResizeChain<V> prevChain = resizeChain.prev;
+            this.resizeChain = prevChain;
+            if (prevChain == null) {
                 this.currentTable = null;
                 return null;
             }
 
-            // the increment is a multiple of table.length, so we can undo the increments on idx by taking the
-            // mod
+            final TableEntry<V>[] newTable = prevChain.table;
+
+            // we recover the original index by modding by the new table length, as the increments applied to the index
+            // are a multiple of the new table's length
             int newIdx = index & (newTable.length - 1);
 
-            final ResizeChain<V> newChain = this.resizeChain = resizeChain.prev;
-            final TableEntry<V>[] prevTable = newChain.table;
+            // the increment is always the previous table's length
+            final ResizeChain<V> nextPrevChain = prevChain.prev;
             final int increment;
-            if (prevTable == null) {
+            if (nextPrevChain == null) {
                 increment = 1;
             } else {
-                increment = prevTable.length;
+                increment = nextPrevChain.table.length;
             }
 
             // done with the upper table, so we can skip the resize node
@@ -1581,8 +1592,8 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> {
 
             protected ResizeChain(final TableEntry<V>[] table, final ResizeChain<V> prev, final ResizeChain<V> next) {
                 this.table = table;
-                this.next = next;
                 this.prev = prev;
+                this.next = next;
             }
         }
     }

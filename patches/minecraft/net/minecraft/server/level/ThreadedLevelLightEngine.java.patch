@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ThreadedLevelLightEngine.java
 +++ b/net/minecraft/server/level/ThreadedLevelLightEngine.java
-@@ -1,65 +_,220 @@
+@@ -1,65 +_,222 @@
  package net.minecraft.server.level;
  
 -import com.mojang.datafixers.util.Pair;
@@ -13,6 +13,8 @@
 -import java.util.concurrent.atomic.AtomicBoolean;
  import java.util.function.IntSupplier;
  import javax.annotation.Nullable;
++
++import io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler;
  import net.minecraft.Util;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.SectionPos;
@@ -104,7 +106,7 @@
 +
 +         final Long id = Long.valueOf(this.relightCounter++);
 +
-+         ((ServerLevel)this.theLightEngine.getWorld()).m_7726_().addTicketAtLevel(TicketType.CHUNK_RELIGHT, chunkPos, io.papermc.paper.util.MCUtil.getTicketLevelFor(ChunkStatus.f_62323_), id);
++         ((ServerLevel)this.theLightEngine.getWorld()).m_7726_().addTicketAtLevel(ChunkTaskScheduler.CHUNK_RELIGHT, chunkPos, io.papermc.paper.util.MCUtil.getTicketLevelFor(ChunkStatus.f_62323_), id);
 +         ticketIds.put(chunkPos, id);
 +
 +         ++totalChunks;
@@ -115,7 +117,7 @@
 +            chunkLightCallback.accept(chunkPos);
 +            ((java.util.concurrent.Executor)((ServerLevel)this.theLightEngine.getWorld()).m_7726_().f_8332_).execute(() -> {
 +               ((ServerLevel)this.theLightEngine.getWorld()).m_7726_().f_8325_.m_140174_(chunkPos.m_45588_()).m_140063_(new net.minecraft.network.protocol.game.ClientboundLightUpdatePacket(chunkPos, ThreadedLevelLightEngine.this, null, null, true), false);
-+               ((ServerLevel)this.theLightEngine.getWorld()).m_7726_().removeTicketAtLevel(TicketType.CHUNK_RELIGHT, chunkPos, io.papermc.paper.util.MCUtil.getTicketLevelFor(ChunkStatus.f_62323_), ticketIds.get(chunkPos));
++               ((ServerLevel)this.theLightEngine.getWorld()).m_7726_().removeTicketAtLevel(ChunkTaskScheduler.CHUNK_RELIGHT, chunkPos, io.papermc.paper.util.MCUtil.getTicketLevelFor(ChunkStatus.f_62323_), ticketIds.get(chunkPos));
 +            });
 +         }, onComplete);
 +      });

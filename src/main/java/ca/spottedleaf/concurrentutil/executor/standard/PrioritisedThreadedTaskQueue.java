@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
 
-    protected final ArrayDeque<PrioritisedTask1>[] queues = new ArrayDeque[Priority.TOTAL_SCHEDULABLE_PRIORITIES]; {
+    protected final ArrayDeque<PrioritisedTask>[] queues = new ArrayDeque[Priority.TOTAL_SCHEDULABLE_PRIORITIES]; {
         for (int i = 0; i < Priority.TOTAL_SCHEDULABLE_PRIORITIES; ++i) {
             this.queues[i] = new ArrayDeque<>();
         }
@@ -34,7 +34,7 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
             throw new IllegalStateException("Queue has shutdown");
         }
 
-        final PrioritisedTask1 ret;
+        final PrioritisedTask ret;
 
         synchronized (this.queues) {
             if (this.hasShutdown) {
@@ -42,7 +42,7 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
             }
             this.getAndAddTotalScheduledTasksVolatile(1L);
 
-            ret = new PrioritisedTask1(this.taskIdGenerator++, task, priority, this);
+            ret = new PrioritisedTask(this.taskIdGenerator++, task, priority, this);
 
             this.queues[ret.priority.priority].add(ret);
 
@@ -62,7 +62,7 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
             throw new NullPointerException("Task cannot be null");
         }
 
-        return new PrioritisedTask1(task, priority, this);
+        return new PrioritisedTask(task, priority, this);
     }
 
     @Override
@@ -77,23 +77,23 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
 
     // callback method for subclasses to override
     // from is null when a task is immediately created
-    protected void priorityChange(final PrioritisedTask1 prioritisedTask, final Priority from, final Priority to) {}
+    protected void priorityChange(final PrioritisedTask task, final Priority from, final Priority to) {}
 
     /**
      * Polls the highest priority task currently available. {@code null} if none. This will mark the
      * returned task as completed.
      */
-    protected PrioritisedTask1 poll() {
+    protected PrioritisedTask poll() {
         return this.poll(Priority.IDLE);
     }
 
-    protected PrioritisedTask1 poll(final Priority minPriority) {
-        final ArrayDeque<PrioritisedTask1>[] queues = this.queues;
+    protected PrioritisedTask poll(final Priority minPriority) {
+        final ArrayDeque<PrioritisedTask>[] queues = this.queues;
         synchronized (queues) {
             final int max = minPriority.priority;
             for (int i = 0; i <= max; ++i) {
-                final ArrayDeque<PrioritisedTask1> queue = queues[i];
-                PrioritisedTask1 task;
+                final ArrayDeque<PrioritisedTask> queue = queues[i];
+                PrioritisedTask task;
                 while ((task = queue.pollFirst()) != null) {
                     if (task.trySetCompleting(i)) {
                         return task;
@@ -112,7 +112,7 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
      */
     @Override
     public boolean executeTask() {
-        final PrioritisedTask1 task = this.poll();
+        final PrioritisedTask task = this.poll();
 
         if (task != null) {
             task.executeInternal();
@@ -158,15 +158,15 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
         return this.totalCompletedTasks.getAndAdd(value);
     }
 
-    protected static final class PrioritisedTask1 implements PrioritisedExecutor.PrioritisedTask {
-        private final PrioritisedThreadedTaskQueue queue;
+    protected static final class PrioritisedTask implements PrioritisedExecutor.PrioritisedTask {
+        protected final PrioritisedThreadedTaskQueue queue;
         protected long id;
         protected static final long NOT_SCHEDULED_ID = -1L;
 
         protected Runnable runnable;
         protected volatile Priority priority;
 
-        protected PrioritisedTask1(final long id, final Runnable runnable, final Priority priority, final PrioritisedThreadedTaskQueue queue) {
+        protected PrioritisedTask(final long id, final Runnable runnable, final Priority priority, final PrioritisedThreadedTaskQueue queue) {
             if (!Priority.isValidPriority(priority)) {
                 throw new IllegalArgumentException("Invalid priority " + priority);
             }
@@ -177,7 +177,7 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
             this.id = id;
         }
 
-        protected PrioritisedTask1(final Runnable runnable, final Priority priority, final PrioritisedThreadedTaskQueue queue) {
+        protected PrioritisedTask(final Runnable runnable, final Priority priority, final PrioritisedThreadedTaskQueue queue) {
             if (!Priority.isValidPriority(priority)) {
                 throw new IllegalArgumentException("Invalid priority " + priority);
             }

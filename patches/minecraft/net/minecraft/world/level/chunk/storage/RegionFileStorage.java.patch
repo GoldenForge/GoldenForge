@@ -47,6 +47,7 @@
 +   // Kaiiju end
 +   private final boolean isChunkData; // Paper
 +
++   private static final int REGION_SHIFT = 5;
 +   // Paper start - cache regionfile does not exist state
 +   static final int MAX_NON_EXISTING_CACHE = 1024 * 64;
 +   private final it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet nonExistingRegionFiles = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
@@ -70,9 +71,8 @@
 +      }
 +   }
 +
-+   public synchronized boolean doesRegionFileNotExistNoIO(ChunkPos pos) {
-+      long key = ChunkPos.m_45589_(pos.m_45610_(), pos.m_45612_());
-+      return !this.doesRegionFilePossiblyExist(key);
++   public synchronized boolean doesRegionFileNotExistNoIO(final int chunkX, final int chunkZ) {
++      return !this.doesRegionFilePossiblyExist(ChunkPos.m_45589_(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT));
 +   }
 +   // Paper end - cache regionfile does not exist state
 +

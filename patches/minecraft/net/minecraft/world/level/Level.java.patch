@@ -144,39 +144,39 @@
 +   public int wakeupInactiveRemainingVillagers;
 +   // Paper end
 +
-+   // Goldenforge API
-+   public java.util.concurrent.CompletableFuture<LevelChunk> getChunkAtAsync(int x, int z, boolean gen, boolean urgent) {
-+      if (Bukkit.isPrimaryThread()) {
-+         net.minecraft.world.level.chunk.LevelChunk immediate = ((ServerChunkCache) m_7726_()).getChunkAtIfLoadedImmediately(x, z);
-+         if (immediate != null) {
-+            return java.util.concurrent.CompletableFuture.completedFuture(immediate);
-+         }
-+      }
-+
-+      ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority;
-+      if (urgent) {
-+         priority = ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.HIGHER;
-+      } else {
-+         priority = ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL;
-+      }
-+
-+      java.util.concurrent.CompletableFuture<LevelChunk> ret = new java.util.concurrent.CompletableFuture<>();
-+
-+      io.papermc.paper.chunk.system.ChunkSystem.scheduleChunkLoad((ServerLevel) this, x, z, gen, ChunkStatus.f_62326_, true, priority, (c) -> {
-+         net.minecraft.server.MinecraftServer.getServer().scheduleOnMain(() -> {
-+            net.minecraft.world.level.chunk.LevelChunk chunk = (net.minecraft.world.level.chunk.LevelChunk)c;
-+            if (chunk != null) this.addTicket(x, z); // Paper
-+            ret.complete(chunk == null ? null : chunk);
-+         });
-+      });
-+
-+      return ret;
-+   }
-+
-+   private void addTicket(int x, int z) {
-+      io.papermc.paper.util.MCUtil.MAIN_EXECUTOR.execute(() -> ((ServerChunkCache) m_7726_()).m_8387_(TicketType.GOLDENFORGE_API, new ChunkPos(x, z), 0, Unit.INSTANCE)); // Paper
-+   }
-+   // Goldenforge end
++//   // Goldenforge API
++//   public java.util.concurrent.CompletableFuture<LevelChunk> getChunkAtAsync(int x, int z, boolean gen, boolean urgent) {
++//      if (Bukkit.isPrimaryThread()) {
++//         net.minecraft.world.level.chunk.LevelChunk immediate = ((ServerChunkCache) getChunkSource()).getChunkAtIfLoadedImmediately(x, z);
++//         if (immediate != null) {
++//            return java.util.concurrent.CompletableFuture.completedFuture(immediate);
++//         }
++//      }
++//
++//      ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority;
++//      if (urgent) {
++//         priority = ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.HIGHER;
++//      } else {
++//         priority = ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.NORMAL;
++//      }
++//
++//      java.util.concurrent.CompletableFuture<LevelChunk> ret = new java.util.concurrent.CompletableFuture<>();
++//
++//      io.papermc.paper.chunk.system.ChunkSystem.scheduleChunkLoad((ServerLevel) this, x, z, gen, ChunkStatus.FULL, true, priority, (c) -> {
++//         net.minecraft.server.MinecraftServer.getServer().scheduleOnMain(() -> {
++//            net.minecraft.world.level.chunk.LevelChunk chunk = (net.minecraft.world.level.chunk.LevelChunk)c;
++//            if (chunk != null) this.addTicket(x, z); // Paper
++//            ret.complete(chunk == null ? null : chunk);
++//         });
++//      });
++//
++//      return ret;
++//   }
++//
++//   private void addTicket(int x, int z) {
++//      io.papermc.paper.util.MCUtil.MAIN_EXECUTOR.execute(() -> ((ServerChunkCache) getChunkSource()).addRegionTicket(TicketType.GOLDENFORGE_API, new ChunkPos(x, z), 0, Unit.INSTANCE)); // Paper
++//   }
++//   // Goldenforge end
  
     protected Level(WritableLevelData p_220352_, ResourceKey<Level> p_220353_, Holder<DimensionType> p_220354_, Supplier<ProfilerFiller> p_220355_, boolean p_220356_, boolean p_220357_, long p_220358_, int p_220359_) {
 +      super(Level.class);

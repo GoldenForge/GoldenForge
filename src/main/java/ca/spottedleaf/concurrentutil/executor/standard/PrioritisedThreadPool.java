@@ -1,9 +1,8 @@
 package ca.spottedleaf.concurrentutil.executor.standard;
 
-import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import org.slf4j.Logger;
-
+import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -13,30 +12,46 @@ import java.util.function.BiConsumer;
 
 public final class PrioritisedThreadPool {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final Logger LOGGER = LoggerFactory.getLogger(PrioritisedThreadPool.class);
 
-    protected final PrioritisedThread[] threads;
-    protected final TreeSet<PrioritisedPoolExecutorImpl> queues = new TreeSet<>(PrioritisedPoolExecutorImpl.comparator());
-    protected final String name;
-    protected final long queueMaxHoldTime;
+    private final PrioritisedThread[] threads;
+    private final TreeSet<PrioritisedPoolExecutorImpl> queues = new TreeSet<>(PrioritisedPoolExecutorImpl.comparator());
+    private final String name;
+    private final long queueMaxHoldTime;
 
-    protected final ReferenceOpenHashSet<PrioritisedPoolExecutorImpl> nonShutdownQueues = new ReferenceOpenHashSet<>();
-    protected final ReferenceOpenHashSet<PrioritisedPoolExecutorImpl> activeQueues = new ReferenceOpenHashSet<>();
+    private final ReferenceOpenHashSet<PrioritisedPoolExecutorImpl> nonShutdownQueues = new ReferenceOpenHashSet<>();
+    private final ReferenceOpenHashSet<PrioritisedPoolExecutorImpl> activeQueues = new ReferenceOpenHashSet<>();
 
-    protected boolean shutdown;
+    private boolean shutdown;
 
-    protected long schedulingIdGenerator;
+    private long schedulingIdGenerator;
 
-    protected static final long DEFAULT_QUEUE_HOLD_TIME = (long)(5.0e6);
+    private static final long DEFAULT_QUEUE_HOLD_TIME = (long)(5.0e6);
 
+    /**
+     * @param name Specified debug name of this thread pool
+     * @param threads The number of threads to use
+     */
     public PrioritisedThreadPool(final String name, final int threads) {
         this(name, threads, null);
     }
 
+    /**
+     * @param name Specified debug name of this thread pool
+     * @param threads The number of threads to use
+     * @param threadModifier Invoked for each created thread with its incremental id before starting them
+     */
     public PrioritisedThreadPool(final String name, final int threads, final BiConsumer<Thread, Integer> threadModifier) {
         this(name, threads, threadModifier, DEFAULT_QUEUE_HOLD_TIME); // 5ms
     }
 
+    /**
+     * @param name Specified debug name of this thread pool
+     * @param threads The number of threads to use
+     * @param threadModifier Invoked for each created thread with its incremental id before starting them
+     * @param queueHoldTime The maximum amount of time to spend executing tasks in a specific queue before attempting
+     *                      to switch to another queue, per thread
+     */
     public PrioritisedThreadPool(final String name, final int threads, final BiConsumer<Thread, Integer> threadModifier,
                                  final long queueHoldTime) { // in ns
         if (threads <= 0) {
@@ -68,16 +83,32 @@ public final class PrioritisedThreadPool {
         }
     }
 
+    /**
+     * Returns an array representing the threads backing this thread pool.
+     */
     public Thread[] getThreads() {
         return Arrays.copyOf(this.threads, this.threads.length, Thread[].class);
     }
 
-    public PrioritisedPoolExecutor createExecutor(final String name, final int parallelism) {
+    /**
+     * Creates and returns a {@link PrioritisedPoolExecutor} to schedule tasks onto. The returned executor will execute
+     * tasks on this thread pool only.
+     * @param name The debug name of the executor.
+     * @param minParallelism The minimum number of threads to be executing tasks from the returned executor
+     *                       before threads may be allocated to other queues in this thread pool.
+     * @param parallelism The maximum number of threads which may be executing tasks from the returned executor.
+     * @throws IllegalStateException If this thread pool is shut down
+     */
+    public PrioritisedPoolExecutor createExecutor(final String name, final int minParallelism, final int parallelism) {
         synchronized (this.nonShutdownQueues) {
             if (this.shutdown) {
                 throw new IllegalStateException("Queue is shutdown: " + this.toString());
             }
-            final PrioritisedPoolExecutorImpl ret = new PrioritisedPoolExecutorImpl(this, name, Math.min(Math.max(1, parallelism), this.threads.length));
+            final PrioritisedPoolExecutorImpl ret = new PrioritisedPoolExecutorImpl(
+                    this, name,
+                    Math.min(Math.max(1, parallelism), this.threads.length),
+                    Math.min(Math.max(0, minParallelism), this.threads.length)
+            );
 
             this.nonShutdownQueues.add(ret);
 
@@ -173,6 +204,12 @@ public final class PrioritisedThreadPool {
         }
     }
 
+    /**
+     * Shuts down this thread pool, optionally waiting for all tasks to be executed.
+     * This function will invoke {@link PrioritisedPoolExecutor#shutdown()} on all created executors on this
+     * thread pool.
+     * @param wait Whether to wait for tasks to be executed
+     */
     public void shutdown(final boolean wait) {
         final ArrayList<PrioritisedPoolExecutorImpl> queuesToShutdown;
         synchronized (this.nonShutdownQueues) {
@@ -325,7 +362,7 @@ public final class PrioritisedThreadPool {
 
     protected static final class PrioritisedPoolExecutorImpl extends PrioritisedThreadedTaskQueue implements PrioritisedPoolExecutor {
 
-        private final PrioritisedThreadPool pool;
+        protected final PrioritisedThreadPool pool;
         protected final long[] priorityCounts = new long[Priority.TOTAL_SCHEDULABLE_PRIORITIES];
         protected long schedulingId;
         protected int concurrentExecutors;
@@ -333,18 +370,33 @@ public final class PrioritisedThreadPool {
 
         protected final String name;
         protected final int maximumExecutors;
+        protected final int minimumExecutors;
         protected boolean isQueued;
 
-        public PrioritisedPoolExecutorImpl(final PrioritisedThreadPool pool, final String name, final int maximumExecutors) {
+        public PrioritisedPoolExecutorImpl(final PrioritisedThreadPool pool, final String name, final int maximumExecutors, final int minimumExecutors) {
             this.pool = pool;
             this.name = name;
             this.maximumExecutors = maximumExecutors;
+            this.minimumExecutors = minimumExecutors;
         }
 
         public static Comparator<PrioritisedPoolExecutorImpl> comparator() {
             return (final PrioritisedPoolExecutorImpl p1, final PrioritisedPoolExecutorImpl p2) -> {
                 if (p1 == p2) {
                     return 0;
+                }
+
+                final int belowMin1 = p1.minimumExecutors - p1.concurrentExecutors;
+                final int belowMin2 = p2.minimumExecutors - p2.concurrentExecutors;
+
+                // test minimum executors
+                if (belowMin1 > 0 || belowMin2 > 0) {
+                    // want the largest belowMin to be first
+                    final int minCompare = Integer.compare(belowMin2, belowMin1);
+
+                    if (minCompare != 0) {
+                        return minCompare;
+                    }
                 }
 
                 // prefer higher priority
@@ -410,7 +462,7 @@ public final class PrioritisedThreadPool {
         private long totalQueuedTasks = 0L;
 
         @Override
-        protected void priorityChange(PrioritisedTask1 prioritisedTask, final Priority from, final Priority to) {
+        protected void priorityChange(final PrioritisedThreadedTaskQueue.PrioritisedTask task, final Priority from, final Priority to) {
             // Note: The superclass' queue lock is ALWAYS held when inside this method. So we do NOT need to do any additional synchronisation
             // for accessing this queue's state.
             final long[] priorityCounts = this.priorityCounts;

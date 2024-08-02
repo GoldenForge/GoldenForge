@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -1,32 +_,26 @@
+@@ -1,32 +_,28 @@
  package net.minecraft.server.level;
  
 +import ca.spottedleaf.starlight.common.util.CoordinateUtils;
@@ -9,8 +9,10 @@
  import com.mojang.datafixers.DataFixer;
  import com.mojang.datafixers.util.Pair;
  import com.mojang.logging.LogUtils;
++import io.papermc.paper.MoonriseCommon;
 +import io.papermc.paper.chunk.system.RegionizedPlayerChunkLoader;
 +import io.papermc.paper.chunk.system.entity.server.ServerEntityLookup;
++import io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler;
 +import io.papermc.paper.chunk.system.scheduling.NewChunkHolder;
 +import io.papermc.paper.util.player.NearbyPlayers;
  import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
@@ -41,7 +43,16 @@
  import java.util.concurrent.Executor;
  import java.util.function.BooleanSupplier;
  import java.util.function.Function;
-@@ -119,12 +_,7 @@
+@@ -111,20 +_,12 @@
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.entity.TickingBlockEntity;
+ import net.minecraft.world.level.block.state.BlockState;
+-import net.minecraft.world.level.chunk.ChunkAccess;
+-import net.minecraft.world.level.chunk.ChunkGenerator;
+-import net.minecraft.world.level.chunk.LevelChunk;
+-import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.*;
+ import net.minecraft.world.level.chunk.storage.EntityStorage;
  import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
  import net.minecraft.world.level.dimension.LevelStem;
  import net.minecraft.world.level.dimension.end.EndDragonFight;
@@ -80,7 +91,7 @@
     public boolean f_8564_;
     private final SleepStatus f_143245_;
     private int f_8551_;
-@@ -184,10 +_,374 @@
+@@ -184,10 +_,350 @@
     private final List<CustomSpawner> f_8558_;
     @Nullable
     private final EndDragonFight f_8559_;
@@ -224,41 +235,17 @@
 +      return null;
 +   }
 +
++   public final ChunkAccess moonrise$getSpecificChunkIfLoaded(final int chunkX, final int chunkZ, final ChunkStatus leastStatus) {
++      final NewChunkHolder newChunkHolder = this.chunkTaskScheduler.chunkHolderManager.getChunkHolder(chunkX, chunkZ);
++      if (newChunkHolder == null) {
++         return null;
++      }
++      return newChunkHolder.getChunkIfPresentUnchecked(leastStatus);
++   }
++
 +   @Override
 +   public ChunkAccess syncLoadNonFull(int chunkX, int chunkZ, net.minecraft.world.level.chunk.ChunkStatus status) {
-+      if (status == null || status.m_62427_(net.minecraft.world.level.chunk.ChunkStatus.f_62326_)) {
-+         throw new IllegalArgumentException("Status: " + status.toString());
-+      }
-+      ChunkAccess loaded = this.getIfAboveStatus(chunkX, chunkZ, status);
-+      if (loaded != null) {
-+         return loaded;
-+      }
-+
-+      Long ticketId = Long.valueOf(this.nonFullSyncLoadIdGenerator.getAndIncrement());
-+      int ticketLevel = 33 + net.minecraft.world.level.chunk.ChunkStatus.m_62370_(status);
-+      this.chunkTaskScheduler.chunkHolderManager.addTicketAtLevel(
-+              TicketType.NON_FULL_SYNC_LOAD, chunkX, chunkZ, ticketLevel, ticketId
-+      );
-+      this.chunkTaskScheduler.chunkHolderManager.processTicketUpdates();
-+
-+      this.chunkTaskScheduler.beginChunkLoadForNonFullSync(chunkX, chunkZ, status, ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority.BLOCKING);
-+
-+      // we could do a simple spinwait here, since we do not need to process tasks while performing this load
-+      // but we process tasks only because it's a better use of the time spent
-+      this.f_8547_.f_8332_.m_18701_(() -> {
-+         return ServerLevel.this.getIfAboveStatus(chunkX, chunkZ, status) != null;
-+      });
-+
-+      loaded = ServerLevel.this.getIfAboveStatus(chunkX, chunkZ, status);
-+      if (loaded == null) {
-+         throw new IllegalStateException("Expected chunk to be loaded for status " + status);
-+      }
-+
-+      this.chunkTaskScheduler.chunkHolderManager.removeTicketAtLevel(
-+              TicketType.NON_FULL_SYNC_LOAD, chunkX, chunkZ, ticketLevel, ticketId
-+      );
-+
-+      return loaded;
++      return this.chunkTaskScheduler.syncLoadNonFull(chunkX, chunkZ, status);
 +   }
 +
 +   public final int getRegionChunkShift() {
@@ -477,7 +464,7 @@
  
        this.f_143245_ = new SleepStatus();
 +      this.initCapabilities();
-+      this.chunkTaskScheduler = new io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler(this, io.papermc.paper.chunk.system.scheduling.ChunkTaskScheduler.workerThreads); // Paper - rewrite chunk system
++      this.chunkTaskScheduler = new ChunkTaskScheduler((ServerLevel)(Object)this, MoonriseCommon.WORKER_POOL);
 +      this.moonrise$setEntityLookup(new ServerEntityLookup((ServerLevel)(Object)this, ((ServerLevel)(Object)this).new EntityCallbacks()));
 +
     }

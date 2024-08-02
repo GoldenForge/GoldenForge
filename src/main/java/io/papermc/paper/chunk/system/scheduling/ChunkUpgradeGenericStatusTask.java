@@ -60,7 +60,7 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
     private boolean isEmptyTask() {
         // must use fromStatus here to avoid any race condition with run() overwriting the status
         final boolean generation = !this.fromStatus.isOrAfter(this.toStatus);
-        return (generation && this.toStatus.isEmptyGenStatus()) || (!generation && this.toStatus.isEmptyLoadStatus());
+        return (generation && this.toStatus.isEmptyGenStatus()) || (!generation && this.toStatus.moonrise$isEmptyLoadStatus());
     }
 
     @Override
@@ -99,7 +99,7 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
                     }
                 );
             } else {
-                if (this.toStatus.isEmptyLoadStatus()) {
+                if (this.toStatus.moonrise$isEmptyLoadStatus()) {
                     completing = true;
                     this.complete(chunk, null);
                     return;

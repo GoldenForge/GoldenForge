@@ -6,17 +6,19 @@ import ca.spottedleaf.concurrentutil.executor.standard.DelayedPrioritisedTask;
 import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.starlight.common.util.CoordinateUtils;
+import ca.spottedleaf.starlight.common.util.WorldUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.mojang.logging.LogUtils;
+import io.papermc.paper.async_save.AsyncChunkSaveData;
+import io.papermc.paper.async_save.ChunkSystemFeatures;
 import io.papermc.paper.chunk.system.ChunkSystem;
 import io.papermc.paper.chunk.system.io.RegionFileIOThread;
 import io.papermc.paper.chunk.system.poi.PoiChunk;
-import io.papermc.paper.util.CoordinateUtils;
 import io.papermc.paper.util.TickThread;
-import io.papermc.paper.util.WorldUtil;
 import io.papermc.paper.world.ChunkEntitySlices;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectLinkedOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
@@ -24,9 +26,7 @@ import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ChunkHolder;
-import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
@@ -34,9 +34,8 @@ import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.ImposterProtoChunk;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.storage.ChunkSerializer;
-import net.minecraft.world.level.chunk.storage.EntityStorage;
-import org.goldenforge.config.GoldenForgeConfig;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.lang.invoke.VarHandle;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -48,16 +47,7 @@ import java.util.function.Consumer;
 
 public final class NewChunkHolder {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
-
-    public static final Thread.UncaughtExceptionHandler CHUNKSYSTEM_UNCAUGHT_EXCEPTION_HANDLER = new Thread.UncaughtExceptionHandler() {
-        @Override
-        public void uncaughtException(final Thread thread, final Throwable throwable) {
-            if (!(throwable instanceof ThreadDeath)) {
-                LOGGER.error("Uncaught exception in thread " + thread.getName(), throwable);
-            }
-        }
-    };
+    private static final Logger LOGGER = LoggerFactory.getLogger(NewChunkHolder.class);
 
     public final ServerLevel world;
     public final int chunkX;
@@ -72,32 +62,6 @@ public final class NewChunkHolder {
     private ChunkEntitySlices entityChunk;
     // entity chunk that is loaded, but not yet deserialized
     private CompoundTag pendingEntityChunk;
-
-    private static final ChunkStatus[] ALL_STATUSES = ChunkStatus.getStatusList().toArray(new ChunkStatus[0]);
-    public static final record ChunkCompletion(ChunkAccess chunk, ChunkStatus genStatus) {};
-    private static final VarHandle CHUNK_COMPLETION_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(ChunkCompletion[].class);
-    private final ChunkCompletion[] chunkCompletions = new ChunkCompletion[ALL_STATUSES.length];
-
-    public void replaceProtoChunk(final ImposterProtoChunk imposterProtoChunk) {
-        for (int i = 0, max = ChunkStatus.FULL.getIndex(); i < max; ++i) {
-            CHUNK_COMPLETION_ARRAY_HANDLE.setVolatile(this.chunkCompletions, i, new ChunkCompletion(imposterProtoChunk, ALL_STATUSES[i]));
-        }
-    }
-
-    public ChunkAccess getChunkIfPresentUnchecked(final ChunkStatus status) {
-        final ChunkCompletion completion = (ChunkCompletion)CHUNK_COMPLETION_ARRAY_HANDLE.getVolatile(this.chunkCompletions, status.getIndex());
-        return completion == null ? null : completion.chunk;
-    }
-
-    public ChunkAccess getChunkIfPresent(final ChunkStatus status) {
-        final ChunkStatus maxStatus = ChunkHolder.getStatus(this.getTicketLevel());
-
-        if (maxStatus == null || status.isOrAfter(maxStatus)) {
-            return null;
-        }
-
-        return this.getChunkIfPresentUnchecked(status);
-    }
 
     ChunkEntitySlices loadInEntityChunk(final boolean transientChunk) {
         TickThread.ensureTickThread(this.world, this.chunkX, this.chunkZ, "Cannot sync load entity data off-main");
@@ -140,7 +104,7 @@ public final class NewChunkHolder {
 
         if (!transientChunk) {
             if (entityChunk != null) {
-                final List<Entity> entities = EntityStorage.readEntities(this.world, entityChunk);
+                final List<Entity> entities = ChunkEntitySlices.readEntities(this.world, entityChunk);
 
                 this.world.moonrise$getEntityLookup().addEntityChunkEntities(entities, new ChunkPos(this.chunkX, this.chunkZ));
             }
@@ -455,7 +419,7 @@ public final class NewChunkHolder {
 
         @Override
         public boolean cancel() {
-            final NewChunkHolder holder = this.chunkHolder; // Folia - use area based lock to reduce contention
+            final NewChunkHolder holder = this.chunkHolder;
             final ReentrantAreaLock.Node schedulingLock = holder.scheduler.schedulingLockArea.lock(holder.chunkX, holder.chunkZ);
             try {
                 if (!this.completed) {
@@ -479,11 +443,38 @@ public final class NewChunkHolder {
      */
     private ChunkStatus currentGenStatus;
 
-    // This allows unsynchronised access to the chunk and last gen status
+    // This allows lockless access to the chunk and last gen status
+    private static final ChunkStatus[] ALL_STATUSES = ChunkStatus.getStatusList().toArray(new ChunkStatus[0]);
+
+    public static final record ChunkCompletion(ChunkAccess chunk, ChunkStatus genStatus) {};
+    private static final VarHandle CHUNK_COMPLETION_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(ChunkCompletion[].class);
+    private final ChunkCompletion[] chunkCompletions = new ChunkCompletion[ALL_STATUSES.length];
+
     private volatile ChunkCompletion lastChunkCompletion;
 
     public ChunkCompletion getLastChunkCompletion() {
         return this.lastChunkCompletion;
+    }
+
+    public ChunkAccess getChunkIfPresentUnchecked(final ChunkStatus status) {
+        final ChunkCompletion completion = (ChunkCompletion)CHUNK_COMPLETION_ARRAY_HANDLE.getVolatile(this.chunkCompletions, status.getIndex());
+        return completion == null ? null : completion.chunk;
+    }
+
+    public ChunkAccess getChunkIfPresent(final ChunkStatus status) {
+        final ChunkStatus maxStatus = ChunkHolder.getStatus(this.getTicketLevel());
+
+        if (maxStatus == null || status.isOrAfter(maxStatus)) {
+            return null;
+        }
+
+        return this.getChunkIfPresentUnchecked(status);
+    }
+
+    public void replaceProtoChunk(final ImposterProtoChunk imposterProtoChunk) {
+        for (int i = 0, max = ChunkStatus.FULL.getIndex(); i < max; ++i) {
+            CHUNK_COMPLETION_ARRAY_HANDLE.setVolatile(this.chunkCompletions, i, new ChunkCompletion(imposterProtoChunk, ALL_STATUSES[i]));
+        }
     }
 
     /**
@@ -497,12 +488,12 @@ public final class NewChunkHolder {
     /**
      * contains the neighbours that this chunk generation is blocking on
      */
-    protected final ReferenceLinkedOpenHashSet<NewChunkHolder> neighboursBlockingGenTask = new ReferenceLinkedOpenHashSet<>(4);
+    private final ReferenceLinkedOpenHashSet<NewChunkHolder> neighboursBlockingGenTask = new ReferenceLinkedOpenHashSet<>(4);
 
     /**
      * map of ChunkHolder -> Required Status for this chunk
      */
-    protected final Reference2ObjectLinkedOpenHashMap<NewChunkHolder, ChunkStatus> neighboursWaitingForUs = new Reference2ObjectLinkedOpenHashMap<>();
+    private final Reference2ObjectLinkedOpenHashMap<NewChunkHolder, ChunkStatus> neighboursWaitingForUs = new Reference2ObjectLinkedOpenHashMap<>();
 
     public void addGenerationBlockingNeighbour(final NewChunkHolder neighbour) {
         this.neighboursBlockingGenTask.add(neighbour);
@@ -519,11 +510,11 @@ public final class NewChunkHolder {
     // priority state
 
     // the target priority for this chunk to generate at
-    private PrioritisedExecutor.Priority priority = PrioritisedExecutor.Priority.NORMAL;
+    private PrioritisedExecutor.Priority priority = null;
     private boolean priorityLocked;
 
     // the priority neighbouring chunks have requested this chunk generate at
-    private PrioritisedExecutor.Priority neighbourRequestedPriority = PrioritisedExecutor.Priority.IDLE;
+    private PrioritisedExecutor.Priority neighbourRequestedPriority = null;
 
     public PrioritisedExecutor.Priority getEffectivePriority(final PrioritisedExecutor.Priority dfl) {
         final PrioritisedExecutor.Priority neighbour = this.neighbourRequestedPriority;
@@ -533,7 +524,7 @@ public final class NewChunkHolder {
             return us == null ? dfl : us;
         }
         if (us == null) {
-            return dfl;
+            return neighbour;
         }
 
         return PrioritisedExecutor.Priority.max(us, neighbour);
@@ -586,7 +577,7 @@ public final class NewChunkHolder {
     }
 
     private void lockPriority() {
-        this.priority = PrioritisedExecutor.Priority.NORMAL;
+        this.priority = null;
         this.priorityLocked = true;
     }
 
@@ -632,8 +623,8 @@ public final class NewChunkHolder {
     }
 
     // ticket level state
-    private int oldTicketLevel = ChunkMap.MAX_CHUNK_DISTANCE + 1;
-    private int currentTicketLevel = ChunkMap.MAX_CHUNK_DISTANCE + 1;
+    public int oldTicketLevel = ChunkHolderManager.MAX_TICKET_LEVEL + 1;
+    private int currentTicketLevel = ChunkHolderManager.MAX_TICKET_LEVEL + 1;
 
     public int getTicketLevel() {
         return this.currentTicketLevel;
@@ -646,12 +637,15 @@ public final class NewChunkHolder {
         this.chunkX = chunkX;
         this.chunkZ = chunkZ;
         this.scheduler = scheduler;
-        this.vanillaChunkHolder = new ChunkHolder(new ChunkPos(chunkX, chunkZ), world, world.getLightEngine(), world.chunkSource.chunkMap, this);
+        this.vanillaChunkHolder = new ChunkHolder(
+                new ChunkPos(chunkX, chunkZ), world,
+                world.getLightEngine(), world.getChunkSource().chunkMap
+        );
+        this.vanillaChunkHolder.moonrise$setRealChunkHolder(this);
     }
 
     protected ImposterProtoChunk wrappedChunkForNeighbour;
 
-    // holds scheduling lock
     public ChunkAccess getChunkForNeighbourAccess() {
         // Vanilla overrides the status futures with an imposter chunk to prevent writes to full chunks
         // But we don't store per-status futures, so we need this hack
@@ -757,19 +751,50 @@ public final class NewChunkHolder {
     }
 
     /** Unloaded from chunk map */
-    boolean killed;
+    private boolean unloaded;
+    private Throwable lastUnloadAdd;
+
+    void markUnloaded() {
+        this.unloaded = true;
+        if (this.inUnloadQueue) {
+            if (this.lastUnloadAdd != null) {
+                LOGGER.error("Unloaded chunkholder " + this.toString() + " while in the unload queue", this.lastUnloadAdd);
+            } else {
+                // should never happen
+                LOGGER.error("Unloaded chunkholder " + this.toString() + " while in the unload queue without a throwable");
+            }
+
+            // prevent crash by removing (note: we hold scheduling lock here)
+            this.inUnloadQueue = false;
+            this.scheduler.chunkHolderManager.unloadQueue.removeChunk(this.chunkX, this.chunkZ);
+        }
+    }
+
+    private boolean inUnloadQueue = false;
+
+    void removeFromUnloadQueue() {
+        this.inUnloadQueue = false;
+    }
 
     // must hold scheduling lock
     private void checkUnload() {
-        if (this.killed) {
+        if (this.unloaded) {
             return;
         }
         if (this.isSafeToUnload() == null) {
             // ensure in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.addChunk(this.chunkX, this.chunkZ);
+            if (!this.inUnloadQueue) {
+                this.inUnloadQueue = true;
+                this.lastUnloadAdd = new Throwable();
+                this.scheduler.chunkHolderManager.unloadQueue.addChunk(this.chunkX, this.chunkZ);
+            }
         } else {
             // ensure not in unload queue
-            this.scheduler.chunkHolderManager.unloadQueue.removeChunk(this.chunkX, this.chunkZ);
+            if (this.inUnloadQueue) {
+                this.inUnloadQueue = false;
+                this.lastUnloadAdd = null;
+                this.scheduler.chunkHolderManager.unloadQueue.removeChunk(this.chunkX, this.chunkZ);
+            }
         }
     }
 
@@ -796,19 +821,39 @@ public final class NewChunkHolder {
         }
     }
 
+    private void removeUnloadTask(final RegionFileIOThread.RegionFileType type) {
+        switch (type) {
+            case CHUNK_DATA: {
+                this.chunkDataUnload = null;
+                return;
+            }
+            case ENTITY_DATA: {
+                this.entityDataUnload = null;
+                return;
+            }
+            case POI_DATA: {
+                this.poiDataUnload = null;
+                return;
+            }
+            default:
+                throw new IllegalStateException("Unknown regionfile type " + type);
+        }
+    }
+
     private UnloadState unloadState;
 
     // holds schedule lock
     UnloadState unloadStage1() {
         // because we hold the scheduling lock, we cannot actually unload anything
-        // so we need to null this chunk's state
-        ChunkAccess chunk = this.currentChunk;
-        ChunkEntitySlices entityChunk = this.entityChunk;
-        PoiChunk poiChunk = this.poiChunk;
+        // so, what we do here instead is to null this chunk's state and setup the unload tasks
+        // the unload tasks will ensure that any loads that take place after stage1 (i.e during stage2, in which
+        // we do not hold the lock) c
+        final ChunkAccess chunk = this.currentChunk;
+        final ChunkEntitySlices entityChunk = this.entityChunk;
+        final PoiChunk poiChunk = this.poiChunk;
         // chunk state
         this.currentChunk = null;
         this.currentGenStatus = null;
-        this.wrappedChunkForNeighbour = null;
         this.lastChunkCompletion = null;
         for (int i = 0; i < this.chunkCompletions.length; ++i) {
             CHUNK_COMPLETION_ARRAY_HANDLE.setVolatile(this.chunkCompletions, i, (ChunkCompletion)null);
@@ -837,15 +882,16 @@ public final class NewChunkHolder {
     }
 
     // data is null if failed or does not need to be saved
-    void completeAsyncChunkDataSave(final CompoundTag data) {
+    void completeAsyncUnloadDataSave(final RegionFileIOThread.RegionFileType type, final CompoundTag data) {
         if (data != null) {
-            RegionFileIOThread.scheduleSave(this.world, this.chunkX, this.chunkZ, data, RegionFileIOThread.RegionFileType.CHUNK_DATA);
+            RegionFileIOThread.scheduleSave(this.world, this.chunkX, this.chunkZ, data, type);
         }
-        this.chunkDataUnload.completable().complete(data);
+
+        this.getUnloadTask(type).completable().complete(data);
         final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
         try {
             // can only write to these fields while holding the schedule lock
-            this.chunkDataUnload = null;
+            this.removeUnloadTask(type);
             this.checkUnload();
         } finally {
             this.scheduler.schedulingLockArea.unlock(schedulingLock);
@@ -864,13 +910,12 @@ public final class NewChunkHolder {
         if (chunk != null) {
             if (chunk instanceof LevelChunk levelChunk) {
                 levelChunk.setLoaded(false);
-                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkEvent.Unload(chunk));
             }
 
             if (!shouldLevelChunkNotSave) {
                 this.saveChunk(chunk, true);
             } else {
-                this.completeAsyncChunkDataSave(null);
+                this.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, null);
             }
 
             if (chunk instanceof LevelChunk levelChunk) {
@@ -1001,7 +1046,7 @@ public final class NewChunkHolder {
             }
         }
 
-        if (newState != oldState) {
+        if (oldState != newState) {
             if (newState.isOrAfter(oldState)) {
                 // status upgrade
                 if (!oldState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && newState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
@@ -1014,9 +1059,6 @@ public final class NewChunkHolder {
                                     this.chunkX, this.chunkZ, ChunkStatus.FULL, this, scheduledTasks
                             );
                         }
-                    } else {
-                        // now we are fully loaded
-                        this.queueBorderFullStatus(true, changedLoadStatus);
                     }
                 }
             } else {
@@ -1033,10 +1075,8 @@ public final class NewChunkHolder {
                     this.completeFullStatusConsumers(ChunkHolder.FullChunkStatus.BORDER, null);
                 }
             }
-        }
 
-        if (oldState != newState) {
-            if (this.onTicketUpdate(oldState, newState)) {
+            if (this.updatePendingStatus()) {
                 changedLoadStatus.add(this);
             }
         }
@@ -1045,16 +1085,6 @@ public final class NewChunkHolder {
             this.checkUnload();
         }
     }
-
-    /*
-        For full chunks, vanilla just loads chunks around it up to FEATURES, 1 radius
-
-        For ticking chunks, it updates the persistent entity manager (soon to be completely nuked by EntitySliceManager, which
-        will also need to be updated but with far less implications)
-        It also shoves the scheduled block ticks into the tick scheduler
-
-        For entity ticking chunks, updates the entity manager (see above)
-     */
 
     static final int NEIGHBOUR_RADIUS = 2;
     private long fullNeighbourChunksLoadedBitset;
@@ -1068,45 +1098,47 @@ public final class NewChunkHolder {
         return (this.fullNeighbourChunksLoadedBitset & (1L << getFullNeighbourIndex(relativeX, relativeZ))) != 0;
     }
 
-    // returns true if this chunk changed full status
+    // returns true if this chunk changed pending full status
+    // must hold scheduling lock
     public final boolean setNeighbourFullLoaded(final int relativeX, final int relativeZ) {
-        final long before = this.fullNeighbourChunksLoadedBitset;
         final int index = getFullNeighbourIndex(relativeX, relativeZ);
         this.fullNeighbourChunksLoadedBitset |= (1L << index);
-        return this.onNeighbourChange(before, this.fullNeighbourChunksLoadedBitset);
+        return this.updatePendingStatus();
     }
 
-    // returns true if this chunk changed full status
+    // returns true if this chunk changed pending full status
+    // must hold scheduling lock
     public final boolean setNeighbourFullUnloaded(final int relativeX, final int relativeZ) {
-        final long before = this.fullNeighbourChunksLoadedBitset;
         final int index = getFullNeighbourIndex(relativeX, relativeZ);
         this.fullNeighbourChunksLoadedBitset &= ~(1L << index);
-        return this.onNeighbourChange(before, this.fullNeighbourChunksLoadedBitset);
+        return this.updatePendingStatus();
     }
 
+    private static long getLoadedMask(final int radius) {
+        long mask = 0L;
+        for (int dx = -radius; dx <= radius; ++dx) {
+            for (int dz = -radius; dz <= radius; ++dz) {
+                mask |= (1L << getFullNeighbourIndex(dx, dz));
+            }
+        }
+
+        return mask;
+    }
+
+    private static final long CHUNK_LOADED_MASK_RAD0 = getLoadedMask(0);
+    private static final long CHUNK_LOADED_MASK_RAD1 = getLoadedMask(1);
+    private static final long CHUNK_LOADED_MASK_RAD2 = getLoadedMask(2);
+
     public static boolean areNeighboursFullLoaded(final long bitset, final int radius) {
-        // index = relativeX + (relativeZ * (NEIGHBOUR_CACHE_RADIUS * 2 + 1)) + (NEIGHBOUR_CACHE_RADIUS + NEIGHBOUR_CACHE_RADIUS * ((NEIGHBOUR_CACHE_RADIUS * 2 + 1)))
         switch (radius) {
             case 0: {
-                return (bitset & (1L << getFullNeighbourIndex(0, 0))) != 0L;
+                return (bitset & CHUNK_LOADED_MASK_RAD0) == CHUNK_LOADED_MASK_RAD0;
             }
             case 1: {
-                long mask = 0L;
-                for (int dx = -1; dx <= 1; ++dx) {
-                    for (int dz = -1; dz <= 1; ++dz) {
-                        mask |= (1L << getFullNeighbourIndex(dx, dz));
-                    }
-                }
-                return (bitset & mask) == mask;
+                return (bitset & CHUNK_LOADED_MASK_RAD1) == CHUNK_LOADED_MASK_RAD1;
             }
             case 2: {
-                long mask = 0L;
-                for (int dx = -2; dx <= 2; ++dx) {
-                    for (int dz = -2; dz <= 2; ++dz) {
-                        mask |= (1L << getFullNeighbourIndex(dx, dz));
-                    }
-                }
-                return (bitset & mask) == mask;
+                return (bitset & CHUNK_LOADED_MASK_RAD2) == CHUNK_LOADED_MASK_RAD2;
             }
 
             default: {
@@ -1115,22 +1147,15 @@ public final class NewChunkHolder {
         }
     }
 
-    // upper 16 bits are pending status, lower 16 bits are current status
-    private volatile long chunkStatus;
-    private static final long PENDING_STATUS_MASK = Long.MIN_VALUE >> 31;
-    private static final ChunkHolder.FullChunkStatus[] CHUNK_STATUS_BY_ID = ChunkHolder.FullChunkStatus.values();
-    private static final VarHandle CHUNK_STATUS_HANDLE = ConcurrentUtil.getVarHandle(NewChunkHolder.class, "chunkStatus", long.class);
-
-    public static ChunkHolder.FullChunkStatus getCurrentChunkStatus(final long encoded) {
-        return CHUNK_STATUS_BY_ID[(int)encoded];
-    }
-
-    public static ChunkHolder.FullChunkStatus getPendingChunkStatus(final long encoded) {
-        return CHUNK_STATUS_BY_ID[(int)(encoded >>> 32)];
-    }
+    // only updated while holding scheduling lock
+    private ChunkHolder.FullChunkStatus pendingFullChunkStatus = ChunkHolder.FullChunkStatus.INACCESSIBLE;
+    // updated while holding no locks, but adds a ticket before to prevent pending status from dropping
+    // so, current will never update to a value higher than pending
+    private ChunkHolder.FullChunkStatus currentFullChunkStatus = ChunkHolder.FullChunkStatus.INACCESSIBLE;
 
     public ChunkHolder.FullChunkStatus getChunkStatus() {
-        return getCurrentChunkStatus(((long)CHUNK_STATUS_HANDLE.getVolatile((NewChunkHolder)this)));
+        // no volatile access, access off-main is considered racey anyways
+        return this.currentFullChunkStatus;
     }
 
     public boolean isEntityTickingReady() {
@@ -1146,120 +1171,43 @@ public final class NewChunkHolder {
     }
 
     private static ChunkHolder.FullChunkStatus getStatusForBitset(final long bitset) {
-        if (areNeighboursFullLoaded(bitset, 2)) {
+        if ((bitset & CHUNK_LOADED_MASK_RAD2) == CHUNK_LOADED_MASK_RAD2) {
             return ChunkHolder.FullChunkStatus.ENTITY_TICKING;
-        } else if (areNeighboursFullLoaded(bitset, 1)) {
+        } else if ((bitset & CHUNK_LOADED_MASK_RAD1) == CHUNK_LOADED_MASK_RAD1) {
             return ChunkHolder.FullChunkStatus.TICKING;
-        } else if (areNeighboursFullLoaded(bitset, 0)) {
+        } else if ((bitset & CHUNK_LOADED_MASK_RAD0) == CHUNK_LOADED_MASK_RAD0) {
             return ChunkHolder.FullChunkStatus.BORDER;
         } else {
             return ChunkHolder.FullChunkStatus.INACCESSIBLE;
         }
     }
 
-    // note: only while updating ticket level, so holds ticket update lock + scheduling lock
-    protected final boolean onTicketUpdate(final ChunkHolder.FullChunkStatus oldState, final ChunkHolder.FullChunkStatus newState) {
-        if (oldState == newState) {
+    // must hold scheduling lock
+    // returns whether the pending status was changed
+    private boolean updatePendingStatus() {
+        final ChunkHolder.FullChunkStatus byTicketLevel = ChunkHolder.getFullChunkStatus(this.oldTicketLevel); // oldTicketLevel is controlled by scheduling lock
+
+        ChunkHolder.FullChunkStatus pending = getStatusForBitset(this.fullNeighbourChunksLoadedBitset);
+        if (pending == ChunkHolder.FullChunkStatus.INACCESSIBLE && byTicketLevel.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && this.currentGenStatus == ChunkStatus.FULL) {
+            // the bitset is only for chunks that have gone through the status updater
+            // but here we are ready to go to FULL
+            pending = ChunkHolder.FullChunkStatus.BORDER;
+        }
+
+        if (pending.isOrAfter(byTicketLevel)) { // pending >= byTicketLevel
+            // cannot set above ticket level
+            pending = byTicketLevel;
+        }
+
+        if (this.pendingFullChunkStatus == pending) {
             return false;
         }
 
-        // preserve border request after full status complete, as it does not set anything in the bitset
-        ChunkHolder.FullChunkStatus byNeighbours = getStatusForBitset(this.fullNeighbourChunksLoadedBitset);
-        if (byNeighbours == ChunkHolder.FullChunkStatus.INACCESSIBLE && newState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && this.currentGenStatus == ChunkStatus.FULL) {
-            byNeighbours = ChunkHolder.FullChunkStatus.BORDER;
-        }
+        this.pendingFullChunkStatus = pending;
 
-        final ChunkHolder.FullChunkStatus toSet;
-
-        if (newState.isOrAfter(byNeighbours)) {
-            // must clamp to neighbours level, even though we have the ticket level
-            toSet = byNeighbours;
-        } else {
-            // must clamp to ticket level, even though we have the neighbours
-            toSet = newState;
-        }
-
-        long curr = (long)CHUNK_STATUS_HANDLE.getVolatile((NewChunkHolder)this);
-
-        if (curr == ((long)toSet.ordinal() | ((long)toSet.ordinal() << 32))) {
-            // nothing to do
-            return false;
-        }
-
-        int failures = 0;
-        for (;;) {
-            final long update = (curr & ~PENDING_STATUS_MASK) | ((long)toSet.ordinal() << 32);
-            if (curr == (curr = (long)CHUNK_STATUS_HANDLE.compareAndExchange((NewChunkHolder)this, curr, update))) {
-                return true;
-            }
-
-            ++failures;
-            for (int i = 0; i < failures; ++i) {
-                ConcurrentUtil.backoff();
-            }
-        }
+        return true;
     }
 
-    protected final boolean onNeighbourChange(final long bitsetBefore, final long bitsetAfter) {
-        ChunkHolder.FullChunkStatus oldState = getStatusForBitset(bitsetBefore);
-        ChunkHolder.FullChunkStatus newState = getStatusForBitset(bitsetAfter);
-        final ChunkHolder.FullChunkStatus currStateTicketLevel = ChunkHolder.getFullChunkStatus(this.oldTicketLevel);
-        if (oldState.isOrAfter(currStateTicketLevel)) {
-            oldState = currStateTicketLevel;
-        }
-        if (newState.isOrAfter(currStateTicketLevel)) {
-            newState = currStateTicketLevel;
-        }
-        // preserve border request after full status complete, as it does not set anything in the bitset
-        if (newState == ChunkHolder.FullChunkStatus.INACCESSIBLE && currStateTicketLevel.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && this.currentGenStatus == ChunkStatus.FULL) {
-            newState = ChunkHolder.FullChunkStatus.BORDER;
-        }
-
-        if (oldState == newState) {
-            return false;
-        }
-
-        int failures = 0;
-        for (long curr = (long)CHUNK_STATUS_HANDLE.getVolatile((NewChunkHolder)this);;) {
-            final long update = (curr & ~PENDING_STATUS_MASK) | ((long)newState.ordinal() << 32);
-            if (curr == (curr = (long)CHUNK_STATUS_HANDLE.compareAndExchange((NewChunkHolder)this, curr, update))) {
-                return true;
-            }
-
-            ++failures;
-            for (int i = 0; i < failures; ++i) {
-                ConcurrentUtil.backoff();
-            }
-        }
-    }
-
-    private boolean queueBorderFullStatus(final boolean loaded, final List<NewChunkHolder> changedFullStatus) {
-        final ChunkHolder.FullChunkStatus toStatus = loaded ? ChunkHolder.FullChunkStatus.BORDER : ChunkHolder.FullChunkStatus.INACCESSIBLE;
-
-        int failures = 0;
-        for (long curr = (long)CHUNK_STATUS_HANDLE.getVolatile((NewChunkHolder)this);;) {
-            final ChunkHolder.FullChunkStatus currPending = getPendingChunkStatus(curr);
-            if (loaded && currPending != ChunkHolder.FullChunkStatus.INACCESSIBLE) {
-                throw new IllegalStateException("Expected " + ChunkHolder.FullChunkStatus.INACCESSIBLE + " for pending, but got " + currPending);
-            }
-
-            final long update = (curr & ~PENDING_STATUS_MASK) | ((long)toStatus.ordinal() << 32);
-            if (curr == (curr = (long)CHUNK_STATUS_HANDLE.compareAndExchange((NewChunkHolder)this, curr, update))) {
-                if ((int)(update) != (int)(update >>> 32)) {
-                    changedFullStatus.add(this);
-                    return true;
-                }
-                return false;
-            }
-
-            ++failures;
-            for (int i = 0; i < failures; ++i) {
-                ConcurrentUtil.backoff();
-            }
-        }
-    }
-
-    // only call on main thread, must hold ticket level and scheduling lock
     private void onFullChunkLoadChange(final boolean loaded, final List<NewChunkHolder> changedFullStatus) {
         final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ, NEIGHBOUR_RADIUS);
         try {
@@ -1282,26 +1230,15 @@ public final class NewChunkHolder {
         }
     }
 
-    private ChunkHolder.FullChunkStatus updateCurrentState(final ChunkHolder.FullChunkStatus to) {
-        int failures = 0;
-        for (long curr = (long)CHUNK_STATUS_HANDLE.getVolatile((NewChunkHolder)this);;) {
-            final long update = (curr & PENDING_STATUS_MASK) | (long)to.ordinal();
-            if (curr == (curr = (long)CHUNK_STATUS_HANDLE.compareAndExchange((NewChunkHolder)this, curr, update))) {
-                return getPendingChunkStatus(curr);
-            }
-
-            ++failures;
-            for (int i = 0; i < failures; ++i) {
-                ConcurrentUtil.backoff();
-            }
-        }
-    }
-
     private void changeEntityChunkStatus(final ChunkHolder.FullChunkStatus toStatus) {
         this.world.moonrise$getEntityLookup().chunkStatusChange(this.chunkX, this.chunkZ, toStatus);
     }
 
     private boolean processingFullStatus = false;
+
+    private void updateCurrentState(final ChunkHolder.FullChunkStatus to) {
+        this.currentFullChunkStatus = to;
+    }
 
     // only to be called on the main thread, no locks need to be held
     public boolean handleFullStatusChange(final List<NewChunkHolder> changedFullStatus) {
@@ -1310,45 +1247,23 @@ public final class NewChunkHolder {
         boolean ret = false;
 
         if (this.processingFullStatus) {
-            // we cannot process updates recursively
+            // we cannot process updates recursively, as we may be in the middle of logic to upgrade/downgrade status
             return ret;
-        }
-
-        // note: use opaque reads for chunk status read since we need it to be atomic
-
-        // test if anything changed
-        long statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
-        if ((int)statusCheck == (int)(statusCheck >>> 32)) {
-            // nothing changed
-            return ret;
-        }
-
-        final ChunkTaskScheduler scheduler = this.scheduler;
-        final ChunkHolderManager holderManager = scheduler.chunkHolderManager;
-        final int ticketKeep;
-        final Long ticketId = Long.valueOf(holderManager.getNextStatusUpgradeId());
-        final ReentrantAreaLock.Node ticketLock = holderManager.ticketLockArea.lock(this.chunkX, this.chunkZ);
-        try {
-            ticketKeep = this.currentTicketLevel;
-            statusCheck = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
-            // handle race condition where ticket level and target status is updated concurrently
-            if ((int)statusCheck == (int)(statusCheck >>> 32)) {
-                // nothing changed
-                return ret;
-            }
-            holderManager.addTicketAtLevel(TicketType.STATUS_UPGRADE, CoordinateUtils.getChunkKey(this.chunkX, this.chunkZ), ticketKeep, ticketId, false);
-        } finally {
-            holderManager.ticketLockArea.unlock(ticketLock);
         }
 
         this.processingFullStatus = true;
         try {
             for (;;) {
-                final long currStateEncoded = (long)CHUNK_STATUS_HANDLE.getOpaque((NewChunkHolder)this);
-                final ChunkHolder.FullChunkStatus currState = getCurrentChunkStatus(currStateEncoded);
-                ChunkHolder.FullChunkStatus nextState = getPendingChunkStatus(currStateEncoded);
-                if (currState == nextState) {
-                    if (nextState == ChunkHolder.FullChunkStatus.INACCESSIBLE) {
+                // check if we have any remaining work to do
+
+                // we do not need to hold the scheduling lock to read pending, as changes to pending
+                // will queue a status update
+
+                final ChunkHolder.FullChunkStatus pending = this.pendingFullChunkStatus;
+                ChunkHolder.FullChunkStatus current = this.currentFullChunkStatus;
+
+                if (pending == current) {
+                    if (pending == ChunkHolder.FullChunkStatus.INACCESSIBLE) {
                         final ReentrantAreaLock.Node schedulingLock = this.scheduler.schedulingLockArea.lock(this.chunkX, this.chunkZ);
                         try {
                             this.checkUnload();
@@ -1356,10 +1271,17 @@ public final class NewChunkHolder {
                             this.scheduler.schedulingLockArea.unlock(schedulingLock);
                         }
                     }
-                    break;
+                    return ret;
                 }
 
+                ret = true;
+
+                // note: because the chunk system delays any ticket downgrade to the chunk holder manager tick, we
+                //       do not need to consider cases where the ticket level may decrease during this call by asynchronous
+                //       ticket changes
+
                 // chunks cannot downgrade state while status is pending a change
+                // note: currentChunk must be LevelChunk, as current != pending which means that at least one is not ACCESSIBLE
                 final LevelChunk chunk = (LevelChunk)this.currentChunk;
 
                 // Note: we assume that only load/unload contain plugin logic
@@ -1367,62 +1289,56 @@ public final class NewChunkHolder {
                 // being changed (i.e during load it is possible it will try to set to full ticking)
                 // in order to allow this change, we also need this plugin logic to be contained strictly after all
                 // of the chunk system load callbacks are invoked
-                if (nextState.isOrAfter(currState)) {
+                if (pending.isOrAfter(current)) {
                     // state upgrade
-                    if (!currState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && nextState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
-                        nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.BORDER);
+                    if (!current.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && pending.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
+                        this.updateCurrentState(ChunkHolder.FullChunkStatus.BORDER);
                         ChunkSystem.onChunkPreBorder(chunk, this.vanillaChunkHolder);
-                        holderManager.ensureInAutosave(this);
+                        this.scheduler.chunkHolderManager.ensureInAutosave(this);
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.BORDER);
-                        chunk.onChunkLoad(this);
+                        ChunkSystem.onChunkBorder(chunk, this.vanillaChunkHolder);
                         this.onFullChunkLoadChange(true, changedFullStatus);
                         this.completeFullStatusConsumers(ChunkHolder.FullChunkStatus.BORDER, chunk);
                     }
 
-                    if (!currState.isOrAfter(ChunkHolder.FullChunkStatus.TICKING) && nextState.isOrAfter(ChunkHolder.FullChunkStatus.TICKING)) {
-                        nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.TICKING);
+                    if (!current.isOrAfter(ChunkHolder.FullChunkStatus.TICKING) && pending.isOrAfter(ChunkHolder.FullChunkStatus.TICKING)) {
+                        this.updateCurrentState(ChunkHolder.FullChunkStatus.TICKING);
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.TICKING);
-                        chunk.onChunkTicking(this);
+                        ChunkSystem.onChunkTicking(chunk, this.vanillaChunkHolder);
                         this.completeFullStatusConsumers(ChunkHolder.FullChunkStatus.TICKING, chunk);
                     }
 
-                    if (!currState.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING) && nextState.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING)) {
-                        nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.ENTITY_TICKING);
+                    if (!current.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING) && pending.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING)) {
+                        this.updateCurrentState(ChunkHolder.FullChunkStatus.ENTITY_TICKING);
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.ENTITY_TICKING);
-                        chunk.onChunkEntityTicking(this);
+                        ChunkSystem.onChunkEntityTicking(chunk, this.vanillaChunkHolder);
                         this.completeFullStatusConsumers(ChunkHolder.FullChunkStatus.ENTITY_TICKING, chunk);
                     }
                 } else {
-                    if (currState.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING) && !nextState.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING)) {
+                    if (current.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING) && !pending.isOrAfter(ChunkHolder.FullChunkStatus.ENTITY_TICKING)) {
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.TICKING);
-                        chunk.onChunkNotEntityTicking(this);
-                        nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.TICKING);
+                        ChunkSystem.onChunkNotEntityTicking(chunk, this.vanillaChunkHolder);
+                        this.updateCurrentState(ChunkHolder.FullChunkStatus.TICKING);
                     }
 
-                    if (currState.isOrAfter(ChunkHolder.FullChunkStatus.TICKING) && !nextState.isOrAfter(ChunkHolder.FullChunkStatus.TICKING)) {
+                    if (current.isOrAfter(ChunkHolder.FullChunkStatus.TICKING) && !pending.isOrAfter(ChunkHolder.FullChunkStatus.TICKING)) {
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.BORDER);
-                        chunk.onChunkNotTicking(this);
-                        nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.BORDER);
+                        ChunkSystem.onChunkNotTicking(chunk, this.vanillaChunkHolder);
+                        this.updateCurrentState(ChunkHolder.FullChunkStatus.BORDER);
                     }
 
-                    if (currState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && !nextState.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
+                    if (current.isOrAfter(ChunkHolder.FullChunkStatus.BORDER) && !pending.isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
                         this.onFullChunkLoadChange(false, changedFullStatus);
                         this.changeEntityChunkStatus(ChunkHolder.FullChunkStatus.INACCESSIBLE);
-                        chunk.onChunkUnload(this);
                         ChunkSystem.onChunkNotBorder(chunk, this.vanillaChunkHolder);
                         ChunkSystem.onChunkPostNotBorder(chunk, this.vanillaChunkHolder);
-                        nextState = this.updateCurrentState(ChunkHolder.FullChunkStatus.INACCESSIBLE);
+                        this.updateCurrentState(ChunkHolder.FullChunkStatus.INACCESSIBLE);
                     }
                 }
-
-                ret = true;
             }
         } finally {
             this.processingFullStatus = false;
-            holderManager.removeTicketAtLevel(TicketType.STATUS_UPGRADE, this.chunkX, this.chunkZ, ticketKeep, ticketId);
         }
-
-        return ret;
     }
 
     // note: must hold scheduling lock
@@ -1484,8 +1400,6 @@ public final class NewChunkHolder {
             for (final Consumer<ChunkAccess> consumer : consumers) {
                 try {
                     consumer.accept(chunk);
-                } catch (final ThreadDeath thr) {
-                    throw thr;
                 } catch (final Throwable thr) {
                     LOGGER.error("Failed to process chunk status callback", thr);
                 }
@@ -1502,19 +1416,6 @@ public final class NewChunkHolder {
     }
 
     private void completeFullStatusConsumers(ChunkHolder.FullChunkStatus status, final LevelChunk chunk) {
-        // need to tell future statuses to complete if cancelled
-        final ChunkHolder.FullChunkStatus max = CHUNK_STATUS_BY_ID[CHUNK_STATUS_BY_ID.length - 1];
-
-        for (;;) {
-            this.completeFullStatusConsumers0(status, chunk);
-            if (chunk != null || status == max) {
-                break;
-            }
-            status = CHUNK_STATUS_BY_ID[status.ordinal() + 1];
-        }
-    }
-
-    private void completeFullStatusConsumers0(final ChunkHolder.FullChunkStatus status, final LevelChunk chunk) {
         final List<Consumer<LevelChunk>> consumers;
         consumers = this.fullStatusWaiters.remove(status);
 
@@ -1527,8 +1428,6 @@ public final class NewChunkHolder {
             for (final Consumer<LevelChunk> consumer : consumers) {
                 try {
                     consumer.accept(chunk);
-                } catch (final ThreadDeath thr) {
-                    throw thr;
                 } catch (final Throwable thr) {
                     LOGGER.error("Failed to process chunk status callback", thr);
                 }
@@ -1601,7 +1500,7 @@ public final class NewChunkHolder {
                 this.neighboursWaitingForUs.clear();
             }
             // reset priority, we have nothing left to generate to
-            this.setPriority(PrioritisedExecutor.Priority.NORMAL);
+            this.setPriority(null);
             this.checkUnload();
             return;
         }
@@ -1661,10 +1560,9 @@ public final class NewChunkHolder {
 
         if (newStatus == ChunkStatus.FULL) {
             this.lockPriority();
-            // must use oldTicketLevel, we hold the schedule lock but not the ticket level lock
-            // however, schedule lock needs to be held for ticket level callback, so we're fine here
-            if (ChunkHolder.getFullChunkStatus(this.oldTicketLevel).isOrAfter(ChunkHolder.FullChunkStatus.BORDER)) {
-                this.queueBorderFullStatus(true, changedLoadStatus);
+            // try to push pending to FULL
+            if (this.updatePendingStatus()) {
+                changedLoadStatus.add(this);
             }
         }
 
@@ -1685,7 +1583,7 @@ public final class NewChunkHolder {
                 this.requestedGenStatus = null;
             }
             // reached final stage, so stop scheduling now
-            this.setPriority(PrioritisedExecutor.Priority.NORMAL);
+            this.setPriority(null);
             this.checkUnload();
 
             this.scheduleNeighbours(needsScheduling, scheduleList);
@@ -1729,7 +1627,7 @@ public final class NewChunkHolder {
             }
             if (thr != null) {
                 if (this.genTaskException != null) {
-                    // first one is probably the TRUE problem
+                    LOGGER.warn("Ignoring exception for " + this.toString(), thr);
                     return;
                 }
                 // don't set generation task to null, so that scheduling will not attempt to create another task and it
@@ -1790,7 +1688,7 @@ public final class NewChunkHolder {
 
     public static final record SaveStat(boolean savedChunk, boolean savedEntityChunk, boolean savedPoiChunk) {}
 
-    public SaveStat save(final boolean shutdown, final boolean unloading) {
+    public SaveStat save(final boolean shutdown) {
         TickThread.ensureTickThread(this.world, this.chunkX, this.chunkZ, "Cannot save data off-main");
 
         ChunkAccess chunk = this.getCurrentChunk();
@@ -1822,15 +1720,15 @@ public final class NewChunkHolder {
         boolean canSaveEntities = entities != null;
 
         if (canSaveChunk) {
-            canSaveChunk = this.saveChunk(chunk, unloading);
+            canSaveChunk = this.saveChunk(chunk, false);
         }
         if (canSavePOI) {
-            canSavePOI = this.savePOI(poi, unloading);
+            canSavePOI = this.savePOI(poi, false);
         }
         if (canSaveEntities) {
             // on shutdown, we need to force transient entity chunks to save
-            canSaveEntities = this.saveEntities(entities, unloading || shutdown);
-            if (unloading || shutdown) {
+            canSaveEntities = this.saveEntities(entities, shutdown);
+            if (shutdown) {
                 this.lastEntityUnload = null;
             }
         }
@@ -1842,10 +1740,10 @@ public final class NewChunkHolder {
 
         private final ServerLevel world;
         private final ChunkAccess chunk;
-        private final ChunkSerializer.AsyncSaveData asyncSaveData;
+        private final AsyncChunkSaveData asyncSaveData;
         private final NewChunkHolder toComplete;
 
-        public AsyncChunkSerializeTask(final ServerLevel world, final ChunkAccess chunk, final ChunkSerializer.AsyncSaveData asyncSaveData,
+        public AsyncChunkSerializeTask(final ServerLevel world, final ChunkAccess chunk, final AsyncChunkSaveData asyncSaveData,
                                        final NewChunkHolder toComplete) {
             this.world = world;
             this.chunk = chunk;
@@ -1853,111 +1751,41 @@ public final class NewChunkHolder {
             this.toComplete = toComplete;
         }
 
-//        @Override
-//        public void run() {
-//            final CompoundTag toSerialize;
-//            try {
-//                this.chunk.asyncsavedata = this.asyncSaveData;
-//                toSerialize = ChunkSerializer.write(this.world, this.chunk);
-//                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, toSerialize));
-//            } catch (final ThreadDeath death) {
-//                throw death;
-//            } catch (final Throwable throwable) {
-//                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + this.world.getWorld().getName() + "', falling back to synchronous save", throwable);
-//                this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
-//                    final CompoundTag synchronousSave;
-//                    try {
-//                        AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
-//                        synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
-//                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
-//                    } catch (final ThreadDeath death) {
-//                        throw death;
-//                    } catch (final Throwable throwable2) {
-//                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
-//                        AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
-//                        return;
-//                    }
-//
-//                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
-//                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
-//
-//                }, PrioritisedExecutor.Priority.HIGHEST);
-//                return;
-//            }
-//            this.toComplete.completeAsyncChunkDataSave(toSerialize);
-//        }
-
-
         @Override
         public void run() {
-            if (!GoldenForgeConfig.Server.asynchronousSave.get()) {
-                this.synchronousSave(false);
-                return;
-            }
             final CompoundTag toSerialize;
             try {
-                this.chunk.asyncsavedata = this.asyncSaveData;
-                toSerialize = ChunkSerializer.write(this.world, this.chunk);
+                this.chunk.asyncsavedata = this.asyncSaveData; // hacky stuff because mods hook is ChunkSerializer#write (i hate modders)
+                toSerialize = ChunkSystemFeatures.saveChunkAsync(this.world, this.chunk);
                 this.chunk.asyncsavedata = null;
-                net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, toSerialize));
-            } catch (final ThreadDeath death) {
-                throw death;
             } catch (final Throwable throwable) {
-                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + this.world.getWorld().getName() + "', falling back to synchronous save", throwable);
-                this.synchronousSave(true);
+                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + WorldUtil.getWorldName(this.world) + "', falling back to synchronous save", throwable);
+                final ChunkPos pos = this.chunk.getPos();
+                this.world.chunkTaskScheduler.scheduleChunkTask(pos.x, pos.z, () -> {
+                    final CompoundTag synchronousSave;
+                    try {
+                        this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData; // same hacky stuff
+                        synchronousSave = ChunkSystemFeatures.saveChunkAsync(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
+                        this.chunk.asyncsavedata = null;
+                    } catch (final Throwable throwable2) {
+                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + WorldUtil.getWorldName(AsyncChunkSerializeTask.this.world) + "', chunk data will be lost", throwable2);
+                        AsyncChunkSerializeTask.this.toComplete.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, null);
+                        return;
+                    }
+
+                    AsyncChunkSerializeTask.this.toComplete.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, synchronousSave);
+                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + WorldUtil.getWorldName(AsyncChunkSerializeTask.this.world) + "' synchronously");
+
+                }, PrioritisedExecutor.Priority.HIGHEST);
                 return;
             }
-            this.toComplete.completeAsyncChunkDataSave(toSerialize);
+            this.toComplete.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, toSerialize);
         }
-
-        private void synchronousSave(boolean debug) {
-            this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
-                final CompoundTag synchronousSave;
-                try {
-                    AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
-                    synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
-                    AsyncChunkSerializeTask.this.chunk.asyncsavedata = null;
-                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
-                } catch (final ThreadDeath death) {
-                    throw death;
-                } catch (final Throwable throwable2) {
-                    LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
-                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
-                    return;
-                }
-
-                AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
-                if (debug) LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
-
-            }, PrioritisedExecutor.Priority.HIGHEST);
-        }
-
-//        @Override
-//        public void run() {
-//            this.world.chunkTaskScheduler.scheduleChunkTask(this.chunk.locX, this.chunk.locZ, () -> {
-//                final CompoundTag synchronousSave;
-//                try {
-//                    AsyncChunkSerializeTask.this.chunk.asyncsavedata = AsyncChunkSerializeTask.this.asyncSaveData;
-//                    synchronousSave = ChunkSerializer.write(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk);
-//                    net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, synchronousSave));
-//                } catch (final ThreadDeath death) {
-//                    throw death;
-//                } catch (final Throwable throwable2) {
-//                    LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "', chunk data will be lost", throwable2);
-//                    AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(null);
-//                    return;
-//                }
-//
-//                AsyncChunkSerializeTask.this.toComplete.completeAsyncChunkDataSave(synchronousSave);
-//                LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + AsyncChunkSerializeTask.this.world.getWorld().getName() + "' synchronously");
-//
-//            }, PrioritisedExecutor.Priority.HIGHEST);
-//        }
 
         @Override
         public String toString() {
             return "AsyncChunkSerializeTask{" +
-                    "chunk={pos=" + this.chunk.getPos() + ",world=\"" + this.world.getWorld().getName() + "\"}" +
+                    "chunk={pos=" + this.chunk.getPos() + ",world=\"" + WorldUtil.getWorldName(this.world) + "\"}" +
                     "}";
         }
     }
@@ -1965,49 +1793,49 @@ public final class NewChunkHolder {
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
         if (!chunk.isUnsaved()) {
             if (unloading) {
-                this.completeAsyncChunkDataSave(null);
+                this.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, null);
             }
             return false;
         }
         boolean completing = false;
+        boolean failedAsyncPrepare = false;
         try {
-            if (unloading) {
+            if (unloading && ChunkSystemFeatures.supportsAsyncChunkSave()) {
                 try {
-                    final ChunkSerializer.AsyncSaveData asyncSaveData = ChunkSerializer.getAsyncSaveData(this.world, chunk);
+                    final AsyncChunkSaveData asyncSaveData = ChunkSystemFeatures.getAsyncSaveData(this.world, chunk);
+
                     final PrioritisedExecutor.PrioritisedTask task = this.scheduler.loadExecutor.createTask(new AsyncChunkSerializeTask(this.world, chunk, asyncSaveData, this));
 
                     this.chunkDataUnload.task().setTask(task);
 
+                    chunk.setUnsaved(false);
+
                     task.queue();
 
-                    chunk.setUnsaved(false);
                     return true;
-                } catch (final ThreadDeath death) {
-                    throw death;
                 } catch (final Throwable thr) {
-                    LOGGER.error("Failed to prepare async chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "', falling back to synchronous save", thr);
+                    LOGGER.error("Failed to prepare async chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "', falling back to synchronous save", thr);
+                    failedAsyncPrepare = true;
                     // fall through to synchronous save
                 }
             }
 
-            chunk.asyncsavedata = null;
             final CompoundTag save = ChunkSerializer.write(this.world, chunk);
-            net.minecraftforge.common.MinecraftForge.EVENT_BUS.post(new net.minecraftforge.event.level.ChunkDataEvent.Save(chunk, chunk.getWorldForge() != null ? chunk.getWorldForge() : this.world, save));
 
             if (unloading) {
                 completing = true;
-                this.completeAsyncChunkDataSave(save);
-                LOGGER.info("Successfully serialized chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "' synchronously");
+                this.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, save);
+                if (failedAsyncPrepare) {
+                    LOGGER.info("Successfully serialized chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "' synchronously");
+                }
             } else {
                 RegionFileIOThread.scheduleSave(this.world, this.chunkX, this.chunkZ, save, RegionFileIOThread.RegionFileType.CHUNK_DATA);
             }
             chunk.setUnsaved(false);
-        } catch (final ThreadDeath death) {
-            throw death;
         } catch (final Throwable thr) {
-            LOGGER.error("Failed to save chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "'");
+            LOGGER.error("Failed to save chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
             if (unloading && !completing) {
-                this.completeAsyncChunkDataSave(null);
+                this.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, null);
             }
         }
 
@@ -2028,7 +1856,7 @@ public final class NewChunkHolder {
                 try {
                     mergeFrom = RegionFileIOThread.loadData(this.world, this.chunkX, this.chunkZ, RegionFileIOThread.RegionFileType.ENTITY_DATA, PrioritisedExecutor.Priority.BLOCKING);
                 } catch (final Exception ex) {
-                    LOGGER.error("Cannot merge transient entities for chunk (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "', data on disk will be replaced", ex);
+                    LOGGER.error("Cannot merge transient entities for chunk (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "', data on disk will be replaced", ex);
                 }
             }
 
@@ -2038,7 +1866,7 @@ public final class NewChunkHolder {
                     // don't override the data on disk with nothing
                     return false;
                 } else {
-                    EntityStorage.copyEntities(mergeFrom, save);
+                    ChunkEntitySlices.copyEntities(mergeFrom, save);
                 }
             }
             if (save == null && this.lastEntitySaveNull) {
@@ -2050,10 +1878,8 @@ public final class NewChunkHolder {
             if (unloading) {
                 this.lastEntityUnload = save;
             }
-        } catch (final ThreadDeath death) {
-            throw death;
         } catch (final Throwable thr) {
-            LOGGER.error("Failed to save entity data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "'");
+            LOGGER.error("Failed to save entity data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
         }
 
         return true;
@@ -2076,10 +1902,8 @@ public final class NewChunkHolder {
             if (unloading) {
                 this.poiDataUnload.completable().complete(save);
             }
-        } catch (final ThreadDeath death) {
-            throw death;
         } catch (final Throwable thr) {
-            LOGGER.error("Failed to save poi data (" + this.chunkX + "," + this.chunkZ + ") in world '" + this.world.getWorld().getName() + "'");
+            LOGGER.error("Failed to save poi data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
         }
 
         return true;
@@ -2089,13 +1913,10 @@ public final class NewChunkHolder {
     public String toString() {
         final ChunkCompletion lastCompletion = this.lastChunkCompletion;
         final ChunkEntitySlices entityChunk = this.entityChunk;
-        final long chunkStatus = this.chunkStatus;
-        final int fullChunkStatus = (int)chunkStatus;
-        final int pendingChunkStatus = (int)(chunkStatus >>> 32);
-        final ChunkHolder.FullChunkStatus currentFullStatus = fullChunkStatus < 0 || fullChunkStatus >= CHUNK_STATUS_BY_ID.length ? null : CHUNK_STATUS_BY_ID[fullChunkStatus];
-        final ChunkHolder.FullChunkStatus pendingFullStatus = pendingChunkStatus < 0 || pendingChunkStatus >= CHUNK_STATUS_BY_ID.length ? null : CHUNK_STATUS_BY_ID[pendingChunkStatus];
+        final ChunkHolder.FullChunkStatus pendingFullStatus = this.pendingFullChunkStatus;
+        final ChunkHolder.FullChunkStatus currentFullStatus = this.currentFullChunkStatus;
         return "NewChunkHolder{" +
-                "world=" + this.world.getWorld().getName() +
+                "world=" + WorldUtil.getWorldName(this.world) +
                 ", chunkX=" + this.chunkX +
                 ", chunkZ=" + this.chunkZ +
                 ", entityChunkFromDisk=" + (entityChunk != null && !entityChunk.isTransient()) +
@@ -2112,31 +1933,48 @@ public final class NewChunkHolder {
                 ", currentTicketLevel=" + this.currentTicketLevel +
                 ", totalNeighboursUsingThisChunk=" + this.totalNeighboursUsingThisChunk +
                 ", fullNeighbourChunksLoadedBitset=" + this.fullNeighbourChunksLoadedBitset +
-                ", chunkStatusRaw=" + chunkStatus +
                 ", currentChunkStatus=" + currentFullStatus +
                 ", pendingChunkStatus=" + pendingFullStatus +
                 ", is_unload_safe=" + this.isSafeToUnload() +
-                ", killed=" + this.killed +
+                ", killed=" + this.unloaded +
                 '}';
     }
 
-    private static JsonElement serializeCompletable(final Completable<?> completable) {
+    private static JsonElement serializeStacktraceElement(final StackTraceElement element) {
+        return element == null ? JsonNull.INSTANCE : new JsonPrimitive(element.toString());
+    }
+
+    private static JsonObject serializeCompletable(final Completable<?> completable) {
+        final JsonObject ret = new JsonObject();
+
         if (completable == null) {
-            return new JsonPrimitive("null");
+            return ret;
         }
 
-        final JsonObject ret = new JsonObject();
+        ret.addProperty("valid", Boolean.TRUE);
+
         final boolean isCompleted = completable.isCompleted();
         ret.addProperty("completed", Boolean.valueOf(isCompleted));
 
         if (isCompleted) {
-            ret.addProperty("completed_exceptionally", Boolean.valueOf(completable.getThrowable() != null));
+            final Throwable throwable = completable.getThrowable();
+            if (throwable != null) {
+                final JsonArray throwableJson = new JsonArray();
+                ret.add("throwable", throwableJson);
+
+                for (final StackTraceElement element : throwable.getStackTrace()) {
+                    throwableJson.add(serializeStacktraceElement(element));
+                }
+            } else {
+                final Object result = completable.getResult();
+                ret.add("result_class", result == null ? JsonNull.INSTANCE : new JsonPrimitive(result.getClass().getName()));
+            }
         }
 
         return ret;
     }
 
-    // holds ticket and scheduling lock
+    // (probably) holds ticket and scheduling lock
     public JsonObject getDebugJson() {
         final JsonObject ret = new JsonObject();
 
@@ -2186,8 +2024,8 @@ public final class NewChunkHolder {
             neighbour.addProperty("waiting_for", Objects.toString(status));
         }
 
-        ret.addProperty("fullchunkstatus", Objects.toString(this.getChunkStatus()));
-        ret.addProperty("fullchunkstatus_raw", Long.valueOf(this.chunkStatus));
+        ret.addProperty("pending_chunk_full_status", Objects.toString(this.pendingFullChunkStatus));
+        ret.addProperty("current_chunk_full_status", Objects.toString(this.currentFullChunkStatus));
         ret.addProperty("generation_task", Objects.toString(this.generationTask));
         ret.addProperty("requested_generation", Objects.toString(this.requestedGenStatus));
         ret.addProperty("has_entity_load_task", Boolean.valueOf(this.entityDataLoadTask != null));
@@ -2210,7 +2048,7 @@ public final class NewChunkHolder {
             ret.addProperty("unload_task_priority_raw", Integer.valueOf(unloadTask.getPriorityInternal()));
         }
 
-        ret.addProperty("killed", Boolean.valueOf(this.killed));
+        ret.addProperty("killed", Boolean.valueOf(this.unloaded));
 
         return ret;
     }
