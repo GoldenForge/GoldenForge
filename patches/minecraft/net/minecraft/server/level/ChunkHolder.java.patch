@@ -61,7 +61,7 @@
     private boolean f_140010_;
     private final ShortSet[] f_140011_;
     private final BitSet f_140012_ = new BitSet();
-@@ -65,97 +_,216 @@
+@@ -65,97 +_,225 @@
     private final LevelLightEngine f_140014_;
     private final ChunkHolder.LevelChangeListener f_140015_;
     private final ChunkHolder.PlayerProvider f_140016_;
@@ -181,7 +181,16 @@
  
     public CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> m_140080_(ChunkStatus p_140081_) {
 -      return m_140074_(this.f_140007_).m_62427_(p_140081_) ? this.m_140047_(p_140081_) : f_139996_;
-+      throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++      CompletableFuture<Either<ChunkAccess, ChunkHolder.ChunkLoadingFailure>> future = new CompletableFuture<>();
++      ChunkAccess chunk = this.getAvailableChunkNow();
++
++      if (chunk != null) {
++         future.complete(Either.left(chunk));
++      } else {
++         return f_139996_;
++      }
++      return future;
++      //throw new UnsupportedOperationException(); // Paper - rewrite chunk system
     }
  
     public CompletableFuture<Either<LevelChunk, ChunkHolder.ChunkLoadingFailure>> m_140026_() {
