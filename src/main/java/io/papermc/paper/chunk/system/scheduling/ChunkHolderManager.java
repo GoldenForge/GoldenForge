@@ -795,6 +795,7 @@ public final class ChunkHolderManager {
         final NewChunkHolder ret = new NewChunkHolder(this.world, CoordinateUtils.getChunkX(position), CoordinateUtils.getChunkZ(position), this.taskScheduler);
 
         ChunkSystem.onChunkHolderCreate(this.world, ret.vanillaChunkHolder);
+        ret.vanillaChunkHolder.onChunkAdd();
 
         return ret;
     }
@@ -1000,6 +1001,7 @@ public final class ChunkHolderManager {
     }
 
     private void removeChunkHolder(final NewChunkHolder holder) {
+        holder.vanillaChunkHolder.onChunkRemove();
         holder.markUnloaded();
         this.autoSaveQueue.remove(holder);
         ChunkSystem.onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
