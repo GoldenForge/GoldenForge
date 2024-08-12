@@ -15,6 +15,16 @@ license="LGPL v2.1"
     description='''
     NeoForge, a NEW broad compatibility API.
     '''
-
+[[mods]]
+modId="goldenforge"
+# We use the global NeoForge version
+version="${global.neoForgeVersion}"
+#updateJSONURL="https://maven.neoforged.net/releases/net/neoforged/forge/promotions_slim.json"
+displayName="GoldenForge"
+credits="manugame"
+authors="manugame"
+description='''
+    A fork of forge designed to improve modded server performance.
+    '''
 [[mixins]]
     config = "neoforge.mixins.json"
