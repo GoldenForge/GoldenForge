@@ -1,5 +1,23 @@
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
+@@ -132,7 +_,7 @@
+     private final ChunkProgressListener progressListener;
+     private final ChunkStatusUpdateListener chunkStatusListener;
+     private final ChunkMap.DistanceManager distanceManager;
+-    private final AtomicInteger tickingGenerated = new AtomicInteger();
++    public final AtomicInteger tickingGenerated = new AtomicInteger();
+     private final String storageName;
+     private final PlayerMap playerMap = new PlayerMap();
+     private final Int2ObjectMap<ChunkMap.TrackedEntity> entityMap = new Int2ObjectOpenHashMap<>();
+@@ -140,7 +_,7 @@
+     private final Long2LongMap chunkSaveCooldowns = new Long2LongOpenHashMap();
+     private final Queue<Runnable> unloadQueue = Queues.newConcurrentLinkedQueue();
+     private int serverViewDistance;
+-    private final WorldGenContext worldGenContext;
++    public final WorldGenContext worldGenContext;
+ 
+     public ChunkMap(
+         ServerLevel p_214836_,
 @@ -395,6 +_,7 @@
                  this.modified = true;
              }
@@ -57,6 +75,15 @@
              EntityType<?> entitytype = p_140200_.getType();
              int i = entitytype.clientTrackingRange() * 16;
              if (i != 0) {
+@@ -1222,7 +_,7 @@
+         }
+     }
+ 
+-    class TrackedEntity {
++    public class TrackedEntity {
+         final ServerEntity serverEntity;
+         final Entity entity;
+         private final int range;
 @@ -1313,5 +_,20 @@
                  this.updatePlayer(serverplayer);
              }

@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
+@@ -168,6 +_,7 @@
+ import org.slf4j.Logger;
+ 
+ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, AutoCloseable {
++    private static MinecraftServer SERVER; // Paper
+     private static final Logger LOGGER = LogUtils.getLogger();
+     public static final String VANILLA_BRAND = "vanilla";
+     private static final float AVERAGE_TICK_TIME_SMOOTHING = 0.8F;
 @@ -264,7 +_,7 @@
  
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
@@ -9,6 +17,14 @@
          thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> LOGGER.error("Uncaught exception in server thread", p_177910_));
          if (Runtime.getRuntime().availableProcessors() > 4) {
              thread.setPriority(8);
+@@ -287,6 +_,7 @@
+         ChunkProgressListenerFactory p_236730_
+     ) {
+         super("Server");
++        SERVER = this; // Paper - better singleton
+         this.registries = p_236726_.registries();
+         this.worldData = p_236726_.worldData();
+         if (!this.registries.compositeAccess().registryOrThrow(Registries.LEVEL_STEM).containsKey(LevelStem.OVERWORLD)) {
 @@ -372,6 +_,7 @@
          this.readScoreboard(dimensiondatastorage);
          this.commandStorage = new CommandStorage(dimensiondatastorage);
@@ -275,14 +291,36 @@
      public void dumpServerProperties(Path p_177911_) throws IOException {
      }
  
-@@ -1873,6 +_,10 @@
- 
-     public WorldData getWorldData() {
-         return this.worldData;
-+    }
-+
-+    public MinecraftServer.ReloadableResources getServerResources() {
-+         return resources;
+@@ -1807,6 +_,10 @@
+         }
      }
  
++    public static MinecraftServer getServer() {
++        return SERVER; // Paper
++    }
++
+     private void startMetricsRecordingTick() {
+         if (this.willStartRecordingMetrics) {
+             this.metricsRecorder = ActiveMetricsRecorder.createStarted(
+@@ -1875,6 +_,10 @@
+         return this.worldData;
+     }
+ 
++    public MinecraftServer.ReloadableResources getServerResources() {
++         return resources;
++    }
++
      public RegistryAccess.Frozen registryAccess() {
+         return this.registries.compositeAccess();
+     }
+@@ -1942,6 +_,10 @@
+     public ChatDecorator getChatDecorator() {
+         return ChatDecorator.PLAIN;
+     }
++
++    public final java.util.concurrent.ExecutorService chatExecutor = java.util.concurrent.Executors.newCachedThreadPool(
++            new com.google.common.util.concurrent.ThreadFactoryBuilder().setDaemon(true).setNameFormat("Async Chat Thread - #%d").setUncaughtExceptionHandler(new net.minecraft.DefaultUncaughtExceptionHandlerWithName(net.minecraft.server.MinecraftServer.LOGGER)).build()); // Paper
++
+ 
+     public boolean logIPs() {
+         return true;

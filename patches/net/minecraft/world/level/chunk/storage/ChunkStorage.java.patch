@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/storage/ChunkStorage.java
++++ b/net/minecraft/world/level/chunk/storage/ChunkStorage.java
+@@ -130,7 +_,7 @@
+         return this.worker;
+     }
+ 
+-    protected RegionStorageInfo storageInfo() {
++    public RegionStorageInfo storageInfo() {
+         return this.worker.storageInfo();
+     }
+ }

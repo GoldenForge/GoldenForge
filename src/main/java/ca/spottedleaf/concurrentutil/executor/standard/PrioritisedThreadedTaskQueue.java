@@ -77,7 +77,7 @@ public class PrioritisedThreadedTaskQueue implements PrioritisedExecutor {
 
     // callback method for subclasses to override
     // from is null when a task is immediately created
-    protected void priorityChange(final PrioritisedTask task, final Priority from, final Priority to) {}
+    protected void priorityChange(final PrioritisedExecutor.PrioritisedTask task, final Priority from, final Priority to) {}
 
     /**
      * Polls the highest priority task currently available. {@code null} if none. This will mark the

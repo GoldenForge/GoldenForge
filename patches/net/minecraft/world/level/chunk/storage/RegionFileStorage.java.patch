@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
+@@ -28,7 +_,7 @@
+         this.info = p_326161_;
+     }
+ 
+-    private RegionFile getRegionFile(ChunkPos p_63712_) throws IOException {
++    public  RegionFile getRegionFile(ChunkPos p_63712_) throws IOException {
+         long i = ChunkPos.asLong(p_63712_.getRegionX(), p_63712_.getRegionZ());
+         RegionFile regionfile = this.regionCache.getAndMoveToFirst(i);
+         if (regionfile != null) {

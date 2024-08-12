@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -45,7 +_,7 @@
+@@ -45,13 +_,13 @@
  import net.minecraft.world.level.storage.DimensionDataStorage;
  import net.minecraft.world.level.storage.LevelStorageSource;
  
@@ -9,6 +9,13 @@
      private static final List<ChunkStatus> CHUNK_STATUSES = ChunkStatus.getStatusList();
      private final DistanceManager distanceManager;
      public final ServerLevel level;
+     final Thread mainThread;
+     final ThreadedLevelLightEngine lightEngine;
+-    private final ServerChunkCache.MainThreadExecutor mainThreadProcessor;
++    public final ServerChunkCache.MainThreadExecutor mainThreadProcessor;
+     public final ChunkMap chunkMap;
+     private final DimensionDataStorage dataStorage;
+     private long lastInhabitedUpdate;
 @@ -150,6 +_,10 @@
                  }
              }
@@ -57,3 +64,16 @@
      }
  
      @Override
+@@ -509,10 +_,10 @@
+         this.distanceManager.removeTicketsOnClosing();
+     }
+ 
+-    static record ChunkAndHolder(LevelChunk chunk, ChunkHolder holder) {
++    public static record ChunkAndHolder(LevelChunk chunk, ChunkHolder holder) {
+     }
+ 
+-    final class MainThreadExecutor extends BlockableEventLoop<Runnable> {
++    public final class MainThreadExecutor extends BlockableEventLoop<Runnable> {
+         MainThreadExecutor(Level p_8494_) {
+             super("Chunk source main thread executor for " + p_8494_.dimension().location());
+         }

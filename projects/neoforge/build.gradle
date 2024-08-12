@@ -75,6 +75,10 @@ sourceSets {
     }
 }
 
+repositories {
+    maven { url = 'https://repo.papermc.io/repository/maven-public/'}
+}
+
 dependencies {
     runtimeOnly "cpw.mods:bootstraplauncher:${project.bootstraplauncher_version}"
 
@@ -133,6 +137,9 @@ dependencies {
     }
 
     userdevTestImplementation("net.neoforged.fancymodloader:junit-fml:${project.fancy_mod_loader_version}")
+
+    //goldenforge
+    installer "org.spongepowered:configurate-yaml:4.2.0-SNAPSHOT"
 }
 
 runTypes {

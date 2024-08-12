@@ -1,14 +1,23 @@
 --- a/net/minecraft/server/Main.java
 +++ b/net/minecraft/server/Main.java
-@@ -64,7 +_,7 @@
+@@ -58,14 +_,16 @@
+ import net.minecraft.world.level.storage.LevelSummary;
+ import net.minecraft.world.level.storage.PrimaryLevelData;
+ import net.minecraft.world.level.storage.WorldData;
++import org.goldenforge.GoldenForgeEntryPoint;
+ import org.slf4j.Logger;
+ 
+ public class Main {
      private static final Logger LOGGER = LogUtils.getLogger();
  
      @DontObfuscate
 -    public static void main(String[] p_129699_) {
 +    public static void main(String[] p_129699_) throws Exception {
          SharedConstants.tryDetectVersion();
++        GoldenForgeEntryPoint.init();
          OptionParser optionparser = new OptionParser();
          OptionSpec<Void> optionspec = optionparser.accepts("nogui");
+         OptionSpec<Void> optionspec1 = optionparser.accepts("initSettings", "Initializes 'server.properties' and 'eula.txt', then quits");
 @@ -83,6 +_,15 @@
          OptionSpec<Void> optionspec13 = optionparser.accepts("jfrProfile");
          OptionSpec<Path> optionspec14 = optionparser.accepts("pidFile").withRequiredArg().withValuesConvertedBy(new PathConverter());
