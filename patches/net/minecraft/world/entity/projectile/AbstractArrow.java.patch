@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/entity/projectile/AbstractArrow.java
 +++ b/net/minecraft/world/entity/projectile/AbstractArrow.java
+@@ -57,7 +_,7 @@
+     private static final int FLAG_NOPHYSICS = 2;
+     @Nullable
+     private BlockState lastState;
+-    protected boolean inGround;
++    public boolean inGround;
+     protected int inGroundTime;
+     public AbstractArrow.Pickup pickup = AbstractArrow.Pickup.DISALLOWED;
+     public int shakeTime;
 @@ -188,7 +_,7 @@
              this.shakeTime--;
          }

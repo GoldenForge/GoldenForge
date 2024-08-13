@@ -1,0 +1,91 @@
+--- a/net/minecraft/world/level/chunk/storage/RegionFile.java
++++ b/net/minecraft/world/level/chunk/storage/RegionFile.java
+@@ -15,8 +_,11 @@
+ import java.nio.file.Path;
+ import java.nio.file.StandardCopyOption;
+ import java.nio.file.StandardOpenOption;
++import java.util.zip.InflaterInputStream;
+ import javax.annotation.Nullable;
+ import net.minecraft.Util;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.NbtIo;
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.util.profiling.jfr.JvmProfiler;
+ import net.minecraft.world.level.ChunkPos;
+@@ -375,6 +_,76 @@
+             this.file.write(bytebuffer, (long)(j - 1));
+         }
+     }
++
++    public static final int MAX_CHUNK_SIZE = 500 * 1024 * 1024; // Paper - don't write garbage data to disk if writing serialization fails
++    // Paper start
++    private final byte[] oversized = new byte[1024];
++    private int oversizedCount;
++
++    private synchronized void initOversizedState() throws IOException {
++        Path metaFile = getOversizedMetaFile();
++        if (Files.exists(metaFile)) {
++            final byte[] read = java.nio.file.Files.readAllBytes(metaFile);
++            System.arraycopy(read, 0, oversized, 0, oversized.length);
++            for (byte temp : oversized) {
++                oversizedCount += temp;
++            }
++        }
++    }
++
++    private static int getChunkIndex(int x, int z) {
++        return (x & 31) + (z & 31) * 32;
++    }
++    synchronized boolean isOversized(int x, int z) {
++        return this.oversized[getChunkIndex(x, z)] == 1;
++    }
++    synchronized void setOversized(int x, int z, boolean oversized) throws IOException {
++        final int offset = getChunkIndex(x, z);
++        boolean previous = this.oversized[offset] == 1;
++        this.oversized[offset] = (byte) (oversized ? 1 : 0);
++        if (!previous && oversized) {
++            oversizedCount++;
++        } else if (!oversized && previous) {
++            oversizedCount--;
++        }
++        if (previous && !oversized) {
++            Path oversizedFile = getOversizedFile(x, z);
++            if (Files.exists(oversizedFile)) {
++                Files.delete(oversizedFile);
++            }
++        }
++        if (oversizedCount > 0) {
++            if (previous != oversized) {
++                writeOversizedMeta();
++            }
++        } else if (previous) {
++            Path oversizedMetaFile = getOversizedMetaFile();
++            if (Files.exists(oversizedMetaFile)) {
++                Files.delete(oversizedMetaFile);
++            }
++        }
++    }
++
++    private void writeOversizedMeta() throws IOException {
++        java.nio.file.Files.write(getOversizedMetaFile(), oversized);
++    }
++
++    private Path getOversizedMetaFile() {
++        return this.path.getParent().resolve(this.path.getFileName().toString().replaceAll("\\.mca$", "") + ".oversized.nbt");
++    }
++
++    private Path getOversizedFile(int x, int z) {
++        return this.path.getParent().resolve(this.path.getFileName().toString().replaceAll("\\.mca$", "") + "_oversized_" + x + "_" + z + ".nbt");
++    }
++
++    synchronized CompoundTag getOversizedData(int x, int z) throws IOException {
++        Path file = getOversizedFile(x, z);
++        try (DataInputStream out = new DataInputStream(new java.io.BufferedInputStream(new InflaterInputStream(Files.newInputStream(file))))) {
++            return NbtIo.read((java.io.DataInput) out);
++        }
++
++    }
++    // Paper end
+ 
+     class ChunkBuffer extends ByteArrayOutputStream {
+         private final ChunkPos pos;

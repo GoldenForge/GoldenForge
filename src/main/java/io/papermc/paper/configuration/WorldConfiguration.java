@@ -3,8 +3,6 @@ package io.papermc.paper.configuration;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
 import com.mojang.logging.LogUtils;
-import io.papermc.paper.configuration.legacy.MaxEntityCollisionsInitializer;
-import io.papermc.paper.configuration.legacy.RequiresSpigotInitialization;
 import io.papermc.paper.configuration.mapping.MergeMap;
 import io.papermc.paper.configuration.serializer.NbtPathSerializer;
 import io.papermc.paper.configuration.transformation.world.FeatureSeedsGeneration;
@@ -12,7 +10,6 @@ import io.papermc.paper.configuration.type.BooleanOrDefault;
 import io.papermc.paper.configuration.type.Duration;
 import io.papermc.paper.configuration.type.DurationOrDisabled;
 import io.papermc.paper.configuration.type.EngineMode;
-import io.papermc.paper.configuration.type.fallback.ArrowDespawnRate;
 import io.papermc.paper.configuration.type.fallback.AutosavePeriod;
 import io.papermc.paper.configuration.type.number.BelowZeroToEmpty;
 import io.papermc.paper.configuration.type.number.DoubleOr;
@@ -41,7 +38,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
 import org.slf4j.Logger;
-import org.spigotmc.SpigotWorldConfig;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.PostProcess;
@@ -57,14 +53,12 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings({"FieldCanBeLocal", "FieldMayBeFinal", "NotNullFieldNotInitialized", "InnerClassMayBeStatic"})
 public class WorldConfiguration extends ConfigurationPart {
-    private static final Logger LOGGER = LogUtils.getClassLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
     static final int CURRENT_VERSION = 31; // (when you change the version, change the comment, so it conflicts on rebases): migrate spawn loaded configs to gamerule
 
-    private final transient SpigotWorldConfig spigotConfig;
     private final transient ResourceLocation worldKey;
 
-    WorldConfiguration(final SpigotWorldConfig spigotConfig, final ResourceLocation worldKey) {
-        this.spigotConfig = spigotConfig;
+    WorldConfiguration(final ResourceLocation worldKey) {
         this.worldKey = worldKey;
     }
 
@@ -74,6 +68,44 @@ public class WorldConfiguration extends ConfigurationPart {
 
     @Setting(Configuration.VERSION_FIELD)
     public int version = CURRENT_VERSION;
+
+    public SpigotConfigs spigotConfigs;
+
+    public class SpigotConfigs extends ConfigurationPart {
+        public int animalActivationRange = 32;
+        public int monsterActivationRange = 32;
+        public int raiderActivationRange = 64;
+        public int miscActivationRange = 16;
+        // Paper start
+        public int flyingMonsterActivationRange = 32;
+        public int waterActivationRange = 16;
+        public int villagerActivationRange = 32;
+        public int wakeUpInactiveAnimals = 4;
+        public int wakeUpInactiveAnimalsEvery = 60*20;
+        public int wakeUpInactiveAnimalsFor = 5*20;
+        public int wakeUpInactiveMonsters = 8;
+        public int wakeUpInactiveMonstersEvery = 20*20;
+        public int wakeUpInactiveMonstersFor = 5*20;
+        public int wakeUpInactiveVillagers = 4;
+        public int wakeUpInactiveVillagersEvery = 30*20;
+        public int wakeUpInactiveVillagersFor = 5*20;
+        public int wakeUpInactiveFlying = 8;
+        public int wakeUpInactiveFlyingEvery = 10*20;
+        public int wakeUpInactiveFlyingFor = 5*20;
+        public int villagersWorkImmunityAfter = 5*20;
+        public int villagersWorkImmunityFor = 20;
+        public boolean villagersActiveForPanic = true;
+        // Paper end
+        public boolean tickInactiveVillagers = true;
+        public boolean ignoreSpectatorActivation = false;
+
+        public int playerTrackingRange = 128;
+        public int animalTrackingRange = 96;
+        public int monsterTrackingRange = 96;
+        public int miscTrackingRange = 96;
+        public int displayTrackingRange = 128;
+        public int otherTrackingRange = 64;
+    }
 
     public Anticheat anticheat;
 
@@ -169,8 +201,6 @@ public class WorldConfiguration extends ConfigurationPart {
         public Spawning spawning;
 
         public class Spawning extends ConfigurationPart {
-            public ArrowDespawnRate nonPlayerArrowDespawnRate = ArrowDespawnRate.def(WorldConfiguration.this.spigotConfig);
-            public ArrowDespawnRate creativeArrowDespawnRate = ArrowDespawnRate.def(WorldConfiguration.this.spigotConfig);
             public boolean filterBadTileEntityNbtFromFallingBlocks = true;
             public List<NbtPathArgument.NbtPath> filteredEntityTagNbtPaths = NbtPathSerializer.fromString(List.of("Pos", "Motion", "SleepingX", "SleepingY", "SleepingZ"));
             public boolean disableMobSpawnerSpawnEggTransformation = false;
@@ -463,7 +493,6 @@ public class WorldConfiguration extends ConfigurationPart {
         public boolean onlyPlayersCollide = false;
         public boolean allowVehicleCollisions = true;
         public boolean fixClimbingBypassingCrammingRule = false;
-        @RequiresSpigotInitialization(MaxEntityCollisionsInitializer.class)
         public int maxEntityCollisions = 8;
         public boolean allowPlayerCrammingDamage = false;
     }

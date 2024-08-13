@@ -1,12 +1,14 @@
 --- a/net/minecraft/server/Main.java
 +++ b/net/minecraft/server/Main.java
-@@ -58,14 +_,16 @@
+@@ -58,15 +_,32 @@
  import net.minecraft.world.level.storage.LevelSummary;
  import net.minecraft.world.level.storage.PrimaryLevelData;
  import net.minecraft.world.level.storage.WorldData;
 +import org.goldenforge.GoldenForgeEntryPoint;
  import org.slf4j.Logger;
  
++import static java.util.Arrays.asList;
++
  public class Main {
      private static final Logger LOGGER = LogUtils.getLogger();
  
@@ -14,16 +16,32 @@
 -    public static void main(String[] p_129699_) {
 +    public static void main(String[] p_129699_) throws Exception {
          SharedConstants.tryDetectVersion();
+-        OptionParser optionparser = new OptionParser();
 +        GoldenForgeEntryPoint.init();
-         OptionParser optionparser = new OptionParser();
++        OptionParser optionparser = new OptionParser() {
++            {
++                acceptsAll(asList("paper-dir", "paper-settings-directory"), "Directory for Paper settings")
++                        .withRequiredArg()
++                        .ofType(File.class)
++                        .defaultsTo(new File(io.papermc.paper.configuration.PaperConfigurations.CONFIG_DIR))
++                        .describedAs("Config directory");
++                acceptsAll(asList("paper", "paper-settings"), "File for Paper settings")
++                        .withRequiredArg()
++                        .ofType(File.class)
++                        .defaultsTo(new File("paper.yml"))
++                        .describedAs("Yml file");
++            }
++        };
          OptionSpec<Void> optionspec = optionparser.accepts("nogui");
          OptionSpec<Void> optionspec1 = optionparser.accepts("initSettings", "Initializes 'server.properties' and 'eula.txt', then quits");
-@@ -83,6 +_,15 @@
+         OptionSpec<Void> optionspec2 = optionparser.accepts("demo");
+@@ -83,6 +_,16 @@
          OptionSpec<Void> optionspec13 = optionparser.accepts("jfrProfile");
          OptionSpec<Path> optionspec14 = optionparser.accepts("pidFile").withRequiredArg().withValuesConvertedBy(new PathConverter());
          OptionSpec<String> optionspec15 = optionparser.nonOptions();
 +        optionparser.accepts("allowUpdates").withRequiredArg().ofType(Boolean.class).defaultsTo(Boolean.TRUE); // Forge: allow mod updates to proceed
 +        optionparser.accepts("gameDir").withRequiredArg().ofType(File.class).defaultsTo(new File(".")); //Forge: Consume this argument, we use it in the launcher, and the client side.
++
 +        final OptionSpec<net.minecraft.core.BlockPos> spawnPosOpt;
 +        boolean gametestEnabled = Boolean.getBoolean("neoforge.gameTestServer");
 +        if (gametestEnabled) {
@@ -69,7 +87,8 @@
 -            }
 -
              File file1 = new File(optionset.valueOf(optionspec9));
-             Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1);
+-            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1);
++            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1, new File("."), optionset);
              String s = Optional.ofNullable(optionset.valueOf(optionspec10)).orElse(dedicatedserversettings.getProperties().levelName);
 +            if (s == null || s.isEmpty() || new File(file1, s).getAbsolutePath().equals(new File(s).getAbsolutePath())) {
 +                LOGGER.error("Invalid world directory specified, must not be null, empty or the same directory as your universe! " + s);

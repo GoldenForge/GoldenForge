@@ -1044,34 +1044,34 @@ public final class RegionFileIOThread extends PrioritisedQueueExecutorThread {
             return ((ChunkSystemRegionFileStorage)(Object)this.getCache()).moonrise$doesRegionFileNotExistNoIO(chunkX, chunkZ);
         }
 
-        public <T> T computeForRegionFile(final int chunkX, final int chunkZ, final boolean existingOnly, final Function<RegionFile, T> function) {
-            final RegionFileStorage cache = this.getCache();
-            final RegionFile regionFile;
-            synchronized (cache) {
-                try {
-                    if (existingOnly) {
-                        regionFile = ((ChunkSystemRegionFileStorage)(Object)cache).moonrise$getRegionFileIfExists(chunkX, chunkZ);
-                    } else {
-                        regionFile = cache.getRegionFile(new ChunkPos(chunkX, chunkZ), existingOnly);
-                    }
-                } catch (final IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-
-                return function.apply(regionFile);
-            }
-        }
-
-        public <T> T computeForRegionFileIfLoaded(final int chunkX, final int chunkZ, final Function<RegionFile, T> function) {
-            final RegionFileStorage cache = this.getCache();
-            final RegionFile regionFile;
-
-            synchronized (cache) {
-                regionFile = ((ChunkSystemRegionFileStorage)(Object)cache).moonrise$getRegionFileIfLoaded(chunkX, chunkZ);
-
-                return function.apply(regionFile);
-            }
-        }
+//        public <T> T computeForRegionFile(final int chunkX, final int chunkZ, final boolean existingOnly, final Function<RegionFile, T> function) {
+//            final RegionFileStorage cache = this.getCache();
+//            final RegionFile regionFile;
+//            synchronized (cache) {
+//                try {
+//                    if (existingOnly) {
+//                        regionFile = ((ChunkSystemRegionFileStorage)(Object)cache).moonrise$getRegionFileIfExists(chunkX, chunkZ);
+//                    } else {
+//                        regionFile = cache.getRegionFile(new ChunkPos(chunkX, chunkZ), existingOnly);
+//                    }
+//                } catch (final IOException ex) {
+//                    throw new RuntimeException(ex);
+//                }
+//
+//                return function.apply(regionFile);
+//            }
+//        }
+//
+//        public <T> T computeForRegionFileIfLoaded(final int chunkX, final int chunkZ, final Function<RegionFile, T> function) {
+//            final RegionFileStorage cache = this.getCache();
+//            final RegionFile regionFile;
+//
+//            synchronized (cache) {
+//                regionFile = ((ChunkSystemRegionFileStorage)(Object)cache).moonrise$getRegionFileIfLoaded(chunkX, chunkZ);
+//
+//                return function.apply(regionFile);
+//            }
+//        }
     }
 
     private static final class ChunkDataTask implements Runnable {

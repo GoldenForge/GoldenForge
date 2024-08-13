@@ -34,6 +34,38 @@
              return protochunk1;
          }
      }
+@@ -278,6 +_,31 @@
+         );
+     }
+ 
++    // Paper start - async chunk saving
++    // must be called sync
++    public static ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData getAsyncSaveData(ServerLevel world, ChunkAccess chunk) {
++        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(world, chunk.locX, chunk.locZ, "Preparing async chunk save data");
++
++        final CompoundTag tickLists = new CompoundTag();
++        ChunkSerializer.saveTicks(world, tickLists, chunk.getTicksForSerialization());
++
++        ListTag blockEntitiesSerialized = new ListTag();
++        for (final BlockPos blockPos : chunk.getBlockEntitiesPos()) {
++            final CompoundTag blockEntityNbt = chunk.getBlockEntityNbtForSaving(blockPos, world.registryAccess());
++            if (blockEntityNbt != null) {
++                blockEntitiesSerialized.add(blockEntityNbt);
++            }
++        }
++
++        return new ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData(
++                tickLists.get(BLOCK_TICKS_TAG),
++                tickLists.get(FLUID_TICKS_TAG),
++                blockEntitiesSerialized,
++                world.getGameTime()
++        );
++    }
++    // Paper end - async chunk saving
++
+     public static CompoundTag write(ServerLevel p_63455_, ChunkAccess p_63456_) {
+         ChunkPos chunkpos = p_63456_.getPos();
+         CompoundTag compoundtag = NbtUtils.addCurrentDataVersion(new CompoundTag());
 @@ -374,6 +_,11 @@
  
              compoundtag.put("CarvingMasks", compoundtag4);

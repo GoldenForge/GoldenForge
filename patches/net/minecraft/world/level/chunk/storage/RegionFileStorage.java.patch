@@ -1,6 +1,22 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
-@@ -28,7 +_,7 @@
+@@ -14,7 +_,7 @@
+ import net.minecraft.util.ExceptionCollector;
+ import net.minecraft.world.level.ChunkPos;
+ 
+-public final class RegionFileStorage implements AutoCloseable {
++public class RegionFileStorage implements AutoCloseable {
+     public static final String ANVIL_EXTENSION = ".mca";
+     private static final int MAX_CACHE_SIZE = 256;
+     private final Long2ObjectLinkedOpenHashMap<RegionFile> regionCache = new Long2ObjectLinkedOpenHashMap<>();
+@@ -22,13 +_,13 @@
+     private final Path folder;
+     private final boolean sync;
+ 
+-    RegionFileStorage(RegionStorageInfo p_326161_, Path p_196954_, boolean p_196955_) {
++    public RegionFileStorage(RegionStorageInfo p_326161_, Path p_196954_, boolean p_196955_) {
+         this.folder = p_196954_;
+         this.sync = p_196955_;
          this.info = p_326161_;
      }
  
@@ -9,3 +25,17 @@
          long i = ChunkPos.asLong(p_63712_.getRegionX(), p_63712_.getRegionZ());
          RegionFile regionfile = this.regionCache.getAndMoveToFirst(i);
          if (regionfile != null) {
+@@ -107,4 +_,13 @@
+     public RegionStorageInfo info() {
+         return this.info;
+     }
++
++    // Paper start - don't write garbage data to disk if writing serialization fails
++    public static final class RegionFileSizeException extends RuntimeException {
++
++        public RegionFileSizeException(String message) {
++            super(message);
++        }
++    }
++    // Paper end - don't write garbage data to disk if writing serialization fails
+ }

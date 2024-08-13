@@ -24,21 +24,24 @@ public final class ChunkSystemConverters {
     public static CompoundTag convertPoiCompoundTag(final CompoundTag data, final ServerLevel world) {
         final int dataVersion = getDataVersion(data, DEFAULT_POI_DATA_VERSION);
 
-        // Paper start - dataconverter
-        return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(
-            ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.POI_CHUNK, data, dataVersion, getCurrentVersion()
-        );
-        // Paper end - dataconverter
+        //TODO: check this
+//        // Paper start - dataconverter
+//        return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(
+//            ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.POI_CHUNK, data, dataVersion, getCurrentVersion()
+//        );
+//        // Paper end - dataconverter
+        return null;
     }
 
     public static CompoundTag convertEntityChunkCompoundTag(final CompoundTag data, final ServerLevel world) {
         final int dataVersion = getDataVersion(data, DEFAULT_ENTITY_CHUNK_DATA_VERSION);
 
-        // Paper start - dataconverter
-        return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(
-            ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.ENTITY_CHUNK, data, dataVersion, getCurrentVersion()
-        );
-        // Paper end - dataconverter
+//        // Paper start - dataconverter
+//        return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(
+//            ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.ENTITY_CHUNK, data, dataVersion, getCurrentVersion()
+//        );
+//        // Paper end - dataconverter
+        return null;
     }
 
     private ChunkSystemConverters() {}

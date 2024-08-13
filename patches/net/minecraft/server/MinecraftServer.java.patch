@@ -8,8 +8,31 @@
      private static final Logger LOGGER = LogUtils.getLogger();
      public static final String VANILLA_BRAND = "vanilla";
      private static final float AVERAGE_TICK_TIME_SMOOTHING = 0.8F;
-@@ -264,7 +_,7 @@
+@@ -262,9 +_,30 @@
+     private volatile boolean isSaving;
+     private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
  
++    public static int currentTick; // Paper - improve tick loop
++    public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
++    public int autosavePeriod;
++    // Paper - don't store the vanilla dispatcher
++    public boolean forceTicks; // Paper - Improved watchdog support
++    // CraftBukkit end
++    // Spigot start
++    public static final int TPS = 20;
++    public static final int TICK_TIME = 1000000000 / MinecraftServer.TPS;
++    private static final int SAMPLE_INTERVAL = 20; // Paper - improve server tick loop
++    @Deprecated(forRemoval = true) // Paper
++    public final double[] recentTps = new double[ 3 ];
++    // Spigot end
++    public final io.papermc.paper.configuration.PaperConfigurations paperConfigurations; // Paper - add paper configuration files
++    public static long currentTickLong = 0L; // Paper - track current tick as a long
++    public boolean isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
++
++    public volatile Thread shutdownThread; // Paper
++    public volatile boolean abnormalExit = false; // Paper
++    public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
++
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
          AtomicReference<S> atomicreference = new AtomicReference<>();
 -        Thread thread = new Thread(() -> atomicreference.get().runServer(), "Server thread");
@@ -25,6 +48,14 @@
          this.registries = p_236726_.registries();
          this.worldData = p_236726_.worldData();
          if (!this.registries.compositeAccess().registryOrThrow(Registries.LEVEL_STEM).containsKey(LevelStem.OVERWORLD)) {
+@@ -317,6 +_,7 @@
+             this.executor = Util.backgroundExecutor();
+             this.potionBrewing = PotionBrewing.bootstrap(this.worldData.enabledFeatures());
+         }
++        this.paperConfigurations = services.paperConfigurations(); // Paper - add paper configuration files
+     }
+ 
+     private void readScoreboard(DimensionDataStorage p_129842_) {
 @@ -372,6 +_,7 @@
          this.readScoreboard(dimensiondatastorage);
          this.commandStorage = new CommandStorage(dimensiondatastorage);

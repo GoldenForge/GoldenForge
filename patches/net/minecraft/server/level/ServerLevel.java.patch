@@ -1,6 +1,15 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -199,7 +_,7 @@
+@@ -178,7 +_,7 @@
+     final List<ServerPlayer> players = Lists.newArrayList();
+     private final ServerChunkCache chunkSource;
+     private final MinecraftServer server;
+-    private final ServerLevelData serverLevelData;
++    public final ServerLevelData serverLevelData;
+     private int lastSpawnChunkRadius;
+     final EntityTickList entityTickList = new EntityTickList();
+     private final PersistentEntitySectionManager<Entity> entityManager;
+@@ -199,12 +_,14 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
      private EndDragonFight dragonFight;
@@ -9,8 +18,22 @@
      private final StructureManager structureManager;
      private final StructureCheck structureCheck;
      private final boolean tickTime;
-@@ -232,7 +_,6 @@
+     private final RandomSequences randomSequences;
+ 
++    public final LevelStorageSource.LevelStorageAccess convertable;
++
+     public ServerLevel(
+         MinecraftServer p_214999_,
+         Executor p_215000_,
+@@ -228,11 +_,12 @@
+             false,
+             p_215006_,
+             p_215007_,
+-            p_214999_.getMaxChainedNeighborUpdates()
++            p_214999_.getMaxChainedNeighborUpdates(),
++            p_214999_.paperConfigurations.createWorldConfig(io.papermc.paper.configuration.PaperConfigurations.createWorldContextMap(p_215001_.levelDirectory.path(), p_215002_.getLevelName(), p_215003_.location(), p_214999_.registryAccess(), p_215002_.getGameRules()))
          );
++        this.convertable = p_215001_;
          this.tickTime = p_215009_;
          this.server = p_214999_;
 -        this.customSpawners = p_215008_;
@@ -203,6 +226,18 @@
          this.neighborUpdater.updateNeighborsAtExceptFromFacing(p_215052_, p_215053_, p_215054_);
      }
  
+@@ -1611,6 +_,11 @@
+         this.entityManager.addWorldGenChunkEntities(p_143328_);
+     }
+ 
++    public void addWorldGenChunkEntities(Stream<Entity> entities, ChunkPos chunkPos) {
++        // Paper end - add chunkpos param
++        //this.moonrise$getEntityLookup().addWorldGenChunkEntities(entities.toList(), chunkPos); // Paper - rewrite chunk system
++    }
++
+     public void startTickingChunk(LevelChunk p_184103_) {
+         p_184103_.unpackTicks(this.getLevelData().getGameTime());
+     }
 @@ -1713,8 +_,8 @@
                  ServerLevel.this.navigatingMobs.add(mob);
              }

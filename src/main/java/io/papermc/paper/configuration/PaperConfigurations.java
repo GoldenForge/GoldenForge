@@ -1,10 +1,8 @@
 package io.papermc.paper.configuration;
 
-import com.google.common.base.Suppliers;
 import com.google.common.collect.Table;
 import com.mojang.logging.LogUtils;
 import io.leangen.geantyref.TypeToken;
-import io.papermc.paper.configuration.legacy.RequiresSpigotInitialization;
 import io.papermc.paper.configuration.mapping.InnerClassFieldDiscoverer;
 import io.papermc.paper.configuration.serializer.*;
 import io.papermc.paper.configuration.serializer.collections.FastutilMapSerializer;
@@ -13,10 +11,8 @@ import io.papermc.paper.configuration.serializer.collections.TableSerializer;
 import io.papermc.paper.configuration.serializer.registry.RegistryHolderSerializer;
 import io.papermc.paper.configuration.serializer.registry.RegistryValueSerializer;
 import io.papermc.paper.configuration.transformation.Transformations;
-import io.papermc.paper.configuration.transformation.global.LegacyPaperConfig;
 import io.papermc.paper.configuration.transformation.global.versioned.V29_LogIPs;
 import io.papermc.paper.configuration.transformation.world.FeatureSeedsGeneration;
-import io.papermc.paper.configuration.transformation.world.LegacyPaperWorldConfig;
 import io.papermc.paper.configuration.transformation.world.versioned.V29_ZeroWorldHeight;
 import io.papermc.paper.configuration.transformation.world.versioned.V30_RenameFilterNbtFromSpawnEgg;
 import io.papermc.paper.configuration.transformation.world.versioned.V31_SpawnLoadedRangeToGameRule;
@@ -24,7 +20,6 @@ import io.papermc.paper.configuration.type.BooleanOrDefault;
 import io.papermc.paper.configuration.type.Duration;
 import io.papermc.paper.configuration.type.DurationOrDisabled;
 import io.papermc.paper.configuration.type.EngineMode;
-import io.papermc.paper.configuration.type.fallback.FallbackValueSerializer;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
 import it.unimi.dsi.fastutil.objects.Reference2IntMap;
@@ -41,14 +36,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
-import org.apache.commons.lang3.RandomStringUtils;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.jetbrains.annotations.VisibleForTesting;
 import org.slf4j.Logger;
-import org.spigotmc.SpigotConfig;
-import org.spigotmc.SpigotWorldConfig;
 import org.spongepowered.configurate.*;
 import org.spongepowered.configurate.objectmapping.ObjectMapper;
 import org.spongepowered.configurate.transformation.ConfigurationTransformation;
@@ -63,7 +53,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import static com.google.common.base.Preconditions.checkState;
 import static io.leangen.geantyref.GenericTypeReflector.erase;
@@ -71,14 +60,15 @@ import static io.leangen.geantyref.GenericTypeReflector.erase;
 @SuppressWarnings("Convert2Diamond")
 public class PaperConfigurations extends Configurations<GlobalConfiguration, WorldConfiguration> {
 
-    private static final Logger LOGGER = LogUtils.getClassLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
     static final String GLOBAL_CONFIG_FILE_NAME = "paper-global.yml";
     static final String WORLD_DEFAULTS_CONFIG_FILE_NAME = "paper-world-defaults.yml";
     static final String WORLD_CONFIG_FILE_NAME = "paper-world.yml";
-    public static final String CONFIG_DIR = "config";
+    public static final String CONFIG_DIR = "papermc";
     private static final String BACKUP_DIR ="legacy-backup";
 
     private static final String GLOBAL_HEADER = String.format("""
+            GoldenForge warning: some options are not implemented yet.
             This is the global configuration file for Paper.
             As you can see, there's a lot to configure. Some options may impact gameplay, so use
             with caution, and make sure you know what each option does before configuring.
@@ -94,6 +84,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
             Website: https://papermc.io/""", WORLD_CONFIG_FILE_NAME);
 
     private static final String WORLD_DEFAULTS_HEADER = """
+            GoldenForge warning: some options are not implemented yet.
             This is the world defaults configuration file for Paper.
             As you can see, there's a lot to configure. Some options may impact gameplay, so use
             with caution, and make sure you know what each option does before configuring.
@@ -109,6 +100,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
             Website: https://papermc.io/""";
 
     private static final Function<ContextMap, String> WORLD_HEADER = map -> String.format("""
+        GoldenForge warning: some options are not implemented yet.
         This is a world configuration file for Paper.
         This file may start empty but can be filled with settings to override ones in the %s/%s
         
@@ -126,15 +118,6 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
         
         See https://docs.papermc.io/paper/configuration for more information.
         """;
-
-    @VisibleForTesting
-    public static final Supplier<SpigotWorldConfig> SPIGOT_WORLD_DEFAULTS = Suppliers.memoize(() -> new SpigotWorldConfig(RandomStringUtils.randomAlphabetic(255)) {
-        @Override // override to ensure "verbose" is false
-        public void init() {
-            SpigotConfig.readConfig(SpigotWorldConfig.class, this);
-        }
-    });
-    public static final ContextKey<Supplier<SpigotWorldConfig>> SPIGOT_WORLD_CONFIG_CONTEXT_KEY = new ContextKey<>(new TypeToken<Supplier<SpigotWorldConfig>>() {}, "spigot world config");
 
 
     public PaperConfigurations(final Path globalFolder) {
@@ -161,7 +144,6 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
         return options.serializers(builder -> builder
             .register(MapSerializer.TYPE, new MapSerializer(false))
             .register(new EnumValueSerializer())
-            .register(new ComponentSerializer())
         );
     }
 
@@ -199,21 +181,18 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
 
     @Override
     protected ContextMap.Builder createDefaultContextMap(final RegistryAccess registryAccess) {
-        return super.createDefaultContextMap(registryAccess)
-            .put(SPIGOT_WORLD_CONFIG_CONTEXT_KEY, SPIGOT_WORLD_DEFAULTS);
+        return super.createDefaultContextMap(registryAccess);
     }
 
     @Override
     protected ObjectMapper.Factory.Builder createWorldObjectMapperFactoryBuilder(final ContextMap contextMap) {
         return super.createWorldObjectMapperFactoryBuilder(contextMap)
-            .addNodeResolver(new RequiresSpigotInitialization.Factory(contextMap.require(SPIGOT_WORLD_CONFIG_CONTEXT_KEY).get()))
             .addNodeResolver(new NestedSetting.Factory())
             .addDiscoverer(InnerClassFieldDiscoverer.worldConfig(createWorldConfigInstance(contextMap)));
     }
 
     private static WorldConfiguration createWorldConfigInstance(ContextMap contextMap) {
         return new WorldConfiguration(
-            contextMap.require(PaperConfigurations.SPIGOT_WORLD_CONFIG_CONTEXT_KEY).get(),
             contextMap.require(Configurations.WORLD_KEY)
         );
     }
@@ -237,7 +216,6 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
                     .register(DurationOrDisabled.SERIALIZER)
                     .register(EngineMode.SERIALIZER)
                     .register(NbtPathSerializer.SERIALIZER)
-                    .register(FallbackValueSerializer.create(contextMap.require(SPIGOT_WORLD_CONFIG_CONTEXT_KEY).get(), MinecraftServer::getServer))
                     .register(new RegistryValueSerializer<>(new TypeToken<EntityType<?>>() {}, access, Registries.ENTITY_TYPE, true))
                     .register(new RegistryValueSerializer<>(Item.class, access, Registries.ITEM, true))
                     .register(new RegistryValueSerializer<>(Block.class, access, Registries.BLOCK, true))
@@ -316,23 +294,22 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
     }
 
     private static ContextMap createWorldContextMap(ServerLevel level) {
-        return createWorldContextMap(level.convertable.levelDirectory.path(), level.serverLevelData.getLevelName(), level.dimension().location(), level.spigotConfig, level.registryAccess(), level.getGameRules());
+        return createWorldContextMap(level.convertable.levelDirectory.path(), level.serverLevelData.getLevelName(), level.dimension().location(), level.registryAccess(), level.getGameRules());
     }
 
-    public static ContextMap createWorldContextMap(final Path dir, final String levelName, final ResourceLocation worldKey, final SpigotWorldConfig spigotConfig, final RegistryAccess registryAccess, final GameRules gameRules) {
+    public static ContextMap createWorldContextMap(final Path dir, final String levelName, final ResourceLocation worldKey, final RegistryAccess registryAccess, final GameRules gameRules) {
         return ContextMap.builder()
             .put(WORLD_DIRECTORY, dir)
             .put(WORLD_NAME, levelName)
             .put(WORLD_KEY, worldKey)
-            .put(SPIGOT_WORLD_CONFIG_CONTEXT_KEY, Suppliers.ofInstance(spigotConfig))
             .put(REGISTRY_ACCESS, registryAccess)
             .put(GAME_RULES, gameRules)
             .build();
     }
 
-    public static PaperConfigurations setup(final Path legacyConfig, final Path configDir, final Path worldFolder, final File spigotConfig) throws Exception {
+    public static PaperConfigurations setup(final Path legacyConfig, final Path configDir, final Path worldFolder) throws Exception {
         final Path legacy = Files.isSymbolicLink(legacyConfig) ? Files.readSymbolicLink(legacyConfig) : legacyConfig;
-        if (needsConverting(legacyConfig)) {
+        if (needsConverting(legacyConfig) && false) {
             final String legacyFileName = legacyConfig.getFileName().toString();
             try {
                 if (Files.exists(configDir) && !Files.isDirectory(configDir)) {
@@ -357,7 +334,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
                     Files.createFile(replacementFile);
                     Files.writeString(replacementFile, String.format(MOVED_NOTICE, configDir.toAbsolutePath()));
                 }
-                convert(legacyConfigBackup, configDir, worldFolder, spigotConfig);
+                convert(legacyConfigBackup, configDir, worldFolder);
             } catch (final IOException ex) {
                 throw new RuntimeException("Could not convert '" + legacyFileName + "' to the new configuration format", ex);
             }
@@ -370,7 +347,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
         }
     }
 
-    private static void convert(final Path legacyConfig, final Path configDir, final Path worldFolder, final File spigotConfig) throws Exception {
+    private static void convert(final Path legacyConfig, final Path configDir, final Path worldFolder) throws Exception {
         createDirectoriesSymlinkAware(configDir);
 
         final YamlConfigurationLoader legacyLoader = ConfigurationLoaders.naturallySortedWithoutHeader(legacyConfig);
@@ -386,60 +363,18 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
         legacy.removeChild("world-settings");
 
         // Apply legacy transformations before settings flatten
-        final YamlConfiguration spigotConfiguration = loadLegacyConfigFile(spigotConfig); // needs to change spigot config values in this transformation
-        LegacyPaperConfig.transformation(spigotConfiguration).apply(legacy);
-        spigotConfiguration.save(spigotConfig);
         legacy.mergeFrom(legacy.node("settings")); // flatten "settings" to root
         legacy.removeChild("settings");
-        LegacyPaperConfig.toNewFormat().apply(legacy);
         globalLoader.save(legacy); // save converted node to new global location
 
         final ConfigurationNode worldDefaults = legacyWorldSettings.node("default").copy();
         checkState(!worldDefaults.virtual());
         worldDefaults.node(Configuration.LEGACY_CONFIG_VERSION_FIELD).raw(version);
-        legacyWorldSettings.removeChild("default");
-        LegacyPaperWorldConfig.transformation().apply(worldDefaults);
-        LegacyPaperWorldConfig.toNewFormat().apply(worldDefaults);
         worldDefaultsLoader.save(worldDefaults);
-
-        legacyWorldSettings.childrenMap().forEach((world, legacyWorldNode) -> {
-            try {
-                legacyWorldNode.node(Configuration.LEGACY_CONFIG_VERSION_FIELD).raw(version);
-                LegacyPaperWorldConfig.transformation().apply(legacyWorldNode);
-                LegacyPaperWorldConfig.toNewFormat().apply(legacyWorldNode);
-                ConfigurationLoaders.naturallySortedWithoutHeader(worldFolder.resolve(world.toString()).resolve(WORLD_CONFIG_FILE_NAME)).save(legacyWorldNode); // save converted node to new location
-            } catch (final ConfigurateException ex) {
-                ex.printStackTrace();
-            }
-        });
     }
 
     private static boolean needsConverting(final Path legacyConfig) {
         return Files.exists(legacyConfig) && Files.isRegularFile(legacyConfig);
-    }
-
-    @Deprecated
-    public YamlConfiguration createLegacyObject(final MinecraftServer server) {
-        YamlConfiguration global = YamlConfiguration.loadConfiguration(this.globalFolder.resolve(this.globalConfigFileName).toFile());
-        ConfigurationSection worlds = global.createSection("__________WORLDS__________");
-        worlds.set("__defaults__", YamlConfiguration.loadConfiguration(this.globalFolder.resolve(this.defaultWorldConfigFileName).toFile()));
-        for (ServerLevel level : server.getAllLevels()) {
-            worlds.set(level.getWorld().getName(), YamlConfiguration.loadConfiguration(getWorldConfigFile(level).toFile()));
-        }
-        return global;
-    }
-
-    @Deprecated
-    public static YamlConfiguration loadLegacyConfigFile(File configFile) throws Exception {
-        YamlConfiguration config = new YamlConfiguration();
-        if (configFile.exists()) {
-            try {
-                config.load(configFile);
-            } catch (Exception ex) {
-                throw new Exception("Failed to load configuration file: " + configFile.getName(), ex);
-            }
-        }
-        return config;
     }
 
     @VisibleForTesting

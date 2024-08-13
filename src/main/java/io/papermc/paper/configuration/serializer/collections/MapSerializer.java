@@ -15,6 +15,8 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.*;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * Map serializer that does not throw errors on individual entry serialization failures.
  */
@@ -22,7 +24,7 @@ public class MapSerializer implements TypeSerializer<Map<?, ?>> {
 
     public static final TypeToken<Map<?, ?>> TYPE = new TypeToken<Map<?, ?>>() {};
 
-    private static final Logger LOGGER = LogUtils.getClassLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private final boolean clearInvalids;
 

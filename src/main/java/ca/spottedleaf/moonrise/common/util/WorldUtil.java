@@ -45,7 +45,7 @@ public final class WorldUtil {
         if (world == null) {
             return "null world";
         }
-        return world.getWorld().getName(); // Paper
+        return world.dimension().location().toString();
     }
 
     private WorldUtil() {

@@ -18,12 +18,12 @@ public final class ChunkSystemFeatures {
     }
 
     public static CompoundTag saveChunkAsync(final ServerLevel world, final ChunkAccess chunk, final AsyncChunkSaveData asyncSaveData) {
-        return net.minecraft.world.level.chunk.storage.ChunkSerializer.saveChunk(world, chunk, asyncSaveData);
+        return net.minecraft.world.level.chunk.storage.ChunkSerializer.write(world, chunk); //TODO: hack this
     }
 
     public static boolean forceNoSave(final ChunkAccess chunk) {
         // support for CB chunk mustNotSave
-        return chunk instanceof net.minecraft.world.level.chunk.LevelChunk levelChunk && levelChunk.mustNotSave;
+        return chunk instanceof net.minecraft.world.level.chunk.LevelChunk levelChunk;
     }
 
     public static boolean supportsAsyncChunkDeserialization() {

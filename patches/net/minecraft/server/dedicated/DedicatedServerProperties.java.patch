@@ -9,3 +9,12 @@
      public final boolean preventProxyConnections = this.get("prevent-proxy-connections", false);
      public final String serverIp = this.get("server-ip", "");
      public final boolean spawnAnimals = this.get("spawn-animals", true);
+@@ -132,7 +_,7 @@
+         return new DedicatedServerProperties(loadFromFile(p_180930_));
+     }
+ 
+-    protected DedicatedServerProperties reload(RegistryAccess p_139761_, Properties p_139762_) {
++    public DedicatedServerProperties reload(RegistryAccess p_139761_, Properties p_139762_) {
+         return new DedicatedServerProperties(p_139762_);
+     }
+ 

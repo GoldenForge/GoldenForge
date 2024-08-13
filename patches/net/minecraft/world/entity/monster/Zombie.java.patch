@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/entity/monster/Zombie.java
 +++ b/net/minecraft/world/entity/monster/Zombie.java
+@@ -84,7 +_,7 @@
+     public static final int REINFORCEMENT_RANGE_MIN = 7;
+     private static final EntityDimensions BABY_DIMENSIONS = EntityType.ZOMBIE.getDimensions().scale(0.5F).withEyeHeight(0.93F);
+     private static final float BREAK_DOOR_CHANCE = 0.1F;
+-    private static final Predicate<Difficulty> DOOR_BREAKING_PREDICATE = p_34284_ -> p_34284_ == Difficulty.HARD;
++    public static final Predicate<Difficulty> DOOR_BREAKING_PREDICATE = p_34284_ -> p_34284_ == Difficulty.HARD;
+     private final BreakDoorGoal breakDoorGoal = new BreakDoorGoal(this, DOOR_BREAKING_PREDICATE);
+     private boolean canBreakDoors;
+     private int inWaterTime;
 @@ -259,6 +_,7 @@
      }
  

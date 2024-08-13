@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/level/storage/LevelStorageSource.java
 +++ b/net/minecraft/world/level/storage/LevelStorageSource.java
+@@ -407,7 +_,7 @@
+ 
+     public class LevelStorageAccess implements AutoCloseable {
+         final DirectoryLock lock;
+-        final LevelStorageSource.LevelDirectory levelDirectory;
++        public final LevelStorageSource.LevelDirectory levelDirectory;
+         private final String levelId;
+         private final Map<LevelResource, Path> resources = Maps.newHashMap();
+ 
 @@ -463,6 +_,18 @@
              }
          }

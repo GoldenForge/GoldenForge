@@ -17,10 +17,12 @@
      private final EntityType<?> type;
      private int id = ENTITY_COUNTER.incrementAndGet();
      public boolean blocksBuilding;
-@@ -194,8 +_,10 @@
+@@ -193,9 +_,11 @@
+     protected final RandomSource random = RandomSource.create();
      public int tickCount;
      private int remainingFireTicks = -this.getFireImmuneTicks();
-     protected boolean wasTouchingWater;
+-    protected boolean wasTouchingWater;
++    public boolean wasTouchingWater;
 +    @Deprecated // Forge: Use forgeFluidTypeHeight instead
      protected Object2DoubleMap<TagKey<Fluid>> fluidHeight = new Object2DoubleArrayMap<>(2);
      protected boolean wasEyeInWater;
@@ -28,6 +30,48 @@
      private final Set<TagKey<Fluid>> fluidOnEyes = new HashSet<>();
      public int invulnerableTime;
      protected boolean firstTick = true;
+@@ -223,7 +_,7 @@
+     public boolean hasImpulse;
+     @Nullable
+     public PortalProcessor portalProcess;
+-    private int portalCooldown;
++    public int portalCooldown;
+     private boolean invulnerable;
+     protected UUID uuid = Mth.createInsecureUUID(this.random);
+     protected String stringUUID = this.uuid.toString();
+@@ -244,6 +_,18 @@
+     @Nullable
+     private BlockState inBlockState = null;
+ 
++    // Spigot start
++    public final org.spigotmc.ActivationRange.ActivationType activationType = org.spigotmc.ActivationRange.initializeEntityActivationType(this);
++    public final boolean defaultActivationState;
++    public long activatedTick = Integer.MIN_VALUE;
++    public void inactiveTick() { }
++    // Spigot end
++    protected int numCollisions = 0; // Paper - Cap entity collisions
++    public boolean fromNetherPortal; // Paper - Add option to nerf pigmen from nether portals
++    public long activatedImmunityTick = Integer.MIN_VALUE; // Paper - EAR
++    public boolean isTemporarilyActive; // Paper - EAR
++    public boolean spawnedViaMobSpawner; // Paper - Yes this name is similar to above, upstream took the better one
++
+     public Entity(EntityType<?> p_19870_, Level p_19871_) {
+         this.type = p_19870_;
+         this.level = p_19871_;
+@@ -251,6 +_,13 @@
+         this.position = Vec3.ZERO;
+         this.blockPosition = BlockPos.ZERO;
+         this.chunkPosition = ChunkPos.ZERO;
++        // Spigot start
++        if (p_19871_ != null) {
++            this.defaultActivationState = org.spigotmc.ActivationRange.initializeEntityActivationState(this, p_19871_.paperConfig());
++        } else {
++            this.defaultActivationState = false;
++        }
++        // Spigot end
+         SynchedEntityData.Builder synchedentitydata$builder = new SynchedEntityData.Builder(this);
+         synchedentitydata$builder.define(DATA_SHARED_FLAGS_ID, (byte)0);
+         synchedentitydata$builder.define(DATA_AIR_SUPPLY_ID, this.getMaxAirSupply());
 @@ -263,7 +_,10 @@
          this.defineSynchedData(synchedentitydata$builder);
          this.entityData = synchedentitydata$builder.build();

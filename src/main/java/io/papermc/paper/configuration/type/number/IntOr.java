@@ -12,7 +12,7 @@ import java.util.function.Predicate;
 
 public interface IntOr {
 
-    Logger LOGGER = LogUtils.getClassLogger();
+    Logger LOGGER = LogUtils.getLogger();
 
     default int or(final int fallback) {
         return this.value().orElse(fallback);

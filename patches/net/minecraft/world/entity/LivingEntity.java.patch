@@ -9,6 +9,24 @@
      private static final Logger LOGGER = LogUtils.getLogger();
      private static final String TAG_ACTIVE_EFFECTS = "active_effects";
      private static final ResourceLocation SPEED_MODIFIER_POWDER_SNOW_ID = ResourceLocation.withDefaultNamespace("powder_snow");
+@@ -178,7 +_,7 @@
+     public static final String ATTRIBUTES_FIELD = "attributes";
+     private final AttributeMap attributes;
+     private final CombatTracker combatTracker = new CombatTracker(this);
+-    private final Map<Holder<MobEffect>, MobEffectInstance> activeEffects = Maps.newHashMap();
++    public final Map<Holder<MobEffect>, MobEffectInstance> activeEffects = Maps.newHashMap();
+     private final NonNullList<ItemStack> lastHandItemStacks = NonNullList.withSize(2, ItemStack.EMPTY);
+     private final NonNullList<ItemStack> lastArmorItemStacks = NonNullList.withSize(4, ItemStack.EMPTY);
+     private ItemStack lastBodyItemStack = ItemStack.EMPTY;
+@@ -214,7 +_,7 @@
+     protected float rotOffs;
+     protected int deathScore;
+     protected float lastHurt;
+-    protected boolean jumping;
++    public boolean jumping;
+     public float xxa;
+     public float yya;
+     public float zza;
 @@ -254,6 +_,14 @@
      private boolean skipDropExperience;
      private final Reference2ObjectMap<Enchantment, Set<EnchantmentLocationBasedEffect>> activeLocationDependentEnchantments = new Reference2ObjectArrayMap<>();

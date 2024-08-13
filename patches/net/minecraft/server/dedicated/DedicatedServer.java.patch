@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -70,7 +_,7 @@
+     private final RconConsoleSource rconConsoleSource;
+     @Nullable
+     private RconThread rconThread;
+-    private final DedicatedServerSettings settings;
++    public final DedicatedServerSettings settings;
+     @Nullable
+     private MinecraftServerGui gui;
+     @Nullable
 @@ -80,6 +_,8 @@
      @Nullable
      private DebugSampleSubscriptionTracker debugSampleSubscriptionTracker;
@@ -17,6 +26,19 @@
                  BufferedReader bufferedreader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
  
                  String s1;
+@@ -133,6 +_,12 @@
+             this.setLocalIp(dedicatedserverproperties.serverIp);
+         }
+ 
++        io.papermc.paper.util.ObfHelper.INSTANCE.getClass(); // Paper - load mappings for stacktrace deobf and etc.
++        // Paper start - initialize global and world-defaults configuration
++        this.paperConfigurations.initializeGlobalConfiguration(this.registryAccess());
++        this.paperConfigurations.initializeWorldDefaultsConfiguration(this.registryAccess());
++        // Paper end - initialize global and world-defaults configuration
++
+         this.setPvpAllowed(dedicatedserverproperties.pvp);
+         this.setFlightAllowed(dedicatedserverproperties.allowFlight);
+         this.setMotd(dedicatedserverproperties.motd);
 @@ -185,11 +_,13 @@
              long i = Util.getNanos();
              SkullBlockEntity.setup(this.services, this);

@@ -140,6 +140,7 @@ dependencies {
 
     //goldenforge
     installer "org.spongepowered:configurate-yaml:4.2.0-SNAPSHOT"
+    installer "net.neoforged:srgutils:1.0.9"
 }
 
 runTypes {

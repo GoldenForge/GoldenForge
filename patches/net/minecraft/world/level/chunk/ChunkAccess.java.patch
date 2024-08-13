@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/ChunkAccess.java
 +++ b/net/minecraft/world/level/chunk/ChunkAccess.java
-@@ -57,7 +_,7 @@
+@@ -57,14 +_,14 @@
  import net.minecraft.world.ticks.TickContainerAccess;
  import org.slf4j.Logger;
  
@@ -9,6 +9,24 @@
      public static final int NO_FILLED_SECTION = -1;
      private static final Logger LOGGER = LogUtils.getLogger();
      private static final LongSet EMPTY_REFERENCE_SET = new LongOpenHashSet();
+     protected final ShortList[] postProcessing;
+     protected volatile boolean unsaved;
+     private volatile boolean isLightCorrect;
+-    protected final ChunkPos chunkPos;
++    protected final ChunkPos chunkPos; public final long coordinateKey; public final int locX; public final int locZ; // Paper - cache coordinate key
+     private long inhabitedTime;
+     @Nullable
+     @Deprecated
+@@ -92,7 +_,8 @@
+         @Nullable LevelChunkSection[] p_187626_,
+         @Nullable BlendingData p_187627_
+     ) {
+-        this.chunkPos = p_187621_;
++        this.locX = p_187621_.x; this.locZ = p_187621_.z; // Paper - reduce need for field lookups
++        this.chunkPos = p_187621_; this.coordinateKey = ChunkPos.asLong(locX, locZ); // Paper - cache long key
+         this.upgradeData = p_187622_;
+         this.levelHeightAccessor = p_187623_;
+         this.sections = new LevelChunkSection[p_187623_.getSectionsCount()];
 @@ -315,10 +_,19 @@
  
      @Override

@@ -21,7 +21,7 @@ import java.util.function.Predicate;
 @SuppressWarnings("Convert2Diamond")
 public final class PacketClassSerializer extends ScalarSerializer<Class<? extends Packet<?>>> implements MapSerializer.WriteBack {
 
-    private static final Logger LOGGER = LogUtils.getClassLogger();
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final TypeToken<Class<? extends Packet<?>>> TYPE = new TypeToken<Class<? extends Packet<?>>>() {};
     private static final List<String> SUBPACKAGES = List.of("game", "handshake", "login", "status");
     private static final BiMap<String, String> MOJANG_TO_OBF;

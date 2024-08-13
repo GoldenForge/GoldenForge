@@ -335,7 +335,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
             try {
                 // run converters
-                final CompoundTag converted = this.world.getChunkSource().chunkMap.upgradeChunkTag(data, new ChunkPos(this.chunkX, this.chunkZ));
+                final CompoundTag converted = this.world.getChunkSource().chunkMap.upgradeChunkTag(data);
 
                 return new TaskResult<>(converted, null);
             } catch (final Throwable thr2) {

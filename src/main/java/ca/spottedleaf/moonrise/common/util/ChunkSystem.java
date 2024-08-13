@@ -89,14 +89,14 @@ public final class ChunkSystem {
         ((ChunkSystemServerLevel)((ServerLevel)chunk.getLevel())).moonrise$getLoadedChunks().add(
                 ((ChunkSystemLevelChunk)chunk).moonrise$getChunkAndHolder()
         );
-        chunk.loadCallback();
+        //chunk.loadCallback(); Goldenforge: we do not need this since
     }
 
     public static void onChunkNotBorder(final LevelChunk chunk, final ChunkHolder holder) {
         ((ChunkSystemServerLevel)((ServerLevel)chunk.getLevel())).moonrise$getLoadedChunks().remove(
                 ((ChunkSystemLevelChunk)chunk).moonrise$getChunkAndHolder()
         );
-        chunk.unloadCallback();
+        //chunk.unloadCallback();  Goldenforge: we do not need this since
     }
 
     public static void onChunkPostNotBorder(final LevelChunk chunk, final ChunkHolder holder) {
