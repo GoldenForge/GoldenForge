@@ -157,14 +157,15 @@ public class GenerationTask {
                 continue;
             }
 
-            holder.scheduleChunkGenerationTask(ChunkStatus.FULL, chunkMap).whenCompleteAsync((result, throwable) -> {
-                if (throwable == null) {
-                    this.acceptChunkResult(chunkLongPos, result);
-                } else {
-                    LOGGER.warn("Encountered unexpected error while generating chunk", throwable);
-                    this.acceptChunkResult(chunkLongPos, ChunkHolder.UNLOADED_CHUNK);
-                }
-            }, runnable -> chunkMap.scheduleOnMainThreadMailbox(ChunkTaskPriorityQueueSorter.message(holder, runnable)));
+            //TODO: impl this with paper patches
+//            holder.scheduleChunkGenerationTask(ChunkStatus.FULL, chunkMap).whenCompleteAsync((result, throwable) -> {
+//                if (throwable == null) {
+//                    this.acceptChunkResult(chunkLongPos, result);
+//                } else {
+//                    LOGGER.warn("Encountered unexpected error while generating chunk", throwable);
+//                    this.acceptChunkResult(chunkLongPos, ChunkHolder.UNLOADED_CHUNK);
+//                }
+//            }, runnable -> chunkMap.scheduleOnMainThreadMailbox(ChunkTaskPriorityQueueSorter.message(holder, runnable)));
         }
     }
 

@@ -101,16 +101,16 @@ public final class ChunkEntitySlices {
         final ListTag entitiesTag = new ListTag();
         final java.util.Map<EntityType<?>, Integer> savedEntityCounts = new java.util.HashMap<>(); // Paper - Entity load/save limit per chunk
         for (final Entity entity : entities) {
-            // Paper start - Entity load/save limit per chunk
-            final EntityType<?> entityType = entity.getType();
-            final int saveLimit = world.paperConfig().chunks.entityPerChunkSaveLimit.getOrDefault(entityType, -1);
-            if (saveLimit > -1) {
-                if (savedEntityCounts.getOrDefault(entityType, 0) >= saveLimit) {
-                    break;
-                }
-                savedEntityCounts.merge(entityType, 1, Integer::sum);
-            }
-            // Paper end - Entity load/save limit per chunk
+//            // Paper start - Entity load/save limit per chunk
+//            final EntityType<?> entityType = entity.getType();
+//            final int saveLimit = world.paperConfig().chunks.entityPerChunkSaveLimit.getOrDefault(entityType, -1);
+//            if (saveLimit > -1) {
+//                if (savedEntityCounts.getOrDefault(entityType, 0) >= saveLimit) {
+//                    break;
+//                }
+//                savedEntityCounts.merge(entityType, 1, Integer::sum);
+//            }
+//            // Paper end - Entity load/save limit per chunk
             CompoundTag compoundTag = new CompoundTag();
             if (entity.save(compoundTag)) {
                 entitiesTag.add(compoundTag);

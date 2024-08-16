@@ -1,5 +1,16 @@
 --- a/net/minecraft/server/level/ServerPlayer.java
 +++ b/net/minecraft/server/level/ServerPlayer.java
+@@ -162,8 +_,9 @@
+ import net.minecraft.world.scores.criteria.ObjectiveCriteria;
+ import org.slf4j.Logger;
+ 
+-public class ServerPlayer extends Player {
++public class ServerPlayer extends Player implements ca.spottedleaf.moonrise.patches.chunk_system.player.ChunkSystemServerPlayer { // Paper - rewrite chunk system
+     private static final Logger LOGGER = LogUtils.getLogger();
++    public long lastSave = MinecraftServer.currentTick; // Paper - Incremental chunk and player saving
+     private static final int NEUTRAL_MOB_DEATH_NOTIFICATION_RADII_XZ = 32;
+     private static final int NEUTRAL_MOB_DEATH_NOTIFICATION_RADII_Y = 10;
+     private static final int FLY_STAT_RECORDING_SPEED = 25;
 @@ -252,6 +_,10 @@
          }
  
@@ -11,6 +22,50 @@
              ServerPlayer.this.connection.send(new ClientboundContainerSetDataPacket(p_143455_.containerId, p_143456_, p_143457_));
          }
      };
+@@ -277,6 +_,43 @@
+     private int containerCounter;
+     public boolean wonGame;
+ 
++    // Paper start - Optional per player mob spawns
++    public static final int MOBCATEGORY_TOTAL_ENUMS = net.minecraft.world.entity.MobCategory.values().length;
++    public final int[] mobCounts = new int[MOBCATEGORY_TOTAL_ENUMS]; // Paper
++    // Paper end - Optional per player mob spawns
++    public final int[] mobBackoffCounts = new int[MOBCATEGORY_TOTAL_ENUMS]; // Paper - per player mob count backoff
++
++    // Paper start - rewrite chunk system
++    public boolean isRealPlayer; // Paper
++    private ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData chunkLoader;
++    private final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder viewDistanceHolder = new ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder();
++
++    @Override
++    public final boolean moonrise$isRealPlayer() {
++        return this.isRealPlayer;
++    }
++
++    @Override
++    public final void moonrise$setRealPlayer(final boolean real) {
++        this.isRealPlayer = real;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData moonrise$getChunkLoader() {
++        return this.chunkLoader;
++    }
++
++    @Override
++    public final void moonrise$setChunkLoader(final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PlayerChunkLoaderData loader) {
++        this.chunkLoader = loader;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder moonrise$getViewDistanceHolder() {
++        return this.viewDistanceHolder;
++    }
++    // Paper end - rewrite chunk system
++
+     public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_301997_) {
+         super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
+         this.textFilter = p_254143_.createTextFilterForPlayer(this);
 @@ -606,6 +_,11 @@
                  this.connection.send(new ClientboundSetExperiencePacket(this.experienceProgress, this.totalExperience, this.experienceLevel));
              }

@@ -1,5 +1,18 @@
 --- a/net/minecraft/util/thread/BlockableEventLoop.java
 +++ b/net/minecraft/util/thread/BlockableEventLoop.java
+@@ -32,9 +_,11 @@
+ 
+     protected abstract boolean shouldRun(R p_18703_);
+ 
++    // Paper start - rewrite chunk system
+     public boolean isSameThread() {
+-        return Thread.currentThread() == this.getRunningThread();
++        return ca.spottedleaf.moonrise.common.util.TickThread.isTickThread();
+     }
++    // Paper end - rewrite chunk system
+ 
+     protected abstract Thread getRunningThread();
+ 
 @@ -56,10 +_,15 @@
      }
  

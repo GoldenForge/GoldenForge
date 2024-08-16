@@ -1,14 +1,30 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -168,6 +_,7 @@
+@@ -167,8 +_,9 @@
+ import net.minecraft.world.phys.Vec3;
  import org.slf4j.Logger;
  
- public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, AutoCloseable {
+-public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, AutoCloseable {
+-    private static final Logger LOGGER = LogUtils.getLogger();
++public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, AutoCloseable, ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer { // Paper - rewrite chunk system
 +    private static MinecraftServer SERVER; // Paper
-     private static final Logger LOGGER = LogUtils.getLogger();
++    public static final Logger LOGGER = LogUtils.getLogger();
      public static final String VANILLA_BRAND = "vanilla";
      private static final float AVERAGE_TICK_TIME_SMOOTHING = 0.8F;
-@@ -262,9 +_,30 @@
+     private static final int TICK_STATS_SPAN = 100;
+@@ -227,6 +_,11 @@
+     private int playerIdleTimeout;
+     private final long[] tickTimesNanos = new long[100];
+     private long aggregatedTickTimesNanos = 0L;
++    // Paper start - Add tick times API and /mspt command
++    public final TickTimes tickTimes5s = new TickTimes(100);
++    public final TickTimes tickTimes10s = new TickTimes(200);
++    public final TickTimes tickTimes60s = new TickTimes(1200);
++    // Paper end - Add tick times API and /mspt command
+     @Nullable
+     private KeyPair keyPair;
+     @Nullable
+@@ -262,9 +_,33 @@
      private volatile boolean isSaving;
      private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
  
@@ -36,10 +52,91 @@
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
          AtomicReference<S> atomicreference = new AtomicReference<>();
 -        Thread thread = new Thread(() -> atomicreference.get().runServer(), "Server thread");
-+        Thread thread = new Thread(net.neoforged.fml.util.thread.SidedThreadGroups.SERVER, () -> atomicreference.get().runServer(), "Server thread");
++
++        Thread thread = new ca.spottedleaf.moonrise.common.util.TickThread(() -> { // Paper - rewrite chunk system
++            ((MinecraftServer) atomicreference.get()).runServer();
++        }, "Server thread");
          thread.setUncaughtExceptionHandler((p_177909_, p_177910_) -> LOGGER.error("Uncaught exception in server thread", p_177910_));
          if (Runtime.getRuntime().availableProcessors() > 4) {
              thread.setPriority(8);
+@@ -276,6 +_,77 @@
+         return s;
+     }
+ 
++    // Paper start - rewrite chunk system
++    private volatile Throwable chunkSystemCrash;
++
++    @Override
++    public final void moonrise$setChunkSystemCrash(final Throwable throwable) {
++        this.chunkSystemCrash = throwable;
++    }
++
++    private static final long CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME = 25L * 1000L; // 25us
++    private static final long MAX_CHUNK_EXEC_TIME = 1000L; // 1us
++    private static final long TASK_EXECUTION_FAILURE_BACKOFF = 5L * 1000L; // 5us
++
++    private long lastMidTickExecute;
++    private long lastMidTickExecuteFailure;
++
++    private boolean tickMidTickTasks() {
++        // give all worlds a fair chance at by targeting them all.
++        // if we execute too many tasks, that's fine - we have logic to correctly handle overuse of allocated time.
++        boolean executed = false;
++        for (final ServerLevel world : this.getAllLevels()) {
++            long currTime = System.nanoTime();
++            if (currTime - ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)world).moonrise$getLastMidTickFailure() <= TASK_EXECUTION_FAILURE_BACKOFF) {
++                continue;
++            }
++            if (!world.getChunkSource().pollTask()) {
++                // we need to back off if this fails
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)world).moonrise$setLastMidTickFailure(currTime);
++            } else {
++                executed = true;
++            }
++        }
++
++        return executed;
++    }
++
++    @Override
++    public final void moonrise$executeMidTickTasks() {
++        final long startTime = System.nanoTime();
++        if ((startTime - this.lastMidTickExecute) <= CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME || (startTime - this.lastMidTickExecuteFailure) <= TASK_EXECUTION_FAILURE_BACKOFF) {
++            // it's shown to be bad to constantly hit the queue (chunk loads slow to a crawl), even if no tasks are executed.
++            // so, backoff to prevent this
++            return;
++        }
++
++        for (;;) {
++            final boolean moreTasks = this.tickMidTickTasks();
++            final long currTime = System.nanoTime();
++            final long diff = currTime - startTime;
++
++            if (!moreTasks || diff >= MAX_CHUNK_EXEC_TIME) {
++                if (!moreTasks) {
++                    this.lastMidTickExecuteFailure = currTime;
++                }
++
++                // note: negative values reduce the time
++                long overuse = diff - MAX_CHUNK_EXEC_TIME;
++                if (overuse >= (10L * 1000L * 1000L)) { // 10ms
++                    // make sure something like a GC or dumb plugin doesn't screw us over...
++                    overuse = 10L * 1000L * 1000L; // 10ms
++                }
++
++                final double overuseCount = (double)overuse/(double)MAX_CHUNK_EXEC_TIME;
++                final long extraSleep = (long)Math.round(overuseCount*CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME);
++
++                this.lastMidTickExecute = currTime + extraSleep;
++                return;
++            }
++        }
++    }
++    // Paper end - rewrite chunk system
++
+     public MinecraftServer(
+         Thread p_236723_,
+         LevelStorageSource.LevelStorageAccess p_236724_,
 @@ -287,6 +_,7 @@
          ChunkProgressListenerFactory p_236730_
      ) {
@@ -88,15 +185,173 @@
              }
          }
  
-@@ -620,6 +_,7 @@
+@@ -537,6 +_,10 @@
+     public abstract boolean shouldRconBroadcast();
+ 
+     public boolean saveAllChunks(boolean p_129886_, boolean p_129887_, boolean p_129888_) {
++        // Paper start - add close param
++        return this.saveAllChunks(p_129886_, p_129887_, p_129888_, false);
++    }
++    public boolean saveAllChunks(boolean p_129886_, boolean p_129887_, boolean p_129888_, boolean close) {
+         boolean flag = false;
+ 
+         for (ServerLevel serverlevel : this.getAllLevels()) {
+@@ -544,7 +_,7 @@
+                 LOGGER.info("Saving chunks for level '{}'/{}", serverlevel, serverlevel.dimension().location());
+             }
+ 
+-            serverlevel.save(null, p_129887_, serverlevel.noSave && !p_129888_);
++            serverlevel.save(null, p_129887_, serverlevel.noSave && !p_129888_, close); // Paper - add close param
+             flag = true;
+         }
+ 
+@@ -582,7 +_,29 @@
+         this.stopServer();
+     }
+ 
++    // CraftBukkit start
++    private boolean hasStopped = false;
++    private boolean hasLoggedStop = false; // Paper - Debugging
++    public volatile boolean hasFullyShutdown = false; // Paper
++    private final Object stopLock = new Object();
++    public final boolean hasStopped() {
++        synchronized (this.stopLock) {
++            return this.hasStopped;
++        }
++    }
++    // CraftBukkit end
++
+     public void stopServer() {
++        // CraftBukkit start - prevent double stopping on multiple threads
++        synchronized(this.stopLock) {
++            if (this.hasStopped) return;
++            this.hasStopped = true;
++        }
++        if (!hasLoggedStop) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper - Debugging
++        // Paper start - kill main thread, and kill it hard
++        shutdownThread = Thread.currentThread();
++        //org.spigotmc.WatchdogThread.doStop(); // Paper
++        // Paper end
+         if (this.metricsRecorder.isRecording()) {
+             this.cancelRecordingMetrics();
+         }
+@@ -594,6 +_,7 @@
+             LOGGER.info("Saving players");
+             this.playerList.saveAll();
+             this.playerList.removeAll();
++            try { Thread.sleep(100); } catch (InterruptedException ex) {} // CraftBukkit - SPIGOT-625 - give server at least a chance to send packets
+         }
+ 
+         LOGGER.info("Saving worlds");
+@@ -604,7 +_,7 @@
+             }
+         }
+ 
+-        while (this.levels.values().stream().anyMatch(p_202480_ -> p_202480_.getChunkSource().chunkMap.hasWork())) {
++        while (false && this.levels.values().stream().anyMatch(p_202480_ -> p_202480_.getChunkSource().chunkMap.hasWork())) { // Paper - rewrite chunk system
+             this.nextTickTimeNanos = Util.getNanos() + TimeUtil.NANOSECONDS_PER_MILLISECOND;
+ 
+             for (ServerLevel serverlevel1 : this.getAllLevels()) {
+@@ -615,15 +_,11 @@
+             this.waitUntilNextTick();
+         }
+ 
+-        this.saveAllChunks(false, true, false);
++        this.saveAllChunks(false, true, false, true); // Paper - rewrite chunk system
+ 
          for (ServerLevel serverlevel2 : this.getAllLevels()) {
              if (serverlevel2 != null) {
-                 try {
-+                    net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Unload(serverlevel2));
-                     serverlevel2.close();
-                 } catch (IOException ioexception1) {
-                     LOGGER.error("Exception closing the level", (Throwable)ioexception1);
-@@ -666,9 +_,11 @@
+-                try {
+-                    serverlevel2.close();
+-                } catch (IOException ioexception1) {
+-                    LOGGER.error("Exception closing the level", (Throwable)ioexception1);
+-                }
++                net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Unload(serverlevel2));
+             }
+         }
+ 
+@@ -635,6 +_,16 @@
+         } catch (IOException ioexception) {
+             LOGGER.error("Failed to unlock level {}", this.storageSource.getLevelId(), ioexception);
+         }
++
++        ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.deinit(); // Paper - rewrite chunk system
++        // Paper start - move final shutdown items here
++        Util.shutdownExecutors();
++        try {
++            net.minecrell.terminalconsole.TerminalConsoleAppender.close(); // Paper - Use TerminalConsoleAppender
++        } catch (final Exception ignored) {
++        }
++        this.onServerExit();
++        // Paper end - Improved watchdog support
+     }
+ 
+     public String getLocalIp() {
+@@ -660,15 +_,86 @@
+         }
+     }
+ 
++    // Spigot Start
++    private static double calcTps(double avg, double exp, double tps)
++    {
++        return ( avg * exp ) + ( tps * ( 1 - exp ) );
++    }
++
++    // Paper start - Further improve server tick loop
++    private static final long SEC_IN_NANO = 1000000000;
++    private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
++    private long lastTick = 0;
++    private long catchupTime = 0;
++    public final RollingAverage tps1 = new RollingAverage(60);
++    public final RollingAverage tps5 = new RollingAverage(60 * 5);
++    public final RollingAverage tps15 = new RollingAverage(60 * 15);
++
++    public static class RollingAverage {
++        private final int size;
++        private long time;
++        private java.math.BigDecimal total;
++        private int index = 0;
++        private final java.math.BigDecimal[] samples;
++        private final long[] times;
++
++        RollingAverage(int size) {
++            this.size = size;
++            this.time = size * SEC_IN_NANO;
++            this.total = dec(TPS).multiply(dec(SEC_IN_NANO)).multiply(dec(size));
++            this.samples = new java.math.BigDecimal[size];
++            this.times = new long[size];
++            for (int i = 0; i < size; i++) {
++                this.samples[i] = dec(TPS);
++                this.times[i] = SEC_IN_NANO;
++            }
++        }
++
++        private static java.math.BigDecimal dec(long t) {
++            return new java.math.BigDecimal(t);
++        }
++        public void add(java.math.BigDecimal x, long t) {
++            time -= times[index];
++            total = total.subtract(samples[index].multiply(dec(times[index])));
++            samples[index] = x;
++            times[index] = t;
++            time += t;
++            total = total.add(x.multiply(dec(t)));
++            if (++index == size) {
++                index = 0;
++            }
++        }
++
++        public double getAverage() {
++            return total.divide(dec(time), 30, java.math.RoundingMode.HALF_UP).doubleValue();
++        }
++    }
++    private static final java.math.BigDecimal TPS_BASE = new java.math.BigDecimal(1E9).multiply(new java.math.BigDecimal(SAMPLE_INTERVAL));
++    // Paper end
++
+     protected void runServer() {
+         try {
++            long serverStartTime = Util.getNanos(); // Paper
+             if (!this.initServer()) {
                  throw new IllegalStateException("Failed to initialize server");
              }
  
@@ -105,9 +360,65 @@
              this.statusIcon = this.loadStatusIcon().orElse(null);
              this.status = this.buildServerStatus();
 +            resetStatusCache(status);
++
++            final long actualDoneTimeMs = System.currentTimeMillis() - serverStartTime; // Paper - Add total time
++            LOGGER.info("Done ({})! For help, type \"help\"", String.format(java.util.Locale.ROOT, "%.3fs", actualDoneTimeMs / 1000.00D)); // Paper - Add total time
++            //org.spigotmc.WatchdogThread.tick();
++            // Paper end - Improved Watchdog Support
++            //org.spigotmc.WatchdogThread.hasStarted = true; // Paper
++            Arrays.fill( this.recentTps, 20 );
++            // Paper start - further improve server tick loop
++            long tickSection = Util.getNanos();
++            long currentTime;
++            // Paper end - further improve server tick loop
  
              while (this.running) {
                  long i;
+@@ -687,6 +_,25 @@
+                         this.lastOverloadWarningNanos = this.nextTickTimeNanos;
+                     }
+                 }
++                // Spigot start
++                ++MinecraftServer.currentTickLong; // Paper - track current tick as a long
++                // Paper start - further improve server tick loop
++                currentTime = Util.getNanos();
++                if (++MinecraftServer.currentTick % MinecraftServer.SAMPLE_INTERVAL == 0) {
++                    final long diff = currentTime - tickSection;
++                    final java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
++                    tps1.add(currentTps, diff);
++                    tps5.add(currentTps, diff);
++                    tps15.add(currentTps, diff);
++
++                    // Backwards compat with bad plugins
++                    this.recentTps[0] = tps1.getAverage();
++                    this.recentTps[1] = tps5.getAverage();
++                    this.recentTps[2] = tps15.getAverage();
++                    tickSection = currentTime;
++                }
++                // Paper end - further improve server tick loop
++                // Spigot end
+ 
+                 boolean flag = i == 0L;
+                 if (this.debugCommandProfilerDelayStart) {
+@@ -694,10 +_,18 @@
+                     this.debugCommandProfiler = new MinecraftServer.TimeProfiler(Util.getNanos(), this.tickCount);
+                 }
+ 
++                lastTick = currentTime;
+                 this.nextTickTimeNanos += i;
+                 this.startMetricsRecordingTick();
+                 this.profiler.push("tick");
+                 this.tickServer(flag ? () -> false : this::haveTime);
++                // Paper start - rewrite chunk system
++                final Throwable crash = this.chunkSystemCrash;
++                if (crash != null) {
++                    this.chunkSystemCrash = null;
++                    throw new RuntimeException("Chunk system crash propagated to tick()", crash);
++                }
++                // Paper end - rewrite chunk system
+                 this.profiler.popPush("nextTickWait");
+                 this.mayHaveDelayedTasks = true;
+                 this.delayedTasksMaxNextTickTimeNanos = Math.max(Util.getNanos() + i, this.nextTickTimeNanos);
 @@ -714,6 +_,8 @@
                  this.isReady = true;
                  JvmProfiler.INSTANCE.onServerTick(this.smoothedTickTimeMillis);
@@ -133,9 +444,96 @@
                  this.onServerExit();
              }
          }
-@@ -901,11 +_,13 @@
+@@ -789,9 +_,28 @@
+     }
+ 
+     private boolean haveTime() {
++        // CraftBukkit start
++        if (isOversleep) return canOversleep(); // Paper - because of our changes, this logic is broken
+         return this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
+     }
+ 
++    // Paper start
++    boolean isOversleep = false;
++    private boolean canOversleep() {
++        return this.mayHaveDelayedTasks && Util.getNanos() < this.delayedTasksMaxNextTickTimeNanos;
++    }
++
++    private boolean canSleepForTickNoOversleep() {
++        return this.forceTicks || this.runningTask() || Util.getNanos() < this.nextTickTimeNanos;
++    }
++    // Paper end
++
++    private void executeModerately() {
++        this.runAllTasks();
++        java.util.concurrent.locks.LockSupport.parkNanos("executing tasks", 1000L);
++        // CraftBukkit end
++    }
++
+     public static boolean throwIfFatalException() {
+         RuntimeException runtimeexception = fatalException.get();
+         if (runtimeexception != null) {
+@@ -811,8 +_,10 @@
+     }
+ 
+     protected void waitUntilNextTick() {
+-        this.runAllTasks();
+-        this.managedBlock(() -> !this.haveTime());
++        //this.executeAll(); // Paper - move this into the tick method for timings
++        this.managedBlock(() -> {
++            return !this.canSleepForTickNoOversleep(); // Paper - move oversleep into full server tick
++        });
+     }
+ 
+     @Override
+@@ -826,6 +_,12 @@
+     }
+ 
+     protected TickTask wrapRunnable(Runnable p_129852_) {
++        // Paper start - anything that does try to post to main during watchdog crash, run on watchdog
++        if (this.hasStopped && Thread.currentThread().equals(shutdownThread)) {
++            p_129852_.run();
++            p_129852_ = () -> {};
++        }
++        // Paper end
+         return new TickTask(this.tickCount, p_129852_);
+     }
+ 
+@@ -842,17 +_,18 @@
+ 
+     private boolean pollTaskInternal() {
+         if (super.pollTask()) {
++            this.moonrise$executeMidTickTasks(); // Paper - rewrite chunk system
+             return true;
+         } else {
++            boolean ret = false; // Paper - force execution of all worlds, do not just bias the first
+             if (this.tickRateManager.isSprinting() || this.haveTime()) {
+                 for (ServerLevel serverlevel : this.getAllLevels()) {
+                     if (serverlevel.getChunkSource().pollTask()) {
+-                        return true;
++                        ret = true; // Paper - force execution of all worlds, do not just bias the first
+                     }
+                 }
+             }
+-
+-            return false;
++            return ret; // Paper - force execution of all worlds, do not just bias the first
+         }
+     }
+ 
+@@ -900,15 +_,52 @@
+ 
      public void tickServer(BooleanSupplier p_129871_) {
          long i = Util.getNanos();
++
++        // Paper start - move oversleep into full server tick
++        isOversleep = true;
++        this.managedBlock(() -> {
++            return !this.canOversleep();
++        });
++        isOversleep = false;
++        // Paper end
++
          this.tickCount++;
 +        net.neoforged.neoforge.event.EventHooks.fireServerTickPre(p_129871_, this);
          this.tickRateManager.tick();
@@ -147,8 +545,44 @@
          }
  
          this.ticksUntilAutosave--;
-@@ -927,6 +_,7 @@
++        // Paper start - Incremental chunk and player saving
++        int playerSaveInterval = io.papermc.paper.configuration.GlobalConfiguration.get().playerAutoSave.rate;
++        if (playerSaveInterval < 0) {
++            playerSaveInterval = autosavePeriod;
++        }
++        this.profiler.push("save");
++        final boolean fullSave = autosavePeriod > 0 && this.tickCount % autosavePeriod == 0;
++        try {
++            this.isSaving = true;
++            if (playerSaveInterval > 0) {
++                this.playerList.saveAll(playerSaveInterval);
++            }
++            for (ServerLevel level : this.getAllLevels()) {
++                //if (level.paperConfig().chunks.autoSaveInterval.value() > 0) {
++                if (0 > 0) {
++                    level.saveIncrementally(fullSave);
++                }
++            }
++        } finally {
++            this.isSaving = false;
++        }
++        this.profiler.pop();
++        // Paper end - Incremental chunk and player saving
++        // Paper start - move executeAll() into full server tick timing
++        this.runAllTasks();
++        // Paper end
+         if (this.ticksUntilAutosave <= 0) {
+             this.ticksUntilAutosave = this.computeNextAutosaveInterval();
+             LOGGER.debug("Autosave started");
+@@ -925,8 +_,14 @@
+         this.aggregatedTickTimesNanos += j;
+         this.tickTimesNanos[k] = j;
          this.smoothedTickTimeMillis = this.smoothedTickTimeMillis * 0.8F + (float)j / (float)TimeUtil.NANOSECONDS_PER_MILLISECOND * 0.19999999F;
++        // Paper start - Add tick times API and /mspt command
++        this.tickTimes5s.add(this.tickCount, j);
++        this.tickTimes10s.add(this.tickCount, j);
++        this.tickTimes60s.add(this.tickCount, j);
++        // Paper end - Add tick times API and /mspt command
          this.logTickMethodTime(i);
          this.profiler.pop();
 +        net.neoforged.neoforge.event.EventHooks.fireServerTickPost(p_129871_, this);
@@ -182,25 +616,51 @@
          );
      }
  
-@@ -996,7 +_,8 @@
+@@ -996,15 +_,37 @@
          this.getFunctions().tick();
          this.profiler.popPush("levels");
  
 -        for (ServerLevel serverlevel : this.getAllLevels()) {
++        // Paper start - Perf: Optimize time updates
++        for (final ServerLevel level : this.getAllLevels()) {
++            final boolean doDaylight = level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT);
++            final long dayTime = level.getDayTime();
++            long worldTime = level.getGameTime();
++            final ClientboundSetTimePacket worldPacket = new ClientboundSetTimePacket(worldTime, dayTime, doDaylight);
++            for (Player entityhuman : level.players()) {
++                if (!(entityhuman instanceof ServerPlayer) || (tickCount + entityhuman.getId()) % 20 != 0) {
++                    continue;
++                }
++                ServerPlayer entityplayer = (ServerPlayer) entityhuman;
++                long playerTime = level.getDayTime();
++                ClientboundSetTimePacket packet = (playerTime == dayTime) ? worldPacket :
++                        new ClientboundSetTimePacket(worldTime, playerTime, doDaylight);
++                entityplayer.connection.send(packet); // Add support for per player time
++            }
++        }
++        // Paper end - Perf: Optimize time updates
++
 +        for(ServerLevel serverlevel : this.getWorldArray()) {
++            serverlevel.updateLagCompensationTick(); // Paper - lag compensation
 +            long tickStart = Util.getNanos();
              this.profiler.push(() -> serverlevel + " " + serverlevel.dimension().location());
-             if (this.tickCount % 20 == 0) {
-                 this.profiler.push("timeSync");
-@@ -1005,6 +_,7 @@
-             }
+-            if (this.tickCount % 20 == 0) {
+-                this.profiler.push("timeSync");
+-                this.synchronizeTime(serverlevel);
+-                this.profiler.pop();
+-            }
++//            if (this.tickCount % 20 == 0) {
++//                this.profiler.push("timeSync");
++//                this.synchronizeTime(serverlevel);
++//                this.profiler.pop();
++//            }
  
              this.profiler.push("tick");
 +            net.neoforged.neoforge.event.EventHooks.fireLevelTickPre(serverlevel, p_129954_);
  
              try {
                  serverlevel.tick(p_129954_);
-@@ -1013,16 +_,18 @@
+@@ -1013,16 +_,19 @@
                  serverlevel.fillReportDetails(crashreport);
                  throw new ReportedException(crashreport);
              }
@@ -208,6 +668,7 @@
  
              this.profiler.pop();
              this.profiler.pop();
++            serverlevel.explosionDensityCache.clear(); // Paper - Optimize explosions
 +            perWorldTickTimes.computeIfAbsent(serverlevel.dimension(), k -> new long[100])[this.tickCount % 100] = Util.getNanos() - tickStart;
          }
  
@@ -252,6 +713,15 @@
      }
  
      public SystemReport fillSystemReport(SystemReport p_177936_) {
+@@ -1400,7 +_,7 @@
+     @Override
+     public void executeIfPossible(Runnable p_202482_) {
+         if (this.isStopped()) {
+-            throw new RejectedExecutionException("Server already shutting down");
++            throw new io.papermc.paper.util.ServerStopRejectedExecutionException("Server already shutting down"); // Paper - do not prematurely disconnect players on stop
+         } else {
+             super.executeIfPossible(p_202482_);
+         }
 @@ -1441,7 +_,7 @@
  
      public CompletableFuture<Void> reloadResources(Collection<String> p_129862_) {
@@ -269,6 +739,20 @@
                  },
                  this
              );
+@@ -1488,6 +_,13 @@
+         return completablefuture;
+     }
+ 
++    // Paper start - rewrite chunk system
++    @Override
++    public boolean isSameThread() {
++        return ca.spottedleaf.moonrise.common.util.TickThread.isTickThread();
++    }
++    // Paper end - rewrite chunk system
++
+     public static WorldDataConfiguration configurePackRepository(
+         PackRepository p_248681_, WorldDataConfiguration p_341632_, boolean p_249869_, boolean p_341620_
+     ) {
 @@ -1495,8 +_,10 @@
          FeatureFlagSet featureflagset = p_249869_ ? FeatureFlagSet.of() : p_341632_.enabledFeatures();
          FeatureFlagSet featureflagset1 = p_249869_ ? FeatureFlags.REGISTRY.allFlags() : p_341632_.enabledFeatures();
@@ -322,12 +806,24 @@
      public void dumpServerProperties(Path p_177911_) throws IOException {
      }
  
-@@ -1807,6 +_,10 @@
+@@ -1807,6 +_,22 @@
          }
      }
  
 +    public static MinecraftServer getServer() {
 +        return SERVER; // Paper
++    }
++
++    public double[] getTPS() {
++        return new double[] {
++                net.minecraft.server.MinecraftServer.getServer().tps1.getAverage(),
++                net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
++                net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
++        };
++    }
++
++    public double getAverageTickTime() {
++        return this.getServer().tickTimes5s.getAverage();
 +    }
 +
      private void startMetricsRecordingTick() {
@@ -344,14 +840,44 @@
      public RegistryAccess.Frozen registryAccess() {
          return this.registries.compositeAccess();
      }
-@@ -1942,6 +_,10 @@
-     public ChatDecorator getChatDecorator() {
+@@ -1943,6 +_,10 @@
          return ChatDecorator.PLAIN;
      }
-+
+ 
 +    public final java.util.concurrent.ExecutorService chatExecutor = java.util.concurrent.Executors.newCachedThreadPool(
 +            new com.google.common.util.concurrent.ThreadFactoryBuilder().setDaemon(true).setNameFormat("Async Chat Thread - #%d").setUncaughtExceptionHandler(new net.minecraft.DefaultUncaughtExceptionHandlerWithName(net.minecraft.server.MinecraftServer.LOGGER)).build()); // Paper
 +
- 
++
      public boolean logIPs() {
          return true;
+     }
+@@ -2059,4 +_,29 @@
+             };
+         }
+     }
++    // Paper start - Add tick times API and /mspt command
++    public static class TickTimes {
++        private final long[] times;
++
++        public TickTimes(int length) {
++            times = new long[length];
++        }
++
++        void add(int index, long time) {
++            times[index % times.length] = time;
++        }
++
++        public long[] getTimes() {
++            return times.clone();
++        }
++
++        public double getAverage() {
++            long total = 0L;
++            for (long value : times) {
++                total += value;
++            }
++            return ((double) total / (double) times.length) * 1.0E-6D;
++        }
++    }
++    // Paper end - Add tick times API and /mspt command
+ }

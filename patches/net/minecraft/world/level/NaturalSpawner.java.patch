@@ -25,6 +25,15 @@
              if (mobcategory != MobCategory.MISC) {
                  BlockPos blockpos = entity.blockPosition();
                  p_186527_.query(
+@@ -82,7 +_,7 @@
+                             potentialcalculator.addCharge(entity.blockPosition(), mobspawnsettings$mobspawncost.charge());
+                         }
+ 
+-                        if (entity instanceof Mob) {
++                        if (p_186528_ != null &&  entity instanceof Mob) {// Paper - Optional per player mob spawns
+                             p_186528_.addMob(p_275163_.getPos(), mobcategory);
+                         }
+ 
 @@ -199,7 +_,7 @@
                                      l1++;
                                      p_47040_.addFreshEntityWithPassengers(mob);
@@ -71,3 +80,20 @@
                                      spawngroupdata = mob.finalizeSpawn(
                                          p_220451_, p_220451_.getCurrentDifficultyAt(mob.blockPosition()), MobSpawnType.CHUNK_GENERATION, spawngroupdata
                                      );
+@@ -505,7 +_,7 @@
+             this.spawnPotential.addCharge(blockpos, d0);
+             MobCategory mobcategory = entitytype.getCategory();
+             this.mobCategoryCounts.addTo(mobcategory, 1);
+-            this.localMobCapCalculator.addMob(new ChunkPos(blockpos), mobcategory);
++            if (this.localMobCapCalculator != null)  this.localMobCapCalculator.addMob(new ChunkPos(blockpos), mobcategory);
+         }
+ 
+         public int getSpawnableChunkCount() {
+@@ -518,6 +_,7 @@
+ 
+         boolean canSpawnForCategory(MobCategory p_186549_, ChunkPos p_186550_) {
+             int i = p_186549_.getMaxInstancesPerChunk() * this.spawnableChunkCount / NaturalSpawner.MAGIC_NUMBER;
++            if (this.localMobCapCalculator == null) return this.mobCategoryCounts.getInt(p_186549_) < i; // Paper - Optional per player mob spawns
+             return this.mobCategoryCounts.getInt(p_186549_) >= i ? false : this.localMobCapCalculator.canSpawn(p_186549_, p_186550_);
+         }
+     }

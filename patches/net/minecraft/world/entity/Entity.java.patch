@@ -5,7 +5,7 @@
  import org.slf4j.Logger;
  
 -public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess, CommandSource, ScoreHolder {
-+public abstract class Entity extends net.neoforged.neoforge.attachment.AttachmentHolder implements SyncedDataHolder, Nameable, EntityAccess, CommandSource, ScoreHolder, net.neoforged.neoforge.common.extensions.IEntityExtension {
++public abstract class Entity extends net.neoforged.neoforge.attachment.AttachmentHolder implements SyncedDataHolder, Nameable, EntityAccess, CommandSource, ScoreHolder, net.neoforged.neoforge.common.extensions.IEntityExtension , ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity { // Paper - rewrite chunk system // Paper - optimise entity tracker
      private static final Logger LOGGER = LogUtils.getLogger();
      public static final String ID_TAG = "id";
      public static final String PASSENGERS_TAG = "Passengers";
@@ -39,11 +39,12 @@
      private boolean invulnerable;
      protected UUID uuid = Mth.createInsecureUUID(this.random);
      protected String stringUUID = this.uuid.toString();
-@@ -244,6 +_,18 @@
+@@ -244,6 +_,111 @@
      @Nullable
      private BlockState inBlockState = null;
  
 +    // Spigot start
++    public boolean valid;
 +    public final org.spigotmc.ActivationRange.ActivationType activationType = org.spigotmc.ActivationRange.initializeEntityActivationType(this);
 +    public final boolean defaultActivationState;
 +    public long activatedTick = Integer.MIN_VALUE;
@@ -54,6 +55,98 @@
 +    public long activatedImmunityTick = Integer.MIN_VALUE; // Paper - EAR
 +    public boolean isTemporarilyActive; // Paper - EAR
 +    public boolean spawnedViaMobSpawner; // Paper - Yes this name is similar to above, upstream took the better one
++
++    // Paper start - rewrite chunk system
++    private final boolean isHardColliding = this.moonrise$isHardCollidingUncached();
++    private net.minecraft.server.level.FullChunkStatus chunkStatus;
++    private int sectionX = Integer.MIN_VALUE;
++    private int sectionY = Integer.MIN_VALUE;
++    private int sectionZ = Integer.MIN_VALUE;
++    private boolean updatingSectionStatus;
++
++    @Override
++    public final boolean moonrise$isHardColliding() {
++        return this.isHardColliding;
++    }
++
++    @Override
++    public final net.minecraft.server.level.FullChunkStatus moonrise$getChunkStatus() {
++        return this.chunkStatus;
++    }
++
++    @Override
++    public final void moonrise$setChunkStatus(final net.minecraft.server.level.FullChunkStatus status) {
++        this.chunkStatus = status;
++    }
++
++    @Override
++    public final int moonrise$getSectionX() {
++        return this.sectionX;
++    }
++
++    @Override
++    public final void moonrise$setSectionX(final int x) {
++        this.sectionX = x;
++    }
++
++    @Override
++    public final int moonrise$getSectionY() {
++        return this.sectionY;
++    }
++
++    @Override
++    public final void moonrise$setSectionY(final int y) {
++        this.sectionY = y;
++    }
++
++    @Override
++    public final int moonrise$getSectionZ() {
++        return this.sectionZ;
++    }
++
++    @Override
++    public final void moonrise$setSectionZ(final int z) {
++        this.sectionZ = z;
++    }
++
++    @Override
++    public final boolean moonrise$isUpdatingSectionStatus() {
++        return this.updatingSectionStatus;
++    }
++
++    @Override
++    public final void moonrise$setUpdatingSectionStatus(final boolean to) {
++        this.updatingSectionStatus = to;
++    }
++
++    @Override
++    public final boolean moonrise$hasAnyPlayerPassengers() {
++        if (this.passengers.isEmpty()) {
++            return false;
++        }
++        return this.getIndirectPassengersStream().anyMatch((entity) -> entity instanceof Player);
++    }
++    // Paper end - rewrite chunk system
++    // Paper start - optimise entity tracker
++    private net.minecraft.server.level.ChunkMap.TrackedEntity trackedEntity;
++
++    @Override
++    public final net.minecraft.server.level.ChunkMap.TrackedEntity moonrise$getTrackedEntity() {
++        return this.trackedEntity;
++    }
++
++    @Override
++    public final void moonrise$setTrackedEntity(final net.minecraft.server.level.ChunkMap.TrackedEntity trackedEntity) {
++        this.trackedEntity = trackedEntity;
++    }
++
++    private static void collectIndirectPassengers(final List<Entity> into, final List<Entity> from) {
++        for (final Entity passenger : from) {
++            into.add(passenger);
++            collectIndirectPassengers(into, ((Entity)(Object)passenger).passengers);
++        }
++    }
++    // Paper end - optimise entity tracker
 +
      public Entity(EntityType<?> p_19870_, Level p_19871_) {
          this.type = p_19870_;

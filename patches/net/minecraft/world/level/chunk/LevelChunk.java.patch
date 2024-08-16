@@ -5,11 +5,62 @@
  import org.slf4j.Logger;
  
 -public class LevelChunk extends ChunkAccess {
-+public class LevelChunk extends ChunkAccess implements net.neoforged.neoforge.attachment.IAttachmentHolder {
++public class LevelChunk extends ChunkAccess implements net.neoforged.neoforge.attachment.IAttachmentHolder, ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkSystemLevelChunk, ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk, ca.spottedleaf.moonrise.patches.chunk_getblock.GetBlockChunk { // Paper - rewrite chunk system // Paper - get block chunk optimisation
      static final Logger LOGGER = LogUtils.getLogger();
      private static final TickingBlockEntity NULL_TICKER = new TickingBlockEntity() {
          @Override
-@@ -139,6 +_,7 @@
+@@ -111,7 +_,49 @@
+         this.postLoad = p_196861_;
+         this.blockTicks = p_196857_;
+         this.fluidTicks = p_196858_;
+-    }
++        // Paper start - get block chunk optimisation
++        this.minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(level);
++        this.maxSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMaxSection(level);
++
++        final boolean empty = ((Object)this instanceof EmptyLevelChunk);
++        this.debug = !empty && this.level.isDebug();
++        this.defaultBlockState = empty ? VOID_AIR_BLOCKSTATE : AIR_BLOCKSTATE;
++        // Paper end - get block chunk optimisation
++    }
++
++    // Paper start - rewrite chunk system
++    private boolean postProcessingDone;
++    private net.minecraft.server.level.ServerChunkCache.ChunkAndHolder chunkAndHolder;
++
++    @Override
++    public final boolean moonrise$isPostProcessingDone() {
++        return this.postProcessingDone;
++    }
++
++    @Override
++    public final net.minecraft.server.level.ServerChunkCache.ChunkAndHolder moonrise$getChunkAndHolder() {
++        return this.chunkAndHolder;
++    }
++
++    @Override
++    public final void moonrise$setChunkAndHolder(final net.minecraft.server.level.ServerChunkCache.ChunkAndHolder holder) {
++        this.chunkAndHolder = holder;
++    }
++    // Paper end - rewrite chunk system
++    // Paper start - get block chunk optimisation
++    private static final BlockState AIR_BLOCKSTATE = Blocks.AIR.defaultBlockState();
++    private static final FluidState AIR_FLUIDSTATE = Fluids.EMPTY.defaultFluidState();
++    private static final BlockState VOID_AIR_BLOCKSTATE = Blocks.VOID_AIR.defaultBlockState();
++    private final int minSection;
++    private final int maxSection;
++    private final boolean debug;
++    private final BlockState defaultBlockState;
++
++    @Override
++    public final BlockState moonrise$getBlock(final int x, final int y, final int z) {
++        return this.getBlockStateFinal(x, y, z);
++    }
++    // Paper end - get block chunk optimisation
+ 
+     public LevelChunk(ServerLevel p_196850_, ProtoChunk p_196851_, @Nullable LevelChunk.PostLoadProcessor p_196852_) {
+         this(
+@@ -139,15 +_,23 @@
          this.setAllStarts(p_196851_.getAllStarts());
          this.setAllReferences(p_196851_.getAllReferences());
  
@@ -17,6 +68,53 @@
          for (Entry<Heightmap.Types, Heightmap> entry : p_196851_.getHeightmaps()) {
              if (ChunkStatus.FULL.heightmapsAfter().contains(entry.getKey())) {
                  this.setHeightmap(entry.getKey(), entry.getValue().getRawData());
+             }
+         }
+ 
+-        this.skyLightSources = p_196851_.skyLightSources;
++        // Paper - rewrite chunk system
+         this.setLightCorrect(p_196851_.isLightCorrect());
+         this.unsaved = true;
++
++        // Paper start - rewrite chunk system
++        this.starlight$setBlockNibbles(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getBlockNibbles());
++        this.starlight$setSkyNibbles(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getSkyNibbles());
++        this.starlight$setSkyEmptinessMap(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getSkyEmptinessMap());
++        this.starlight$setBlockEmptinessMap(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getBlockEmptinessMap());
++        // Paper end - rewrite chunk system
+     }
+ 
+     @Override
+@@ -173,6 +_,20 @@
+             : super.getListenerRegistry(p_251193_);
+     }
+ 
++    // Paper start - Perf: Reduce instructions and provide final method
++    public BlockState getBlockState(final int x, final int y, final int z) {
++        return this.getBlockStateFinal(x, y, z);
++    }
++    public BlockState getBlockStateFinal(final int x, final int y, final int z) {
++        // Copied and modified from below
++        final int sectionIndex = this.getSectionIndex(y);
++        if (sectionIndex < 0 || sectionIndex >= this.sections.length
++                || this.sections[sectionIndex].nonEmptyBlockCount == 0) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        return this.sections[sectionIndex].states.get((y & 15) << 8 | (z & 15) << 4 | x & 15);
++    }
++
+     @Override
+     public BlockState getBlockState(BlockPos p_62923_) {
+         int i = p_62923_.getX();
+@@ -262,7 +_,7 @@
+                 if (LightEngine.hasDifferentLightProperties(this, p_62865_, blockstate, p_62866_)) {
+                     ProfilerFiller profilerfiller = this.level.getProfiler();
+                     profilerfiller.push("updateSkyLightSources");
+-                    this.skyLightSources.update(this, j, i, l);
++                    // Paper - rewrite chunk system
+                     profilerfiller.popPush("queueCheckLight");
+                     this.level.getChunkSource().getLightEngine().checkBlock(p_62865_);
+                     profilerfiller.pop();
 @@ -278,7 +_,7 @@
                  if (!levelchunksection.getBlockState(j, k, l).is(block)) {
                      return null;

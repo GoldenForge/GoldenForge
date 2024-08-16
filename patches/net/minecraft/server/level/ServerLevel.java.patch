@@ -1,6 +1,15 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -178,7 +_,7 @@
+@@ -166,7 +_,7 @@
+ import net.minecraft.world.ticks.LevelTicks;
+ import org.slf4j.Logger;
+ 
+-public class ServerLevel extends Level implements WorldGenLevel {
++public class ServerLevel extends Level implements WorldGenLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevelReader { // Paper - rewrite chunk system
+     public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
+     public static final IntProvider RAIN_DELAY = UniformInt.of(12000, 180000);
+     public static final IntProvider RAIN_DURATION = UniformInt.of(12000, 24000);
+@@ -178,10 +_,10 @@
      final List<ServerPlayer> players = Lists.newArrayList();
      private final ServerChunkCache chunkSource;
      private final MinecraftServer server;
@@ -8,8 +17,12 @@
 +    public final ServerLevelData serverLevelData;
      private int lastSpawnChunkRadius;
      final EntityTickList entityTickList = new EntityTickList();
-     private final PersistentEntitySectionManager<Entity> entityManager;
-@@ -199,12 +_,14 @@
+-    private final PersistentEntitySectionManager<Entity> entityManager;
++//    private final PersistentEntitySectionManager<Entity> entityManager;
+     private final GameEventDispatcher gameEventDispatcher;
+     public boolean noSave;
+     private final SleepStatus sleepStatus;
+@@ -199,12 +_,276 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
      private EndDragonFight dragonFight;
@@ -21,6 +34,268 @@
      private final RandomSequences randomSequences;
  
 +    public final LevelStorageSource.LevelStorageAccess convertable;
++
++    public LevelChunk getChunkIfLoaded(int x, int z) {
++        return this.chunkSource.getChunkAtIfLoadedImmediately(x, z); // Paper - Use getChunkIfLoadedImmediately
++    }
++
++    // Paper start
++    public final boolean areChunksLoadedForMove(AABB axisalignedbb) {
++        // copied code from collision methods, so that we can guarantee that they wont load chunks (we don't override
++        // ICollisionAccess methods for VoxelShapes)
++        // be more strict too, add a block (dumb plugins in move events?)
++        int minBlockX = Mth.floor(axisalignedbb.minX - 1.0E-7D) - 3;
++        int maxBlockX = Mth.floor(axisalignedbb.maxX + 1.0E-7D) + 3;
++
++        int minBlockZ = Mth.floor(axisalignedbb.minZ - 1.0E-7D) - 3;
++        int maxBlockZ = Mth.floor(axisalignedbb.maxZ + 1.0E-7D) + 3;
++
++        int minChunkX = minBlockX >> 4;
++        int maxChunkX = maxBlockX >> 4;
++
++        int minChunkZ = minBlockZ >> 4;
++        int maxChunkZ = maxBlockZ >> 4;
++
++        ServerChunkCache chunkProvider = this.getChunkSource();
++
++        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
++            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
++                if (chunkProvider.getChunkAtIfLoadedImmediately(cx, cz) == null) {
++                    return false;
++                }
++            }
++        }
++
++        return true;
++    }
++
++    public final void loadChunksForMoveAsync(AABB axisalignedbb, ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                             java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        // Paper - rewrite chunk system
++        int minBlockX = Mth.floor(axisalignedbb.minX - 1.0E-7D) - 3;
++        int maxBlockX = Mth.floor(axisalignedbb.maxX + 1.0E-7D) + 3;
++
++        int minBlockZ = Mth.floor(axisalignedbb.minZ - 1.0E-7D) - 3;
++        int maxBlockZ = Mth.floor(axisalignedbb.maxZ + 1.0E-7D) + 3;
++
++        int minChunkX = minBlockX >> 4;
++        int maxChunkX = maxBlockX >> 4;
++
++        int minChunkZ = minBlockZ >> 4;
++        int maxChunkZ = maxBlockZ >> 4;
++
++        this.moonrise$loadChunksAsync(minChunkX, maxChunkX, minChunkZ, maxChunkZ, priority, onLoad); // Paper - rewrite chunk system
++    }
++    // Paper end
++
++    // Paper start - optimise getPlayerByUUID
++    @Nullable
++    @Override
++    public Player getPlayerByUUID(UUID uuid) {
++        final Player player = this.getServer().getPlayerList().getPlayer(uuid);
++        return player != null && player.level() == this ? player : null;
++    }
++    // Paper end - optimise getPlayerByUUID
++    // Paper start - rewrite chunk system
++    private boolean markedClosing;
++    private final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder viewDistanceHolder = new ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder();
++    private final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader chunkLoader = new ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader((ServerLevel)(Object)this);
++    private final ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.EntityDataController entityDataController;
++    private final ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.PoiDataController poiDataController;
++    private final ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController chunkDataController;
++    private final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler chunkTaskScheduler;
++    private long lastMidTickFailure;
++    private long tickedBlocksOrFluids;
++    private final ca.spottedleaf.moonrise.common.misc.NearbyPlayers nearbyPlayers = new ca.spottedleaf.moonrise.common.misc.NearbyPlayers((ServerLevel)(Object)this);
++    private static final ServerChunkCache.ChunkAndHolder[] EMPTY_CHUNK_AND_HOLDERS = new ServerChunkCache.ChunkAndHolder[0];
++    private final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> loadedChunks = new ca.spottedleaf.moonrise.common.list.ReferenceList<>(EMPTY_CHUNK_AND_HOLDERS);
++    private final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> tickingChunks = new ca.spottedleaf.moonrise.common.list.ReferenceList<>(EMPTY_CHUNK_AND_HOLDERS);
++    private final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> entityTickingChunks = new ca.spottedleaf.moonrise.common.list.ReferenceList<>(EMPTY_CHUNK_AND_HOLDERS);
++
++    @Override
++    public final LevelChunk moonrise$getFullChunkIfLoaded(final int chunkX, final int chunkZ) {
++        return this.chunkSource.getChunkNow(chunkX, chunkZ);
++    }
++
++    @Override
++    public final ChunkAccess moonrise$getAnyChunkIfLoaded(final int chunkX, final int chunkZ) {
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder newChunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(chunkX, chunkZ));
++        if (newChunkHolder == null) {
++            return null;
++        }
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder.ChunkCompletion lastCompletion = newChunkHolder.getLastChunkCompletion();
++        return lastCompletion == null ? null : lastCompletion.chunk();
++    }
++
++    @Override
++    public final ChunkAccess moonrise$getSpecificChunkIfLoaded(final int chunkX, final int chunkZ, final net.minecraft.world.level.chunk.status.ChunkStatus leastStatus) {
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder newChunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(chunkX, chunkZ);
++        if (newChunkHolder == null) {
++            return null;
++        }
++        return newChunkHolder.getChunkIfPresentUnchecked(leastStatus);
++    }
++
++    @Override
++    public final void moonrise$midTickTasks() {
++        ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
++    }
++
++    @Override
++    public final ChunkAccess moonrise$syncLoadNonFull(final int chunkX, final int chunkZ, final net.minecraft.world.level.chunk.status.ChunkStatus status) {
++        return this.moonrise$getChunkTaskScheduler().syncLoadNonFull(chunkX, chunkZ, status);
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler moonrise$getChunkTaskScheduler() {
++        return this.chunkTaskScheduler;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.ChunkDataController moonrise$getChunkDataController() {
++        return this.chunkDataController;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.ChunkDataController moonrise$getPoiChunkDataController() {
++        return this.poiDataController;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.ChunkDataController moonrise$getEntityChunkDataController() {
++        return this.entityDataController;
++    }
++
++    @Override
++    public final int moonrise$getRegionChunkShift() {
++        return io.papermc.paper.threadedregions.TickRegions.getRegionChunkShift();
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader moonrise$getPlayerChunkLoader() {
++        return this.chunkLoader;
++    }
++
++    @Override
++    public final void moonrise$loadChunksAsync(final BlockPos pos, final int radiusBlocks,
++                                               final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        this.moonrise$loadChunksAsync(
++                (pos.getX() - radiusBlocks) >> 4,
++                (pos.getX() + radiusBlocks) >> 4,
++                (pos.getZ() - radiusBlocks) >> 4,
++                (pos.getZ() + radiusBlocks) >> 4,
++                priority, onLoad
++        );
++    }
++
++    @Override
++    public final void moonrise$loadChunksAsync(final BlockPos pos, final int radiusBlocks,
++                                               final net.minecraft.world.level.chunk.status.ChunkStatus chunkStatus, final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        this.moonrise$loadChunksAsync(
++                (pos.getX() - radiusBlocks) >> 4,
++                (pos.getX() + radiusBlocks) >> 4,
++                (pos.getZ() - radiusBlocks) >> 4,
++                (pos.getZ() + radiusBlocks) >> 4,
++                chunkStatus, priority, onLoad
++        );
++    }
++
++    @Override
++    public final void moonrise$loadChunksAsync(final int minChunkX, final int maxChunkX, final int minChunkZ, final int maxChunkZ,
++                                               final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        this.moonrise$loadChunksAsync(minChunkX, maxChunkX, minChunkZ, maxChunkZ, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, priority, onLoad);
++    }
++
++    @Override
++    public final void moonrise$loadChunksAsync(final int minChunkX, final int maxChunkX, final int minChunkZ, final int maxChunkZ,
++                                               final net.minecraft.world.level.chunk.status.ChunkStatus chunkStatus, final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler chunkTaskScheduler = this.moonrise$getChunkTaskScheduler();
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager chunkHolderManager = chunkTaskScheduler.chunkHolderManager;
++
++        final int requiredChunks = (maxChunkX - minChunkX + 1) * (maxChunkZ - minChunkZ + 1);
++        final java.util.concurrent.atomic.AtomicInteger loadedChunks = new java.util.concurrent.atomic.AtomicInteger();
++        final Long holderIdentifier = ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.getNextChunkLoadId();
++        final int ticketLevel = ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.getTicketLevel(chunkStatus);
++
++        final List<ChunkAccess> ret = new ArrayList<>(requiredChunks);
++
++        final java.util.function.Consumer<net.minecraft.world.level.chunk.ChunkAccess> consumer = (final ChunkAccess chunk) -> {
++            if (chunk != null) {
++                synchronized (ret) {
++                    ret.add(chunk);
++                }
++                chunkHolderManager.addTicketAtLevel(ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.CHUNK_LOAD, chunk.getPos(), ticketLevel, holderIdentifier);
++            }
++            if (loadedChunks.incrementAndGet() == requiredChunks) {
++                try {
++                    onLoad.accept(java.util.Collections.unmodifiableList(ret));
++                } finally {
++                    for (int i = 0, len = ret.size(); i < len; ++i) {
++                        final ChunkPos chunkPos = ret.get(i).getPos();
++
++                        chunkHolderManager.removeTicketAtLevel(ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.CHUNK_LOAD, chunkPos, ticketLevel, holderIdentifier);
++                    }
++                }
++            }
++        };
++
++        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
++            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
++                chunkTaskScheduler.scheduleChunkLoad(cx, cz, chunkStatus, true, priority, consumer);
++            }
++        }
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder moonrise$getViewDistanceHolder() {
++        return this.viewDistanceHolder;
++    }
++
++    @Override
++    public final long moonrise$getLastMidTickFailure() {
++        return this.lastMidTickFailure;
++    }
++
++    @Override
++    public final void moonrise$setLastMidTickFailure(final long time) {
++        this.lastMidTickFailure = time;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.common.misc.NearbyPlayers moonrise$getNearbyPlayers() {
++        return this.nearbyPlayers;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> moonrise$getLoadedChunks() {
++        return this.loadedChunks;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> moonrise$getTickingChunks() {
++        return this.tickingChunks;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> moonrise$getEntityTickingChunks() {
++        return this.entityTickingChunks;
++    }
++    // Paper end - rewrite chunk system
++    // Paper start - lag compensation
++    private long lagCompensationTick = net.minecraft.server.MinecraftServer.SERVER_INIT;
++
++    public long getLagCompensationTick() {
++        return this.lagCompensationTick;
++    }
++
++    public void updateLagCompensationTick() {
++        this.lagCompensationTick = (System.nanoTime() - net.minecraft.server.MinecraftServer.SERVER_INIT) / (java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(50L));
++    }
++    // Paper end - lag compensation
 +
      public ServerLevel(
          MinecraftServer p_214999_,
@@ -40,18 +315,59 @@
          this.serverLevelData = p_215002_;
          ChunkGenerator chunkgenerator = p_215004_.generator();
          boolean flag = p_214999_.forceSynchronousWrites();
-@@ -298,6 +_,11 @@
+@@ -248,7 +_,7 @@
+             this,
+             p_214999_
+         );
+-        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++//        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
+         this.chunkSource = new ServerChunkCache(
+             this,
+             p_215001_,
+@@ -260,7 +_,7 @@
+             p_214999_.getPlayerList().getSimulationDistance(),
+             flag,
+             p_215005_,
+-            this.entityManager::updateChunkStatus,
++            null,
+             () -> p_214999_.overworld().getDataStorage()
+         );
+         this.chunkSource.getGeneratorState().ensureStructuresGenerated();
+@@ -298,7 +_,33 @@
          this.randomSequences = Objects.requireNonNullElseGet(
              p_288977_, () -> this.getDataStorage().computeIfAbsent(RandomSequences.factory(i), "random_sequences")
          );
+-    }
++
++        // Paper start - rewrite chunk system
++        this.entityDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.EntityDataController(
++                new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.EntityDataController.EntityRegionFileStorage(
++                        new RegionStorageInfo(p_215001_.getLevelId(), p_215003_, "entities"),
++                        p_215001_.getDimensionPath(p_215003_).resolve("entities"),
++                        p_214999_.forceSynchronousWrites()
++                )
++        );
++        this.poiDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.PoiDataController((ServerLevel)(Object)this);
++        this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this);
++        this.moonrise$setEntityLookup(new ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup((ServerLevel)(Object)this, ((ServerLevel)(Object)this).new EntityCallbacks()));
++        this.chunkTaskScheduler = new ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler((ServerLevel)(Object)this, ca.spottedleaf.moonrise.common.util.MoonriseCommon.WORKER_POOL);
++        // Paper end - rewrite chunk system
 +
 +        net.neoforged.neoforge.attachment.LevelAttachmentsSavedData.init(this);
 +        // Neo: Move the initialization of customSpawners to the end of costructor
 +        // Providing a fully initialized ServerLevel instance for the ServerLevelEvent.CustomSpawners
 +        this.customSpawners = net.neoforged.neoforge.event.EventHooks.getCustomSpawners(this, p_215008_);
-     }
++    }
++
++    // Paper start
++    @Override
++    public boolean hasChunk(int chunkX, int chunkZ) {
++        return this.getChunkSource().getChunkAtIfLoadedImmediately(chunkX, chunkZ) != null;
++    }
++    // Paper end
  
      @Deprecated
+     @VisibleForTesting
 @@ -342,7 +_,7 @@
          if (this.sleepStatus.areEnoughSleeping(i) && this.sleepStatus.areEnoughDeepSleeping(i, this.players)) {
              if (this.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)) {
@@ -81,6 +397,25 @@
                              profilerfiller.pop();
                          }
                      }
+@@ -423,13 +_,16 @@
+         }
+ 
+         profilerfiller.push("entityManagement");
+-        this.entityManager.tick();
++        //this.entityManager.tick();
+         profilerfiller.pop();
+     }
+ 
+     @Override
+     public boolean shouldTickBlocksAt(long p_184059_) {
+-        return this.chunkSource.chunkMap.getDistanceManager().inBlockTickingRange(p_184059_);
++        // Paper start - rewrite chunk system
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder holder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(p_184059_);
++        return holder != null && holder.isTickingReady();
++        // Paper end - rewrite chunk system
+     }
+ 
+     protected void tickTime() {
 @@ -438,7 +_,7 @@
              this.serverLevelData.setGameTime(i);
              this.serverLevelData.getScheduledEvents().tick(this.server, i);
@@ -122,23 +457,130 @@
          }
      }
  
-@@ -758,7 +_,11 @@
+@@ -743,6 +_,12 @@
+         if (fluidstate.is(p_184078_)) {
+             fluidstate.tick(this, p_184077_);
+         }
++
++        // Paper start - rewrite chunk system
++        if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
++            ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
++        }
++        // Paper end - rewrite chunk system
+     }
+ 
+     private void tickBlock(BlockPos p_184113_, Block p_184114_) {
+@@ -750,15 +_,32 @@
+         if (blockstate.is(p_184114_)) {
+             blockstate.tick(this, p_184113_, this.random);
+         }
++
++        // Paper start - rewrite chunk system
++        if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
++            ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
++        }
++        // Paper end - rewrite chunk system
+     }
+ 
+     public void tickNonPassenger(Entity p_8648_) {
++        // Paper start - log detailed entity tick information
++        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread("Cannot tick an entity off-main");
++        final boolean isActive = org.spigotmc.ActivationRange.checkIfActive(p_8648_);
+         p_8648_.setOldPosAndRot();
+         ProfilerFiller profilerfiller = this.getProfiler();
          p_8648_.tickCount++;
          this.getProfiler().push(() -> BuiltInRegistries.ENTITY_TYPE.getKey(p_8648_.getType()).toString());
          profilerfiller.incrementCounter("tickNonPassenger");
 -        p_8648_.tick();
++
++        //TODO: goldenforge: check this impl with neoforge event
 +        // Neo: Permit cancellation of Entity#tick via EntityTickEvent.Pre
 +        if (!net.neoforged.neoforge.event.EventHooks.fireEntityTickPre(p_8648_).isCanceled()) {
-+            p_8648_.tick();
++            if (isActive) { // Paper - EAR 2
++                p_8648_.tick();
++            } else { p_8648_.inactiveTick(); } // Paper - EAR 2
 +            net.neoforged.neoforge.event.EventHooks.fireEntityTickPost(p_8648_);
 +        }
          this.getProfiler().pop();
  
          for (Entity entity : p_8648_.getPassengers()) {
-@@ -807,6 +_,7 @@
-             } else {
-                 this.entityManager.autoSave();
+@@ -770,12 +_,20 @@
+         if (p_8664_.isRemoved() || p_8664_.getVehicle() != p_8663_) {
+             p_8664_.stopRiding();
+         } else if (p_8664_ instanceof Player || this.entityTickList.contains(p_8664_)) {
++            final boolean isActive = org.spigotmc.ActivationRange.checkIfActive(p_8664_);
+             p_8664_.setOldPosAndRot();
+             p_8664_.tickCount++;
+             ProfilerFiller profilerfiller = this.getProfiler();
+             profilerfiller.push(() -> BuiltInRegistries.ENTITY_TYPE.getKey(p_8664_.getType()).toString());
+             profilerfiller.incrementCounter("tickPassenger");
+-            p_8664_.rideTick();
++            if (isActive) {
++                p_8664_.rideTick();
++            } else {
++                p_8664_.setDeltaMovement(Vec3.ZERO);
++                p_8664_.inactiveTick();
++                // copied from inside of if (isPassenger()) of passengerTick, but that ifPassenger is unnecessary
++                p_8663_.positionRider(p_8664_);
++            }
+             profilerfiller.pop();
+ 
+             for (Entity entity : p_8664_.getPassengers()) {
+@@ -789,7 +_,33 @@
+         return !this.server.isUnderSpawnProtection(this, p_8697_, p_8696_) && this.getWorldBorder().isWithinBounds(p_8697_);
+     }
+ 
++    // Paper start - Incremental chunk and player saving
++    public void saveIncrementally(boolean doFull) {
++        ServerChunkCache chunkproviderserver = this.getChunkSource();
++
++        if (doFull) {
++            this.saveLevelData();
++        }
++
++        // chunk autosave is already called by the ChunkSystem during unload processing (ChunkMap#processUnloads)
++
++        // Copied from save()
++        // CraftBukkit start - moved from MinecraftServer.saveChunks
++        if (doFull) { // Paper
++            ServerLevel worldserver1 = this;
++
++//            this.serverLevelData.setWorldBorder(worldserver1.getWorldBorder().createSettings());
++//            this.serverLevelData.setCustomBossEvents(this.server.getCustomBossEvents().save(this.registryAccess()));
++//            this.convertable.saveDataTag(this.server.registryAccess(), this.serverLevelData, this.server.getPlayerList().getSingleplayerData());
++        }
++        // CraftBukkit end
++    }
++    // Paper end - Incremental chunk and player saving
++
+     public void save(@Nullable ProgressListener p_8644_, boolean p_8645_, boolean p_8646_) {
++        this.save(p_8644_, p_8645_, p_8646_);
++    }
++    public void save(@Nullable ProgressListener p_8644_, boolean p_8645_, boolean p_8646_, boolean close) {
+         ServerChunkCache serverchunkcache = this.getChunkSource();
+         if (!p_8646_) {
+             if (p_8644_ != null) {
+@@ -801,12 +_,20 @@
+                 p_8644_.progressStage(Component.translatable("menu.savingChunks"));
              }
+ 
++            if (!close) { serverchunkcache.save(p_8645_); } // Paper - add close param
++
+             serverchunkcache.save(p_8645_);
+-            if (p_8645_) {
+-                this.entityManager.saveAll();
+-            } else {
+-                this.entityManager.autoSave();
++            // Paper start - add close param
++            if (close) {
++                try {
++                    serverchunkcache.close(!p_8646_);
++                } catch (IOException never) {
++                    throw new RuntimeException(never);
++                }
+             }
++            // Paper end - add close param
++
 +            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Save(this));
          }
      }
@@ -151,22 +593,29 @@
          Entity entity = this.getEntities().get(p_8854_.getUUID());
          if (entity != null) {
              LOGGER.warn("Force-added player with duplicate UUID {}", p_8854_.getUUID());
-@@ -903,7 +_,8 @@
+@@ -903,20 +_,33 @@
              this.removePlayerImmediately((ServerPlayer)entity, Entity.RemovalReason.DISCARDED);
          }
  
 -        this.entityManager.addNewEntity(p_8854_);
-+        this.entityManager.addNewEntityWithoutEvent(p_8854_);
++        this.moonrise$getEntityLookup().addNewEntity(p_8854_); // Paper - rewrite chunk system
 +        p_8854_.onAddedToLevel();
      }
  
      private boolean addEntity(Entity p_8873_) {
-@@ -911,7 +_,12 @@
++        org.spigotmc.AsyncCatcher.catchOp("entity add"); // Spigot
++        // Paper start - extra debug info
++        if (p_8873_.valid) {
++            MinecraftServer.LOGGER.error("Attempted Double World add on {}", p_8873_, new Throwable());
++            return true;
++        }
++        // Paper end - extra debug info
+         if (p_8873_.isRemoved()) {
              LOGGER.warn("Tried to add entity {} but it was marked as removed already", EntityType.getKey(p_8873_.getType()));
              return false;
          } else {
 -            return this.entityManager.addNewEntity(p_8873_);
-+            if (this.entityManager.addNewEntity(p_8873_)) {
++            if (this.moonrise$getEntityLookup().addNewEntity(p_8873_)) {
 +                p_8873_.onAddedToLevel();
 +                return true;
 +            } else {
@@ -175,6 +624,12 @@
          }
      }
  
+     public boolean tryAddFreshEntityWithPassengers(Entity p_8861_) {
+-        if (p_8861_.getSelfAndPassengers().map(Entity::getUUID).anyMatch(this.entityManager::isLoaded)) {
++        if (p_8861_.getSelfAndPassengers().map(Entity::getUUID).anyMatch(this.moonrise$getEntityLookup()::hasEntity)) {
+             return false;
+         } else {
+             this.addFreshEntityWithPassengers(p_8861_);
 @@ -959,6 +_,12 @@
          float p_263390_,
          long p_263403_
@@ -226,18 +681,166 @@
          this.neighborUpdater.updateNeighborsAtExceptFromFacing(p_215052_, p_215053_, p_215054_);
      }
  
-@@ -1611,6 +_,11 @@
-         this.entityManager.addWorldGenChunkEntities(p_143328_);
+@@ -1440,7 +_,7 @@
+                 }
+             }
+ 
+-            writer.write(String.format(Locale.ROOT, "entities: %s\n", this.entityManager.gatherStats()));
++            writer.write(String.format(Locale.ROOT, "entities: %s\n", this.moonrise$getEntityLookup().getDebugInfo()));
+             writer.write(String.format(Locale.ROOT, "block_entity_tickers: %d\n", this.blockEntityTickers.size()));
+             writer.write(String.format(Locale.ROOT, "block_ticks: %d\n", this.getBlockTicks().count()));
+             writer.write(String.format(Locale.ROOT, "fluid_ticks: %d\n", this.getFluidTicks().count()));
+@@ -1464,7 +_,7 @@
+         Path path1 = p_8787_.resolve("entity_chunks.csv");
+ 
+         try (Writer writer5 = Files.newBufferedWriter(path1)) {
+-            this.entityManager.dumpSections(writer5);
++          //  this.entityManager.dumpSections(writer5);
+         }
+ 
+         Path path2 = p_8787_.resolve("entities.csv");
+@@ -1564,18 +_,9 @@
+ 
+     @VisibleForTesting
+     public String getWatchdogStats() {
+-        return String.format(
+-            Locale.ROOT,
+-            "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s",
+-            this.players.size(),
+-            this.entityManager.gatherStats(),
+-            getTypeCount(this.entityManager.getEntityGetter().getAll(), p_258244_ -> BuiltInRegistries.ENTITY_TYPE.getKey(p_258244_.getType()).toString()),
+-            this.blockEntityTickers.size(),
+-            getTypeCount(this.blockEntityTickers, TickingBlockEntity::getType),
+-            this.getBlockTicks().count(),
+-            this.getFluidTicks().count(),
+-            this.gatherChunkSourceStats()
+-        );
++        return String.format(Locale.ROOT, "players: %s, entities: %s [%s], block_entities: %d [%s], block_ticks: %d, fluid_ticks: %d, chunk_source: %s", this.players.size(), this.moonrise$getEntityLookup().getDebugInfo(), ServerLevel.getTypeCount(this.moonrise$getEntityLookup().getAll(), (entity) -> { // Paper - rewrite chunk system
++            return BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString();
++        }), this.blockEntityTickers.size(), ServerLevel.getTypeCount(this.blockEntityTickers, TickingBlockEntity::getType), this.getBlockTicks().count(), this.getFluidTicks().count(), this.gatherChunkSourceStats());
      }
  
-+    public void addWorldGenChunkEntities(Stream<Entity> entities, ChunkPos chunkPos) {
-+        // Paper end - add chunkpos param
-+        //this.moonrise$getEntityLookup().addWorldGenChunkEntities(entities.toList(), chunkPos); // Paper - rewrite chunk system
+     private static <T> String getTypeCount(Iterable<T> p_143302_, Function<T, String> p_143303_) {
+@@ -1600,16 +_,28 @@
+ 
+     @Override
+     public LevelEntityGetter<Entity> getEntities() {
+-        return this.entityManager.getEntityGetter();
+-    }
+-
+-    public void addLegacyChunkEntities(Stream<Entity> p_143312_) {
+-        this.entityManager.addLegacyChunkEntities(p_143312_);
+-    }
+-
+-    public void addWorldGenChunkEntities(Stream<Entity> p_143328_) {
+-        this.entityManager.addWorldGenChunkEntities(p_143328_);
+-    }
++        org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
++        return this.moonrise$getEntityLookup(); // Paper - rewrite chunk system
 +    }
 +
++    public void addLegacyChunkEntities(Stream<Entity> entities) {
++        // Paper start - add chunkpos param
++        this.addLegacyChunkEntities(entities, null);
++    }
++    public void addLegacyChunkEntities(Stream<Entity> entities, ChunkPos chunkPos) {
++        // Paper end - add chunkpos param
++        this.moonrise$getEntityLookup().addLegacyChunkEntities(entities.toList(), chunkPos); // Paper - rewrite chunk system
++    }
++
++    public void addWorldGenChunkEntities(Stream<Entity> entities) {
++        // Paper start - add chunkpos param
++        this.addWorldGenChunkEntities(entities, null);
++    }
++    public void addWorldGenChunkEntities(Stream<Entity> entities, ChunkPos chunkPos) {
++        // Paper end - add chunkpos param
++        this.moonrise$getEntityLookup().addWorldGenChunkEntities(entities.toList(), chunkPos); // Paper - rewrite chunk system
++    }
++
+ 
      public void startTickingChunk(LevelChunk p_184103_) {
          p_184103_.unpackTicks(this.getLevelData().getGameTime());
+@@ -1626,32 +_,44 @@
+     @Override
+     public void close() throws IOException {
+         super.close();
+-        this.entityManager.close();
      }
+ 
+     @Override
+     public String gatherChunkSourceStats() {
+-        return "Chunks[S] W: " + this.chunkSource.gatherStats() + " E: " + this.entityManager.gatherStats();
++        return "Chunks[S] W: " + this.chunkSource.gatherStats() + " E: " + this.moonrise$getEntityLookup().getDebugInfo();
+     }
+ 
+     public boolean areEntitiesLoaded(long p_143320_) {
+-        return this.entityManager.areEntitiesLoaded(p_143320_);
+-    }
+-
+-    private boolean isPositionTickingWithEntitiesLoaded(long p_184111_) {
+-        return this.areEntitiesLoaded(p_184111_) && this.chunkSource.isPositionTicking(p_184111_);
+-    }
+-
+-    public boolean isPositionEntityTicking(BlockPos p_143341_) {
+-        return this.entityManager.canPositionTick(p_143341_) && this.chunkSource.chunkMap.getDistanceManager().inEntityTickingRange(ChunkPos.asLong(p_143341_));
+-    }
+-
+-    public boolean isNaturalSpawningAllowed(BlockPos p_201919_) {
+-        return this.entityManager.canPositionTick(p_201919_);
+-    }
+-
+-    public boolean isNaturalSpawningAllowed(ChunkPos p_201917_) {
+-        return this.entityManager.canPositionTick(p_201917_);
++        return this.moonrise$getAnyChunkIfLoaded(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkX(p_143320_), ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkZ(p_143320_)) != null; // Paper - rewrite chunk system
++    }
++
++    private boolean isPositionTickingWithEntitiesLoaded(long chunkPos) {
++        // Paper start - rewrite chunk system
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder chunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(chunkPos);
++        // isTicking implies the chunk is loaded, and the chunk is loaded now implies the entities are loaded
++        return chunkHolder != null && chunkHolder.isTickingReady();
++        // Paper end - rewrite chunk system
++    }
++
++    public boolean isPositionEntityTicking(BlockPos pos) {
++        // Paper start - rewrite chunk system
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder chunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(pos));
++        return chunkHolder != null && chunkHolder.isEntityTickingReady();
++        // Paper end - rewrite chunk system
++    }
++
++    public boolean isNaturalSpawningAllowed(BlockPos pos) {
++        // Paper start - rewrite chunk system
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder chunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(pos));
++        return chunkHolder != null && chunkHolder.isEntityTickingReady();
++        // Paper end - rewrite chunk system
++    }
++
++    public boolean isNaturalSpawningAllowed(ChunkPos pos) {
++        // Paper start - rewrite chunk system
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder chunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(pos));
++        return chunkHolder != null && chunkHolder.isEntityTickingReady();
++        // Paper end - rewrite chunk system
+     }
+ 
+     @Override
+@@ -1675,7 +_,7 @@
+     @Override
+     public CrashReportCategory fillReportDetails(CrashReport p_307518_) {
+         CrashReportCategory crashreportcategory = super.fillReportDetails(p_307518_);
+-        crashreportcategory.setDetail("Loaded entity count", () -> String.valueOf(this.entityManager.count()));
++        crashreportcategory.setDetail("Loaded entity count", () -> String.valueOf(this.moonrise$getEntityLookup().getEntityCount()));
+         return crashreportcategory;
+     }
+ 
+@@ -1696,6 +_,7 @@
+         }
+ 
+         public void onTrackingStart(Entity p_143371_) {
++            p_143371_.valid = true; // CraftBukkit
+             ServerLevel.this.getChunkSource().addEntity(p_143371_);
+             if (p_143371_ instanceof ServerPlayer serverplayer) {
+                 ServerLevel.this.players.add(serverplayer);
 @@ -1713,8 +_,8 @@
                  ServerLevel.this.navigatingMobs.add(mob);
              }
@@ -249,6 +852,14 @@
                      ServerLevel.this.dragonParts.put(enderdragonpart.getId(), enderdragonpart);
                  }
              }
+@@ -1724,6 +_,7 @@
+ 
+         public void onTrackingEnd(Entity p_143375_) {
+             ServerLevel.this.getChunkSource().removeEntity(p_143375_);
++            p_143375_.valid = false;
+             if (p_143375_ instanceof ServerPlayer serverplayer) {
+                 ServerLevel.this.players.remove(serverplayer);
+                 ServerLevel.this.updateSleepingPlayerList();
 @@ -1733,24 +_,106 @@
                  if (ServerLevel.this.isUpdatingNavigations) {
                      String s = "onTrackingStart called during navigation iteration";

@@ -1,5 +1,17 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
+@@ -84,6 +_,11 @@
+     }
+ 
+     public void sendChanges() {
++        // Paper start - optimise collisions
++        if (((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)this.entity).moonrise$isHardColliding()) {
++            this.teleportDelay = 9999;
++        }
++        // Paper end - optimise collisions
+         List<Entity> list = this.entity.getPassengers();
+         if (!list.equals(this.lastPassengers)) {
+             this.broadcast.accept(new ClientboundSetPassengersPacket(this.entity));
 @@ -101,9 +_,9 @@
  
          if (this.entity instanceof ItemFrame itemframe && this.tickCount % 10 == 0) {

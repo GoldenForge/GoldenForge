@@ -10,6 +10,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.goldenforge.commands.GoldenForgeCommand;
 
 import java.io.File;
 
@@ -19,12 +20,13 @@ public class GoldenForge {
     public static Logger LOGGER = LogManager.getLogger("GoldenForge");
 
     public static String getBranding() {
-        return "Goldenforge 1.19.2 " + GoldenForgeEntryPoint.getVersion();
+        return "Goldenforge 1.21.1 " + GoldenForgeEntryPoint.getVersion();
     }
 
     public GoldenForge() {
         LOGGER.info("Loading GoldenForge");
         NeoForge.EVENT_BUS.register(this);
+        NeoForge.EVENT_BUS.addListener(this::onCommandsRegister);
 
 //        File configDir = new File(".", "goldenforge"); configDir.mkdirs();
 //        ModConfig config = new ModConfig(ModConfig.Type.SERVER, GoldenForgeConfig.serverSpec, ModLoadingContext.get().getActiveContainer(), "goldenforge.toml", true);
@@ -41,7 +43,7 @@ public class GoldenForge {
 
     @SubscribeEvent
     public void onCommandsRegister(RegisterCommandsEvent event) {
-        //GoldenForgeCommand.register(event.getDispatcher());
+        GoldenForgeCommand.register(event.getDispatcher());
     }
 
 //    private static void openConfig(final ModConfig config, final Path configBasePath) {

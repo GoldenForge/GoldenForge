@@ -81,7 +81,7 @@ public class TickThread extends Thread {
     }
 
     private TickThread(final Runnable run, final String name, final int id) {
-        super(run, name);
+        super(net.neoforged.fml.util.thread.SidedThreadGroups.SERVER, run, name); // Goldenforge
         this.id = id;
     }
 

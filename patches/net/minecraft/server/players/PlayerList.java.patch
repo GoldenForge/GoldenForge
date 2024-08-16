@@ -8,6 +8,14 @@
  
      public PlayerList(MinecraftServer p_203842_, LayeredRegistryAccess<RegistryLayer> p_251844_, PlayerDataStorage p_203844_, int p_203845_) {
          this.server = p_203842_;
+@@ -137,6 +_,7 @@
+     }
+ 
+     public void placeNewPlayer(Connection p_11262_, ServerPlayer p_11263_, CommonListenerCookie p_301988_) {
++        p_11263_.isRealPlayer = true;
+         GameProfile gameprofile = p_11263_.getGameProfile();
+         GameProfileCache gameprofilecache = this.server.getProfileCache();
+         String s;
 @@ -177,7 +_,7 @@
          p_11263_.loadGameTypes(optional1.orElse(null));
          ServerGamePacketListenerImpl servergamepacketlistenerimpl = new ServerGamePacketListenerImpl(this.server, p_11262_, p_11263_, p_301988_);
@@ -103,6 +111,33 @@
          this.ops.remove(p_11281_);
          ServerPlayer serverplayer = this.getPlayer(p_11281_.getId());
          if (serverplayer != null) {
+@@ -655,9 +_,23 @@
+     }
+ 
+     public void saveAll() {
+-        for (int i = 0; i < this.players.size(); i++) {
+-            this.save(this.players.get(i));
+-        }
++        // Paper start - Incremental chunk and player saving
++        this.saveAll(-1);
++    }
++
++    public void saveAll(int interval) {
++        io.papermc.paper.util.MCUtil.ensureMain("Save Players" , () -> { // Paper - Ensure main
++            int numSaved = 0;
++            long now = MinecraftServer.currentTick;
++            for (int i = 0; i < this.players.size(); ++i) {
++                ServerPlayer entityplayer = this.players.get(i);
++                if (interval == -1 || now - entityplayer.lastSave >= interval) {
++                    this.save(entityplayer);
++                    if (interval != -1 && ++numSaved >= io.papermc.paper.configuration.GlobalConfiguration.get().playerAutoSave.maxPerTick()) { break; }
++                }
++                // Paper end - Incremental chunk and player saving
++            }
++            return null; }); // Paper - ensure main
+     }
+ 
+     public UserWhiteList getWhiteList() {
 @@ -682,8 +_,12 @@
      public void sendLevelInfo(ServerPlayer p_11230_, ServerLevel p_11231_) {
          WorldBorder worldborder = this.server.overworld().getWorldBorder();

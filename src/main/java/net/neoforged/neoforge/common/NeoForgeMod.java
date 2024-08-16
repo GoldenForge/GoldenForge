@@ -509,6 +509,8 @@ public class NeoForgeMod {
         LOGGER.info(NEOFORGEMOD, "NeoForge mod loading, version {}, for MC {}", NeoForgeVersion.getVersion(), DetectedVersion.BUILT_IN.getName());
         ForgeSnapshotsMod.logStartupWarning();
 
+        new org.goldenforge.GoldenForge();
+
         CrashReportCallables.registerCrashCallable("Crash Report UUID", () -> {
             final UUID uuid = UUID.randomUUID();
             LOGGER.fatal("Preparing crash report with UUID {}", uuid);

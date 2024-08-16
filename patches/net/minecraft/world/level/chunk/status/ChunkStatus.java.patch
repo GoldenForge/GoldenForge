@@ -1,0 +1,95 @@
+--- a/net/minecraft/world/level/chunk/status/ChunkStatus.java
++++ b/net/minecraft/world/level/chunk/status/ChunkStatus.java
+@@ -11,7 +_,7 @@
+ import net.minecraft.world.level.levelgen.Heightmap;
+ import org.jetbrains.annotations.VisibleForTesting;
+ 
+-public class ChunkStatus {
++public class ChunkStatus implements ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkSystemChunkStatus { // Paper - rewrite chunk system
+     public static final int MAX_STRUCTURE_DISTANCE = 8;
+     private static final EnumSet<Heightmap.Types> WORLDGEN_HEIGHTMAPS = EnumSet.of(Heightmap.Types.OCEAN_FLOOR_WG, Heightmap.Types.WORLD_SURFACE_WG);
+     public static final EnumSet<Heightmap.Types> FINAL_HEIGHTMAPS = EnumSet.of(
+@@ -34,6 +_,59 @@
+     private final ChunkType chunkType;
+     private final EnumSet<Heightmap.Types> heightmapsAfter;
+ 
++    // Paper start - rewrite chunk system
++    private boolean isParallelCapable;
++    private boolean emptyLoadTask;
++    private int writeRadius;
++    private ChunkStatus nextStatus;
++    private java.util.concurrent.atomic.AtomicBoolean warnedAboutNoImmediateComplete;
++
++    @Override
++    public final boolean moonrise$isParallelCapable() {
++        return this.isParallelCapable;
++    }
++
++    @Override
++    public final void moonrise$setParallelCapable(final boolean value) {
++        this.isParallelCapable = value;
++    }
++
++    @Override
++    public final int moonrise$getWriteRadius() {
++        return this.writeRadius;
++    }
++
++    @Override
++    public final void moonrise$setWriteRadius(final int value) {
++        this.writeRadius = value;
++    }
++
++    @Override
++    public final ChunkStatus moonrise$getNextStatus() {
++        return this.nextStatus;
++    }
++
++    @Override
++    public final boolean moonrise$isEmptyLoadStatus() {
++        return this.emptyLoadTask;
++    }
++
++    @Override
++    public void moonrise$setEmptyLoadStatus(final boolean value) {
++        this.emptyLoadTask = value;
++    }
++
++    @Override
++    public final boolean moonrise$isEmptyGenStatus() {
++        return (Object)this == ChunkStatus.EMPTY;
++    }
++
++    @Override
++    public final java.util.concurrent.atomic.AtomicBoolean moonrise$getWarnedAboutNoImmediateComplete() {
++        return this.warnedAboutNoImmediateComplete;
++    }
++    // Paper end - rewrite chunk system
++
+     private static ChunkStatus register(String p_330494_, @Nullable ChunkStatus p_331829_, EnumSet<Heightmap.Types> p_330717_, ChunkType p_331982_) {
+         return Registry.register(BuiltInRegistries.CHUNK_STATUS, p_330494_, new ChunkStatus(p_331829_, p_330717_, p_331982_));
+     }
+@@ -52,11 +_,18 @@
+     }
+ 
+     @VisibleForTesting
+-    protected ChunkStatus(@Nullable ChunkStatus p_330316_, EnumSet<Heightmap.Types> p_331442_, ChunkType p_331412_) {
+-        this.parent = p_330316_ == null ? this : p_330316_;
+-        this.chunkType = p_331412_;
+-        this.heightmapsAfter = p_331442_;
+-        this.index = p_330316_ == null ? 0 : p_330316_.getIndex() + 1;
++    protected ChunkStatus(@Nullable ChunkStatus previous, EnumSet<Heightmap.Types> heightMapTypes, ChunkType chunkType) {
++        this.isParallelCapable = false;
++        this.writeRadius = -1;
++        this.nextStatus = (ChunkStatus)(Object)this;
++        if (previous != null) {
++            previous.nextStatus = (ChunkStatus)(Object)this;
++        }
++        this.warnedAboutNoImmediateComplete = new java.util.concurrent.atomic.AtomicBoolean();
++        this.parent = previous == null ? this : previous;
++        this.chunkType = chunkType;
++        this.heightmapsAfter = heightMapTypes;
++        this.index = previous == null ? 0 : previous.getIndex() + 1;
+     }
+ 
+     public int getIndex() {
