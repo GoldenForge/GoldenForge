@@ -66,7 +66,7 @@
              return true;
          }
      }
-@@ -295,6 +_,10 @@
+@@ -295,6 +_,11 @@
          if (this.queryThreadGs4 != null) {
              this.queryThreadGs4.stop();
          }
@@ -74,6 +74,7 @@
 +            this.dediLanPinger.interrupt();
 +            this.dediLanPinger = null;
 +        }
++        System.exit(this.abnormalExit ? 70 : 0); // CraftBukkit // Paper
      }
  
      @Override

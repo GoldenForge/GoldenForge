@@ -26,11 +26,12 @@
      private final Map<Structure, StructureStart> structureStarts = Maps.newHashMap();
      private final Map<Structure, LongSet> structuresRefences = Maps.newHashMap();
      protected final Map<BlockPos, CompoundTag> pendingBlockEntities = Maps.newHashMap();
-@@ -83,6 +_,57 @@
+@@ -83,6 +_,58 @@
      protected final LevelHeightAccessor levelHeightAccessor;
      protected final LevelChunkSection[] sections;
  
 +    // Paper start - rewrite chunk system
++    public ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData asyncsavedata;
 +    private volatile ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray[] blockNibbles;
 +    private volatile ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray[] skyNibbles;
 +    private volatile boolean[] skyEmptinessMap;

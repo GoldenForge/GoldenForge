@@ -5,6 +5,7 @@
 
 package net.neoforged.neoforge.server.command.generation;
 
+import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
 import java.util.Comparator;
@@ -20,7 +21,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkResult;
-import net.minecraft.server.level.ChunkTaskPriorityQueueSorter;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
@@ -157,6 +157,10 @@ public class GenerationTask {
                 continue;
             }
 
+            chunkMap.level.moonrise$getChunkTaskScheduler().scheduleChunkLoad(holder.getPos().x, holder.getPos().z, true, ChunkStatus.FULL, true, PrioritisedExecutor.Priority.HIGH, (chunk -> {
+               ChunkResult<ChunkAccess> result = ChunkResult.of(chunk);
+                this.acceptChunkResult(chunkLongPos, result);
+            }));
             //TODO: impl this with paper patches
 //            holder.scheduleChunkGenerationTask(ChunkStatus.FULL, chunkMap).whenCompleteAsync((result, throwable) -> {
 //                if (throwable == null) {

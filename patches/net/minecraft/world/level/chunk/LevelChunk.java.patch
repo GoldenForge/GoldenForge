@@ -184,6 +184,37 @@
              }
          }
  
+@@ -472,6 +_,30 @@
+         }
+     }
+ 
++    @Override
++    public boolean isUnsaved() {
++        // Paper start - rewrite chunk system
++        final long gameTime = this.level.getGameTime();
++        if (((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.blockTicks).moonrise$isDirty(gameTime)
++                || ((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.fluidTicks).moonrise$isDirty(gameTime)) {
++            return true;
++        }
++
++        return super.isUnsaved();
++        // Paper end - rewrite chunk system
++    }
++
++    // Paper start - rewrite chunk system
++    @Override
++    public void setUnsaved(final boolean needsSaving) {
++        if (!needsSaving) {
++            ((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.blockTicks).moonrise$clearDirty();
++            ((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.fluidTicks).moonrise$clearDirty();
++        }
++        super.setUnsaved(needsSaving);
++    }
++    // Paper end - rewrite chunk system
++
+     public boolean isEmpty() {
+         return false;
+     }
 @@ -496,7 +_,7 @@
          p_187974_.accept((p_338077_, p_338078_, p_338079_) -> {
              BlockEntity blockentity = this.getBlockEntity(p_338077_, LevelChunk.EntityCreationType.IMMEDIATE);
@@ -193,6 +224,14 @@
              }
          });
      }
+@@ -548,6 +_,7 @@
+ 
+         this.pendingBlockEntities.clear();
+         this.upgradeData.upgrade(this);
++        this.postProcessingDone = true; // Paper - rewrite chunk system
+     }
+ 
+     @Nullable
 @@ -604,6 +_,7 @@
      }
  

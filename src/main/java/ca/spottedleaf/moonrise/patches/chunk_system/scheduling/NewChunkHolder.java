@@ -879,19 +879,13 @@ public final class NewChunkHolder {
         final ChunkEntitySlices entityChunk = state.entityChunk();
         final PoiChunk poiChunk = state.poiChunk();
 
-        final boolean shouldLevelChunkNotSave = ChunkSystemFeatures.forceNoSave(chunk);
-
         // unload chunk data
         if (chunk != null) {
             if (chunk instanceof LevelChunk levelChunk) {
                 levelChunk.setLoaded(false);
             }
 
-            if (!shouldLevelChunkNotSave) {
-                this.saveChunk(chunk, true);
-            } else {
-                this.completeAsyncUnloadDataSave(RegionFileIOThread.RegionFileType.CHUNK_DATA, null);
-            }
+            this.saveChunk(chunk, true);
 
             if (chunk instanceof LevelChunk levelChunk) {
                 this.world.unload(levelChunk);
@@ -923,7 +917,7 @@ public final class NewChunkHolder {
 
         // unload poi data
         if (poiChunk != null) {
-            if (poiChunk.isDirty() && !shouldLevelChunkNotSave) {
+            if (poiChunk.isDirty()) {
                 this.savePOI(poiChunk, true);
             } else {
                 this.poiDataUnload.completable().complete(null);
@@ -1689,11 +1683,9 @@ public final class NewChunkHolder {
             }
         }
 
-        final boolean forceNoSaveChunk = ChunkSystemFeatures.forceNoSave(chunk);
-
         // can only synchronously save worldgen chunks during shutdown
-        boolean canSaveChunk = !forceNoSaveChunk && (chunk != null && ((shutdown || chunk instanceof LevelChunk) && chunk.isUnsaved()));
-        boolean canSavePOI = !forceNoSaveChunk && (poi != null && poi.isDirty());
+        boolean canSaveChunk = (chunk != null && ((shutdown || chunk instanceof LevelChunk) && chunk.isUnsaved()));
+        boolean canSavePOI = (poi != null && poi.isDirty());
         boolean canSaveEntities = entities != null;
 
         if (canSaveChunk) {

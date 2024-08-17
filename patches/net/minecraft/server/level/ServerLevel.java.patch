@@ -554,7 +554,7 @@
 +    // Paper end - Incremental chunk and player saving
 +
      public void save(@Nullable ProgressListener p_8644_, boolean p_8645_, boolean p_8646_) {
-+        this.save(p_8644_, p_8645_, p_8646_);
++        this.save(p_8644_, p_8645_, p_8646_, false);
 +    }
 +    public void save(@Nullable ProgressListener p_8644_, boolean p_8645_, boolean p_8646_, boolean close) {
          ServerChunkCache serverchunkcache = this.getChunkSource();
