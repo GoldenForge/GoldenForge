@@ -18,6 +18,54 @@
      public void validate() {
          this.featuresPerStep.get();
      }
+@@ -244,29 +_,24 @@
+     }
+ 
+     @Nullable
+-    private static Pair<BlockPos, Holder<Structure>> getNearestGeneratedStructure(
+-        Set<Holder<Structure>> p_223189_,
+-        LevelReader p_223190_,
+-        StructureManager p_223191_,
+-        int p_223192_,
+-        int p_223193_,
+-        int p_223194_,
+-        boolean p_223195_,
+-        long p_223196_,
+-        RandomSpreadStructurePlacement p_223197_
+-    ) {
+-        int i = p_223197_.spacing();
+-
+-        for (int j = -p_223194_; j <= p_223194_; j++) {
+-            boolean flag = j == -p_223194_ || j == p_223194_;
+-
+-            for (int k = -p_223194_; k <= p_223194_; k++) {
+-                boolean flag1 = k == -p_223194_ || k == p_223194_;
+-                if (flag || flag1) {
+-                    int l = p_223192_ + i * j;
+-                    int i1 = p_223193_ + i * k;
+-                    ChunkPos chunkpos = p_223197_.getPotentialStructureChunk(p_223196_, l, i1);
+-                    Pair<BlockPos, Holder<Structure>> pair = getStructureGeneratingAt(p_223189_, p_223190_, p_223191_, p_223195_, p_223197_, chunkpos);
++    private static Pair<BlockPos, Holder<Structure>> getNearestGeneratedStructure(Set<Holder<Structure>> structures, LevelReader world, StructureManager structureAccessor, int centerChunkX, int centerChunkZ, int radius, boolean skipReferencedStructures, long seed, RandomSpreadStructurePlacement placement) {
++        int i1 = placement.spacing();
++
++        for (int j1 = -radius; j1 <= radius; ++j1) {
++            // Paper start - Perf: iterate over border chunks instead of entire square chunk area
++            boolean flag1 = j1 == -radius || j1 == radius; final boolean onBorderAlongZAxis = flag1; // Paper - OBFHELPER
++
++            for (int k1 = -radius; k1 <= radius; k1 += onBorderAlongZAxis ? 1 : radius * 2) {
++                // boolean flag2 = k1 == -radius || k1 == radius;
++
++                // if (flag1 || flag2) {
++                if (true) {
++                    // Paper end - Perf: iterate over border chunks instead of entire square chunk area
++                    int l1 = centerChunkX + i1 * j1;
++                    int i2 = centerChunkZ + i1 * k1;
++                    ChunkPos chunkcoordintpair = placement.getPotentialStructureChunk(seed, l1, i2);
++                    Pair<BlockPos, Holder<Structure>> pair = ChunkGenerator.getStructureGeneratingAt(structures, world, structureAccessor, skipReferencedStructures, placement, chunkcoordintpair);
++
+                     if (pair != null) {
+                         return pair;
+                     }
 @@ -293,7 +_,7 @@
                      return Pair.of(p_223203_.getLocatePos(p_223204_), holder);
                  }
