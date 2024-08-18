@@ -1,0 +1,58 @@
+--- a/net/minecraft/world/level/portal/PortalForcer.java
++++ b/net/minecraft/world/level/portal/PortalForcer.java
+@@ -39,15 +_,46 @@
+         this.level = p_77650_;
+     }
+ 
+-    public Optional<BlockPos> findClosestPortalPosition(BlockPos p_352378_, boolean p_352309_, WorldBorder p_352374_) {
+-        PoiManager poimanager = this.level.getPoiManager();
+-        int i = p_352309_ ? 16 : 128;
+-        poimanager.ensureLoadedAndValid(this.level, p_352378_, i);
+-        return poimanager.getInSquare(p_230634_ -> p_230634_.is(PoiTypes.NETHER_PORTAL), p_352378_, i, PoiManager.Occupancy.ANY)
+-            .map(PoiRecord::getPos)
+-            .filter(p_352374_::isWithinBounds)
+-            .filter(p_352047_ -> this.level.getBlockState(p_352047_).hasProperty(BlockStateProperties.HORIZONTAL_AXIS))
+-            .min(Comparator.<BlockPos>comparingDouble(p_352046_ -> p_352046_.distSqr(p_352378_)).thenComparingInt(Vec3i::getY));
++    public Optional<BlockPos> findClosestPortalPosition(BlockPos pos, boolean destIsNether, WorldBorder worldBorder) {
++        // CraftBukkit start
++        return this.findClosestPortalPosition(pos, worldBorder, destIsNether ? 16 : 128); // Search Radius
++    }
++
++    public Optional<BlockPos> findClosestPortalPosition(BlockPos blockposition, WorldBorder worldborder, int i) {
++        PoiManager villageplace = this.level.getPoiManager();
++        // Paper start - optimise portals
++        Optional<PoiRecord> optional;
++        java.util.List<PoiRecord> records = new java.util.ArrayList<>();
++        io.papermc.paper.util.PoiAccess.findClosestPoiDataRecords(
++                villageplace,
++                type -> type.is(PoiTypes.NETHER_PORTAL),
++                (BlockPos pos) -> {
++                    net.minecraft.world.level.chunk.ChunkAccess lowest = this.level.getChunk(pos.getX() >> 4, pos.getZ() >> 4, net.minecraft.world.level.chunk.status.ChunkStatus.EMPTY);
++                    if (!lowest.getPersistedStatus().isOrAfter(net.minecraft.world.level.chunk.status.ChunkStatus.FULL)
++                            && (lowest.getBelowZeroRetrogen() == null || !lowest.getBelowZeroRetrogen().targetStatus().isOrAfter(net.minecraft.world.level.chunk.status.ChunkStatus.SPAWN))) {
++                        // why would we generate the chunk?
++                        return false;
++                    }
++                    if (!worldborder.isWithinBounds(pos)) {
++                        return false;
++                    }
++                    return lowest.getBlockState(pos).hasProperty(BlockStateProperties.HORIZONTAL_AXIS);
++                },
++                blockposition, i, Double.MAX_VALUE, PoiManager.Occupancy.ANY, true, records
++        );
++
++        // this gets us most of the way there, but we bias towards lower y values.
++        BlockPos lowestPos = null;
++        for (PoiRecord record : records) {
++            if (lowestPos == null) {
++                lowestPos = record.getPos();
++            } else if (lowestPos.getY() > record.getPos().getY()) {
++                lowestPos = record.getPos();
++            }
++        }
++        // now we're done
++        return Optional.ofNullable(lowestPos);
++        // Paper end - optimise portals
+     }
+ 
+     public Optional<BlockUtil.FoundRectangle> createPortal(BlockPos p_77667_, Direction.Axis p_77668_) {
