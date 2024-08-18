@@ -5,6 +5,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -19,11 +22,15 @@ public class TpsMonitorManager {
         return new DecimalFormat("#,##0.00");
     });
 
-    public TpsMonitorManager() {
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
         INSTANCE = this;
-        MinecraftServer.getServer().addTickable(this::tick);
     }
 
+    @SubscribeEvent
+    public void onServerTick(ServerTickEvent.Post event) {
+        this.tick();
+    }
 
     public void togglePlayer(ServerPlayer player) {
         if (activesTpsMonitors.contains(player)) {
@@ -39,6 +46,10 @@ public class TpsMonitorManager {
     }
 
     public void tick() {
+
+        if (this.activesTpsMonitors.isEmpty()) {
+            return;
+        }
 
         double tps = MinecraftServer.getServer().getTPS()[0];
         if (tps > 20.0D) {
@@ -67,10 +78,8 @@ public class TpsMonitorManager {
         }
 
         final long currTime = System.nanoTime();
-//        final double genRate = io.papermc.paper.chunk.system.scheduling.ChunkFullTask.genRate(currTime);
-//        final double loadRate = io.papermc.paper.chunk.system.scheduling.ChunkFullTask.loadRate(currTime);
-        final double genRate = 0;
-        final double loadRate = 0;
+        final double genRate = ca.spottedleaf.moonrise.patches.chunk_system.scheduling.task.ChunkFullTask.genRate(currTime);
+        final double loadRate = ca.spottedleaf.moonrise.patches.chunk_system.scheduling.task.ChunkFullTask.loadRate(currTime);
 
         String msg = ChatFormatting.DARK_GRAY + "TPS: " + tpsColor + FORMATER.format(tps) + ChatFormatting.DARK_GRAY + " MSPT: " + msptColor + FORMATER.format(mspt) + ChatFormatting.DARK_GRAY + " LOAD/GEN RATE: " + TWO_DECIMAL_PLACES.get().format(loadRate) +"/"+TWO_DECIMAL_PLACES.get().format(genRate);
 

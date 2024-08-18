@@ -28,6 +28,10 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
     private final ChunkAccess fromChunk;
     private final PrioritisedExecutor.PrioritisedTask convertToFullTask;
 
+    public static final io.papermc.paper.util.IntervalledCounter chunkLoads = new io.papermc.paper.util.IntervalledCounter(java.util.concurrent.TimeUnit.SECONDS.toNanos(15L));
+    public static final io.papermc.paper.util.IntervalledCounter chunkGenerates = new io.papermc.paper.util.IntervalledCounter(java.util.concurrent.TimeUnit.SECONDS.toNanos(15L));
+
+
     public ChunkFullTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX, final int chunkZ,
                          final NewChunkHolder chunkHolder, final ChunkAccess fromChunk, final PrioritisedExecutor.Priority priority) {
         super(scheduler, world, chunkX, chunkZ);
@@ -39,6 +43,20 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
     @Override
     public ChunkStatus getTargetStatus() {
         return ChunkStatus.FULL;
+    }
+
+    public static double genRate(final long time) {
+        synchronized (chunkGenerates) {
+            chunkGenerates.updateCurrentTime(time);
+            return chunkGenerates.getRate();
+        }
+    }
+
+    public static double loadRate(final long time) {
+        synchronized (chunkLoads) {
+            chunkLoads.updateCurrentTime(time);
+            return chunkLoads.getRate();
+        }
     }
 
     @Override
@@ -53,6 +71,17 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
             } else {
                 poiChunk.load();
                 ((ChunkSystemPoiManager)this.world.getPoiManager()).moonrise$checkConsistency(this.fromChunk);
+            }
+
+            final long time = System.nanoTime();
+            if (this.fromChunk instanceof ImposterProtoChunk wrappedFull) {
+                synchronized (chunkLoads) {
+                    chunkLoads.updateAndAdd(1L, time);
+                }
+            } else {
+                synchronized (chunkGenerates) {
+                    chunkGenerates.updateAndAdd(1L, time);
+                }
             }
 
             if (this.fromChunk instanceof ImposterProtoChunk wrappedFull) {

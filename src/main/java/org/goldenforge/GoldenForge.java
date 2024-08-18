@@ -11,6 +11,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.goldenforge.commands.GoldenForgeCommand;
+import org.goldenforge.tpsmonitor.TpsMonitorManager;
 
 import java.io.File;
 
@@ -27,6 +28,7 @@ public class GoldenForge {
         LOGGER.info("Loading GoldenForge");
         NeoForge.EVENT_BUS.register(this);
         NeoForge.EVENT_BUS.addListener(this::onCommandsRegister);
+        NeoForge.EVENT_BUS.register(new TpsMonitorManager());
 
 //        File configDir = new File(".", "goldenforge"); configDir.mkdirs();
 //        ModConfig config = new ModConfig(ModConfig.Type.SERVER, GoldenForgeConfig.serverSpec, ModLoadingContext.get().getActiveContainer(), "goldenforge.toml", true);
