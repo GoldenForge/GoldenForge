@@ -53,7 +53,7 @@
      protected final WritableLevelData levelData;
      private final Supplier<ProfilerFiller> profiler;
      public final boolean isClientSide;
-@@ -114,6 +_,486 @@
+@@ -114,6 +_,499 @@
      private final RegistryAccess registryAccess;
      private final DamageSources damageSources;
      private long subTickCount;
@@ -111,6 +111,19 @@
 +        ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getHardCollidingEntities(entity, box, ret, predicate);
 +
 +        return ret;
++    }
++
++    @Override
++    public final boolean hasChunkAt(BlockPos pos) {
++        return getChunkIfLoaded(pos.getX() >> 4, pos.getZ() >> 4) != null; // Paper - Perf: Optimize Level.hasChunkAt(BlockPosition)Z
++    }
++
++    public final boolean isLoadedAndInBounds(BlockPos blockposition) { // Paper - final for inline
++        return getWorldBorder().isWithinBounds(blockposition) && getChunkIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4) != null;
++    }
++
++    public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
++        return ((ServerLevel) this).getChunkSource().getChunkAtIfLoadedImmediately(x, z);
 +    }
 +
 +    @Override
