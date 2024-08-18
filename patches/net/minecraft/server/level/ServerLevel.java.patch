@@ -9,9 +9,12 @@
      public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
      public static final IntProvider RAIN_DELAY = UniformInt.of(12000, 180000);
      public static final IntProvider RAIN_DURATION = UniformInt.of(12000, 24000);
-@@ -178,10 +_,10 @@
+@@ -176,12 +_,12 @@
+     private static final int EMPTY_TIME_NO_TICK = 300;
+     private static final int MAX_SCHEDULED_TICKS_PER_TICK = 65536;
      final List<ServerPlayer> players = Lists.newArrayList();
-     private final ServerChunkCache chunkSource;
+-    private final ServerChunkCache chunkSource;
++    public final ServerChunkCache chunkSource;
      private final MinecraftServer server;
 -    private final ServerLevelData serverLevelData;
 +    public final ServerLevelData serverLevelData;
@@ -306,7 +309,7 @@
              p_215007_,
 -            p_214999_.getMaxChainedNeighborUpdates()
 +            p_214999_.getMaxChainedNeighborUpdates(),
-+            p_214999_.paperConfigurations.createWorldConfig(io.papermc.paper.configuration.PaperConfigurations.createWorldContextMap(p_215001_.levelDirectory.path(), p_215002_.getLevelName(), p_215003_.location(), p_214999_.registryAccess(), p_215002_.getGameRules()))
++            p_214999_.paperConfigurations.createWorldConfig(io.papermc.paper.configuration.PaperConfigurations.createWorldContextMap(p_215001_.getDimensionPath(p_215003_), p_215002_.getLevelName(), p_215003_.location(), p_214999_.registryAccess(), p_215002_.getGameRules()))
          );
 +        this.convertable = p_215001_;
          this.tickTime = p_215009_;
