@@ -27,6 +27,17 @@
      @Override
      public BlockState getBlockState(BlockPos p_9587_) {
          return this.getChunk(SectionPos.blockToSectionCoord(p_9587_.getX()), SectionPos.blockToSectionCoord(p_9587_.getZ())).getBlockState(p_9587_);
+@@ -196,7 +_,9 @@
+         if (blockstate.isAir()) {
+             return false;
+         } else {
+-            if (p_9551_) {
++            //TODO: goldenforge: make this configurable?
++            if (p_9551_) LOGGER.warn("Potential async entity add during worldgen", new Throwable()); // Paper - Fix async entity add due to fungus trees; log when this happens
++            if (false) { // CraftBukkit - SPIGOT-6833: Do not drop during world generation
+                 BlockEntity blockentity = blockstate.hasBlockEntity() ? this.getBlockEntity(p_9550_) : null;
+                 Block.dropResources(blockstate, this.level, p_9550_, blockentity, p_9552_, ItemStack.EMPTY);
+             }
 @@ -317,6 +_,7 @@
  
      @Override
