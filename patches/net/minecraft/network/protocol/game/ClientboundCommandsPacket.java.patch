@@ -1,0 +1,56 @@
+--- a/net/minecraft/network/protocol/game/ClientboundCommandsPacket.java
++++ b/net/minecraft/network/protocol/game/ClientboundCommandsPacket.java
+@@ -11,6 +_,8 @@
+ import com.mojang.brigadier.tree.CommandNode;
+ import com.mojang.brigadier.tree.LiteralCommandNode;
+ import com.mojang.brigadier.tree.RootCommandNode;
++import io.netty.buffer.Unpooled;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+ import it.unimi.dsi.fastutil.ints.IntSet;
+ import it.unimi.dsi.fastutil.ints.IntSets;
+@@ -200,6 +_,8 @@
+         @Nullable
+         private final ResourceLocation suggestionId;
+ 
++        private static final int MOD_ARGUMENT_INDICATOR = -256; // Goldenforge: CrossStitch impl
++
+         @Nullable
+         private static ResourceLocation getSuggestionId(@Nullable SuggestionProvider<SharedSuggestionProvider> p_237654_) {
+             return p_237654_ != null ? SuggestionProviders.getName(p_237654_) : null;
+@@ -242,8 +_,33 @@
+         private static <A extends ArgumentType<?>, T extends ArgumentTypeInfo.Template<A>> void serializeCap(
+             FriendlyByteBuf p_237663_, ArgumentTypeInfo<A, T> p_237664_, ArgumentTypeInfo.Template<A> p_237665_
+         ) {
+-            p_237663_.writeVarInt(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(p_237664_));
+-            p_237664_.serializeToNetwork((T)p_237665_, p_237663_);
++            if (GlobalConfiguration.get().proxies.velocity.enableCrossStitch) {
++                ResourceLocation key = BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getKey(p_237664_);
++                int id = BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(p_237664_);
++
++                if (key == null || key.getNamespace().equals("brigadier") || (key.getNamespace().equals("minecraft") && !key.getPath().equals("test_argument") && !key.getPath().equals("test_class"))) {
++                    p_237663_.writeVarInt(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(p_237664_));
++                    p_237664_.serializeToNetwork((T)p_237665_, p_237663_);
++                    return;
++                }
++                serializeWrappedArgumentType(p_237663_, p_237664_, p_237665_);
++                org.goldenforge.GoldenForge.LOGGER.debug("Mod argument type: {}: {}:{}", id, key.getNamespace(), key.getPath());
++            } else {
++                p_237663_.writeVarInt(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(p_237664_));
++                p_237664_.serializeToNetwork((T)p_237665_, p_237663_);
++            }
++        }
++
++        // from https://github.com/Sonic2423/NeoForwarding
++        private static <A extends ArgumentType<?>, T extends ArgumentTypeInfo.Template<A>> void serializeWrappedArgumentType(FriendlyByteBuf pBuffer, ArgumentTypeInfo<A, T> pArgumentInfo, ArgumentTypeInfo.Template<A> pArgumentInfoTemplate) {
++            pBuffer.writeVarInt(MOD_ARGUMENT_INDICATOR);
++            pBuffer.writeVarInt(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(pArgumentInfo));
++
++            FriendlyByteBuf extraData = new FriendlyByteBuf(Unpooled.buffer());
++            pArgumentInfo.serializeToNetwork((T) pArgumentInfoTemplate, extraData);
++
++            pBuffer.writeVarInt(extraData.readableBytes());
++            pBuffer.writeBytes(extraData);
+         }
+     }
+ 

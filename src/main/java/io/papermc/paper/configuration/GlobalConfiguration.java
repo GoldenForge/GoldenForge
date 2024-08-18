@@ -6,6 +6,7 @@ import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundPlaceRecipePacket;
+import net.minecraft.server.MinecraftServer;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
@@ -72,6 +73,32 @@ public class GlobalConfiguration extends ConfigurationPart {
 
     @Setting(Configuration.VERSION_FIELD)
     public int version = CURRENT_VERSION;
+
+    public Proxies proxies;
+
+    public class Proxies extends ConfigurationPart {
+
+        public Velocity velocity;
+
+        public class Velocity extends ConfigurationPart {
+            public boolean enabled = false;
+            public boolean onlineMode = true;
+            public boolean enableCrossStitch = true;
+            public String secret = "";
+
+            @PostProcess
+            private void postProcess() {
+                if (this.enabled && this.secret.isEmpty()) {
+                    LOGGER.error("Velocity is enabled, but no secret key was specified. A secret key is required. Disabling velocity...");
+                    this.enabled = false;
+                }
+            }
+        }
+        public boolean proxyProtocol = false;
+        public boolean isProxyOnlineMode() {
+            return MinecraftServer.getServer().usesAuthentication() || (this.velocity.enabled && this.velocity.onlineMode);
+        }
+    }
 
     public Console console;
 

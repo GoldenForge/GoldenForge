@@ -1,5 +1,14 @@
 --- a/net/minecraft/network/Connection.java
 +++ b/net/minecraft/network/Connection.java
+@@ -88,7 +_,7 @@
+     private volatile boolean sendLoginDisconnect = true;
+     private final Queue<Consumer<Connection>> pendingActions = Queues.newConcurrentLinkedQueue();
+     private Channel channel;
+-    private SocketAddress address;
++    public SocketAddress address;
+     @Nullable
+     private volatile PacketListener disconnectListener;
+     @Nullable
 @@ -107,6 +_,8 @@
      private volatile DisconnectionDetails delayedDisconnect;
      @Nullable
