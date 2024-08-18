@@ -10,7 +10,7 @@
      @Override
      public final void addPlayerListener(PlayerAdvancements p_66243_, CriterionTrigger.Listener<T> p_66244_) {
 -        this.players.computeIfAbsent(p_66243_, p_66252_ -> Sets.newHashSet()).add(p_66244_);
-+        p_66243_.criterionData.computeIfAbsent(p_66243_, p_66252_ -> Sets.newHashSet()).add(p_66244_); // Paper - fix AdvancementDataPlayer leak
++        p_66243_.criterionData.computeIfAbsent(this, p_66252_ -> Sets.newHashSet()).add(p_66244_); // Paper - fix AdvancementDataPlayer leak
      }
  
      @Override

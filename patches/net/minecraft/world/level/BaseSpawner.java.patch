@@ -9,6 +9,36 @@
      public static final String SPAWN_DATA_TAG = "SpawnData";
      private static final Logger LOGGER = LogUtils.getLogger();
      private static final int EVENT_SPAWN = 1;
+@@ -44,6 +_,7 @@
+     private int maxNearbyEntities = 6;
+     private int requiredPlayerRange = 16;
+     private int spawnRange = 4;
++    private int tickDelay = 0; // Paper - Configurable mob spawner tick rate
+ 
+     public void setEntityId(EntityType<?> p_253682_, @Nullable Level p_254041_, RandomSource p_254221_, BlockPos p_254050_) {
+         this.getOrCreateNextSpawnData(p_254041_, p_254221_, p_254050_)
+@@ -77,13 +_,19 @@
+     }
+ 
+     public void serverTick(ServerLevel p_151312_, BlockPos p_151313_) {
++        if (spawnCount <= 0 || maxNearbyEntities <= 0) return; // Paper - Ignore impossible spawn tick
++        // Paper start - Configurable mob spawner tick rate
++        if (spawnDelay > 0 && --tickDelay > 0) return;
++        tickDelay = p_151312_.paperConfig().tickRates.mobSpawner;
++        if (tickDelay == -1) { return; } // If disabled
++        // Paper end - Configurable mob spawner tick rate
+         if (this.isNearPlayer(p_151312_, p_151313_)) {
+-            if (this.spawnDelay == -1) {
++            if (this.spawnDelay < -tickDelay) { // Paper - Configurable mob spawner tick rate
+                 this.delay(p_151312_, p_151313_);
+             }
+ 
+             if (this.spawnDelay > 0) {
+-                this.spawnDelay--;
++                this.spawnDelay -= tickDelay; // Paper - Configurable mob spawner tick rate
+             } else {
+                 boolean flag = false;
+                 RandomSource randomsource = p_151312_.getRandom();
 @@ -151,15 +_,14 @@
  
                          entity.moveTo(entity.getX(), entity.getY(), entity.getZ(), randomsource.nextFloat() * 360.0F, 0.0F);
