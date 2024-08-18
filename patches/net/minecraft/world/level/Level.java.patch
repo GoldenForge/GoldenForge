@@ -17,6 +17,14 @@
  import net.minecraft.CrashReport;
  import net.minecraft.CrashReportCategory;
  import net.minecraft.ReportedException;
+@@ -26,6 +_,7 @@
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.level.FullChunkStatus;
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.sounds.SoundEvent;
+ import net.minecraft.sounds.SoundEvents;
+ import net.minecraft.sounds.SoundSource;
 @@ -56,6 +_,7 @@
  import net.minecraft.world.level.block.state.BlockState;
  import net.minecraft.world.level.border.WorldBorder;
@@ -561,6 +569,20 @@
      }
  
      @Override
+@@ -202,6 +_,13 @@
+         }
+     }
+ 
++    // Paper start - if loaded
++    @Nullable
++    @Override
++    public final ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
++        return ((ServerLevel)this).chunkSource.getChunkAtIfLoadedImmediately(x, z);
++    }
++
+     @Override
+     public boolean setBlock(BlockPos p_46601_, BlockState p_46602_, int p_46603_) {
+         return this.setBlock(p_46601_, p_46602_, p_46603_, 512);
 @@ -216,11 +_,40 @@
          } else {
              LevelChunk levelchunk = this.getChunkAt(p_46605_);

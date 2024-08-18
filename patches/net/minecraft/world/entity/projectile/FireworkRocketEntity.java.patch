@@ -1,16 +1,35 @@
 --- a/net/minecraft/world/entity/projectile/FireworkRocketEntity.java
 +++ b/net/minecraft/world/entity/projectile/FireworkRocketEntity.java
-@@ -177,6 +_,13 @@
-         }
+@@ -47,6 +_,18 @@
+         super(p_37027_, p_37028_);
      }
  
++    // Spigot Start - copied from tick
++    @Override
++    public void inactiveTick() {
++        this.life += 1;
++
++        if (!this.level().isClientSide && this.life > this.lifetime) {
++            this.explode();
++        }
++        super.inactiveTick();
++    }
++    // Spigot End
++
+     public FireworkRocketEntity(Level p_37030_, double p_37031_, double p_37032_, double p_37033_, ItemStack p_37034_) {
+         super(EntityType.FIREWORK_ROCKET, p_37030_);
+         this.life = 0;
+@@ -174,6 +_,13 @@
+ 
+         if (!this.level().isClientSide && this.life > this.lifetime) {
+             this.explode();
++        }
++    }
++
 +    @Override
 +    protected void onHit(HitResult result) {
 +        if (result.getType() == HitResult.Type.MISS || !net.neoforged.neoforge.event.EventHooks.onProjectileImpact(this, result)) {
 +            super.onHit(result);
-+        }
-+    }
-+
-     private void explode() {
-         this.level().broadcastEntityEvent(this, (byte)17);
-         this.gameEvent(GameEvent.EXPLODE, this.getOwner());
+         }
+     }
+ 

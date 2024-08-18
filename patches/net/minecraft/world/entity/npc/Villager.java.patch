@@ -1,5 +1,61 @@
 --- a/net/minecraft/world/entity/npc/Villager.java
 +++ b/net/minecraft/world/entity/npc/Villager.java
+@@ -268,10 +_,36 @@
+         return this.assignProfessionWhenSpawned;
+     }
+ 
++    // Spigot Start
++    @Override
++    public void inactiveTick() {
++        // SPIGOT-3874, SPIGOT-3894, SPIGOT-3846, SPIGOT-5286 :(
++        // Paper start
++        if (this.getUnhappyCounter() > 0) {
++            this.setUnhappyCounter(this.getUnhappyCounter() - 1);
++        }
++        if (this.isEffectiveAi()) {
++            if (this.level().paperConfig().spigotConfigs.tickInactiveVillagers) {
++                this.customServerAiStep();
++            } else {
++                this.customServerAiStep(true);
++            }
++        }
++        maybeDecayGossip();
++        // Paper end
++
++        super.inactiveTick();
++    }
++    // Spigot End
++
+     @Override
+     protected void customServerAiStep() {
++        this.customServerAiStep(false);
++    }
++
++    protected void customServerAiStep(final boolean inactive) {
+         this.level().getProfiler().push("villagerBrain");
+-        this.getBrain().tick((ServerLevel)this.level(), this);
++        if (!inactive) this.getBrain().tick((ServerLevel)this.level(), this); // Paper
+         this.level().getProfiler().pop();
+         if (this.assignProfessionWhenSpawned) {
+             this.assignProfessionWhenSpawned = false;
+@@ -295,7 +_,7 @@
+             this.lastTradedPlayer = null;
+         }
+ 
+-        if (!this.isNoAi() && this.random.nextInt(100) == 0) {
++        if (!inactive && !this.isNoAi() && this.random.nextInt(100) == 0) { // Paper
+             Raid raid = ((ServerLevel)this.level()).getRaidAt(this.blockPosition());
+             if (raid != null && raid.isActive() && !raid.isOver()) {
+                 this.level().broadcastEntityEvent(this, (byte)42);
+@@ -306,6 +_,8 @@
+             this.stopTrading();
+         }
+ 
++        if (inactive) return; // Paper
++
+         super.customServerAiStep();
+     }
+ 
 @@ -322,7 +_,7 @@
      @Override
      public InteractionResult mobInteract(Player p_35472_, InteractionHand p_35473_) {

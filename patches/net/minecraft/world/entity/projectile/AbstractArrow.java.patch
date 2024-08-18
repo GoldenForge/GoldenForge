@@ -9,6 +9,25 @@
      protected int inGroundTime;
      public AbstractArrow.Pickup pickup = AbstractArrow.Pickup.DISALLOWED;
      public int shakeTime;
+@@ -72,6 +_,18 @@
+     @Nullable
+     private ItemStack firedFromWeapon = null;
+ 
++    // Spigot Start
++    @Override
++    public void inactiveTick()
++    {
++        if ( this.inGround )
++        {
++            this.life += 1;
++        }
++        super.inactiveTick();
++    }
++    // Spigot End
++
+     protected AbstractArrow(EntityType<? extends AbstractArrow> p_331098_, Level p_331626_) {
+         super(p_331098_, p_331626_);
+     }
 @@ -188,7 +_,7 @@
              this.shakeTime--;
          }

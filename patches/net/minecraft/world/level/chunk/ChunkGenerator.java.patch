@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/ChunkGenerator.java
 +++ b/net/minecraft/world/level/chunk/ChunkGenerator.java
-@@ -92,9 +_,14 @@
+@@ -92,11 +_,16 @@
      public ChunkGenerator(BiomeSource p_255838_, Function<Holder<Biome>, BiomeGenerationSettings> p_256216_) {
          this.biomeSource = p_255838_;
          this.generationSettingsGetter = p_256216_;
@@ -8,11 +8,22 @@
 +        this.featuresPerStep = net.neoforged.neoforge.common.util.Lazy.of(
              () -> FeatureSorter.buildFeaturesPerStep(List.copyOf(p_255838_.possibleBiomes()), p_223216_ -> p_256216_.apply(p_223216_).features(), true)
          );
-+    }
-+
+     }
+ 
 +    @org.jetbrains.annotations.ApiStatus.Internal
 +    public void refreshFeaturesPerStep() {
 +        ((net.neoforged.neoforge.common.util.Lazy<?>) this.featuresPerStep).invalidate();
-     }
- 
++    }
++
      public void validate() {
+         this.featuresPerStep.get();
+     }
+@@ -293,7 +_,7 @@
+                     return Pair.of(p_223203_.getLocatePos(p_223204_), holder);
+                 }
+ 
+-                ChunkAccess chunkaccess = p_223200_.getChunk(p_223204_.x, p_223204_.z, ChunkStatus.STRUCTURE_STARTS);
++                ChunkAccess chunkaccess = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevelReader)p_223200_).moonrise$syncLoadNonFull(p_223204_.x, p_223204_.z, ChunkStatus.STRUCTURE_STARTS); // Paper - rewrite chunk system
+                 StructureStart structurestart = p_223201_.getStartForStructure(SectionPos.bottomOf(chunkaccess), holder.value(), chunkaccess);
+                 if (structurestart != null && structurestart.isValid() && (!p_223202_ || tryAddReference(p_223201_, structurestart))) {
+                     return Pair.of(p_223203_.getLocatePos(structurestart.getChunkPos()), holder);
