@@ -1,8 +1,41 @@
 --- a/net/minecraft/advancements/critereon/SimpleCriterionTrigger.java
 +++ b/net/minecraft/advancements/critereon/SimpleCriterionTrigger.java
-@@ -42,14 +_,14 @@
+@@ -15,41 +_,41 @@
+ import net.minecraft.world.level.storage.loot.LootContext;
+ 
+ public abstract class SimpleCriterionTrigger<T extends SimpleCriterionTrigger.SimpleInstance> implements CriterionTrigger<T> {
+-    private final Map<PlayerAdvancements, Set<CriterionTrigger.Listener<T>>> players = Maps.newIdentityHashMap();
++    //private final Map<PlayerAdvancements, Set<CriterionTrigger.Listener<T>>> players = Maps.newIdentityHashMap();
+ 
+     @Override
+     public final void addPlayerListener(PlayerAdvancements p_66243_, CriterionTrigger.Listener<T> p_66244_) {
+-        this.players.computeIfAbsent(p_66243_, p_66252_ -> Sets.newHashSet()).add(p_66244_);
++        p_66243_.criterionData.computeIfAbsent(p_66243_, p_66252_ -> Sets.newHashSet()).add(p_66244_); // Paper - fix AdvancementDataPlayer leak
+     }
+ 
+     @Override
+     public final void removePlayerListener(PlayerAdvancements p_66254_, CriterionTrigger.Listener<T> p_66255_) {
+-        Set<CriterionTrigger.Listener<T>> set = this.players.get(p_66254_);
++        Set<CriterionTrigger.Listener<T>> set = (Set) p_66254_.criterionData.get(this); // Paper - fix AdvancementDataPlayer leak
+         if (set != null) {
+             set.remove(p_66255_);
+             if (set.isEmpty()) {
+-                this.players.remove(p_66254_);
++                p_66254_.criterionData.remove(this); // Paper - fix AdvancementDataPlayer leak
+             }
+         }
+     }
+ 
+     @Override
+     public final void removePlayerListeners(PlayerAdvancements p_66241_) {
+-        this.players.remove(p_66241_);
++        p_66241_.criterionData.remove(this); // Paper - fix AdvancementDataPlayer leak
+     }
+ 
+     protected void trigger(ServerPlayer p_66235_, Predicate<T> p_66236_) {
          PlayerAdvancements playeradvancements = p_66235_.getAdvancements();
-         Set<CriterionTrigger.Listener<T>> set = this.players.get(playeradvancements);
+-        Set<CriterionTrigger.Listener<T>> set = this.players.get(playeradvancements);
++        Set<CriterionTrigger.Listener<T>> set =  (Set) playeradvancements.criterionData.get(this); // Paper - fix AdvancementDataPlayer leak
          if (set != null && !set.isEmpty()) {
 -            LootContext lootcontext = EntityPredicate.createContext(p_66235_, p_66235_);
 +            LootContext lootContext = null; // EntityPredicate.createContext(player, player); // Paper - Perf: lazily create LootContext for criterions
