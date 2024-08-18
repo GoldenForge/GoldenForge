@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -51,7 +_,7 @@
+     private final byte[] challenge;
+     final MinecraftServer server;
+     final Connection connection;
+-    private volatile ServerLoginPacketListenerImpl.State state = ServerLoginPacketListenerImpl.State.HELLO;
++    public volatile ServerLoginPacketListenerImpl.State state = ServerLoginPacketListenerImpl.State.HELLO;
+     private int tick;
+     @Nullable
+     String requestedUsername;
 @@ -60,6 +_,8 @@
      private final String serverId = "";
      private final boolean transferred;
@@ -93,3 +102,12 @@
          this.disconnect(ServerCommonPacketListenerImpl.DISCONNECT_UNEXPECTED_QUERY);
      }
  
+@@ -253,7 +_,7 @@
+         this.disconnect(ServerCommonPacketListenerImpl.DISCONNECT_UNEXPECTED_QUERY);
+     }
+ 
+-    static enum State {
++    public static enum State {
+         HELLO,
+         KEY,
+         AUTHENTICATING,

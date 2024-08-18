@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/network/ServerConnectionListener.java
 +++ b/net/minecraft/server/network/ServerConnectionListener.java
-@@ -48,11 +_,12 @@
+@@ -48,16 +_,28 @@
  
  public class ServerConnectionListener {
      private static final Logger LOGGER = LogUtils.getLogger();
@@ -15,6 +15,22 @@
      );
      final MinecraftServer server;
      public volatile boolean running;
+     private final List<ChannelFuture> channels = Collections.synchronizedList(Lists.newArrayList());
+     final List<Connection> connections = Collections.synchronizedList(Lists.newArrayList());
++    // Paper start - prevent blocking on adding a new connection while the server is ticking
++    private final java.util.Queue<Connection> pending = new java.util.concurrent.ConcurrentLinkedQueue<>();
++    private static final boolean disableFlushConsolidation = Boolean.getBoolean("Paper.disableFlushConsolidate"); // Paper - Optimize network
++    private final void addPending() {
++        Connection connection;
++        while ((connection = pending.poll()) != null) {
++            connections.add(connection);
++            connection.isPending = false; // Paper - Optimize network
++        }
++    }
++    // Paper end - prevent blocking on adding a new connection while the server is ticking
+ 
+     public ServerConnectionListener(MinecraftServer p_9707_) {
+         this.server = p_9707_;
 @@ -65,6 +_,8 @@
      }
  
@@ -24,12 +40,48 @@
          synchronized (this.channels) {
              Class<? extends ServerSocketChannel> oclass;
              EventLoopGroup eventloopgroup;
-@@ -86,7 +_,7 @@
+@@ -86,7 +_,8 @@
                      } catch (ChannelException channelexception) {
                      }
  
 -                    ChannelPipeline channelpipeline = p_9729_.pipeline().addLast("timeout", new ReadTimeoutHandler(30));
++                    if (!disableFlushConsolidation) p_9729_.pipeline().addFirst(new io.netty.handler.flush.FlushConsolidationHandler()); // Paper - Optimize network
 +                    ChannelPipeline channelpipeline = p_9729_.pipeline().addLast("timeout", new ReadTimeoutHandler(READ_TIMEOUT));
                      if (ServerConnectionListener.this.server.repliesToStatus()) {
                          channelpipeline.addLast("legacy_query", new LegacyQueryHandler(ServerConnectionListener.this.getServer()));
                      }
+@@ -94,7 +_,8 @@
+                     Connection.configureSerialization(channelpipeline, PacketFlow.SERVERBOUND, false, null);
+                     int i = ServerConnectionListener.this.server.getRateLimitPacketsPerSecond();
+                     Connection connection = (Connection)(i > 0 ? new RateKickingConnection(i) : new Connection(PacketFlow.SERVERBOUND));
+-                    ServerConnectionListener.this.connections.add(connection);
++
++                    pending.add(connection); // Paper - prevent blocking on adding a new connection while the server is ticking
+                     connection.configurePacketHandler(channelpipeline);
+                     connection.setListenerForServerboundHandshake(new ServerHandshakePacketListenerImpl(ServerConnectionListener.this.server, connection));
+                 }
+@@ -102,6 +_,16 @@
+         }
+     }
+ 
++    // CraftBukkit start
++    public void acceptConnections() {
++        synchronized (this.channels) {
++            for (ChannelFuture future : this.channels) {
++                future.channel().config().setAutoRead(true);
++            }
++        }
++    }
++    // CraftBukkit end
++
+     public SocketAddress startMemoryChannel() {
+         ChannelFuture channelfuture;
+         synchronized (this.channels) {
+@@ -146,6 +_,7 @@
+ 
+     public void tick() {
+         synchronized (this.connections) {
++            this.addPending(); // Paper - prevent blocking on adding a new connection while the server is ticking
+             Iterator<Connection> iterator = this.connections.iterator();
+ 
+             while (iterator.hasNext()) {
