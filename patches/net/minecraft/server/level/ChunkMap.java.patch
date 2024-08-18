@@ -1135,6 +1135,14 @@
  
          public TrackedEntity(Entity p_140478_, int p_140479_, int p_140480_, boolean p_140481_) {
              this.serverEntity = new ServerEntity(ChunkMap.this.level, p_140478_, p_140480_, p_140481_, this::broadcast);
+@@ -1297,6 +_,7 @@
+ 
+         private int getEffectiveRange() {
+             int i = this.range;
++            i = org.spigotmc.TrackingRange.getEntityTrackingRange(entity, i); // Paper
+ 
+             for (Entity entity : this.entity.getIndirectPassengers()) {
+                 int j = entity.getType().clientTrackingRange() * 16;
 @@ -1314,4 +_,19 @@
              }
          }
