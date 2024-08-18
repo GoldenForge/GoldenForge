@@ -1,0 +1,12 @@
+--- a/net/minecraft/network/protocol/Packet.java
++++ b/net/minecraft/network/protocol/Packet.java
+@@ -22,4 +_,9 @@
+     static <B extends ByteBuf, T extends Packet<?>> StreamCodec<B, T> codec(StreamMemberEncoder<B, T> p_319871_, StreamDecoder<B, T> p_319793_) {
+         return StreamCodec.ofMember(p_319871_, p_319793_);
+     }
++
++    @org.jetbrains.annotations.Nullable
++    default java.util.List<Packet<?>> getExtraPackets() {
++        return null;
++    }
+ }

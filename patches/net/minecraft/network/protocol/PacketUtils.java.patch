@@ -1,0 +1,49 @@
+--- a/net/minecraft/network/protocol/PacketUtils.java
++++ b/net/minecraft/network/protocol/PacketUtils.java
+@@ -14,6 +_,24 @@
+ public class PacketUtils {
+     private static final Logger LOGGER = LogUtils.getLogger();
+ 
++    // Paper start - detailed watchdog information
++    public static final java.util.concurrent.ConcurrentLinkedDeque<PacketListener> packetProcessing = new java.util.concurrent.ConcurrentLinkedDeque<>();
++    static final java.util.concurrent.atomic.AtomicLong totalMainThreadPacketsProcessed = new java.util.concurrent.atomic.AtomicLong();
++
++    public static long getTotalProcessedPackets() {
++        return totalMainThreadPacketsProcessed.get();
++    }
++
++    public static java.util.List<PacketListener> getCurrentPacketProcessors() {
++        java.util.List<PacketListener> ret = new java.util.ArrayList<>(4);
++        for (PacketListener listener : packetProcessing) {
++            ret.add(listener);
++        }
++
++        return ret;
++    }
++    // Paper end - detailed watchdog information
++
+     public static <T extends PacketListener> void ensureRunningOnSameThread(Packet<T> p_131360_, T p_131361_, ServerLevel p_131362_) throws RunningOnDifferentThreadException {
+         ensureRunningOnSameThread(p_131360_, p_131361_, p_131362_.getServer());
+     }
+@@ -21,6 +_,8 @@
+     public static <T extends PacketListener> void ensureRunningOnSameThread(Packet<T> p_131364_, T p_131365_, BlockableEventLoop<?> p_131366_) throws RunningOnDifferentThreadException {
+         if (!p_131366_.isSameThread()) {
+             p_131366_.executeIfPossible(() -> {
++                packetProcessing.push(p_131365_); // Paper - detailed watchdog information
++                try { // Paper - detailed watchdog information
+                 if (p_131365_.shouldHandleMessage(p_131364_)) {
+                     try {
+                         p_131364_.handle(p_131365_);
+@@ -34,6 +_,12 @@
+                 } else {
+                     LOGGER.debug("Ignoring packet due to disconnection: {}", p_131364_);
+                 }
++                    // Paper start - detailed watchdog information
++                } finally {
++                    totalMainThreadPacketsProcessed.getAndIncrement();
++                    packetProcessing.pop();
++                }
++                // Paper end - detailed watchdog information
+             });
+             throw RunningOnDifferentThreadException.RUNNING_ON_DIFFERENT_THREAD;
+         }
