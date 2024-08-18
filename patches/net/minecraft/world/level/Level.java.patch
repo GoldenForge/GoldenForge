@@ -582,6 +582,22 @@
      }
  
      @Override
+@@ -188,7 +_,14 @@
+     }
+ 
+     public LevelChunk getChunk(int p_46727_, int p_46728_) {
+-        return (LevelChunk)this.getChunk(p_46727_, p_46728_, ChunkStatus.FULL);
++        // Paper start - Perf: make sure loaded chunks get the inlined variant of this function
++        net.minecraft.server.level.ServerChunkCache cps = ((ServerLevel)this).getChunkSource();
++        LevelChunk ifLoaded = cps.getChunkAtIfLoadedImmediately(p_46727_, p_46728_);
++        if (ifLoaded != null) {
++            return ifLoaded;
++        }
++        return (LevelChunk) cps.getChunk(p_46727_, p_46728_, ChunkStatus.FULL, true); // Paper - avoid a method jump
++        // Paper end - Perf: make sure loaded chunks get the inlined variant of this function
+     }
+ 
+     @Nullable
 @@ -202,6 +_,13 @@
          }
      }
