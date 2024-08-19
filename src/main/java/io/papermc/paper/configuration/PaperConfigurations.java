@@ -167,6 +167,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
             .header(GLOBAL_HEADER)
             .serializers(builder -> builder
                 .register(new PacketClassSerializer())
+                .register(IntOr.Disabled.SERIALIZER)
                 .register(IntOr.Default.SERIALIZER)
                 .register(DoubleOr.Default.SERIALIZER)
             );
