@@ -85,7 +85,7 @@
      }
  
      @Override
-@@ -173,6 +_,20 @@
+@@ -173,8 +_,26 @@
              : super.getListenerRegistry(p_251193_);
      }
  
@@ -105,8 +105,14 @@
 +
      @Override
      public BlockState getBlockState(BlockPos p_62923_) {
++        if (true) {
++            return this.getBlockStateFinal(p_62923_.getX(), p_62923_.getY(), p_62923_.getZ());
++        }
++        // Paper end - Perf: Reduce instructions and provide final method
          int i = p_62923_.getX();
-@@ -209,6 +_,18 @@
+         int j = p_62923_.getY();
+         int k = p_62923_.getZ();
+@@ -209,28 +_,48 @@
          }
      }
  
@@ -125,6 +131,47 @@
      @Override
      public FluidState getFluidState(BlockPos p_62895_) {
          return this.getFluidState(p_62895_.getX(), p_62895_.getY(), p_62895_.getZ());
+     }
+ 
+-    public FluidState getFluidState(int p_62815_, int p_62816_, int p_62817_) {
+-        try {
+-            int i = this.getSectionIndex(p_62816_);
+-            if (i >= 0 && i < this.sections.length) {
+-                LevelChunkSection levelchunksection = this.sections[i];
+-                if (!levelchunksection.hasOnlyAir()) {
+-                    return levelchunksection.getFluidState(p_62815_ & 15, p_62816_ & 15, p_62817_ & 15);
+-                }
++    public FluidState getFluidState(int x, int y, int z) {
++        // Paper start - Perf: Optimise Chunk#getFluid
++        // try {  // Remove try catch
++        int index = this.getSectionIndex(y);
++        if (index >= 0 && index < this.sections.length) {
++            LevelChunkSection chunksection = this.sections[index];
++
++            if (!chunksection.hasOnlyAir()) {
++                return chunksection.states.get((y & 15) << 8 | (z & 15) << 4 | x & 15).getFluidState();
++                // Paper end - Perf: Optimise Chunk#getFluid
+             }
++        }
+ 
+-            return Fluids.EMPTY.defaultFluidState();
++        return Fluids.EMPTY.defaultFluidState();
++        /* // Paper - Perf: Optimise Chunk#getFluid
+         } catch (Throwable throwable) {
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Getting fluid state");
+-            CrashReportCategory crashreportcategory = crashreport.addCategory("Block being got");
+-            crashreportcategory.setDetail("Location", () -> CrashReportCategory.formatLocation(this, p_62815_, p_62816_, p_62817_));
++            CrashReportCategory crashreportsystemdetails = crashreport.addCategory("Block being got");
++
++            crashreportsystemdetails.setDetail("Location", () -> {
++                return CrashReportCategory.formatLocation(this, x, y, z);
++            });
+             throw new ReportedException(crashreport);
+         }
++         */  // Paper - Perf: Optimise Chunk#getFluid
+     }
+ 
+     @Nullable
 @@ -262,7 +_,7 @@
                  if (LightEngine.hasDifferentLightProperties(this, p_62865_, blockstate, p_62866_)) {
                      ProfilerFiller profilerfiller = this.level.getProfiler();
