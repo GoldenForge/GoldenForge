@@ -9,3 +9,106 @@
      private final NonNullList<ItemStack> handItems = NonNullList.withSize(2, ItemStack.EMPTY);
      private final NonNullList<ItemStack> armorItems = NonNullList.withSize(4, ItemStack.EMPTY);
      private boolean invisible;
+@@ -85,9 +_,16 @@
+     private Rotations rightArmPose = DEFAULT_RIGHT_ARM_POSE;
+     private Rotations leftLegPose = DEFAULT_LEFT_LEG_POSE;
+     private Rotations rightLegPose = DEFAULT_RIGHT_LEG_POSE;
++    // Paper start - Allow ArmorStands not to tick
++    public boolean canTick = true;
++    private boolean noTickPoseDirty = false;
++    private boolean noTickEquipmentDirty = false;
++    // Paper end - Allow ArmorStands not to tick
++
+ 
+     public ArmorStand(EntityType<? extends ArmorStand> p_31553_, Level p_31554_) {
+         super(p_31553_, p_31554_);
++        if (p_31554_ != null) this.canTick = p_31554_.paperConfig().entities.armorStands.tick; // Paper - Allow ArmorStands not to tick
+     }
+ 
+     public ArmorStand(Level p_31556_, double p_31557_, double p_31558_, double p_31559_) {
+@@ -166,6 +_,7 @@
+             case HUMANOID_ARMOR:
+                 this.onEquipItem(p_31584_, this.armorItems.set(p_31584_.getIndex(), p_31585_), p_31585_);
+         }
++        this.noTickEquipmentDirty = true; // Paper - Allow ArmorStands not to tick; Still update equipment
+     }
+ 
+     @Override
+@@ -290,7 +_,8 @@
+ 
+     @Override
+     protected void pushEntities() {
+-        for (Entity entity : this.level().getEntities(this, this.getBoundingBox(), RIDABLE_MINECARTS)) {
++        if (!this.level().paperConfig().entities.armorStands.doCollisionEntityLookups) return; // Paper - Option to prevent armor stands from doing entity lookups
++        for (Entity entity : this.level().getEntitiesOfClass(AbstractMinecart.class, this.getBoundingBox(), RIDABLE_MINECARTS)) { // Paper - optimise collisions
+             if (this.distanceToSqr(entity) <= 0.2) {
+                 entity.push(this);
+             }
+@@ -550,7 +_,29 @@
+ 
+     @Override
+     public void tick() {
++        // Paper start - Allow ArmorStands not to tick
++        if (!this.canTick) {
++            if (this.noTickPoseDirty) {
++                this.noTickPoseDirty = false;
++                this.updatePose();
++            }
++
++            if (this.noTickEquipmentDirty) {
++                this.noTickEquipmentDirty = false;
++                this.detectEquipmentUpdates();
++            }
++
++            return;
++        }
++        // Paper end - Allow ArmorStands not to tick
++
+         super.tick();
++        // Paper start - Allow ArmorStands not to tick
++        updatePose();
++    }
++
++    public void updatePose() {
++        // Paper end - Allow ArmorStands not to tick
+         Rotations rotations = this.entityData.get(DATA_HEAD_POSE);
+         if (!this.headPose.equals(rotations)) {
+             this.setHeadPose(rotations);
+@@ -664,31 +_,37 @@
+     public void setHeadPose(Rotations p_31598_) {
+         this.headPose = p_31598_;
+         this.entityData.set(DATA_HEAD_POSE, p_31598_);
++        this.noTickPoseDirty = true; // Paper - Allow updates when not ticking
+     }
+ 
+     public void setBodyPose(Rotations p_31617_) {
+         this.bodyPose = p_31617_;
+         this.entityData.set(DATA_BODY_POSE, p_31617_);
++        this.noTickPoseDirty = true; // Paper - Allow updates when not ticking
+     }
+ 
+     public void setLeftArmPose(Rotations p_31624_) {
+         this.leftArmPose = p_31624_;
+         this.entityData.set(DATA_LEFT_ARM_POSE, p_31624_);
++        this.noTickPoseDirty = true; // Paper - Allow updates when not ticking
+     }
+ 
+     public void setRightArmPose(Rotations p_31629_) {
+         this.rightArmPose = p_31629_;
+         this.entityData.set(DATA_RIGHT_ARM_POSE, p_31629_);
++        this.noTickPoseDirty = true; // Paper - Allow updates when not ticking
+     }
+ 
+     public void setLeftLegPose(Rotations p_31640_) {
+         this.leftLegPose = p_31640_;
+         this.entityData.set(DATA_LEFT_LEG_POSE, p_31640_);
++        this.noTickPoseDirty = true; // Paper - Allow updates when not ticking
+     }
+ 
+     public void setRightLegPose(Rotations p_31652_) {
+         this.rightLegPose = p_31652_;
+         this.entityData.set(DATA_RIGHT_LEG_POSE, p_31652_);
++        this.noTickPoseDirty = true; // Paper - Allow updates when not ticking
+     }
+ 
+     public Rotations getHeadPose() {

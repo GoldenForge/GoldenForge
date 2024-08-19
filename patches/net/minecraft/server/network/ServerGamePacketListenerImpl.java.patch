@@ -1,5 +1,22 @@
 --- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -24,6 +_,7 @@
+ import java.util.concurrent.CompletableFuture;
+ import java.util.function.BiFunction;
+ import java.util.function.Consumer;
++import java.util.function.Function;
+ import java.util.stream.Collectors;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
+@@ -243,7 +_,7 @@
+         p_9772_.connection = this;
+         p_9772_.getTextFilter().join();
+         this.signedMessageDecoder = SignedMessageChain.Decoder.unsigned(p_9772_.getUUID(), p_9770_::enforceSecureProfile);
+-        this.chatMessageChain = new FutureChain(p_9770_);
++        this.chatMessageChain = new FutureChain(p_9770_.chatExecutor); // CraftBukkit - async chat
+     }
+ 
+     @Override
 @@ -439,9 +_,11 @@
                  }
  
@@ -76,17 +93,78 @@
          ServerLevel serverlevel = this.player.serverLevel();
          InteractionHand interactionhand = p_9930_.getHand();
          ItemStack itemstack = this.player.getItemInHand(interactionhand);
-@@ -1231,8 +_,9 @@
+@@ -1219,6 +_,12 @@
+ 
+     @Override
+     public void handleChat(ServerboundChatPacket p_9841_) {
++        // CraftBukkit start - async chat
++        // SPIGOT-3638
++        if (this.server.isStopped()) {
++            return;
++        }
++        // CraftBukkit end
+         Optional<LastSeenMessages> optional = this.unpackAndApplyLastSeen(p_9841_.lastSeenMessages());
+         if (!optional.isEmpty()) {
+             this.tryHandleChat(p_9841_.message(), () -> {
+@@ -1230,13 +_,14 @@
+                     return;
                  }
  
-                 CompletableFuture<FilteredText> completablefuture = this.filterTextPacket(playerchatmessage.signedContent());
+-                CompletableFuture<FilteredText> completablefuture = this.filterTextPacket(playerchatmessage.signedContent());
 -                Component component = this.server.getChatDecorator().decorate(this.player, playerchatmessage.decoratedContent());
++                CompletableFuture<FilteredText> completablefuture = this.filterTextPacket(playerchatmessage.signedContent()).thenApplyAsync(Function.identity(), this.server.chatExecutor); // CraftBukkit - async chat
 +                Component component = net.neoforged.neoforge.common.CommonHooks.getServerChatSubmittedDecorator().decorate(this.player, playerchatmessage.decoratedContent());
                  this.chatMessageChain.append(completablefuture, p_300785_ -> {
 +                    if (component == null) return; // Forge: ServerChatEvent was canceled if this is null.
                      PlayerChatMessage playerchatmessage1 = playerchatmessage.withUnsignedContent(component).filter(p_300785_.mask());
                      this.broadcastChatMessage(playerchatmessage1);
                  });
+-            });
++            }, false); // CraftBukkit - async chat
+         }
+     }
+ 
+@@ -1245,7 +_,7 @@
+         this.tryHandleChat(p_215225_.command(), () -> {
+             this.performUnsignedChatCommand(p_215225_.command());
+             this.detectRateSpam();
+-        });
++        }, true); // CraftBukkit - sync commands
+     }
+ 
+     private void performUnsignedChatCommand(String p_338482_) {
+@@ -1267,7 +_,7 @@
+             this.tryHandleChat(p_338604_.command(), () -> {
+                 this.performSignedChatCommand(p_338604_, optional.get());
+                 this.detectRateSpam();
+-            });
++            }, true); // CraftBukkit - sync commands
+         }
+     }
+ 
+@@ -1348,14 +_,20 @@
+         return commanddispatcher.parse(p_242938_, this.player.createCommandSourceStack());
+     }
+ 
+-    private void tryHandleChat(String p_338775_, Runnable p_338235_) {
++    private void tryHandleChat(String p_338775_, Runnable p_338235_, boolean sync) { // CraftBukkit
+         if (isChatMessageIllegal(p_338775_)) {
+             this.disconnect(Component.translatable("multiplayer.disconnect.illegal_characters"));
+         } else if (this.player.getChatVisibility() == ChatVisiblity.HIDDEN) {
+             this.send(new ClientboundSystemChatPacket(Component.translatable("chat.disabled.options").withStyle(ChatFormatting.RED), false));
+         } else {
+             this.player.resetLastActionTime();
+-            this.server.execute(p_338235_);
++            // CraftBukkit start
++            if (sync) {
++                this.server.execute(p_338235_);
++            } else {
++                p_338235_.run();
++            }
++            // CraftBukkit end
+         }
+     }
+ 
 @@ -1561,7 +_,11 @@
  
                          @Override

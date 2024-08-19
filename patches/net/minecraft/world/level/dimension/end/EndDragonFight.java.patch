@@ -1,17 +1,31 @@
 --- a/net/minecraft/world/level/dimension/end/EndDragonFight.java
 +++ b/net/minecraft/world/level/dimension/end/EndDragonFight.java
-@@ -544,6 +_,14 @@
+@@ -116,6 +_,13 @@
+             this.respawnStage = DragonRespawnAnimation.START;
          }
-     }
  
++        // Paper start - Add config to disable ender dragon legacy check
++        if (p_289768_ == EndDragonFight.Data.DEFAULT && !p_289771_.paperConfig().entities.spawning.scanForLegacyEnderDragon) {
++            this.needsStateScanning = false;
++            this.dragonKilled = true;
++        }
++        // Paper end - Add config to disable ender dragon legacy check
++
+         this.portalLocation = p_289768_.exitPortalLocation.orElse(null);
+         this.gateways.addAll(p_289768_.gateways.orElseGet(() -> {
+             ObjectArrayList<Integer> objectarraylist = new ObjectArrayList<>(ContiguousSet.create(Range.closedOpen(0, 20), DiscreteDomain.integers()));
+@@ -542,6 +_,14 @@
+                 endcrystal.setBeamTarget(null);
+             }
+         }
++    }
++
 +    public void addPlayer(ServerPlayer player) {
 +        this.dragonEvent.addPlayer(player);
 +    }
 +
 +    public void removePlayer(ServerPlayer player) {
 +        this.dragonEvent.removePlayer(player);
-+    }
-+
+     }
+ 
      @Nullable
-     public UUID getDragonUUID() {
-         return this.dragonUUID;

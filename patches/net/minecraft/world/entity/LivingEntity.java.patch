@@ -548,6 +548,15 @@
                  d2 = 0.0;
              }
  
+@@ -2444,7 +_,7 @@
+         }
+     }
+ 
+-    private void detectEquipmentUpdates() {
++    public void detectEquipmentUpdates() {
+         Map<EquipmentSlot, ItemStack> map = this.collectEquipmentChanges();
+         if (map != null) {
+             this.handleHandSwap(map);
 @@ -2466,6 +_,7 @@
              };
              ItemStack itemstack1 = this.getItemBySlot(equipmentslot);

@@ -184,7 +184,7 @@
              Pair<Vec3i, Vec3i> pair = exits(railshape);
              Vec3i vec3i = pair.getFirst();
              Vec3i vec3i1 = pair.getSecond();
-@@ -647,6 +_,10 @@
+@@ -647,8 +_,13 @@
  
      @Override
      public void push(Entity p_38165_) {
@@ -194,7 +194,10 @@
 +        }
          if (!this.level().isClientSide) {
              if (!p_38165_.noPhysics && !this.noPhysics) {
++                if (!this.level().paperConfig().collisions.allowVehicleCollisions && this.level().paperConfig().collisions.onlyPlayersCollide && !(p_38165_ instanceof Player)) return; // Paper - Collision option for requiring a player participant
                  if (!this.hasPassenger(p_38165_)) {
+                     double d0 = p_38165_.getX() - this.getX();
+                     double d1 = p_38165_.getZ() - this.getZ();
 @@ -685,13 +_,11 @@
  
                              Vec3 vec32 = this.getDeltaMovement();

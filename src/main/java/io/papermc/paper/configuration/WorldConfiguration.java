@@ -107,61 +107,6 @@ public class WorldConfiguration extends ConfigurationPart {
         public int otherTrackingRange = 64;
     }
 
-    public Anticheat anticheat;
-
-    public class Anticheat extends ConfigurationPart {
-
-        public Obfuscation obfuscation;
-
-        public class Obfuscation extends ConfigurationPart {
-            public Items items = new Items();
-            public class Items extends ConfigurationPart {
-                public boolean hideItemmeta = false;
-                public boolean hideDurability = false;
-                public boolean hideItemmetaWithVisualEffects = false;
-            }
-        }
-
-        public AntiXray antiXray;
-
-        public class AntiXray extends ConfigurationPart {
-            public boolean enabled = false;
-            public EngineMode engineMode = EngineMode.HIDE;
-            public int maxBlockHeight = 64;
-            public int updateRadius = 2;
-            public boolean lavaObscures = false;
-            public boolean usePermission = false;
-            public List<Block> hiddenBlocks = List.of(
-                //<editor-fold desc="Anti-Xray Hidden Blocks" defaultstate="collapsed">
-                Blocks.COPPER_ORE,
-                Blocks.DEEPSLATE_COPPER_ORE,
-                Blocks.RAW_COPPER_BLOCK,
-                Blocks.GOLD_ORE,
-                Blocks.DEEPSLATE_GOLD_ORE,
-                Blocks.IRON_ORE,
-                Blocks.DEEPSLATE_IRON_ORE,
-                Blocks.RAW_IRON_BLOCK,
-                Blocks.COAL_ORE,
-                Blocks.DEEPSLATE_COAL_ORE,
-                Blocks.LAPIS_ORE,
-                Blocks.DEEPSLATE_LAPIS_ORE,
-                Blocks.MOSSY_COBBLESTONE,
-                Blocks.OBSIDIAN,
-                Blocks.CHEST,
-                Blocks.DIAMOND_ORE,
-                Blocks.DEEPSLATE_DIAMOND_ORE,
-                Blocks.REDSTONE_ORE,
-                Blocks.DEEPSLATE_REDSTONE_ORE,
-                Blocks.CLAY,
-                Blocks.EMERALD_ORE,
-                Blocks.DEEPSLATE_EMERALD_ORE,
-                Blocks.ENDER_CHEST
-                //</editor-fold>
-            );
-            public List<Block> replacementBlocks = List.of(Blocks.STONE, Blocks.OAK_PLANKS, Blocks.DEEPSLATE);
-        }
-    }
-
     public Entities entities;
 
     public class Entities extends ConfigurationPart {

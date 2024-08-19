@@ -18,6 +18,14 @@
              .yRot(-this.getYRot() * (float) (Math.PI / 180.0));
      }
  
+@@ -192,6 +_,7 @@
+ 
+     @Override
+     public void push(Entity p_38373_) {
++        if (!this.level().paperConfig().collisions.allowVehicleCollisions && this.level().paperConfig().collisions.onlyPlayersCollide && !(p_38373_ instanceof Player)) return; // Paper - Collision option for requiring a player participant
+         if (p_38373_ instanceof Boat) {
+             if (p_38373_.getBoundingBox().minY < this.getBoundingBox().maxY) {
+                 super.push(p_38373_);
 @@ -212,7 +_,8 @@
              case DARK_OAK -> Items.DARK_OAK_BOAT;
              case MANGROVE -> Items.MANGROVE_BOAT;
