@@ -40,3 +40,22 @@
      }
  
      default int getMaxLightLevel() {
+@@ -64,8 +_,16 @@
+ 
+     default BlockHitResult clip(ClipContext p_45548_) {
+         return traverseBlocks(p_45548_.getFrom(), p_45548_.getTo(), p_45548_, (p_151359_, p_151360_) -> {
+-            BlockState blockstate = this.getBlockState(p_151360_);
+-            FluidState fluidstate = this.getFluidState(p_151360_);
++            // Paper start - Prevent raytrace from loading chunks
++            BlockState blockstate = this.getBlockStateIfLoaded(p_151360_);
++            if (blockstate == null) {
++                // copied the last function parameter (listed below)
++                Vec3 vec3d = p_45548_.getFrom().subtract(p_45548_.getTo());
++
++                return BlockHitResult.miss(p_45548_.getTo(), Direction.getNearest(vec3d.x, vec3d.y, vec3d.z), BlockPos.containing(p_45548_.getTo()));
++            }
++            // Paper end - Prevent raytrace from loading chunks
++            FluidState fluidstate = blockstate.getFluidState(); // Paper - Perf: don't need to go to world state again
+             Vec3 vec3 = p_151359_.getFrom();
+             Vec3 vec31 = p_151359_.getTo();
+             VoxelShape voxelshape = p_151359_.getBlockShape(blockstate, this, p_151360_);
