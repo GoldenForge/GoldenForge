@@ -19,6 +19,24 @@
      }
  
      @Override
+@@ -35,6 +_,17 @@
+         return this.getChunk(SectionPos.blockToSectionCoord(p_112947_.getX()), SectionPos.blockToSectionCoord(p_112947_.getZ())).getBlockState(p_112947_);
+     }
+ 
++    //no op
++    @Override
++    public @org.jetbrains.annotations.Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++        return null;
++    }
++
++    @Override
++    public @org.jetbrains.annotations.Nullable FluidState getFluidIfLoaded(BlockPos blockposition) {
++        return null;
++    }
++
+     @Override
+     public FluidState getFluidState(BlockPos p_112943_) {
+         return this.getChunk(SectionPos.blockToSectionCoord(p_112943_.getX()), SectionPos.blockToSectionCoord(p_112943_.getZ()))
 @@ -75,6 +_,21 @@
      @Override
      public int getHeight() {

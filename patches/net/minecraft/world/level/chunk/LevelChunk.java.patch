@@ -106,6 +106,25 @@
      @Override
      public BlockState getBlockState(BlockPos p_62923_) {
          int i = p_62923_.getX();
+@@ -209,6 +_,18 @@
+         }
+     }
+ 
++    // Paper start - If loaded util
++    @Override
++    public final FluidState getFluidIfLoaded(BlockPos blockposition) {
++        return this.getFluidState(blockposition);
++    }
++
++    @Override
++    public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++        return this.getBlockState(blockposition);
++    }
++    // Paper end
++
+     @Override
+     public FluidState getFluidState(BlockPos p_62895_) {
+         return this.getFluidState(p_62895_.getX(), p_62895_.getY(), p_62895_.getZ());
 @@ -262,7 +_,7 @@
                  if (LightEngine.hasDifferentLightProperties(this, p_62865_, blockstate, p_62866_)) {
                      ProfilerFiller profilerfiller = this.level.getProfiler();

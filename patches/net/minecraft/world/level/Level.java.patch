@@ -598,7 +598,7 @@
      }
  
      @Nullable
-@@ -202,6 +_,13 @@
+@@ -202,6 +_,40 @@
          }
      }
  
@@ -609,6 +609,33 @@
 +        return ((ServerLevel)this).chunkSource.getChunkAtIfLoadedImmediately(x, z);
 +    }
 +
++    @Override
++    @Nullable
++    public final BlockState getBlockStateIfLoaded(BlockPos pos) {
++        if (this.isOutsideBuildHeight(pos)) {
++            return Blocks.VOID_AIR.defaultBlockState();
++        } else {
++            ChunkAccess chunk = this.getChunkIfLoadedImmediately(pos.getX() >> 4, pos.getZ() >> 4);
++
++            return chunk == null ? null : chunk.getBlockState(pos);
++        }
++    }
++
++    @Override
++    public final FluidState getFluidIfLoaded(BlockPos blockposition) {
++        ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
++
++        return chunk == null ? null : chunk.getFluidState(blockposition);
++    }
++
++    public final @Nullable LevelChunk getChunkIfLoaded(BlockPos blockposition) {
++        return ((ServerLevel) this).getChunkSource().getChunkAtIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
++    }
++
++    //  reduces need to do isLoaded before getType
++    public final @Nullable BlockState getBlockStateIfLoadedAndInBounds(BlockPos blockposition) {
++        return getWorldBorder().isWithinBounds(blockposition) ? getBlockStateIfLoaded(blockposition) : null;
++    }
      @Override
      public boolean setBlock(BlockPos p_46601_, BlockState p_46602_, int p_46603_) {
          return this.setBlock(p_46601_, p_46602_, p_46603_, 512);

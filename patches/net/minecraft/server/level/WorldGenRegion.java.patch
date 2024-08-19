@@ -11,13 +11,13 @@
 +        return this.getChunk(x, z, ChunkStatus.FULL, false);
 +    }
 +
-+    //@Override //TODO: goldenforge
++    @Override
 +    public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
 +        ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
 +        return chunk == null ? null : chunk.getBlockState(blockposition);
 +    }
 +
-+    //@Override
++    @Override
 +    public final FluidState getFluidIfLoaded(BlockPos blockposition) {
 +        ChunkAccess chunk = this.getChunkIfLoadedImmediately(blockposition.getX() >> 4, blockposition.getZ() >> 4);
 +        return chunk == null ? null : chunk.getFluidState(blockposition);
