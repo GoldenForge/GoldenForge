@@ -25,6 +25,7 @@ allprojects {
     group 'net.neoforged'
     repositories {
         mavenLocal()
+        maven { url = "https://repo.papermc.io/repository/maven-public/"}
     }
 }
 
