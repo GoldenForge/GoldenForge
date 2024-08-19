@@ -1,5 +1,21 @@
 --- a/net/minecraft/world/entity/animal/Bee.java
 +++ b/net/minecraft/world/entity/animal/Bee.java
+@@ -386,6 +_,7 @@
+         if (this.hivePos == null) {
+             return false;
+         } else {
++            if (!this.level().isLoadedAndInBounds(this.hivePos)) return false; // Paper - Do not allow bees to load chunks for beehives
+             BlockEntity blockentity = this.level().getBlockEntity(this.hivePos);
+             return blockentity instanceof BeehiveBlockEntity && ((BeehiveBlockEntity)blockentity).isFireNearby();
+         }
+@@ -418,6 +_,7 @@
+     }
+ 
+     private boolean doesHiveHaveSpace(BlockPos p_27885_) {
++        if (!this.level().isLoadedAndInBounds(p_27885_)) return false; // Paper - Do not allow bees to load chunks for beehives
+         BlockEntity blockentity = this.level().getBlockEntity(p_27885_);
+         return blockentity instanceof BeehiveBlockEntity ? !((BeehiveBlockEntity)blockentity).isFull() : false;
+     }
 @@ -486,8 +_,9 @@
          } else if (this.isTooFarAway(this.hivePos)) {
              return false;
@@ -11,7 +27,7 @@
          }
      }
  
-@@ -636,8 +_,18 @@
+@@ -636,11 +_,21 @@
      }
  
      @Override
@@ -22,11 +38,50 @@
 +
 +    private void jumpInLiquidInternal() {
          this.setDeltaMovement(this.getDeltaMovement().add(0.0, 0.01, 0.0));
-+    }
-+
-+    @Override
-+    public void jumpInFluid(net.neoforged.neoforge.fluids.FluidType type) {
-+        this.jumpInLiquidInternal();
      }
  
      @Override
++    public void jumpInFluid(net.neoforged.neoforge.fluids.FluidType type) {
++        this.jumpInLiquidInternal();
++    }
++
++    @Override
+     public Vec3 getLeashOffset() {
+         return new Vec3(0.0, (double)(0.5F * this.getEyeHeight()), (double)(this.getBbWidth() * 0.2F));
+     }
+@@ -715,15 +_,19 @@
+     class BeeEnterHiveGoal extends Bee.BaseBeeGoal {
+         @Override
+         public boolean canBeeUse() {
+-            if (Bee.this.hasHive()
+-                && Bee.this.wantsToEnterHive()
+-                && Bee.this.hivePos.closerToCenterThan(Bee.this.position(), 2.0)
+-                && Bee.this.level().getBlockEntity(Bee.this.hivePos) instanceof BeehiveBlockEntity beehiveblockentity) {
+-                if (!beehiveblockentity.isFull()) {
+-                    return true;
++            if (Bee.this.hasHive() && Bee.this.wantsToEnterHive() && Bee.this.hivePos.closerToCenterThan(Bee.this.position(), 2.0D)) {
++                if (!Bee.this.level().isLoadedAndInBounds(Bee.this.hivePos)) return false; // Paper - Do not allow bees to load chunks for beehives
++                BlockEntity tileentity = Bee.this.level().getBlockEntity(Bee.this.hivePos);
++
++                if (tileentity instanceof BeehiveBlockEntity) {
++                    BeehiveBlockEntity tileentitybeehive = (BeehiveBlockEntity) tileentity;
++
++                    if (!tileentitybeehive.isFull()) {
++                        return true;
++                    }
++
++                    Bee.this.hivePos = null;
+                 }
+-
+-                Bee.this.hivePos = null;
+             }
+ 
+             return false;
+@@ -736,6 +_,7 @@
+ 
+         @Override
+         public void start() {
++            if (!Bee.this.level().isLoadedAndInBounds(Bee.this.hivePos)) return; // Paper - Do not allow bees to load chunks for beehives
+             if (Bee.this.level().getBlockEntity(Bee.this.hivePos) instanceof BeehiveBlockEntity beehiveblockentity) {
+                 beehiveblockentity.addOccupant(Bee.this);
+             }
