@@ -9,7 +9,7 @@
      public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
      public static final IntProvider RAIN_DELAY = UniformInt.of(12000, 180000);
      public static final IntProvider RAIN_DURATION = UniformInt.of(12000, 24000);
-@@ -176,12 +_,12 @@
+@@ -176,11 +_,12 @@
      private static final int EMPTY_TIME_NO_TICK = 300;
      private static final int MAX_SCHEDULED_TICKS_PER_TICK = 65536;
      final List<ServerPlayer> players = Lists.newArrayList();
@@ -20,11 +20,10 @@
 +    public final ServerLevelData serverLevelData;
      private int lastSpawnChunkRadius;
      final EntityTickList entityTickList = new EntityTickList();
--    private final PersistentEntitySectionManager<Entity> entityManager;
-+//    private final PersistentEntitySectionManager<Entity> entityManager;
++    // Goldenforge: keep this for spark compat
+     private final PersistentEntitySectionManager<Entity> entityManager;
      private final GameEventDispatcher gameEventDispatcher;
      public boolean noSave;
-     private final SleepStatus sleepStatus;
 @@ -199,12 +_,276 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
@@ -323,7 +322,7 @@
              p_214999_
          );
 -        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
-+//        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage, this.moonrise$getEntityLookup());
          this.chunkSource = new ServerChunkCache(
              this,
              p_215001_,
