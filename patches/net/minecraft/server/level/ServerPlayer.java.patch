@@ -66,6 +66,15 @@
      public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_301997_) {
          super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
          this.textFilter = p_254143_.createTextFilterForPlayer(this);
+@@ -548,7 +_,7 @@
+ 
+     public void doTick() {
+         try {
+-            if (!this.isSpectator() || !this.touchingUnloadedChunk()) {
++            if (valid && !this.isSpectator() || !this.touchingUnloadedChunk()) { // Paper - don't tick dead players that are not in the world currently (pending respawn)
+                 super.tick();
+             }
+ 
 @@ -606,6 +_,11 @@
                  this.connection.send(new ClientboundSetExperiencePacket(this.experienceProgress, this.totalExperience, this.experienceLevel));
              }
