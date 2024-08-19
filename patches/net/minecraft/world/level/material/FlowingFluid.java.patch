@@ -1,7 +1,22 @@
 --- a/net/minecraft/world/level/material/FlowingFluid.java
 +++ b/net/minecraft/world/level/material/FlowingFluid.java
-@@ -164,7 +_,7 @@
-             BlockState blockstate = p_256464_.getBlockState(blockpos);
+@@ -147,7 +_,8 @@
+                 Direction direction = entry.getKey();
+                 FluidState fluidstate = entry.getValue();
+                 BlockPos blockpos = p_76016_.relative(direction);
+-                BlockState blockstate = p_256644_.getBlockState(blockpos);
++                BlockState blockstate = p_256644_.getBlockStateIfLoaded(blockpos); // Paper - Prevent chunk loading from fluid flowing
++                if (blockstate == null) continue; // Paper - Prevent chunk loading from fluid flowing
+                 if (this.canSpreadTo(p_256644_, p_76016_, p_76018_, direction, blockpos, blockstate, p_256644_.getFluidState(blockpos), fluidstate.getType())) {
+                     this.spreadTo(p_256644_, blockpos, blockstate, direction, fluidstate);
+                 }
+@@ -161,10 +_,11 @@
+ 
+         for (Direction direction : Direction.Plane.HORIZONTAL) {
+             BlockPos blockpos = p_76037_.relative(direction);
+-            BlockState blockstate = p_256464_.getBlockState(blockpos);
++            BlockState blockstate = p_256464_.getBlockStateIfLoaded(blockpos); // Paper - Prevent chunk loading from fluid flowing
++            if (blockstate == null) continue; // Paper - Prevent chunk loading from fluid flowing
              FluidState fluidstate = blockstate.getFluidState();
              if (fluidstate.getType().isSame(this) && this.canPassThroughWall(direction, p_256464_, p_76037_, p_76038_, blockpos, blockstate)) {
 -                if (fluidstate.isSource()) {
@@ -34,3 +49,47 @@
      protected abstract boolean canConvertToSource(Level p_256009_);
  
      protected void spreadTo(LevelAccessor p_76005_, BlockPos p_76006_, BlockState p_76007_, Direction p_76008_, FluidState p_76009_) {
+@@ -276,10 +_,18 @@
+             if (direction != p_76030_) {
+                 BlockPos blockpos = p_76028_.relative(direction);
+                 short short1 = getCacheKey(p_76032_, blockpos);
+-                Pair<BlockState, FluidState> pair = p_76033_.computeIfAbsent(short1, p_284932_ -> {
+-                    BlockState blockstate1 = p_76027_.getBlockState(blockpos);
+-                    return Pair.of(blockstate1, blockstate1.getFluidState());
+-                });
++                // Paper start - Prevent chunk loading from fluid flowing
++                Pair<BlockState, FluidState> pair = p_76033_.get(short1);
++                if (pair == null) {
++                    BlockState iblockdatax = p_76027_.getBlockStateIfLoaded(blockpos);
++                    if (iblockdatax == null) {
++                        continue;
++                    }
++
++                    pair = Pair.of(iblockdatax, iblockdatax.getFluidState());
++                    p_76033_.put(short1, pair);
++                }
++                // Paper end - Prevent chunk loading from fluid flowing
+                 BlockState blockstate = pair.getFirst();
+                 FluidState fluidstate = pair.getSecond();
+                 if (this.canPassThrough(p_76027_, this.getFlowing(), p_76028_, p_76031_, direction, blockpos, blockstate, fluidstate)) {
+@@ -357,10 +_,16 @@
+         for (Direction direction : Direction.Plane.HORIZONTAL) {
+             BlockPos blockpos = p_76081_.relative(direction);
+             short short1 = getCacheKey(p_76081_, blockpos);
+-            Pair<BlockState, FluidState> pair = short2objectmap.computeIfAbsent(short1, p_284929_ -> {
+-                BlockState blockstate1 = p_256191_.getBlockState(blockpos);
+-                return Pair.of(blockstate1, blockstate1.getFluidState());
+-            });
++            // Paper start - Prevent chunk loading from fluid flowing
++            Pair<BlockState, FluidState> pair = (Pair) short2objectmap.get(short1);
++            if (pair == null) {
++                BlockState iblockdatax = p_256191_.getBlockStateIfLoaded(blockpos);
++                if (iblockdatax == null) continue;
++
++                pair = Pair.of(iblockdatax, iblockdatax.getFluidState());
++                short2objectmap.put(short1, pair);
++            }
++            // Paper end - Prevent chunk loading from fluid flowing
+             BlockState blockstate = pair.getFirst();
+             FluidState fluidstate = pair.getSecond();
+             FluidState fluidstate1 = this.getNewLiquid(p_256191_, blockpos, blockstate);
