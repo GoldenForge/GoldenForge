@@ -65,7 +65,7 @@
          ServerLevel serverlevel = p_11287_.serverLevel();
          p_11287_.awardStat(Stats.LEAVE_GAME);
          this.save(p_11287_);
-@@ -440,13 +_,20 @@
+@@ -440,13 +_,21 @@
          this.players.remove(p_11237_);
          p_11237_.serverLevel().removePlayerImmediately(p_11237_, p_348558_);
          DimensionTransition dimensiontransition = p_11237_.findRespawnPositionAndUseSpawnBlock(p_11238_, DimensionTransition.DO_NOTHING);
@@ -75,7 +75,9 @@
 +        dimensiontransition = event.getDimensionTransition();
 +
          ServerLevel serverlevel = dimensiontransition.newLevel();
-         ServerPlayer serverplayer = new ServerPlayer(this.server, serverlevel, p_11237_.getGameProfile(), p_11237_.clientInformation());
+-        ServerPlayer serverplayer = new ServerPlayer(this.server, serverlevel, p_11237_.getGameProfile(), p_11237_.clientInformation());
++       // ServerPlayer serverplayer = new ServerPlayer(this.server, serverlevel, p_11237_.getGameProfile(), p_11237_.clientInformation());
++        ServerPlayer serverplayer = p_11237_;
          serverplayer.connection = p_11237_.connection;
          serverplayer.restoreFrom(p_11237_, p_11238_);
          serverplayer.setId(p_11237_.getId());
@@ -87,7 +89,13 @@
              serverplayer.copyRespawnPosition(p_11237_);
          }
  
-@@ -477,6 +_,7 @@
+@@ -472,11 +_,13 @@
+         this.sendActivePlayerEffects(serverplayer);
+         this.sendLevelInfo(serverplayer, serverlevel);
+         this.sendPlayerPermissionLevel(serverplayer);
++        serverplayer.revive();
+         serverlevel.addRespawnedPlayer(serverplayer);
+         this.players.add(serverplayer);
          this.playersByUUID.put(serverplayer.getUUID(), serverplayer);
          serverplayer.initInventoryMenu();
          serverplayer.setHealth(serverplayer.getHealth());

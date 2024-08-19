@@ -234,7 +234,15 @@
          this.containerMenu = this.inventoryMenu;
      }
  
-@@ -1375,6 +_,15 @@
+@@ -1368,13 +_,22 @@
+         this.lastSentExp = -1;
+         this.lastSentHealth = -1.0F;
+         this.lastSentFood = -1;
+-        this.recipeBook.copyOverData(p_9016_.recipeBook);
++        //this.recipeBook.copyOverData(p_9016_.recipeBook);
+         this.seenCredits = p_9016_.seenCredits;
+         this.enteredNetherPosition = p_9016_.enteredNetherPosition;
+         this.chunkTrackingView = p_9016_.chunkTrackingView;
          this.setShoulderEntityLeft(p_9016_.getShoulderEntityLeft());
          this.setShoulderEntityRight(p_9016_.getShoulderEntityRight());
          this.setLastDeathLocation(p_9016_.getLastDeathLocation());
