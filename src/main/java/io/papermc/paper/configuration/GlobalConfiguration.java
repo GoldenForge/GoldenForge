@@ -98,6 +98,10 @@ public class GlobalConfiguration extends ConfigurationPart {
         public boolean isProxyOnlineMode() {
             return MinecraftServer.getServer().usesAuthentication() || (this.velocity.enabled && this.velocity.onlineMode);
         }
+
+        public boolean shouldEnableCrossStitch() {
+            return this.velocity.enabled && this.velocity.enableCrossStitch;
+        }
     }
 
     public Console console;

@@ -24,7 +24,7 @@
          ) {
 -            p_237663_.writeVarInt(BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(p_237664_));
 -            p_237664_.serializeToNetwork((T)p_237665_, p_237663_);
-+            if (GlobalConfiguration.get().proxies.velocity.enableCrossStitch) {
++            if (GlobalConfiguration.get().proxies.shouldEnableCrossStitch()) {
 +                ResourceLocation key = BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getKey(p_237664_);
 +                int id = BuiltInRegistries.COMMAND_ARGUMENT_TYPE.getId(p_237664_);
 +
