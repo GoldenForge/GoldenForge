@@ -326,7 +326,36 @@
      }
  
      private boolean isLevelRunningNormally() {
-@@ -2056,7 +_,8 @@
+@@ -2003,17 +_,17 @@
+ 
+         try {
+             p_261564_.saveDataTag(p_261470_.registries().compositeAccess(), p_261470_.worldData());
+-            Services services = Services.create(this.authenticationService, this.gameDirectory);
+-            services.profileCache().setExecutor(this);
+-            SkullBlockEntity.setup(services, this);
+-            GameProfileCache.setUsesAuthentication(false);
+-            this.singleplayerServer = MinecraftServer.spin(
+-                p_231361_ -> new IntegratedServer(p_231361_, this, p_261564_, p_261826_, p_261470_, services, p_319374_ -> {
+-                        StoringChunkProgressListener storingchunkprogresslistener = StoringChunkProgressListener.createFromGameruleRadius(p_319374_ + 0);
+-                        this.progressListener.set(storingchunkprogresslistener);
+-                        return ProcessorChunkProgressListener.createStarted(storingchunkprogresslistener, this.progressTasks::add);
+-                    })
+-            );
++//            Services services = Services.create(this.authenticationService, this.gameDirectory);
++//            services.profileCache().setExecutor(this);
++//            SkullBlockEntity.setup(services, this);
++//            GameProfileCache.setUsesAuthentication(false);
++//            this.singleplayerServer = MinecraftServer.spin(
++//                p_231361_ -> new IntegratedServer(p_231361_, this, p_261564_, p_261826_, p_261470_, services, p_319374_ -> {
++//                        StoringChunkProgressListener storingchunkprogresslistener = StoringChunkProgressListener.createFromGameruleRadius(p_319374_ + 0);
++//                        this.progressListener.set(storingchunkprogresslistener);
++//                        return ProcessorChunkProgressListener.createStarted(storingchunkprogresslistener, this.progressTasks::add);
++//                    })
++//            );
+             this.isLocalServer = true;
+             this.updateReportEnvironment(ReportEnvironment.local());
+             this.quickPlayLog.setWorldData(QuickPlayLog.Type.SINGLEPLAYER, p_261564_.getLevelId(), p_261470_.worldData().getLevelName());
+@@ -2056,13 +_,14 @@
      }
  
      public void setLevel(ClientLevel p_91157_, ReceivingLevelScreen.Reason p_341652_) {
@@ -336,6 +365,15 @@
          this.level = p_91157_;
          this.updateLevelInEngines(p_91157_);
          if (!this.isLocalServer) {
+-            Services services = Services.create(this.authenticationService, this.gameDirectory);
+-            services.profileCache().setExecutor(this);
+-            SkullBlockEntity.setup(services, this);
++//            Services services = Services.create(this.authenticationService, this.gameDirectory);
++//            services.profileCache().setExecutor(this);
++//            SkullBlockEntity.setup(services, this);
+             GameProfileCache.setUsesAuthentication(false);
+         }
+     }
 @@ -2093,6 +_,7 @@
          IntegratedServer integratedserver = this.singleplayerServer;
          this.singleplayerServer = null;
