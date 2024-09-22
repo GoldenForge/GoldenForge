@@ -10,13 +10,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameRules;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.goldenforge.GoldenForge;
 import org.jetbrains.annotations.MustBeInvokedByOverriders;
 import org.slf4j.Logger;
 import org.spongepowered.configurate.CommentedConfigurationNode;
 import org.spongepowered.configurate.ConfigurateException;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.ConfigurationOptions;
+import org.spongepowered.configurate.NodePath;
 import org.spongepowered.configurate.objectmapping.ObjectMapper;
 import org.spongepowered.configurate.serialize.SerializationException;
 import org.spongepowered.configurate.util.CheckedFunction;
@@ -46,12 +46,12 @@ public abstract class Configurations<G, W> {
     protected final String worldConfigFileName;
 
     public Configurations(
-        final Path globalFolder,
-        final Class<G> globalConfigType,
-        final Class<W> worldConfigClass,
-        final String globalConfigFileName,
-        final String defaultWorldConfigFileName,
-        final String worldConfigFileName
+            final Path globalFolder,
+            final Class<G> globalConfigType,
+            final Class<W> worldConfigClass,
+            final String globalConfigFileName,
+            final String defaultWorldConfigFileName,
+            final String worldConfigFileName
     ) {
         this.globalFolder = globalFolder;
         this.globalConfigClass = globalConfigType;
@@ -63,8 +63,8 @@ public abstract class Configurations<G, W> {
 
     protected ObjectMapper.Factory.Builder createObjectMapper() {
         return ObjectMapper.factoryBuilder()
-            .addConstraint(Constraint.class, new Constraint.Factory())
-            .addConstraint(Constraints.Min.class, Number.class, new Constraints.Min.Factory());
+                .addConstraint(Constraint.class, new Constraint.Factory())
+                .addConstraint(Constraints.Min.class, Number.class, new Constraints.Min.Factory());
     }
 
     protected YamlConfigurationLoader.Builder createLoaderBuilder() {
@@ -122,9 +122,9 @@ public abstract class Configurations<G, W> {
     protected G initializeGlobalConfiguration(final CheckedFunction<ConfigurationNode, G, SerializationException> creator) throws ConfigurateException {
         final Path configFile = this.globalFolder.resolve(this.globalConfigFileName);
         final YamlConfigurationLoader loader = this.createGlobalLoaderBuilder()
-            .defaultOptions(this.applyObjectMapperFactory(this.createGlobalObjectMapperFactoryBuilder().build()))
-            .path(configFile)
-            .build();
+                .defaultOptions(this.applyObjectMapperFactory(this.createGlobalObjectMapperFactoryBuilder().build()))
+                .path(configFile)
+                .build();
         final ConfigurationNode node;
         if (Files.notExists(configFile)) {
             node = CommentedConfigurationNode.root(loader.defaultOptions());
@@ -156,15 +156,15 @@ public abstract class Configurations<G, W> {
     @MustBeInvokedByOverriders
     protected ContextMap.Builder createDefaultContextMap(final RegistryAccess registryAccess) {
         return ContextMap.builder()
-            .put(WORLD_NAME, WORLD_DEFAULTS)
-            .put(WORLD_KEY, WORLD_DEFAULTS_KEY)
-            .put(REGISTRY_ACCESS, registryAccess);
+                .put(WORLD_NAME, WORLD_DEFAULTS)
+                .put(WORLD_KEY, WORLD_DEFAULTS_KEY)
+                .put(REGISTRY_ACCESS, registryAccess);
     }
 
     public void initializeWorldDefaultsConfiguration(final RegistryAccess registryAccess) throws ConfigurateException {
         final ContextMap contextMap = this.createDefaultContextMap(registryAccess)
-            .put(FIRST_DEFAULT)
-            .build();
+                .put(FIRST_DEFAULT)
+                .build();
         final Path configFile = this.globalFolder.resolve(this.defaultWorldConfigFileName);
         final DefaultWorldLoader result = this.createDefaultWorldLoader(false, contextMap, configFile);
         final YamlConfigurationLoader loader = result.loader();
@@ -186,11 +186,11 @@ public abstract class Configurations<G, W> {
             throw new IllegalStateException("World defaults configuration file '" + configFile + "' doesn't exist");
         }
         return new DefaultWorldLoader(
-            this.createWorldConfigLoaderBuilder(contextMap)
-                .defaultOptions(this.applyObjectMapperFactory(this.createWorldObjectMapperFactoryBuilder(contextMap).build()))
-                .path(configFile)
-                .build(),
-            willCreate
+                this.createWorldConfigLoaderBuilder(contextMap)
+                        .defaultOptions(this.applyObjectMapperFactory(this.createWorldObjectMapperFactoryBuilder(contextMap).build()))
+                        .path(configFile)
+                        .build(),
+                willCreate
         );
     }
 
@@ -221,16 +221,15 @@ public abstract class Configurations<G, W> {
         final Path dir = contextMap.require(WORLD_DIRECTORY);
         final Path worldConfigFile = dir.resolve(this.worldConfigFileName);
         if (Files.notExists(worldConfigFile)) {
-            GoldenForge.LOGGER.warn("creating file");
             PaperConfigurations.createDirectoriesSymlinkAware(dir);
             Files.createFile(worldConfigFile); // create empty file as template
             newFile = true;
         }
 
         final YamlConfigurationLoader worldLoader = this.createWorldConfigLoaderBuilder(contextMap)
-            .defaultOptions(this.applyObjectMapperFactory(this.createWorldObjectMapperFactoryBuilder(contextMap).build()))
-            .path(worldConfigFile)
-            .build();
+                .defaultOptions(this.applyObjectMapperFactory(this.createWorldObjectMapperFactoryBuilder(contextMap).build()))
+                .path(worldConfigFile)
+                .build();
         final ConfigurationNode worldNode = worldLoader.load();
         if (newFile) { // set the version field if new file
             worldNode.node(Configuration.VERSION_FIELD).set(this.worldConfigVersion());
@@ -273,8 +272,8 @@ public abstract class Configurations<G, W> {
 
     private UnaryOperator<ConfigurationOptions> applyObjectMapperFactory(final ObjectMapper.Factory factory) {
         return options -> options.serializers(builder -> builder
-            .register(this::isConfigType, factory.asTypeSerializer())
-            .registerAnnotatedObjects(factory));
+                .register(this::isConfigType, factory.asTypeSerializer())
+                .registerAnnotatedObjects(factory));
     }
 
     public Path getWorldConfigFile(ServerLevel level) {

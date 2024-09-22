@@ -37,6 +37,7 @@ import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
@@ -359,7 +360,7 @@ public class WorldConfiguration extends ConfigurationPart {
         public boolean disableIceAndSnow = false;
         public boolean optimizeExplosions = false;
         public boolean disableExplosionKnockback = false;
-        public boolean generateFlatBedrock = false;
+        //public boolean generateFlatBedrock = false;
         public FrostedIce frostedIce;
 
         public class FrostedIce extends ConfigurationPart {
@@ -510,15 +511,10 @@ public class WorldConfiguration extends ConfigurationPart {
         public int lightQueueSize = 20;
         public boolean updatePathfindingOnBlockUpdate = true;
         public boolean showSignClickCommandFailureMsgsToPlayer = false;
-        public RedstoneImplementation redstoneImplementation = RedstoneImplementation.VANILLA;
         public boolean disableEndCredits = false;
         public double maxLeashDistance = Leashable.LEASH_TOO_FAR_DIST;
         public boolean disableSprintInterruptionOnAttack = false;
         public int shieldBlockingDelay = 5;
         public boolean disableRelativeProjectileVelocity = false;
-
-        public enum RedstoneImplementation {
-            VANILLA, EIGENCRAFT, ALTERNATE_CURRENT
-        }
     }
 }

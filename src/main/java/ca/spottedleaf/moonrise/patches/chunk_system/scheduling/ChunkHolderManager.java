@@ -229,10 +229,8 @@ public final class ChunkHolderManager {
     public void autoSave() {
         final List<NewChunkHolder> reschedule = new ArrayList<>();
         final long currentTick = this.currentTick;
-        //final long maxSaveTime = currentTick - Math.max(1L, this.world.paperConfig().chunks.autoSaveInterval.value());
-        final long maxSaveTime = 0;
-       // final int maxToSave = this.world.paperConfig().chunks.maxAutoSaveChunksPerTick;
-        final int maxToSave = 24;
+        final long maxSaveTime = currentTick - Math.max(1L, this.world.paperConfig().chunks.autoSaveInterval.value());
+        final int maxToSave = this.world.paperConfig().chunks.maxAutoSaveChunksPerTick;
         for (int autoSaved = 0; autoSaved < maxToSave && !this.autoSaveQueue.isEmpty();) {
             final NewChunkHolder holder = this.autoSaveQueue.first();
 
