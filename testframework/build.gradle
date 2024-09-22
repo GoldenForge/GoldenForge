@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
     id 'com.diffplug.spotless'
     id 'net.neoforged.licenser'
-    id 'net.neoforged.gradle.platform'
+    id 'org.goldenforge.patched.neoforged.gradle.platform'
     id 'neoforge.formatting-conventions'
 }
 
@@ -17,6 +17,10 @@ repositories {
     maven {
         name 'NeoForged'
         url 'https://maven.neoforged.net/releases'
+    }
+    maven {
+        name 'ModcraftMC'
+        url 'https://maven.modcraftmc.fr/releases/'
     }
 }
 
