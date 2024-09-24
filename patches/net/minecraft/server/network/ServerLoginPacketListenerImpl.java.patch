@@ -18,6 +18,17 @@
      public ServerLoginPacketListenerImpl(MinecraftServer p_10027_, Connection p_10028_, boolean p_320815_) {
          this.server = p_10027_;
          this.connection = p_10028_;
+@@ -70,7 +_,9 @@
+     @Override
+     public void tick() {
+         if (this.state == ServerLoginPacketListenerImpl.State.VERIFYING) {
+-            this.verifyLoginAndFinishConnectionSetup(Objects.requireNonNull(this.authenticatedProfile));
++            if (this.connection.isConnected()) { // Paper - prevent logins to be processed even though disconnect was called
++                this.verifyLoginAndFinishConnectionSetup(Objects.requireNonNull(this.authenticatedProfile));
++            } // Paper - prevent logins to be processed even though disconnect was called
+         }
+ 
+         if (this.state == ServerLoginPacketListenerImpl.State.WAITING_FOR_DUPE_DISCONNECT
 @@ -115,7 +_,12 @@
      @Override
      public void handleHello(ServerboundHelloPacket p_10047_) {

@@ -22,11 +22,12 @@
              ServerPlayer.this.connection.send(new ClientboundContainerSetDataPacket(p_143455_.containerId, p_143456_, p_143457_));
          }
      };
-@@ -277,6 +_,43 @@
+@@ -277,6 +_,44 @@
      private int containerCounter;
      public boolean wonGame;
  
 +    // Paper start - Optional per player mob spawns
++    private int containerUpdateDelay; // Paper - Configurable container update tick rate
 +    public static final int MOBCATEGORY_TOTAL_ENUMS = net.minecraft.world.entity.MobCategory.values().length;
 +    public final int[] mobCounts = new int[MOBCATEGORY_TOTAL_ENUMS]; // Paper
 +    // Paper end - Optional per player mob spawns
@@ -66,6 +67,20 @@
      public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_301997_) {
          super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
          this.textFilter = p_254143_.createTextFilterForPlayer(this);
+@@ -496,7 +_,12 @@
+             this.invulnerableTime--;
+         }
+ 
+-        this.containerMenu.broadcastChanges();
++        // Paper start - Configurable container update tick rate
++        if (--containerUpdateDelay <= 0) {
++            this.containerMenu.broadcastChanges();
++            containerUpdateDelay = this.level().paperConfig().tickRates.containerUpdate;
++        }
++        // Paper end - Configurable container update tick rate
+         if (!this.level().isClientSide && !this.containerMenu.stillValid(this)) {
+             this.closeContainer();
+             this.containerMenu = this.inventoryMenu;
 @@ -548,7 +_,7 @@
  
      public void doTick() {

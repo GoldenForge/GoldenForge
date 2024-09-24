@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/dedicated/DedicatedServer.java
 +++ b/net/minecraft/server/dedicated/DedicatedServer.java
+@@ -20,6 +_,8 @@
+ import java.util.Optional;
+ import java.util.function.BooleanSupplier;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.DefaultUncaughtExceptionHandler;
+ import net.minecraft.DefaultUncaughtExceptionHandlerWithName;
+ import net.minecraft.SharedConstants;
 @@ -70,7 +_,7 @@
      private final RconConsoleSource rconConsoleSource;
      @Nullable
@@ -26,7 +35,7 @@
                  BufferedReader bufferedreader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
  
                  String s1;
-@@ -133,6 +_,12 @@
+@@ -133,6 +_,14 @@
              this.setLocalIp(dedicatedserverproperties.serverIp);
          }
  
@@ -35,6 +44,8 @@
 +        this.paperConfigurations.initializeGlobalConfiguration(this.registryAccess());
 +        this.paperConfigurations.initializeWorldDefaultsConfiguration(this.registryAccess());
 +        // Paper end - initialize global and world-defaults configuration
++
++        org.spigotmc.WatchdogThread.doStart(GlobalConfiguration.get().watchdog.timeoutTime); // Paper - start watchdog thread
 +
          this.setPvpAllowed(dedicatedserverproperties.pvp);
          this.setFlightAllowed(dedicatedserverproperties.allowFlight);
@@ -53,6 +64,15 @@
              if (dedicatedserverproperties.announcePlayerAchievements != null) {
                  this.getGameRules().getRule(GameRules.RULE_ANNOUNCE_ADVANCEMENTS).set(dedicatedserverproperties.announcePlayerAchievements, this);
              }
+@@ -204,7 +_,7 @@
+                 this.rconThread = RconThread.create(this);
+             }
+ 
+-            if (this.getMaxTickLength() > 0L) {
++            if (false && this.getMaxTickLength() > 0L) {
+                 Thread thread1 = new Thread(new ServerWatchdog(this));
+                 thread1.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandlerWithName(LOGGER));
+                 thread1.setName("Server Watchdog");
 @@ -217,6 +_,12 @@
                  LOGGER.info("JMX monitoring enabled");
              }
@@ -66,7 +86,7 @@
              return true;
          }
      }
-@@ -295,6 +_,11 @@
+@@ -295,6 +_,12 @@
          if (this.queryThreadGs4 != null) {
              this.queryThreadGs4.stop();
          }
@@ -74,6 +94,7 @@
 +            this.dediLanPinger.interrupt();
 +            this.dediLanPinger = null;
 +        }
++        org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
 +        System.exit(this.abnormalExit ? 70 : 0); // CraftBukkit // Paper
      }
  

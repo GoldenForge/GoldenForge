@@ -110,13 +110,13 @@
 +    // Paper end - async chunk saving
 +
      public static CompoundTag write(ServerLevel p_63455_, ChunkAccess p_63456_) {
-+        ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData asyncsavedata = p_63456_.asyncsavedata;
          ChunkPos chunkpos = p_63456_.getPos();
          CompoundTag compoundtag = NbtUtils.addCurrentDataVersion(new CompoundTag());
          compoundtag.putInt("xPos", chunkpos.x);
          compoundtag.putInt("yPos", p_63456_.getMinSection());
          compoundtag.putInt("zPos", chunkpos.z);
 -        compoundtag.putLong("LastUpdate", p_63455_.getGameTime());
++        ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData asyncsavedata = p_63456_.asyncsavedata;
 +        compoundtag.putLong("LastUpdate", asyncsavedata != null ? asyncsavedata.worldTime() : p_63455_.getGameTime()); // Paper - async chunk saving // Paper - diff on change
          compoundtag.putLong("InhabitedTime", p_63456_.getInhabitedTime());
          compoundtag.putString("Status", BuiltInRegistries.CHUNK_STATUS.getKey(p_63456_.getPersistedStatus()).toString());

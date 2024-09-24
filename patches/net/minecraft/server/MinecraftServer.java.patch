@@ -24,6 +24,15 @@
      @Nullable
      private KeyPair keyPair;
      @Nullable
+@@ -236,7 +_,7 @@
+     private long lastOverloadWarningNanos;
+     protected final Services services;
+     private long lastServerStatus;
+-    private final Thread serverThread;
++    public final Thread serverThread;
+     private long lastTickNanos = Util.getNanos();
+     private long taskExecutionStartNanos = Util.getNanos();
+     private long idleTimeNanos;
 @@ -262,10 +_,35 @@
      private volatile boolean isSaving;
      private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
@@ -147,11 +156,12 @@
          this.registries = p_236726_.registries();
          this.worldData = p_236726_.worldData();
          if (!this.registries.compositeAccess().registryOrThrow(Registries.LEVEL_STEM).containsKey(LevelStem.OVERWORLD)) {
-@@ -317,6 +_,7 @@
+@@ -317,6 +_,8 @@
              this.executor = Util.backgroundExecutor();
              this.potionBrewing = PotionBrewing.bootstrap(this.worldData.enabledFeatures());
          }
 +        this.paperConfigurations = services.paperConfigurations(); // Paper - add paper configuration files
++        Runtime.getRuntime().addShutdownHook(new org.bukkit.craftbukkit.util.ServerShutdownThread(this));
      }
  
      private void readScoreboard(DimensionDataStorage p_129842_) {
@@ -179,7 +189,31 @@
              ChunkPos chunkpos = new ChunkPos(serverchunkcache.randomState().sampler().findSpawnPosition());
              int i = serverchunkcache.getGenerator().getSpawnHeight(p_177897_);
              if (i < p_177897_.getMinBuildHeight()) {
-@@ -513,6 +_,7 @@
+@@ -485,6 +_,7 @@
+     }
+ 
+     private void prepareLevels(ChunkProgressListener p_129941_) {
++        this.forceTicks = true;
+         ServerLevel serverlevel = this.overworld();
+         LOGGER.info("Preparing start region for dimension {}", serverlevel.dimension().location());
+         BlockPos blockpos = serverlevel.getSharedSpawnPos();
+@@ -496,12 +_,11 @@
+         int j = i > 0 ? Mth.square(ChunkProgressListener.calculateDiameter(i)) : 0;
+ 
+         while (serverchunkcache.getTickingGenerated() < j) {
+-            this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
+-            this.waitUntilNextTick();
++            this.executeModerately();
+         }
+ 
+-        this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
+-        this.waitUntilNextTick();
++       // this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
++        this.executeModerately();
+ 
+         for (ServerLevel serverlevel1 : this.levels.values()) {
+             ForcedChunksSavedData forcedchunkssaveddata = serverlevel1.getDataStorage().get(ForcedChunksSavedData.factory(), "chunks");
+@@ -513,13 +_,15 @@
                      ChunkPos chunkpos = new ChunkPos(k);
                      serverlevel1.getChunkSource().updateChunkForced(chunkpos, true);
                  }
@@ -187,6 +221,16 @@
              }
          }
  
+-        this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
+-        this.waitUntilNextTick();
++       // this.nextTickTimeNanos = Util.getNanos() + PREPARE_LEVELS_DEFAULT_DELAY_NANOS;
++        this.executeModerately();
+         p_129941_.stop();
+         this.updateMobSpawningFlags();
++        this.forceTicks = false;
+     }
+ 
+     public GameType getDefaultGameType() {
 @@ -537,6 +_,10 @@
      public abstract boolean shouldRconBroadcast();
  
@@ -207,7 +251,7 @@
              flag = true;
          }
  
-@@ -582,7 +_,29 @@
+@@ -582,7 +_,28 @@
          this.stopServer();
      }
  
@@ -229,10 +273,9 @@
 +            if (this.hasStopped) return;
 +            this.hasStopped = true;
 +        }
-+        if (!hasLoggedStop) io.papermc.paper.util.TraceUtil.dumpTraceForThread("Server stopped"); // Paper - Debugging
 +        // Paper start - kill main thread, and kill it hard
 +        shutdownThread = Thread.currentThread();
-+        //org.spigotmc.WatchdogThread.doStop(); // Paper
++        org.spigotmc.WatchdogThread.doStop(); // Paper
 +        // Paper end
          if (this.metricsRecorder.isRecording()) {
              this.cancelRecordingMetrics();
@@ -272,10 +315,14 @@
              }
          }
  
-@@ -635,6 +_,16 @@
+@@ -635,6 +_,20 @@
          } catch (IOException ioexception) {
              LOGGER.error("Failed to unlock level {}", this.storageSource.getLevelId(), ioexception);
          }
++
++        io.papermc.paper.util.MCUtil.asyncExecutor.shutdown(); // Paper
++        try { io.papermc.paper.util.MCUtil.asyncExecutor.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS); // Paper
++        } catch (java.lang.InterruptedException ignored) {} // Paper
 +
 +        ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.deinit(); // Paper - rewrite chunk system
 +        // Paper start - move final shutdown items here
@@ -363,11 +410,11 @@
              this.status = this.buildServerStatus();
 +            resetStatusCache(status);
 +
-+            final long actualDoneTimeMs = System.currentTimeMillis() - serverStartTime; // Paper - Add total time
++            final long actualDoneTimeMs = System.currentTimeMillis() - Main.BOOT_TIME.toEpochMilli(); // Paper - Add total time
 +            LOGGER.info("Done ({})! For help, type \"help\"", String.format(java.util.Locale.ROOT, "%.3fs", actualDoneTimeMs / 1000.00D)); // Paper - Add total time
-+            //org.spigotmc.WatchdogThread.tick();
++            org.spigotmc.WatchdogThread.tick();
 +            // Paper end - Improved Watchdog Support
-+            //org.spigotmc.WatchdogThread.hasStarted = true; // Paper
++            org.spigotmc.WatchdogThread.hasStarted = true; // Paper
 +            Arrays.fill( this.recentTps, 20 );
 +            // Paper start - further improve server tick loop
 +            long tickSection = Util.getNanos();
@@ -446,15 +493,16 @@
                  this.onServerExit();
              }
          }
-@@ -789,9 +_,28 @@
+@@ -789,7 +_,26 @@
      }
  
      private boolean haveTime() {
+-        return this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
 +        // CraftBukkit start
 +        if (isOversleep) return canOversleep(); // Paper - because of our changes, this logic is broken
-         return this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
-     }
- 
++        return this.forceTicks || this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
++    }
++
 +    // Paper start
 +    boolean isOversleep = false;
 +    private boolean canOversleep() {
@@ -470,11 +518,9 @@
 +        this.runAllTasks();
 +        java.util.concurrent.locks.LockSupport.parkNanos("executing tasks", 1000L);
 +        // CraftBukkit end
-+    }
-+
+     }
+ 
      public static boolean throwIfFatalException() {
-         RuntimeException runtimeexception = fatalException.get();
-         if (runtimeexception != null) {
 @@ -811,8 +_,10 @@
      }
  
@@ -523,7 +569,7 @@
          }
      }
  
-@@ -900,15 +_,52 @@
+@@ -900,15 +_,51 @@
  
      public void tickServer(BooleanSupplier p_129871_) {
          long i = Util.getNanos();
@@ -560,8 +606,7 @@
 +                this.playerList.saveAll(playerSaveInterval);
 +            }
 +            for (ServerLevel level : this.getAllLevels()) {
-+                //if (level.paperConfig().chunks.autoSaveInterval.value() > 0) {
-+                if (0 > 0) {
++                if (level.paperConfig().chunks.autoSaveInterval.value() > 0) {
 +                    level.saveIncrementally(fullSave);
 +                }
 +            }
@@ -576,7 +621,7 @@
          if (this.ticksUntilAutosave <= 0) {
              this.ticksUntilAutosave = this.computeNextAutosaveInterval();
              LOGGER.debug("Autosave started");
-@@ -925,8 +_,14 @@
+@@ -925,8 +_,15 @@
          this.aggregatedTickTimesNanos += j;
          this.tickTimesNanos[k] = j;
          this.smoothedTickTimeMillis = this.smoothedTickTimeMillis * 0.8F + (float)j / (float)TimeUtil.NANOSECONDS_PER_MILLISECOND * 0.19999999F;
@@ -587,6 +632,7 @@
 +        // Paper end - Add tick times API and /mspt command
          this.logTickMethodTime(i);
          this.profiler.pop();
++        org.spigotmc.WatchdogThread.tick(); // Spigot
 +        net.neoforged.neoforge.event.EventHooks.fireServerTickPost(p_129871_, this);
      }
  

@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/Main.java
 +++ b/net/minecraft/server/Main.java
-@@ -58,15 +_,32 @@
+@@ -58,15 +_,33 @@
  import net.minecraft.world.level.storage.LevelSummary;
  import net.minecraft.world.level.storage.PrimaryLevelData;
  import net.minecraft.world.level.storage.WorldData;
@@ -11,6 +11,7 @@
 +
  public class Main {
      private static final Logger LOGGER = LogUtils.getLogger();
++    public static final java.time.Instant BOOT_TIME = java.time.Instant.now(); // Paper - track initial start time
  
      @DontObfuscate
 -    public static void main(String[] p_129699_) {
@@ -123,7 +124,7 @@
                                          WorldDimensions.Complete worlddimensions$complete = worlddimensions.bake(registry);
                                          Lifecycle lifecycle = worlddimensions$complete.lifecycle().add(p_307161_.datapackWorldgen().allRegistriesLifecycle());
                                          return new WorldLoader.DataLoadOutput<>(
-@@ -246,24 +_,22 @@
+@@ -246,37 +_,38 @@
  
              WorldData worlddata = worldstem.worldData();
              levelstoragesource$levelstorageaccess.saveDataTag(registryaccess$frozen, worlddata);
@@ -159,14 +160,27 @@
                      }
  
                      return dedicatedserver1;
-@@ -272,7 +_,10 @@
-             Thread thread = new Thread("Server Shutdown Thread") {
-                 @Override
-                 public void run() {
-+                    // FORGE: Halting as GameTestServer will cause issues as it always calls System#exit on both crash and normal exit, so skip it
-+                    if (!(dedicatedserver instanceof net.minecraft.gametest.framework.GameTestServer))
-                     dedicatedserver.halt(true);
-+                    org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
                  }
-             };
-             thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
+             );
+-            Thread thread = new Thread("Server Shutdown Thread") {
+-                @Override
+-                public void run() {
+-                    dedicatedserver.halt(true);
+-                }
+-            };
+-            thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
+-            Runtime.getRuntime().addShutdownHook(thread);
++//            Thread thread = new Thread("Server Shutdown Thread") {
++//                @Override
++//                public void run() {
++//                    // FORGE: Halting as GameTestServer will cause issues as it always calls System#exit on both crash and normal exit, so skip it
++//                    if (!(dedicatedserver instanceof net.minecraft.gametest.framework.GameTestServer))
++//                    dedicatedserver.halt(true);
++//                    org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
++//                }
++//            };
++//            thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
++//            Runtime.getRuntime().addShutdownHook(thread);
+         } catch (Exception exception1) {
+             LOGGER.error(LogUtils.FATAL_MARKER, "Failed to start the minecraft server", (Throwable)exception1);
+         }

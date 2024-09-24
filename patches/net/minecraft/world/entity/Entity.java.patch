@@ -39,11 +39,12 @@
      private boolean invulnerable;
      protected UUID uuid = Mth.createInsecureUUID(this.random);
      protected String stringUUID = this.uuid.toString();
-@@ -244,6 +_,111 @@
+@@ -244,6 +_,112 @@
      @Nullable
      private BlockState inBlockState = null;
  
 +    // Spigot start
++    public boolean collisionLoadChunks = false; // Paper
 +    public boolean valid;
 +    public final org.spigotmc.ActivationRange.ActivationType activationType = org.spigotmc.ActivationRange.initializeEntityActivationType(this);
 +    public final boolean defaultActivationState;
@@ -193,7 +194,48 @@
          }
  
          this.checkBelowWorld();
-@@ -604,6 +_,8 @@
+@@ -598,12 +_,49 @@
+         return this.onGround;
+     }
+ 
++    // Paper start - detailed watchdog information
++    public final Object posLock = new Object(); // Paper - log detailed entity tick information
++
++    private Vec3 moveVector;
++    private double moveStartX;
++    private double moveStartY;
++    private double moveStartZ;
++
++    public final Vec3 getMoveVector() {
++        return this.moveVector;
++    }
++
++    public final double getMoveStartX() {
++        return this.moveStartX;
++    }
++
++    public final double getMoveStartY() {
++        return this.moveStartY;
++    }
++
++    public final double getMoveStartZ() {
++        return this.moveStartZ;
++    }
++    // Paper end - detailed watchdog information
++
+     public void move(MoverType p_19973_, Vec3 p_19974_) {
++        // Paper start - detailed watchdog information
++        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread("Cannot move an entity off-main");
++        synchronized (this.posLock) {
++            this.moveStartX = this.getX();
++            this.moveStartY = this.getY();
++            this.moveStartZ = this.getZ();
++            this.moveVector = p_19974_;
++        }
++        try {
++            // Paper end - detailed watchdog information
+         if (this.noPhysics) {
+             this.setPos(this.getX() + p_19974_.x, this.getY() + p_19974_.y, this.getZ() + p_19974_.z);
          } else {
              this.wasOnFire = this.isOnFire();
              if (p_19973_ == MoverType.PISTON) {
@@ -225,7 +267,7 @@
                      BlockPos blockpos1 = this.getOnPos();
                      BlockState blockstate1 = this.level().getBlockState(blockpos1);
                      boolean flag1 = this.isStateClimbable(blockstate1);
-@@ -717,16 +_,16 @@
+@@ -717,18 +_,25 @@
                          this.setRemainingFireTicks(-this.getFireImmuneTicks());
                      }
  
@@ -244,7 +286,16 @@
 +                this.level.getProfiler().pop();
              }
          }
++        // Paper start - detailed watchdog information
++        } finally {
++            synchronized (this.posLock) { // Paper
++                this.moveVector = null;
++            } // Paper
++        }
++        // Paper end - detailed watchdog information
      }
+ 
+     private boolean isStateClimbable(BlockState p_286733_) {
 @@ -806,15 +_,13 @@
      }
  
@@ -878,7 +929,18 @@
          return this.fluidHeight.getDouble(p_204037_);
      }
  
-@@ -3308,6 +_,15 @@
+@@ -3244,7 +_,9 @@
+     }
+ 
+     public void setDeltaMovement(Vec3 p_20257_) {
+-        this.deltaMovement = p_20257_;
++        synchronized (this.posLock) { // Paper
++            this.deltaMovement = p_20257_;
++        }
+     }
+ 
+     public void addDeltaMovement(Vec3 p_250128_) {
+@@ -3308,8 +_,19 @@
      }
  
      public final void setPosRaw(double p_20344_, double p_20345_, double p_20346_) {
@@ -892,8 +954,13 @@
 +        }
 +        // Paper end - rewrite chunk system
          if (this.position.x != p_20344_ || this.position.y != p_20345_ || this.position.z != p_20346_) {
-             this.position = new Vec3(p_20344_, p_20345_, p_20346_);
+-            this.position = new Vec3(p_20344_, p_20345_, p_20346_);
++            synchronized (this.posLock) { // Paper
++                this.position = new Vec3(p_20344_, p_20345_, p_20346_);
++            }
              int i = Mth.floor(p_20344_);
+             int j = Mth.floor(p_20345_);
+             int k = Mth.floor(p_20346_);
 @@ -3323,6 +_,7 @@
  
              this.levelCallback.onMove();

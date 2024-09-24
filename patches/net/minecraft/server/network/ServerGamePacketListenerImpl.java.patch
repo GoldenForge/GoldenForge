@@ -17,6 +17,36 @@
      }
  
      @Override
+@@ -397,9 +_,9 @@
+                 double d0 = entity.getX();
+                 double d1 = entity.getY();
+                 double d2 = entity.getZ();
+-                double d3 = clampHorizontal(p_9876_.getX());
+-                double d4 = clampVertical(p_9876_.getY());
+-                double d5 = clampHorizontal(p_9876_.getZ());
++                double d3 = clampHorizontal(p_9876_.getX()); final double toX = d3; // Paper - OBFHELPER
++                double d4 = clampVertical(p_9876_.getY()); final double toY = d4; // Paper - OBFHELPER
++                double d5 = clampHorizontal(p_9876_.getZ()); final double toZ = d5; // Paper - OBFHELPER
+                 float f = Mth.wrapDegrees(p_9876_.getYRot());
+                 float f1 = Mth.wrapDegrees(p_9876_.getXRot());
+                 double d6 = d3 - this.vehicleFirstGoodX;
+@@ -430,6 +_,16 @@
+                     d7 = 0.0;
+                 }
+ 
++                // Paper start - Prevent moving into unloaded chunks
++                if (this.player.level().paperConfig().chunks.preventMovingIntoUnloadedChunks && (
++                        !serverlevel.areChunksLoadedForMove(this.player.getBoundingBox().expandTowards(new Vec3(toX, toY, toZ).subtract(this.player.position()))) ||
++                                !serverlevel.areChunksLoadedForMove(entity.getBoundingBox().expandTowards(new Vec3(toX, toY, toZ).subtract(entity.position())))
++                )) {
++                    this.connection.send(new ClientboundMoveVehiclePacket(entity));
++                    return;
++                }
++                // Paper end - Prevent moving into unloaded chunks
++
+                 d8 = d5 - entity.getZ();
+                 d10 = d6 * d6 + d7 * d7 + d8 * d8;
+                 boolean flag2 = false;
 @@ -439,9 +_,11 @@
                  }
  
@@ -53,6 +83,33 @@
      private boolean noBlocksAround(Entity p_9794_) {
          return p_9794_.level()
              .getBlockStates(p_9794_.getBoundingBox().inflate(0.0625).expandTowards(0.0, -0.55, 0.0))
+@@ -846,9 +_,9 @@
+                 }
+ 
+                 if (!this.updateAwaitingTeleport()) {
+-                    double d0 = clampHorizontal(p_9874_.getX(this.player.getX()));
+-                    double d1 = clampVertical(p_9874_.getY(this.player.getY()));
+-                    double d2 = clampHorizontal(p_9874_.getZ(this.player.getZ()));
++                    double d0 = clampHorizontal(p_9874_.getX(this.player.getX())); final double toX = d0; // Paper - OBFHELPER
++                    double d1 = clampVertical(p_9874_.getY(this.player.getY())); final double toY = d1; // Paper - OBFHELPER
++                    double d2 = clampHorizontal(p_9874_.getZ(this.player.getZ())); final double toZ = d2; // Paper - OBFHELPER
+                     float f = Mth.wrapDegrees(p_9874_.getYRot(this.player.getYRot()));
+                     float f1 = Mth.wrapDegrees(p_9874_.getXRot(this.player.getXRot()));
+                     if (this.player.isPassenger()) {
+@@ -877,6 +_,13 @@
+                                     i = 1;
+                                 }
+ 
++                                // Paper start - Prevent moving into unloaded chunks
++                                if (this.player.level().paperConfig().chunks.preventMovingIntoUnloadedChunks && (this.player.getX() != toX || this.player.getZ() != toZ) && !serverlevel.areChunksLoadedForMove(this.player.getBoundingBox().expandTowards(new Vec3(toX, toY, toZ).subtract(this.player.position())))) {
++                                    this.teleport(this.player.getX(), this.player.getY(), this.player.getZ(), this.player.getYRot(), this.player.getXRot(), Collections.emptySet());
++                                    return;
++                                }
++                                // Paper end - Prevent moving into unloaded chunks
++
+                                 if (!this.player.isChangingDimension()
+                                     && (!this.player.level().getGameRules().getBoolean(GameRules.RULE_DISABLE_ELYTRA_MOVEMENT_CHECK) || !flag)) {
+                                     float f2 = flag ? 300.0F : 100.0F;
 @@ -927,7 +_,7 @@
                                      && !flag1
                                      && this.player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR

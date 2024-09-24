@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/lighting/LevelLightEngine.java
 +++ b/net/minecraft/world/level/lighting/LevelLightEngine.java
-@@ -9,145 +_,103 @@
+@@ -9,145 +_,107 @@
  import net.minecraft.world.level.chunk.DataLayer;
  import net.minecraft.world.level.chunk.LightChunkGetter;
  
@@ -30,6 +30,10 @@
 -        }
 +    // Paper start - rewrite chunk system
 +    protected final ca.spottedleaf.moonrise.patches.starlight.light.StarLightInterface lightEngine;
++
++    private final LightEngine<?, ?> blockEngine = null;
++    @Nullable
++    private final LightEngine<?, ?> skyEngine = null;
 +
 +    @Override
 +    public final ca.spottedleaf.moonrise.patches.starlight.light.StarLightInterface starlight$getLightEngine() {

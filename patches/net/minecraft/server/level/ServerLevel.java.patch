@@ -480,17 +480,30 @@
      }
  
      private void tickBlock(BlockPos p_184113_, Block p_184114_) {
-@@ -750,15 +_,32 @@
+@@ -750,15 +_,44 @@
          if (blockstate.is(p_184114_)) {
              blockstate.tick(this, p_184113_, this.random);
          }
+-    }
 +
 +        // Paper start - rewrite chunk system
 +        if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
 +            ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
 +        }
 +        // Paper end - rewrite chunk system
-     }
++    }
++
++    // Paper start - log detailed entity tick information
++    // TODO replace with varhandle
++    static final java.util.concurrent.atomic.AtomicReference<Entity> currentlyTickingEntity = new java.util.concurrent.atomic.AtomicReference<>();
++
++    public static List<Entity> getCurrentlyTickingEntities() {
++        Entity ticking = currentlyTickingEntity.get();
++        List<Entity> ret = java.util.Arrays.asList(ticking == null ? new Entity[0] : new Entity[] { ticking });
++
++        return ret;
++    }
++    // Paper end - log detailed entity tick information
  
      public void tickNonPassenger(Entity p_8648_) {
 +        // Paper start - log detailed entity tick information

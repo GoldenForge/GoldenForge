@@ -7,7 +7,7 @@
  import com.google.common.collect.ImmutableList;
  import com.google.common.collect.Iterables;
  import com.google.common.collect.Lists;
-@@ -113,11 +_,11 @@
+@@ -113,11 +_,21 @@
      public static final int MIN_VIEW_DISTANCE = 2;
      public static final int MAX_VIEW_DISTANCE = 32;
      public static final int FORCED_TICKET_LEVEL = ChunkLevel.byStatus(FullChunkStatus.ENTITY_TICKING);
@@ -17,7 +17,17 @@
 -    private final List<ChunkGenerationTask> pendingGenerationTasks = new ArrayList<>();
 -    final ServerLevel level;
 +//    private final Long2ObjectLinkedOpenHashMap<ChunkHolder> updatingChunkMap = new Long2ObjectLinkedOpenHashMap<>();
-+//    private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap = this.updatingChunkMap.clone();
++    private volatile Long2ObjectLinkedOpenHashMap<ChunkHolder> visibleChunkMap = new Long2ObjectLinkedOpenHashMap<>() {
++    @Override
++    public ChunkHolder get(long k) {
++        return ChunkMap.this.getVisibleChunkIfPresent(k);
++    }
++
++    @Override
++    public int size() {
++        return ChunkMap.this.size();
++    }
++};
 +//    private final Long2ObjectLinkedOpenHashMap<ChunkHolder> pendingUnloads = new Long2ObjectLinkedOpenHashMap<>();
 +//    private final List<ChunkGenerationTask> pendingGenerationTasks = new ArrayList<>();
 +    public final ServerLevel level;
