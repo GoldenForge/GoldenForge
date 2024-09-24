@@ -115,6 +115,7 @@ public class GlobalConfiguration extends ConfigurationPart {
     public Watchdog watchdog;
 
     public class Watchdog extends ConfigurationPart {
+        public int timeoutTime = 60;
         public int earlyWarningEvery = 5000;
         public int earlyWarningDelay = 10000;
     }
