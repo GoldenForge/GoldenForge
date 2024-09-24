@@ -17,6 +17,17 @@
          MapId mapid = p_42854_.get(DataComponents.MAP_ID);
          return getSavedData(mapid, p_42855_);
      }
+@@ -100,8 +_,8 @@
+                             int j2 = (j / i + k1 - 64) * i;
+                             int k2 = (k / i + l1 - 64) * i;
+                             Multiset<MapColor> multiset = LinkedHashMultiset.create();
+-                            LevelChunk levelchunk = p_42894_.getChunk(SectionPos.blockToSectionCoord(j2), SectionPos.blockToSectionCoord(k2));
+-                            if (!levelchunk.isEmpty()) {
++                            LevelChunk levelchunk = p_42894_.getChunkIfLoaded(SectionPos.blockToSectionCoord(j2), SectionPos.blockToSectionCoord(k2)); // Paper - Maps shouldn't load chunks
++                            if (levelchunk != null && !levelchunk.isEmpty()) { // Paper - Maps shouldn't load chunks
+                                 int l2 = 0;
+                                 double d1 = 0.0;
+                                 if (p_42894_.dimensionType().hasCeiling()) {
 @@ -214,7 +_,7 @@
  
                  for (int j1 = 0; j1 < 128; j1++) {
