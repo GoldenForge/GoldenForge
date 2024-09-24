@@ -644,6 +644,15 @@
                      this.doPush(entity1);
                  }
              }
+@@ -2812,7 +_,7 @@
+     public void stopRiding() {
+         Entity entity = this.getVehicle();
+         super.stopRiding();
+-        if (entity != null && entity != this.getVehicle() && !this.level().isClientSide) {
++        if (entity != null && entity != this.getVehicle() && !this.level().isClientSide && entity.valid) { // Paper - don't process on world gen
+             this.dismountVehicle(entity);
+         }
+     }
 @@ -2977,10 +_,17 @@
          return (this.entityData.get(DATA_LIVING_ENTITY_FLAGS) & 2) > 0 ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
      }
