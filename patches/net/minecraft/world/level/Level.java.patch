@@ -47,7 +47,7 @@
      public static final Codec<ResourceKey<Level>> RESOURCE_KEY_CODEC = ResourceKey.codec(Registries.DIMENSION);
      public static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION, ResourceLocation.withDefaultNamespace("overworld"));
      public static final ResourceKey<Level> NETHER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.withDefaultNamespace("the_nether"));
-@@ -114,6 +_,499 @@
+@@ -114,6 +_,500 @@
      private final RegistryAccess registryAccess;
      private final DamageSources damageSources;
      private long subTickCount;
@@ -58,6 +58,7 @@
 +    private final java.util.ArrayList<BlockEntity> pendingFreshBlockEntities = new java.util.ArrayList<>();
 +
 +    // Paper start
++    private int tileTickPosition;
 +    public int wakeupInactiveRemainingAnimals;
 +    public int wakeupInactiveRemainingFlying;
 +    public int wakeupInactiveRemainingMonsters;
@@ -689,7 +690,7 @@
      }
  
      public void updateNeighborsAtExceptFromFacing(BlockPos p_46591_, Block p_46592_, Direction p_46593_) {
-@@ -489,10 +_,26 @@
+@@ -489,41 +_,89 @@
          (this.tickingBlockEntities ? this.pendingBlockEntityTickers : this.blockEntityTickers).add(p_151526_);
      }
  
@@ -702,21 +703,56 @@
 +    }
 +
      protected void tickBlockEntities() {
-         ProfilerFiller profilerfiller = this.getProfiler();
-         profilerfiller.push("blockEntities");
-+        if (!this.pendingFreshBlockEntities.isEmpty()) {
-+            this.freshBlockEntities.addAll(this.pendingFreshBlockEntities);
-+            this.pendingFreshBlockEntities.clear();
-+        }
+-        ProfilerFiller profilerfiller = this.getProfiler();
+-        profilerfiller.push("blockEntities");
++        ProfilerFiller gameprofilerfiller = this.getProfiler();
++
++        gameprofilerfiller.push("blockEntities");
          this.tickingBlockEntities = true;
-+        if (!this.freshBlockEntities.isEmpty()) {
-+            this.freshBlockEntities.forEach(BlockEntity::onLoad);
-+            this.freshBlockEntities.clear();
-+        }
          if (!this.pendingBlockEntityTickers.isEmpty()) {
              this.blockEntityTickers.addAll(this.pendingBlockEntityTickers);
              this.pendingBlockEntityTickers.clear();
-@@ -516,14 +_,36 @@
+         }
+-
+-        Iterator<TickingBlockEntity> iterator = this.blockEntityTickers.iterator();
++        // Spigot start
++        // Iterator<TickingBlockEntity> iterator = this.blockEntityTickers.iterator();
+         boolean flag = this.tickRateManager().runsNormally();
+ 
+-        while (iterator.hasNext()) {
+-            TickingBlockEntity tickingblockentity = iterator.next();
++        int tickedEntities = 0; // Paper - rewrite chunk system
++
++        int tilesThisCycle = 0;
++        var toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<TickingBlockEntity>(); // Paper - Fix MC-117075; use removeAll
++        toRemove.add(null); // Paper - Fix MC-117075
++        for (tileTickPosition = 0; tileTickPosition < this.blockEntityTickers.size(); tileTickPosition++) { // Paper - Disable tick limiters
++            this.tileTickPosition = (this.tileTickPosition < this.blockEntityTickers.size()) ? this.tileTickPosition : 0;
++            TickingBlockEntity tickingblockentity = (TickingBlockEntity) this.blockEntityTickers.get(this.tileTickPosition);
++            // Spigot end
++
+             if (tickingblockentity.isRemoved()) {
+-                iterator.remove();
++                // Spigot start
++                tilesThisCycle--;
++                toRemove.add(tickingblockentity); // Paper - Fix MC-117075; use removeAll
++                // Spigot end
+             } else if (flag && this.shouldTickBlocksAt(tickingblockentity.getPos())) {
+                 tickingblockentity.tick();
++                // Paper start - rewrite chunk system
++                if ((++tickedEntities & 7) == 0) {
++                    ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)(Level)(Object)this).moonrise$midTickTasks();
++                }
++                // Paper end - rewrite chunk system
+             }
+         }
+-
++        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075
++        
+         this.tickingBlockEntities = false;
+-        profilerfiller.pop();
++        gameprofilerfiller.pop();
+     }
  
      public <T extends Entity> void guardEntityTick(Consumer<T> p_46654_, T p_46655_) {
          try {
