@@ -86,7 +86,7 @@
              return true;
          }
      }
-@@ -295,6 +_,12 @@
+@@ -295,6 +_,13 @@
          if (this.queryThreadGs4 != null) {
              this.queryThreadGs4.stop();
          }
@@ -95,6 +95,7 @@
 +            this.dediLanPinger = null;
 +        }
 +        org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
++        hasFullyShutdown = true; // Paper
 +        System.exit(this.abnormalExit ? 70 : 0); // CraftBukkit // Paper
      }
  
