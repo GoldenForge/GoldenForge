@@ -399,6 +399,12 @@ public final class ChunkHolderManager {
         }
     }
 
+    public SortedArraySet<Ticket<?>> getTicketsSyncronised(long key) {
+        synchronized (tickets) {
+            return this.tickets.getOrDefault(key, SortedArraySet.create(4));
+        }
+    }
+
     public Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> getTicketsCopy() {
         final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> ret = new Long2ObjectOpenHashMap<>();
         final Long2ObjectOpenHashMap<LongArrayList> sections = new Long2ObjectOpenHashMap<>();

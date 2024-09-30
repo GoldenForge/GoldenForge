@@ -225,7 +225,7 @@
 +    }
 +
 +    private SortedArraySet<Ticket<?>> getTickets(long position) {
-+        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++        return this.getChunkHolderManager().getTicketsSyncronised(position); // Paper - rewrite chunk system
      }
  
      protected void updateChunkForced(ChunkPos p_140800_, boolean p_140801_) {
