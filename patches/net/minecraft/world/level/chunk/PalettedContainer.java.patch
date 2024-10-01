@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/PalettedContainer.java
 +++ b/net/minecraft/world/level/chunk/PalettedContainer.java
-@@ -27,6 +_,7 @@
+@@ -27,19 +_,20 @@
  import net.minecraft.util.ZeroBitStorage;
  
  public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainerRO<T> {
@@ -8,6 +8,49 @@
      private static final int MIN_PALETTE_BITS = 0;
      private final PaletteResize<T> dummyPaletteResize = (p_238275_, p_238276_) -> 0;
      private final IdMap<T> registry;
+     private volatile PalettedContainer.Data<T> data;
+     private final PalettedContainer.Strategy strategy;
+-    private final ThreadingDetector threadingDetector = new ThreadingDetector("PalettedContainer");
++    //private final ThreadingDetector threadingDetector = new ThreadingDetector("PalettedContainer");
+ 
+     public void acquire() {
+-        this.threadingDetector.checkAndLock();
++        //this.threadingDetector.checkAndLock();
+     }
+ 
+     public void release() {
+-        this.threadingDetector.checkAndUnlock();
++        //this.threadingDetector.checkAndUnlock();
+     }
+ 
+     public static <T> Codec<PalettedContainer<T>> codecRW(IdMap<T> p_238372_, Codec<T> p_238373_, PalettedContainer.Strategy p_238374_, T p_238375_) {
+@@ -101,7 +_,7 @@
+     }
+ 
+     @Override
+-    public int onResize(int p_63142_, T p_63143_) {
++    public synchronized int onResize(int p_63142_, T p_63143_) { // Paper - synchronize
+         PalettedContainer.Data<T> data = this.data;
+         PalettedContainer.Data<T> data1 = this.createOrReuseData(data, p_63142_);
+         data1.copyFrom(data.palette, data.storage);
+@@ -126,7 +_,7 @@
+         return this.getAndSet(this.strategy.getIndex(p_63128_, p_63129_, p_63130_), p_63131_);
+     }
+ 
+-    private T getAndSet(int p_63097_, T p_63098_) {
++    private synchronized T getAndSet(int p_63097_, T p_63098_) { // Paper - synchronize
+         int i = this.data.palette.idFor(p_63098_);
+         int j = this.data.storage.getAndSet(p_63097_, i);
+         return this.data.palette.valueFor(j);
+@@ -142,7 +_,7 @@
+         }
+     }
+ 
+-    private void set(int p_63133_, T p_63134_) {
++    private synchronized void set(int p_63133_, T p_63134_) { // Paper - synchronize
+         int i = this.data.palette.idFor(p_63134_);
+         this.data.storage.set(p_63133_, i);
+     }
 @@ -152,7 +_,7 @@
          return this.get(this.strategy.getIndex(p_63088_, p_63089_, p_63090_));
      }
@@ -17,3 +60,30 @@
          PalettedContainer.Data<T> data = this.data;
          return data.palette.valueFor(data.storage.get(p_63086_));
      }
+@@ -165,7 +_,7 @@
+         intset.forEach(p_238274_ -> p_196880_.accept(palette.valueFor(p_238274_)));
+     }
+ 
+-    public void read(FriendlyByteBuf p_63119_) {
++    public synchronized void read(FriendlyByteBuf p_63119_) { // Paper - synchronize
+         this.acquire();
+ 
+         try {
+@@ -180,7 +_,7 @@
+     }
+ 
+     @Override
+-    public void write(FriendlyByteBuf p_63136_) {
++    public synchronized void write(FriendlyByteBuf p_63136_) { // Paper - synchronize
+         this.acquire();
+ 
+         try {
+@@ -228,7 +_,7 @@
+     }
+ 
+     @Override
+-    public PalettedContainerRO.PackedData<T> pack(IdMap<T> p_188065_, PalettedContainer.Strategy p_188066_) {
++    public synchronized PalettedContainerRO.PackedData<T> pack(IdMap<T> p_188065_, PalettedContainer.Strategy p_188066_) { // Paper - synchronize
+         this.acquire();
+ 
+         PalettedContainerRO.PackedData palettedcontainerro$packeddata;
