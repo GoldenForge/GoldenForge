@@ -39,7 +39,7 @@
  
 +    public static int currentTick; // Paper - improve tick loop
 +    public java.util.Queue<Runnable> processQueue = new java.util.concurrent.ConcurrentLinkedQueue<Runnable>();
-+    public int autosavePeriod;
++    public int autosavePeriod = 6000;
 +    // Paper - don't store the vanilla dispatcher
 +    public boolean forceTicks; // Paper - Improved watchdog support
 +    // CraftBukkit end
@@ -70,14 +70,13 @@
          if (Runtime.getRuntime().availableProcessors() > 4) {
              thread.setPriority(8);
          }
-@@ -276,6 +_,77 @@
+@@ -276,6 +_,75 @@
          return s;
      }
  
 +    // Paper start - rewrite chunk system
 +    private volatile Throwable chunkSystemCrash;
-+
-+    @Override
++    
 +    public final void moonrise$setChunkSystemCrash(final Throwable throwable) {
 +        this.chunkSystemCrash = throwable;
 +    }
@@ -108,8 +107,7 @@
 +
 +        return executed;
 +    }
-+
-+    @Override
++    
 +    public final void moonrise$executeMidTickTasks() {
 +        final long startTime = System.nanoTime();
 +        if ((startTime - this.lastMidTickExecute) <= CHUNK_TASK_QUEUE_BACKOFF_MIN_TIME || (startTime - this.lastMidTickExecuteFailure) <= TASK_EXECUTION_FAILURE_BACKOFF) {
@@ -664,11 +662,15 @@
          );
      }
  
-@@ -996,15 +_,37 @@
+@@ -996,15 +_,41 @@
          this.getFunctions().tick();
          this.profiler.popPush("levels");
  
 -        for (ServerLevel serverlevel : this.getAllLevels()) {
++        while (!this.processQueue.isEmpty()) {
++            this.processQueue.remove().run();
++        }
++
 +        // Paper start - Perf: Optimize time updates
 +        for (final ServerLevel level : this.getAllLevels()) {
 +            final boolean doDaylight = level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT);
