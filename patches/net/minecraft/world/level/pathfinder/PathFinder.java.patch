@@ -1,0 +1,135 @@
+--- a/net/minecraft/world/level/pathfinder/PathFinder.java
++++ b/net/minecraft/world/level/pathfinder/PathFinder.java
+@@ -38,13 +_,12 @@
+         if (node == null) {
+             return null;
+         } else {
+-            Map<Target, BlockPos> map = p_77430_.stream()
+-                .collect(
+-                    Collectors.toMap(
+-                        p_326774_ -> this.nodeEvaluator.getTarget((double)p_326774_.getX(), (double)p_326774_.getY(), (double)p_326774_.getZ()),
+-                        Function.identity()
+-                    )
+-                );
++            // Paper start - Perf: remove streams and optimize collection
++            List<Map.Entry<Target, BlockPos>> map = Lists.newArrayList();
++            for (final BlockPos pos : p_77430_) {
++                map.add(new java.util.AbstractMap.SimpleEntry<>(this.nodeEvaluator.getTarget(pos.getX(), pos.getY(), pos.getZ()), pos));
++            }
++            // Paper end - Perf: remove streams and optimize collection
+             Path path = this.findPath(p_77428_.getProfiler(), node, map, p_77431_, p_77432_, p_77433_);
+             this.nodeEvaluator.done();
+             return path;
+@@ -52,18 +_,19 @@
+     }
+ 
+     @Nullable
+-    private Path findPath(ProfilerFiller p_164717_, Node p_164718_, Map<Target, BlockPos> p_164719_, float p_164720_, int p_164721_, float p_164722_) {
++    // Paper start - Perf: remove streams and optimize collection
++    private Path findPath(ProfilerFiller p_164717_, Node p_164718_, List<Map.Entry<Target, BlockPos>> positions, float p_164720_, int p_164721_, float p_164722_) {
+         p_164717_.push("find_path");
+         p_164717_.markForCharting(MetricCategory.PATH_FINDING);
+-        Set<Target> set = p_164719_.keySet();
++        //Set<Target> set = p_164719_.keySet();
+         p_164718_.g = 0.0F;
+-        p_164718_.h = this.getBestH(p_164718_, set);
++        p_164718_.h = this.getBestH(p_164718_, positions); // Paper - optimize collection
+         p_164718_.f = p_164718_.h;
+         this.openSet.clear();
+         this.openSet.insert(p_164718_);
+-        Set<Node> set1 = ImmutableSet.of();
++        //Set<Node> set1 = ImmutableSet.of();
+         int i = 0;
+-        Set<Target> set2 = Sets.newHashSetWithExpectedSize(set.size());
++        List<Map.Entry<Target, BlockPos>> entryList = Lists.newArrayListWithExpectedSize(positions.size()); // Paper - optimize collection
+         int j = (int)((float)this.maxVisitedNodes * p_164722_);
+ 
+         while (!this.openSet.isEmpty()) {
+@@ -74,14 +_,18 @@
+             Node node = this.openSet.pop();
+             node.closed = true;
+ 
+-            for (Target target : set) {
++            // Paper start - optimize collection
++            for (int i1 = 0; i1 < positions.size(); i1++) {
++                final Map.Entry<Target, BlockPos> entry = positions.get(i1);
++                Target target = entry.getKey();
+                 if (node.distanceManhattan(target) <= (float)p_164721_) {
+                     target.setReached();
+-                    set2.add(target);
++                    entryList.add(entry);
++                    // Paper end - Perf: remove streams and optimize collection
+                 }
+             }
+ 
+-            if (!set2.isEmpty()) {
++            if (!entryList.isEmpty()) { // Paper - Perf: remove streams and optimize collection; rename
+                 break;
+             }
+ 
+@@ -96,7 +_,7 @@
+                     if (node1.walkedDistance < p_164720_ && (!node1.inOpenSet() || f1 < node1.g)) {
+                         node1.cameFrom = node;
+                         node1.g = f1;
+-                        node1.h = this.getBestH(node1, set) * 1.5F;
++                        node1.h = this.getBestH(node1, positions) * 1.5F; // Paper - Perf: remove streams and optimize collection
+                         if (node1.inOpenSet()) {
+                             this.openSet.changeCost(node1, node1.g + node1.h);
+                         } else {
+@@ -108,21 +_,26 @@
+             }
+         }
+ 
+-        Optional<Path> optional = !set2.isEmpty()
+-            ? set2.stream()
+-                .map(p_77454_ -> this.reconstructPath(p_77454_.getBestNode(), p_164719_.get(p_77454_), true))
+-                .min(Comparator.comparingInt(Path::getNodeCount))
+-            : set.stream()
+-                .map(p_77451_ -> this.reconstructPath(p_77451_.getBestNode(), p_164719_.get(p_77451_), false))
+-                .min(Comparator.comparingDouble(Path::getDistToTarget).thenComparingInt(Path::getNodeCount));
++        // Paper start - Perf: remove streams and optimize collection
++        Path best = null;
++        boolean entryListIsEmpty = entryList.isEmpty();
++        Comparator<Path> comparator = entryListIsEmpty ? Comparator.comparingInt(Path::getNodeCount)
++                : Comparator.comparingDouble(Path::getDistToTarget).thenComparingInt(Path::getNodeCount);
++        for (Map.Entry<Target, BlockPos> entry : entryListIsEmpty ? positions : entryList) {
++            Path path = this.reconstructPath(entry.getKey().getBestNode(), entry.getValue(), !entryListIsEmpty);
++            if (best == null || comparator.compare(path, best) < 0)
++                best = path;
++        }
+         p_164717_.pop();
+-        return optional.isEmpty() ? null : optional.get();
++        return best;
++        // Paper end - Perf: remove streams and optimize collection
+     }
+ 
+     protected float distance(Node p_230617_, Node p_230618_) {
+         return p_230617_.distanceTo(p_230618_);
+     }
+ 
++    // Goldenforge: keep for mod compatibility
+     private float getBestH(Node p_77445_, Set<Target> p_77446_) {
+         float f = Float.MAX_VALUE;
+ 
+@@ -130,6 +_,21 @@
+             float f1 = p_77445_.distanceTo(target);
+             target.updateBest(f1, p_77445_);
+             f = Math.min(f1, f);
++        }
++
++        return f;
++    }
++
++    private float getBestH(Node node, List<Map.Entry<Target, BlockPos>> targets) { // Paper - Perf: remove streams and optimize collection; Set<Target> -> List<Map.Entry<Target, BlockPos>>
++        float f = Float.MAX_VALUE;
++
++        // Paper start - Perf: remove streams and optimize collection
++        for (int i = 0, targetsSize = targets.size(); i < targetsSize; i++) {
++            final Target target = targets.get(i).getKey();
++            // Paper end - Perf: remove streams and optimize collection
++            float g = node.distanceTo(target);
++            target.updateBest(g, node);
++            f = Math.min(g, f);
+         }
+ 
+         return f;
