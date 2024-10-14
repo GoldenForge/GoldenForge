@@ -9,3 +9,96 @@
      private Behavior.Status status = Behavior.Status.STOPPED;
  
      public GateBehavior(
+@@ -57,7 +_,7 @@
+         if (this.hasRequiredMemories(p_259746_)) {
+             this.status = Behavior.Status.RUNNING;
+             this.orderPolicy.apply(this.behaviors);
+-            this.runningPolicy.apply(this.behaviors.stream(), p_259362_, p_259746_, p_259560_);
++            this.runningPolicy.apply(this.behaviors, p_259362_, p_259746_, p_259560_) ;// Paper - Perf: Remove streams from hot code
+             return true;
+         } else {
+             return false;
+@@ -66,10 +_,13 @@
+ 
+     @Override
+     public final void tickOrStop(ServerLevel p_259934_, E p_259790_, long p_260259_) {
+-        this.behaviors
+-            .stream()
+-            .filter(p_258342_ -> p_258342_.getStatus() == Behavior.Status.RUNNING)
+-            .forEach(p_258336_ -> p_258336_.tickOrStop(p_259934_, p_259790_, p_260259_));
++        // Paper start - Perf: Remove streams from hot code
++        for (final BehaviorControl<? super E> task : this.behaviors) {
++            if (task.getStatus() == Behavior.Status.RUNNING) {
++                task.tickOrStop(p_259934_, p_259790_, p_260259_);
++            }
++        }
++        // Paper end - Perf: Remove streams from hot code
+         if (this.behaviors.stream().noneMatch(p_258344_ -> p_258344_.getStatus() == Behavior.Status.RUNNING)) {
+             this.doStop(p_259934_, p_259790_, p_260259_);
+         }
+@@ -78,11 +_,16 @@
+     @Override
+     public final void doStop(ServerLevel p_259962_, E p_260250_, long p_259847_) {
+         this.status = Behavior.Status.STOPPED;
+-        this.behaviors
+-            .stream()
+-            .filter(p_258337_ -> p_258337_.getStatus() == Behavior.Status.RUNNING)
+-            .forEach(p_258341_ -> p_258341_.doStop(p_259962_, p_260250_, p_259847_));
+-        this.exitErasedMemories.forEach(p_260250_.getBrain()::eraseMemory);
++        // Paper start - Perf: Remove streams from hot code
++        for (final BehaviorControl<? super E> task : this.behaviors) {
++            if (task.getStatus() == Behavior.Status.RUNNING) {
++                task.doStop(p_259962_, p_260250_, p_259847_);
++            }
++        }
++        for (final MemoryModuleType<?> exitErasedMemory : this.exitErasedMemories) {
++            p_260250_.getBrain().eraseMemory(exitErasedMemory);
++        }
++        // Paper end - Perf: Remove streams from hot code
+     }
+ 
+     @Override
+@@ -115,8 +_,19 @@
+         }
+     }
+ 
++    // Goldenforge: Keep both method for mod compatibility
+     public static enum RunningPolicy {
+         RUN_ONE {
++            // Paper start - Perf: Remove streams from hot code
++            @Override
++            public <E extends LivingEntity> void apply(ShufflingList<BehaviorControl<? super E>> tasks, ServerLevel world, E entity, long time) {
++                for (final BehaviorControl<? super E> task : tasks) {
++                    if (task.getStatus() == Behavior.Status.STOPPED && task.tryStart(world, entity, time)) {
++                        break;
++                    }
++                }
++                // Paper end - Perf: Remove streams from hot code
++            }
+             @Override
+             public <E extends LivingEntity> void apply(Stream<BehaviorControl<? super E>> p_147537_, ServerLevel p_147538_, E p_147539_, long p_147540_) {
+                 p_147537_.filter(p_258349_ -> p_258349_.getStatus() == Behavior.Status.STOPPED)
+@@ -125,6 +_,16 @@
+             }
+         },
+         TRY_ALL {
++            // Paper start - Perf: Remove streams from hot code
++            @Override
++            public <E extends LivingEntity> void apply(ShufflingList<BehaviorControl<? super E>> tasks, ServerLevel world, E entity, long time) {
++                for (final BehaviorControl<? super E> task : tasks) {
++                    if (task.getStatus() == Behavior.Status.STOPPED) {
++                        task.tryStart(world, entity, time);
++                    }
++                }
++                // Paper end - Perf: Remove streams from hot code
++            }
+             @Override
+             public <E extends LivingEntity> void apply(Stream<BehaviorControl<? super E>> p_147542_, ServerLevel p_147543_, E p_147544_, long p_147545_) {
+                 p_147542_.filter(p_258350_ -> p_258350_.getStatus() == Behavior.Status.STOPPED)
+@@ -133,5 +_,6 @@
+         };
+ 
+         public abstract <E extends LivingEntity> void apply(Stream<BehaviorControl<? super E>> p_147532_, ServerLevel p_147533_, E p_147534_, long p_147535_);
++        public abstract <E extends LivingEntity> void apply(ShufflingList<BehaviorControl<? super E>> tasks, ServerLevel world, E entity, long time); // Paper - Perf: Remove streams from hot code
+     }
+ }

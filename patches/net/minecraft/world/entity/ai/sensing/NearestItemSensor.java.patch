@@ -1,0 +1,24 @@
+--- a/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/NearestItemSensor.java
+@@ -25,11 +_,15 @@
+         Brain<?> brain = p_26698_.getBrain();
+         List<ItemEntity> list = p_26697_.getEntitiesOfClass(ItemEntity.class, p_26698_.getBoundingBox().inflate(32.0, 16.0, 32.0), p_26703_ -> true);
+         list.sort(Comparator.comparingDouble(p_26698_::distanceToSqr));
+-        Optional<ItemEntity> optional = list.stream()
+-            .filter(p_26706_ -> p_26698_.wantsToPickUp(p_26706_.getItem()))
+-            .filter(p_26701_ -> p_26701_.closerThan(p_26698_, 32.0))
+-            .filter(p_26698_::hasLineOfSight)
+-            .findFirst();
+-        brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_WANTED_ITEM, optional);
++        // Paper start - Perf: remove streams from hot code
++        ItemEntity nearest = null;
++        for (ItemEntity entityItem : list) {
++            if (p_26698_.hasLineOfSight(entityItem)) { // Paper - Perf: Move predicate into getEntities
++                nearest = entityItem;
++                break;
++            }
++        }
++        brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_WANTED_ITEM, Optional.ofNullable(nearest));
++        // Paper end - Perf: remove streams from hot code
+     }
+ }

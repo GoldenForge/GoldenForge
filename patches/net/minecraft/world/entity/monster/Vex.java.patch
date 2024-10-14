@@ -1,0 +1,15 @@
+--- a/net/minecraft/world/entity/monster/Vex.java
++++ b/net/minecraft/world/entity/monster/Vex.java
+@@ -355,7 +_,11 @@
+ 
+             for (int i = 0; i < 3; i++) {
+                 BlockPos blockpos1 = blockpos.offset(Vex.this.random.nextInt(15) - 7, Vex.this.random.nextInt(11) - 5, Vex.this.random.nextInt(15) - 7);
+-                if (Vex.this.level().isEmptyBlock(blockpos1)) {
++
++                // Paper start - Don't load chunks
++                final net.minecraft.world.level.block.state.BlockState blockState = Vex.this.level().getBlockStateIfLoaded(blockpos1);
++                if (blockState != null && Vex.this.level().isEmptyBlock(blockpos1)) {
++                    // Paper end - Don't load chunks
+                     Vex.this.moveControl
+                         .setWantedPosition((double)blockpos1.getX() + 0.5, (double)blockpos1.getY() + 0.5, (double)blockpos1.getZ() + 0.5, 0.25);
+                     if (Vex.this.getTarget() == null) {
