@@ -14,7 +14,7 @@ ext.isPreReleaseVersion = project.minecraft_version.contains('w') || project.min
 if (isPreReleaseVersion) {
     project.version = "${project.neoforge_snapshot_next_stable}.0-alpha.${project.minecraft_version}.${(new Date()).format('yyyyMMdd.HHmmss', TimeZone.getTimeZone('UTC'))}"
 } else {
-    project.version = "21.1.61" // Goldenforge: hardcode version
+    project.version = "21.1.69" // Goldenforge: hardcode version
 }
 
 // Print version, generally useful to know - also appears on CI
