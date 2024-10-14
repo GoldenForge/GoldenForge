@@ -16,7 +16,10 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+
+import io.papermc.paper.util.MCUtil;
 import net.minecraft.DetectedVersion;
+import net.minecraft.SharedConstants;
 import net.minecraft.advancements.critereon.EntitySubPredicate;
 import net.minecraft.advancements.critereon.ItemSubPredicate;
 import net.minecraft.commands.Commands;
@@ -523,7 +526,8 @@ public class NeoForgeMod {
         LOGGER.info(NEOFORGEMOD, "NeoForge mod loading, version {}, for MC {}", NeoForgeVersion.getVersion(), DetectedVersion.BUILT_IN.getName());
         ForgeSnapshotsMod.logStartupWarning();
 
-        new org.goldenforge.GoldenForge();
+        if (SharedConstants.IS_RUNNING_IN_IDE) // for some ready the modloader do not load goldenforge in userdev
+            new org.goldenforge.GoldenForge();
 
         CrashReportCallables.registerCrashCallable("Crash Report UUID", () -> {
             final UUID uuid = UUID.randomUUID();
