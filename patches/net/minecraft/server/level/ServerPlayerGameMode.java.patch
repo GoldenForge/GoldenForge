@@ -11,15 +11,44 @@
      }
  
      public GameType getGameModeForPlayer() {
-@@ -93,7 +_,7 @@
+@@ -93,10 +_,11 @@
      }
  
      public void tick() {
 -        this.gameTicks++;
 +        this.gameTicks = (int)this.level.getLagCompensationTick(); // CraftBukkit; // Paper - lag compensation
++        BlockState blockstate;
          if (this.hasDelayedDestroy) {
-             BlockState blockstate = this.level.getBlockState(this.delayedDestroyPos);
-             if (blockstate.isAir()) {
+-            BlockState blockstate = this.level.getBlockState(this.delayedDestroyPos);
+-            if (blockstate.isAir()) {
++            blockstate = this.level.getBlockStateIfLoaded(this.delayedDestroyPos); // Paper - Don't allow digging into unloaded chunks
++            if (blockstate == null || blockstate.isAir()) { // Paper - Don't allow digging into unloaded chunks
+                 this.hasDelayedDestroy = false;
+             } else {
+                 float f = this.incrementDestroyProgress(blockstate, this.delayedDestroyPos, this.delayedTickStart);
+@@ -106,13 +_,19 @@
+                 }
+             }
+         } else if (this.isDestroyingBlock) {
+-            BlockState blockstate1 = this.level.getBlockState(this.destroyPos);
+-            if (blockstate1.isAir()) {
++            // Paper start - Don't allow digging into unloaded chunks; don't want to do same logic as above, return instead
++            blockstate = this.level.getBlockStateIfLoaded(this.destroyPos);
++            if (blockstate == null) {
++                this.isDestroyingBlock = false;
++                return;
++            }
++            // Paper end - Don't allow digging into unloaded chunks
++            if (blockstate.isAir()) {
+                 this.level.destroyBlockProgress(this.player.getId(), this.destroyPos, -1);
+                 this.lastSentState = -1;
+                 this.isDestroyingBlock = false;
+             } else {
+-                this.incrementDestroyProgress(blockstate1, this.destroyPos, this.destroyProgressStart);
++                this.incrementDestroyProgress(blockstate, this.destroyPos, this.destroyProgressStart);
+             }
+         }
+     }
 @@ -133,6 +_,10 @@
      }
  

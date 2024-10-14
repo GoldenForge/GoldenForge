@@ -132,7 +132,18 @@
                      this.player.stopUsingItem();
                  }
  
-@@ -1060,7 +_,7 @@
+@@ -1055,12 +_,18 @@
+             case START_DESTROY_BLOCK:
+             case ABORT_DESTROY_BLOCK:
+             case STOP_DESTROY_BLOCK:
++                // Paper start - Don't allow digging into unloaded chunks
++                if (this.player.level().getChunkIfLoadedImmediately(blockpos.getX() >> 4, blockpos.getZ() >> 4) == null) {
++                    this.player.connection.ackBlockChangesUpTo(p_9889_.getSequence());
++                    return;
++                }
++                // Paper end - Don't allow digging into unloaded chunks
+                 this.player
+                     .gameMode
                      .handleBlockBreakAction(
                          blockpos, serverboundplayeractionpacket$action, p_9889_.getDirection(), this.player.level().getMaxBuildHeight(), p_9889_.getSequence()
                      );
