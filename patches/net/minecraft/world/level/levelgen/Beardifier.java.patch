@@ -1,17 +1,6 @@
 --- a/net/minecraft/world/level/levelgen/Beardifier.java
 +++ b/net/minecraft/world/level/levelgen/Beardifier.java
-@@ -37,13 +_,19 @@
-         int j = p_223939_.getMinBlockZ();
-         ObjectList<Beardifier.Rigid> objectlist = new ObjectArrayList<>(10);
-         ObjectList<JigsawJunction> objectlist1 = new ObjectArrayList<>(32);
--        p_223938_.startsForStructure(p_223939_, p_223941_ -> p_223941_.terrainAdaptation() != TerrainAdjustment.NONE)
--            .forEach(
--                p_223936_ -> {
-+        // Paper start - Perf: Remove streams from hot code
-+        for (net.minecraft.world.level.levelgen.structure.StructureStart p_223936_ : p_223938_.startsForStructure(p_223939_, (structure) -> {
-+            return structure.terrainAdaptation() != TerrainAdjustment.NONE;
-+        })) { // Paper end - Perf: Remove streams from hot code
-                     TerrainAdjustment terrainadjustment = p_223936_.getStructure().terrainAdaptation();
+@@ -44,6 +_,11 @@
  
                      for (StructurePiece structurepiece : p_223936_.getPieces()) {
                          if (structurepiece.isCloseToChunk(p_223939_, 12)) {
@@ -23,13 +12,3 @@
                              if (structurepiece instanceof PoolElementStructurePiece) {
                                  PoolElementStructurePiece poolelementstructurepiece = (PoolElementStructurePiece)structurepiece;
                                  StructureTemplatePool.Projection structuretemplatepool$projection = poolelementstructurepiece.getElement().getProjection();
-@@ -67,8 +_,7 @@
-                             }
-                         }
-                     }
--                }
--            );
-+        } // Paper - Perf: Remove streams from hot code
-         return new Beardifier(objectlist.iterator(), objectlist1.iterator());
-     }
- 
