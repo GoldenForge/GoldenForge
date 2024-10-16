@@ -32,6 +32,14 @@ public class GlobalConfiguration extends ConfigurationPart {
     public PufferfishConfig pufferfishConfig;
     public class PufferfishConfig extends ConfigurationPart {
         public boolean enableAsyncMobSpawning = false;
+        public String sentryDsn = "";
+
+        @PostProcess
+        private void postProcess() {
+            if (sentryDsn != null && !sentryDsn.isBlank()) {
+                gg.pufferfish.pufferfish.sentry.SentryManager.init(this);
+            }
+        }
     }
 
     public ChunkLoadingBasic chunkLoadingBasic;

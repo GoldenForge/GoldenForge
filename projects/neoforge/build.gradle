@@ -147,6 +147,7 @@ dependencies {
     installer "org.spongepowered:configurate-core:4.2.0-SNAPSHOT"
     installer "io.leangen.geantyref:geantyref:1.3.16"
     installer "net.neoforged:srgutils:1.0.9"
+    installer "io.sentry:sentry:5.4.0"
 }
 
 runTypes {
