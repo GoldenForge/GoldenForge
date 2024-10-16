@@ -34,6 +34,26 @@
                              p_186528_.addMob(p_275163_.getPos(), mobcategory);
                          }
  
+@@ -144,8 +_,8 @@
+         StructureManager structuremanager = p_47040_.structureManager();
+         ChunkGenerator chunkgenerator = p_47040_.getChunkSource().getGenerator();
+         int i = p_47042_.getY();
+-        BlockState blockstate = p_47041_.getBlockState(p_47042_);
+-        if (!blockstate.isRedstoneConductor(p_47041_, p_47042_)) {
++        BlockState blockstate = p_47040_.getBlockStateIfLoadedAndInBounds(p_47042_); // Paper - don't load chunks for mob spawn
++        if (blockstate != null && !blockstate.isRedstoneConductor(p_47041_, p_47042_)) { // Paper - don't load chunks for mob spawn
+             BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
+             int j = 0;
+ 
+@@ -167,7 +_,7 @@
+                     Player player = p_47040_.getNearestPlayer(d0, (double)i, d1, -1.0, false);
+                     if (player != null) {
+                         double d2 = player.distanceToSqr(d0, (double)i, d1);
+-                        if (isRightDistanceToPlayerAndSpawnPoint(p_47040_, p_47041_, blockpos$mutableblockpos, d2)) {
++                        if (p_47040_.isLoadedAndInBounds(blockpos$mutableblockpos) && isRightDistanceToPlayerAndSpawnPoint(p_47040_, p_47041_, blockpos$mutableblockpos, d2)) { // Paper - don't load chunks for mob spawn
+                             if (mobspawnsettings$spawnerdata == null) {
+                                 Optional<MobSpawnSettings.SpawnerData> optional = getRandomSpawnMobAt(
+                                     p_47040_, structuremanager, chunkgenerator, p_47039_, p_47040_.random, blockpos$mutableblockpos
 @@ -199,7 +_,7 @@
                                      l1++;
                                      p_47040_.addFreshEntityWithPassengers(mob);
