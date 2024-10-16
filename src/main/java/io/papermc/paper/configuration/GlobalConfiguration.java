@@ -29,6 +29,11 @@ public class GlobalConfiguration extends ConfigurationPart {
         return instance;
     }
 
+    public PufferfishConfig pufferfishConfig;
+    public class PufferfishConfig extends ConfigurationPart {
+        public boolean enableAsyncMobSpawning = false;
+    }
+
     public ChunkLoadingBasic chunkLoadingBasic;
 
     public class ChunkLoadingBasic extends ConfigurationPart {

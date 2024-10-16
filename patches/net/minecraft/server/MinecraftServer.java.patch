@@ -33,7 +33,7 @@
      private long lastTickNanos = Util.getNanos();
      private long taskExecutionStartNanos = Util.getNanos();
      private long idleTimeNanos;
-@@ -262,10 +_,35 @@
+@@ -262,10 +_,37 @@
      private volatile boolean isSaving;
      private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
  
@@ -57,6 +57,8 @@
 +    public volatile Thread shutdownThread; // Paper
 +    public volatile boolean abnormalExit = false; // Paper
 +    public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
++
++    public gg.pufferfish.pufferfish.util.AsyncExecutor mobSpawnExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("MobSpawning"); // Pufferfish - optimize mob spawning
 +
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
          AtomicReference<S> atomicreference = new AtomicReference<>();

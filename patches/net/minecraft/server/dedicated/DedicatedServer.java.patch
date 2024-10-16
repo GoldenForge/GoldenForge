@@ -73,10 +73,12 @@
                  Thread thread1 = new Thread(new ServerWatchdog(this));
                  thread1.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandlerWithName(LOGGER));
                  thread1.setName("Server Watchdog");
-@@ -217,6 +_,12 @@
+@@ -217,6 +_,14 @@
                  LOGGER.info("JMX monitoring enabled");
              }
  
++            if (GlobalConfiguration.get().pufferfishConfig.enableAsyncMobSpawning) mobSpawnExecutor.start(); // Pufferfish
++
 +            if (net.neoforged.neoforge.common.NeoForgeConfig.SERVER.advertiseDedicatedServerToLan.get()) {
 +                this.dediLanPinger = new net.minecraft.client.server.LanServerPinger(this.getMotd(), String.valueOf(this.getServerPort()));
 +                this.dediLanPinger.start();
