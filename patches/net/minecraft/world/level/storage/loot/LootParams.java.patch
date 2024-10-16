@@ -1,5 +1,18 @@
 --- a/net/minecraft/world/level/storage/loot/LootParams.java
 +++ b/net/minecraft/world/level/storage/loot/LootParams.java
+@@ -23,8 +_,10 @@
+         ServerLevel p_287766_, Map<LootContextParam<?>, Object> p_287705_, Map<ResourceLocation, LootParams.DynamicDrop> p_287642_, float p_287671_
+     ) {
+         this.level = p_287766_;
+-        this.params = p_287705_;
+-        this.dynamicDrops = p_287642_;
++        // Pufferfish start - use unmodifiable maps instead of immutable ones to skip the copy
++        this.params = java.util.Collections.unmodifiableMap(p_287705_);
++        this.dynamicDrops = java.util.Collections.unmodifiableMap(p_287642_);
++        // Pufferfish end
+         this.luck = p_287671_;
+     }
+ 
 @@ -125,7 +_,7 @@
  
          public LootParams create(LootContextParamSet p_287701_) {
