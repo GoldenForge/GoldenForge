@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/level/block/piston/PistonStructureResolver.java
 +++ b/net/minecraft/world/level/block/piston/PistonStructureResolver.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.level.block.piston;
+ 
++import com.abdelaziz.canary.common.util.constants.DirectionConstants;
+ import com.google.common.collect.Lists;
+ import java.util.List;
+ import net.minecraft.core.BlockPos;
 @@ -50,7 +_,7 @@
          } else {
              for (int i = 0; i < this.toPush.size(); i++) {
@@ -54,7 +61,12 @@
                                  return false;
                              }
                          }
-@@ -174,7 +_,7 @@
+@@ -170,11 +_,11 @@
+     private boolean addBranchingBlocks(BlockPos p_60432_) {
+         BlockState blockstate = this.level.getBlockState(p_60432_);
+ 
+-        for (Direction direction : Direction.values()) {
++        for (Direction direction : DirectionConstants.ALL) { // Goldenforge: lithium: do not allocate
              if (direction.getAxis() != this.pushDirection.getAxis()) {
                  BlockPos blockpos = p_60432_.relative(direction);
                  BlockState blockstate1 = this.level.getBlockState(blockpos);

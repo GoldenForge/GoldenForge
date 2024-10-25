@@ -1,0 +1,38 @@
+--- a/net/minecraft/util/random/WeightedRandomList.java
++++ b/net/minecraft/util/random/WeightedRandomList.java
+@@ -1,7 +_,10 @@
+ package net.minecraft.util.random;
+ 
++import com.abdelaziz.canary.common.util.collections.HashedReferenceList;
+ import com.google.common.collect.ImmutableList;
+ import com.mojang.serialization.Codec;
++
++import java.util.Collections;
+ import java.util.List;
+ import java.util.Objects;
+ import java.util.Optional;
+@@ -11,10 +_,15 @@
+ public class WeightedRandomList<E extends WeightedEntry> {
+     private final int totalWeight;
+     private final ImmutableList<E> items;
++    //Goldenforge: lithium: Need a separate variable due to items being type ImmutableList
++    private List<E> entryHashList;
+ 
+     WeightedRandomList(List<? extends E> p_146327_) {
+         this.items = ImmutableList.copyOf(p_146327_);
+         this.totalWeight = WeightedRandom.getTotalWeight(p_146327_);
++
++        //We are using reference equality here, because all vanilla implementations of Weighted use reference equality
++        this.entryHashList = this.items.size() > 4 ? this.items : Collections.unmodifiableList(new HashedReferenceList<>(this.items));
+     }
+ 
+     public static <E extends WeightedEntry> WeightedRandomList<E> create() {
+@@ -44,7 +_,7 @@
+     }
+ 
+     public List<E> unwrap() {
+-        return this.items;
++        return this.entryHashList; // Goldenforge: lithium: return a collection with a faster contains() call
+     }
+ 
+     public static <E extends WeightedEntry> Codec<WeightedRandomList<E>> codec(Codec<E> p_146334_) {

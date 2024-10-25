@@ -1,5 +1,12 @@
 --- a/net/minecraft/world/entity/LivingEntity.java
 +++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.entity;
+ 
++import com.abdelaziz.canary.common.util.constants.EquipmentSlotConstants;
+ import com.google.common.annotations.VisibleForTesting;
+ import com.google.common.base.Objects;
+ import com.google.common.collect.ImmutableList;
 @@ -132,7 +_,7 @@
  import net.minecraft.world.scores.Scoreboard;
  import org.slf4j.Logger;
@@ -576,6 +583,15 @@
          Map<EquipmentSlot, ItemStack> map = this.collectEquipmentChanges();
          if (map != null) {
              this.handleHandSwap(map);
+@@ -2458,7 +_,7 @@
+     private Map<EquipmentSlot, ItemStack> collectEquipmentChanges() {
+         Map<EquipmentSlot, ItemStack> map = null;
+ 
+-        for (EquipmentSlot equipmentslot : EquipmentSlot.values()) {
++        for (EquipmentSlot equipmentslot : EquipmentSlotConstants.ALL) { // Goldenforge: lithium: do not allocate
+             ItemStack itemstack = switch (equipmentslot.getType()) {
+                 case HAND -> this.getLastHandItem(equipmentslot);
+                 case HUMANOID_ARMOR -> this.getLastArmorItem(equipmentslot);
 @@ -2466,6 +_,7 @@
              };
              ItemStack itemstack1 = this.getItemBySlot(equipmentslot);

@@ -1,20 +1,32 @@
 --- a/net/minecraft/world/level/biome/MobSpawnSettings.java
 +++ b/net/minecraft/world/level/biome/MobSpawnSettings.java
-@@ -51,6 +_,8 @@
+@@ -49,8 +_,10 @@
+                 .apply(p_187051_, MobSpawnSettings::new)
+     );
      private final float creatureGenerationProbability;
-     private final Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> spawners;
+-    private final Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> spawners;
++    private Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> spawners;
      private final Map<EntityType<?>, MobSpawnSettings.MobSpawnCost> mobSpawnCosts;
 +    private final java.util.Set<MobCategory> typesView;
 +    private final java.util.Set<EntityType<?>> costView;
  
      MobSpawnSettings(
          float p_196689_,
-@@ -60,15 +_,25 @@
+@@ -60,15 +_,34 @@
          this.creatureGenerationProbability = p_196689_;
          this.spawners = ImmutableMap.copyOf(p_196690_);
          this.mobSpawnCosts = ImmutableMap.copyOf(p_196691_);
 +        this.typesView = java.util.Collections.unmodifiableSet(this.spawners.keySet());
 +        this.costView = java.util.Collections.unmodifiableSet(this.mobSpawnCosts.keySet());
++
++        // Goldenforge: lithium
++        Map<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> spawns = Maps.newEnumMap(MobCategory.class);
++
++        for (Map.Entry<MobCategory, WeightedRandomList<MobSpawnSettings.SpawnerData>> entry : this.spawners.entrySet()) {
++            spawns.put(entry.getKey(), entry.getValue());
++        }
++
++        this.spawners = spawns;
      }
  
      public WeightedRandomList<MobSpawnSettings.SpawnerData> getMobs(MobCategory p_151799_) {

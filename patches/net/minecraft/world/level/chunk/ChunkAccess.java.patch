@@ -145,6 +145,42 @@
                              }
                          }
                      }
+@@ -420,19 +_,23 @@
+     }
+ 
+     @Override
+-    public Holder<Biome> getNoiseBiome(int p_204347_, int p_204348_, int p_204349_) {
+-        try {
+-            int i = QuartPos.fromBlock(this.getMinBuildHeight());
+-            int k = i + QuartPos.fromBlock(this.getHeight()) - 1;
+-            int l = Mth.clamp(p_204348_, i, k);
+-            int j = this.getSectionIndex(QuartPos.toBlock(l));
+-            return this.sections[j].getNoiseBiome(p_204347_ & 3, l & 3, p_204349_ & 3);
+-        } catch (Throwable throwable) {
+-            CrashReport crashreport = CrashReport.forThrowable(throwable, "Getting biome");
+-            CrashReportCategory crashreportcategory = crashreport.addCategory("Biome being got");
+-            crashreportcategory.setDetail("Location", () -> CrashReportCategory.formatLocation(this, p_204347_, p_204348_, p_204349_));
+-            throw new ReportedException(crashreport);
++    public Holder<Biome> getNoiseBiome(int biomeX, int biomeY, int biomeZ) {
++        // Paper start - get block chunk optimisation
++        int sectionY = (biomeY >> 2) - this.minSection;
++        int rel = biomeY & 3;
++
++        final LevelChunkSection[] sections = this.sections;
++
++        if (sectionY < 0) {
++            sectionY = 0;
++            rel = 0;
++        } else if (sectionY >= sections.length) {
++            sectionY = sections.length - 1;
++            rel = 3;
+         }
++
++        return sections[sectionY].getNoiseBiome(biomeX & 3, rel, biomeZ & 3);
++        // Paper end - get block chunk optimisation
+     }
+ 
+     public void fillBiomesFromNoise(BiomeResolver p_187638_, Climate.Sampler p_187639_) {
 @@ -466,14 +_,82 @@
      }
  

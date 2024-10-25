@@ -1,0 +1,21 @@
+--- a/net/minecraft/world/level/EntityBasedExplosionDamageCalculator.java
++++ b/net/minecraft/world/level/EntityBasedExplosionDamageCalculator.java
+@@ -15,8 +_,16 @@
+ 
+     @Override
+     public Optional<Float> getBlockExplosionResistance(Explosion p_45902_, BlockGetter p_45903_, BlockPos p_45904_, BlockState p_45905_, FluidState p_45906_) {
+-        return super.getBlockExplosionResistance(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_)
+-            .map(p_45913_ -> this.source.getBlockExplosionResistance(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_, p_45913_));
++        // Goldenforge: lithium: avoid lambda and optional allocation
++        Optional<Float> optionalBlastResistance = super.getBlockExplosionResistance(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_);
++        if (optionalBlastResistance.isPresent()) {
++            float blastResistance = optionalBlastResistance.get();
++            float effectiveExplosionResistance = this.source.getBlockExplosionResistance(p_45902_, p_45903_, p_45904_, p_45905_, p_45906_, blastResistance);
++            if (effectiveExplosionResistance != blastResistance) {
++                return Optional.of(effectiveExplosionResistance);
++            }
++        }
++        return optionalBlastResistance;
+     }
+ 
+     @Override

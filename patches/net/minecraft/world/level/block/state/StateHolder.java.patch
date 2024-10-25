@@ -1,0 +1,31 @@
+--- a/net/minecraft/world/level/block/state/StateHolder.java
++++ b/net/minecraft/world/level/block/state/StateHolder.java
+@@ -1,5 +_,7 @@
+ package net.minecraft.world.level.block.state;
+ 
++import com.abdelaziz.canary.common.state.FastImmutableTable;
++import com.abdelaziz.canary.common.state.StatePropertyTableCache;
+ import com.google.common.collect.ArrayTable;
+ import com.google.common.collect.HashBasedTable;
+ import com.google.common.collect.Table;
+@@ -15,7 +_,10 @@
+ import java.util.function.Function;
+ import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
++
++import net.minecraft.world.level.block.Block;
+ import net.minecraft.world.level.block.state.properties.Property;
++import net.minecraft.world.level.material.Fluid;
+ 
+ public abstract class StateHolder<O, S> {
+     public static final String NAME_TAG = "Name";
+@@ -149,6 +_,9 @@
+             }
+ 
+             this.neighbours = (Table<Property<?>, Comparable<?>, S>)(table.isEmpty() ? table : ArrayTable.create(table));
++        }
++        if (this.owner instanceof Block || this.owner instanceof Fluid) {
++            this.neighbours = new FastImmutableTable<>(this.neighbours, StatePropertyTableCache.getTableCache(this.owner));
+         }
+     }
+ 

@@ -160,3 +160,33 @@
      @Deprecated
      public Holder.Reference<Block> builtInRegistryHolder() {
          return this.builtInRegistryHolder;
+@@ -501,11 +_,18 @@
+         private final BlockState first;
+         private final BlockState second;
+         private final Direction direction;
++        private int hash;  // GoldenForge: lithium: use cached hashcode
+ 
+         public BlockStatePairKey(BlockState p_49984_, BlockState p_49985_, Direction p_49986_) {
+             this.first = p_49984_;
+             this.second = p_49985_;
+             this.direction = p_49986_;
++            // GoldenForge: lithium: use cached hashcode
++            int hash = this.first.hashCode();
++            hash = 31 * hash + this.second.hashCode();
++            hash = 31 * hash + this.direction.hashCode();
++
++            this.hash = hash;
+         }
+ 
+         @Override
+@@ -523,9 +_,7 @@
+ 
+         @Override
+         public int hashCode() {
+-            int i = this.first.hashCode();
+-            i = 31 * i + this.second.hashCode();
+-            return 31 * i + this.direction.hashCode();
++            return this.hash; // GoldenForge: lithium: use cached hashcode
+         }
+     }
+ }
