@@ -18,8 +18,9 @@ import org.gradle.plugins.ide.eclipse.model.SourceFolder
 plugins {
     id 'org.cadixdev.licenser' version '0.6.1'
     id 'com.github.ben-manes.versions' version '0.46.0'
-    id 'net.minecraftforge.gradleutils' version '2+'
+    id 'net.minecraftforge.gradleutils' version '[2.2,2.3)'
     id 'eclipse'
+    id 'idea'
     id 'de.undercouch.download' version '5.4.0'
     id 'net.minecraftforge.gradle.patcher' version '[6.0,6.2)' apply false
     id 'net.minecraftforge.gradle.mcp' version '[6.0,6.2)' apply false
@@ -43,16 +44,16 @@ ext {
     MCP_VERSION = '20220805.130853'
     SPI_VERSION = '6.0.0'
     ACCESSTRANSFORMERS_VERSION = '8.0.4'
-    COREMODS_VERSION = '5.0.1'
+    COREMODS_VERSION = '5.2.1'
     EVENTBUS_VERSION = '6.0.3'
     MODLAUNCHER_VERSION = '10.0.8'
     SECUREJARHANDLER_VERSION = '2.1.4'
     BOOTSTRAPLAUNCHER_VERSION = '1.1.2'
-    ASM_VERSION = '9.7'
+    ASM_VERSION = '9.7.1'
     INSTALLER_VERSION = '2.2.+'
     MIXIN_VERSION = '0.8.5'
     TERMINALCONSOLEAPPENDER_VERSION = '1.2.0'
-    JLINE_VERSION = '3.12.1'
+    JLINE_VERSION = '3.12.+'
     NIGHTCONFIG_VERSION = '3.6.4'
     JETBRAINS_ANNOTATIONS_VERSION = '23.0.0'
     SLF4J_API_VERSION = '1.8.0-beta4'
@@ -61,7 +62,7 @@ ext {
     // These versions should be kept in sync with the version manifest JSON
     // To use a version newer than the version manifest JSON, the dependency must be added to the installer configuration
     MOJANG_LOGGING_VERSION = '1.0.0'
-    LOG4J_VERSION = '2.17.0'
+    LOG4J_VERSION = '2.19.0'
     GUAVA_VERSION = '31.0.1-jre'
     GSON_VERSION = '2.8.9'
     APACHE_COMMONS_LANG3_VERSION = '3.12.0'
@@ -89,10 +90,14 @@ println('Version: ' + VERSION +
         ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ')' +
         ' Arch: ' + System.getProperty('os.arch'))
 
+changelog {
+    fromTag MIN_TAG_FOR_CHANGELOG
+}
 
 def extraTxts = [
     rootProject.file('CREDITS.txt'),
     rootProject.file('LICENSE.txt'),
+    rootProject.tasks.createChangelog.outputFile
 ]
 
 tasks.register('downloadVersionManifest', Download) {
@@ -299,7 +304,7 @@ def sharedDeps = {
     installer "org.jline:jline-reader:${JLINE_VERSION}"   // Dep of TerminalConsoleAppender
     installer "org.jline:jline-terminal:${JLINE_VERSION}" // Dep of TerminalConsoleAppender
     installer "org.spongepowered:mixin:${MIXIN_VERSION}"
-    installer 'org.openjdk.nashorn:nashorn-core:15.3'
+    installer 'org.openjdk.nashorn:nashorn-core:15.4'
     installer "net.minecraftforge:JarJarSelector:${JARJAR_VERSION}"
     installer "net.minecraftforge:JarJarMetadata:${JARJAR_VERSION}"
     installer "com.velocitypowered:velocity-native:3.1.2-SNAPSHOT"
@@ -317,6 +322,11 @@ def sharedDeps = {
     installer "net.objecthunter:exp4j:0.4.8"
     installer "com.ibm.async:asyncutil:0.1.0"
     installer "org.threadly:threadly:7.0"
+    installer "org.apache.logging.log4j:log4j-slf4j-impl:${LOG4J_VERSION}" // Bumped for CoreMods
+    installer "org.apache.logging.log4j:log4j-api:${LOG4J_VERSION}" // Bumped for CoreMods
+    installer "org.apache.logging.log4j:log4j-core:${LOG4J_VERSION}" // Bumped for CoreMods
+    installer 'net.java.dev.jna:jna:5.12.1'
+    installer 'net.java.dev.jna:jna-platform:5.12.1'
 
     /*
     installer 'org.lwjgl:lwjgl:3.2.2'
@@ -475,7 +485,7 @@ def sharedFmlonlyForge = { Project prj ->
         // SecureJarHandler bootstrap values.
         run.property 'ignoreList', prj.configurations.moduleonly.files.collect {it.name.replaceAll(/([-_]([.\d]*\d+)|\.jar$)/, '') }.join(',') + ",client-extra,fmlcore,javafmllanguage,lowcodelanguage,mclanguage,${prj.name}-"
         // FIXME: Without this jna doesn't work at runtime. Someone figure out why please?
-        run.property 'mergeModules', 'jna-5.10.0.jar,jna-platform-5.10.0.jar'
+        run.property 'mergeModules', 'jna-5.12.1.jar,jna-platform-5.12.1.jar'
         if (userdevRuns.contains(run)) {
             run.property 'legacyClassPath.file', '{minecraft_classpath_file}'
             run.jvmArgs '-p', '{modules}'
@@ -905,7 +915,6 @@ project(':forge') {
     apply plugin: 'java-library'
     apply plugin: 'net.minecraftforge.gradle.patcher'
     apply plugin: 'org.cadixdev.licenser'
-    //apply plugin: 'org.spongepowered.mixin'
 
     sourceSets {
         main {
@@ -1115,7 +1124,7 @@ project(':forge') {
                 'Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
                 'GitCommit': gradleutils.gitInfo.abbreviatedId,
                 'Git-Branch': gradleutils.gitInfo.branch,
-                'FML-System-Mods': 'forge',
+                'FML-System-Mods': 'forge'
             ] as LinkedHashMap,
             'net/minecraftforge/versions/forge/': [
                 'Specification-Title':      'Forge',
@@ -1752,5 +1761,13 @@ if (System.env.TEAMCITY_VERSION) {
             println "##teamcity[setParameter name='env.PUBLISHED_JAVA_ARTIFACT_VERSION' value='${project(':forge').version}']"
             println "##teamcity[setParameter name='env.PUBLISHED_JAVA_FML_ARTIFACT_VERSION' value='${project(':fmlonly').version}']"
         }
+    }
+}
+
+idea {
+    module {
+        // IntelliJ IDEA does not do this by itself anymore...
+        downloadJavadoc = true
+        downloadSources = true
     }
 }
