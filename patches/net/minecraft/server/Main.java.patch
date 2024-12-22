@@ -1,14 +1,7 @@
 --- a/net/minecraft/server/Main.java
 +++ b/net/minecraft/server/Main.java
-@@ -58,15 +_,33 @@
- import net.minecraft.world.level.storage.LevelSummary;
- import net.minecraft.world.level.storage.PrimaryLevelData;
- import net.minecraft.world.level.storage.WorldData;
-+import org.goldenforge.GoldenForgeEntryPoint;
- import org.slf4j.Logger;
+@@ -62,9 +_,10 @@
  
-+import static java.util.Arrays.asList;
-+
  public class Main {
      private static final Logger LOGGER = LogUtils.getLogger();
 +    public static final java.time.Instant BOOT_TIME = java.time.Instant.now(); // Paper - track initial start time
@@ -17,32 +10,14 @@
 -    public static void main(String[] p_129699_) {
 +    public static void main(String[] p_129699_) throws Exception {
          SharedConstants.tryDetectVersion();
--        OptionParser optionparser = new OptionParser();
-+        GoldenForgeEntryPoint.init();
-+        OptionParser optionparser = new OptionParser() {
-+            {
-+                acceptsAll(asList("paper-dir", "paper-settings-directory"), "Directory for Paper settings")
-+                        .withRequiredArg()
-+                        .ofType(File.class)
-+                        .defaultsTo(new File(io.papermc.paper.configuration.PaperConfigurations.CONFIG_DIR))
-+                        .describedAs("Config directory");
-+                acceptsAll(asList("paper", "paper-settings"), "File for Paper settings")
-+                        .withRequiredArg()
-+                        .ofType(File.class)
-+                        .defaultsTo(new File("paper.yml"))
-+                        .describedAs("Yml file");
-+            }
-+        };
+         OptionParser optionparser = new OptionParser();
          OptionSpec<Void> optionspec = optionparser.accepts("nogui");
-         OptionSpec<Void> optionspec1 = optionparser.accepts("initSettings", "Initializes 'server.properties' and 'eula.txt', then quits");
-         OptionSpec<Void> optionspec2 = optionparser.accepts("demo");
-@@ -83,6 +_,16 @@
+@@ -83,6 +_,15 @@
          OptionSpec<Void> optionspec13 = optionparser.accepts("jfrProfile");
          OptionSpec<Path> optionspec14 = optionparser.accepts("pidFile").withRequiredArg().withValuesConvertedBy(new PathConverter());
          OptionSpec<String> optionspec15 = optionparser.nonOptions();
 +        optionparser.accepts("allowUpdates").withRequiredArg().ofType(Boolean.class).defaultsTo(Boolean.TRUE); // Forge: allow mod updates to proceed
 +        optionparser.accepts("gameDir").withRequiredArg().ofType(File.class).defaultsTo(new File(".")); //Forge: Consume this argument, we use it in the launcher, and the client side.
-+
 +        final OptionSpec<net.minecraft.core.BlockPos> spawnPosOpt;
 +        boolean gametestEnabled = Boolean.getBoolean("neoforge.gameTestServer");
 +        if (gametestEnabled) {
@@ -89,7 +64,7 @@
 -
              File file1 = new File(optionset.valueOf(optionspec9));
 -            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1);
-+            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1, new File("."), optionset);
++            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1, optionspec9);
              String s = Optional.ofNullable(optionset.valueOf(optionspec10)).orElse(dedicatedserversettings.getProperties().levelName);
 +            if (s == null || s.isEmpty() || new File(file1, s).getAbsolutePath().equals(new File(s).getAbsolutePath())) {
 +                LOGGER.error("Invalid world directory specified, must not be null, empty or the same directory as your universe! " + s);
@@ -114,6 +89,22 @@
                      } catch (NbtException | ReportedNbtException | IOException ioexception) {
                          LOGGER.error("Failed to load world data from {}", levelstoragesource$leveldirectory.oldDataFile(), ioexception);
                          LOGGER.error(
+@@ -173,6 +_,15 @@
+ 
+             PackRepository packrepository = ServerPacksSource.createPackRepository(levelstoragesource$levelstorageaccess);
+ 
++            if (gametestEnabled) {
++                net.neoforged.neoforge.gametest.GameTestHooks.registerGametests();
++                net.minecraft.core.BlockPos spawnPos = optionset.valueOf(spawnPosOpt);
++                MinecraftServer.spin(thread -> net.minecraft.gametest.framework.GameTestServer.create(thread, levelstoragesource$levelstorageaccess, packrepository, net.minecraft.gametest.framework.GameTestRegistry.getAllTestFunctions(), spawnPos));
++                // If we're running a gametest server we don't need to load the resources normally (GameTestServer#create does it using a flat world)
++                // or create a shutdown thread as the gametest server will always exit itself
++                return;
++            }
++
+             WorldStem worldstem;
+             try {
+                 WorldLoader.InitConfig worldloader$initconfig = loadOrCreateConfig(dedicatedserversettings.getProperties(), dynamic1, flag, packrepository);
 @@ -214,6 +_,9 @@
                                              worlddimensions = dedicatedserverproperties.createDimensions(p_307161_.datapackWorldgen());
                                          }
@@ -124,63 +115,11 @@
                                          WorldDimensions.Complete worlddimensions$complete = worlddimensions.bake(registry);
                                          Lifecycle lifecycle = worlddimensions$complete.lifecycle().add(p_307161_.datapackWorldgen().allRegistriesLifecycle());
                                          return new WorldLoader.DataLoadOutput<>(
-@@ -246,37 +_,38 @@
- 
-             WorldData worlddata = worldstem.worldData();
-             levelstoragesource$levelstorageaccess.saveDataTag(registryaccess$frozen, worlddata);
--            final DedicatedServer dedicatedserver = MinecraftServer.spin(
-+            final MinecraftServer dedicatedserver = MinecraftServer.spin(
-                 p_293760_ -> {
--                    DedicatedServer dedicatedserver1 = new DedicatedServer(
--                        p_293760_,
--                        levelstoragesource$levelstorageaccess,
--                        packrepository,
--                        worldstem,
--                        dedicatedserversettings,
--                        DataFixers.getDataFixer(),
--                        services,
--                        LoggerChunkProgressListener::createFromGameruleRadius
--                    );
-+                    MinecraftServer dedicatedserver1;
-+                    if (gametestEnabled) {
-+                        net.neoforged.neoforge.gametest.GameTestHooks.registerGametests();
-+                        net.minecraft.core.BlockPos spawnPos = optionset.valueOf(spawnPosOpt);
-+                        dedicatedserver1 = net.minecraft.gametest.framework.GameTestServer.create(p_293760_, levelstoragesource$levelstorageaccess, packrepository, net.minecraft.gametest.framework.GameTestRegistry.getAllTestFunctions(), spawnPos);
-+                    } else {
-+                        dedicatedserver1 = new DedicatedServer(p_293760_, levelstoragesource$levelstorageaccess, packrepository, worldstem, dedicatedserversettings, DataFixers.getDataFixer(), services, LoggerChunkProgressListener::createFromGameruleRadius);
-+                    }
-                     dedicatedserver1.setPort(optionset.valueOf(optionspec11));
-                     dedicatedserver1.setDemo(optionset.has(optionspec2));
-                     dedicatedserver1.setId(optionset.valueOf(optionspec12));
-                     boolean flag2 = !optionset.has(optionspec) && !optionset.valuesOf(optionspec15).contains("nogui");
--                    if (flag2 && !GraphicsEnvironment.isHeadless()) {
--                        dedicatedserver1.showGui();
-+                    if (dedicatedserver1 instanceof DedicatedServer dedicatedServer && flag2 && !GraphicsEnvironment.isHeadless()) {
-+                        dedicatedServer.showGui();
-                     }
- 
-                     return dedicatedserver1;
+@@ -273,6 +_,7 @@
+                 @Override
+                 public void run() {
+                     dedicatedserver.halt(true);
++                    org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
                  }
-             );
--            Thread thread = new Thread("Server Shutdown Thread") {
--                @Override
--                public void run() {
--                    dedicatedserver.halt(true);
--                }
--            };
--            thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
--            Runtime.getRuntime().addShutdownHook(thread);
-+//            Thread thread = new Thread("Server Shutdown Thread") {
-+//                @Override
-+//                public void run() {
-+//                    // FORGE: Halting as GameTestServer will cause issues as it always calls System#exit on both crash and normal exit, so skip it
-+//                    if (!(dedicatedserver instanceof net.minecraft.gametest.framework.GameTestServer))
-+//                    dedicatedserver.halt(true);
-+//                    org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
-+//                }
-+//            };
-+//            thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
-+//            Runtime.getRuntime().addShutdownHook(thread);
-         } catch (Exception exception1) {
-             LOGGER.error(LogUtils.FATAL_MARKER, "Failed to start the minecraft server", (Throwable)exception1);
-         }
+             };
+             thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
