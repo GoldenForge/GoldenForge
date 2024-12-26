@@ -1,11 +1,11 @@
 package ca.spottedleaf.moonrise.patches.block_counting;
 
-import ca.spottedleaf.moonrise.common.list.IBlockDataList;
+import ca.spottedleaf.moonrise.common.list.ShortList;
 
 public interface BlockCountingChunkSection {
 
-    public int moonrise$getSpecialCollidingBlocks();
+    public boolean moonrise$hasSpecialCollidingBlocks();
 
-    public IBlockDataList moonrise$getTickingBlockList();
+    public ShortList moonrise$getTickingBlockList();
 
 }

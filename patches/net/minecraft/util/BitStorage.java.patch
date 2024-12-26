@@ -17,15 +17,15 @@
 +    // Paper start - block counting
 +    // provide default impl in case mods implement this...
 +    @Override
-+    public default it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.ints.IntArrayList> moonrise$countEntries() {
-+        final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.ints.IntArrayList> ret = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
++    public default it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> moonrise$countEntries() {
++        final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> ret = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
 +
 +        final int size = this.getSize();
 +        for (int index = 0; index < size; ++index) {
 +            final int paletteIdx = this.get(index);
 +            ret.computeIfAbsent(paletteIdx, (final int key) -> {
-+                return new it.unimi.dsi.fastutil.ints.IntArrayList();
-+            }).add(index);
++                return new it.unimi.dsi.fastutil.shorts.ShortArrayList();
++            }).add((short)index);
 +        }
 +
 +        return ret;

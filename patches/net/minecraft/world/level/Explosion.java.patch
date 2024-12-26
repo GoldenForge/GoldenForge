@@ -179,10 +179,10 @@
 +            }
 +
 +            final BlockState blockState = cachedBlock.blockState;
-+            if (blockState != null && !((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)blockState).moonrise$emptyCollisionShape()) {
++            if (blockState != null && !((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)blockState).moonrise$emptyContextCollisionShape()) {
 +                net.minecraft.world.phys.shapes.VoxelShape collision = cachedBlock.cachedCollisionShape;
 +                if (collision == null) {
-+                    collision = ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)blockState).moonrise$getConstantCollisionShape();
++                    collision = ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)blockState).moonrise$getConstantContextCollisionShape();
 +                    if (collision == null) {
 +                        collision = blockState.getCollisionShape(this.level, currPos, context);
 +                        if (!context.isDelegated()) {

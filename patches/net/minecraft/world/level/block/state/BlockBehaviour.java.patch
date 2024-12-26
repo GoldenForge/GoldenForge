@@ -82,7 +82,7 @@
          private final int lightEmission;
          private final boolean useShapeForLightOcclusion;
          private final boolean isAir;
-@@ -422,6 +_,76 @@
+@@ -422,6 +_,82 @@
          private FluidState fluidState = Fluids.EMPTY.defaultFluidState();
          private boolean isRandomlyTicking;
  
@@ -108,15 +108,21 @@
 +        private final int id2 = it.unimi.dsi.fastutil.HashCommon.murmurHash3(it.unimi.dsi.fastutil.HashCommon.murmurHash3(ID_GENERATOR.getAndIncrement() + RANDOM_OFFSET) + RANDOM_OFFSET);
 +        private boolean occludesFullBlock;
 +        private boolean emptyCollisionShape;
++        private boolean emptyConstantCollisionShape;
 +        private VoxelShape constantCollisionShape;
-+        private AABB constantAABBCollision;
 +
-+        private static void initCaches(final VoxelShape shape) {
++        private static void initCaches(final VoxelShape shape, final boolean neighbours) {
 +            ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)shape).moonrise$isFullBlock();
 +            ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)shape).moonrise$occludesFullBlock();
 +            shape.toAabbs();
 +            if (!shape.isEmpty()) {
 +                shape.bounds();
++            }
++            if (neighbours) {
++                for (final Direction direction : DIRECTIONS_CACHED) {
++                    initCaches(((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)shape).moonrise$getFaceShapeClamped(direction), false);
++                    initCaches(shape.getFaceShape(direction), false);
++                }
 +            }
 +        }
 +
@@ -136,6 +142,11 @@
 +        }
 +
 +        @Override
++        public final boolean moonrise$emptyContextCollisionShape() {
++            return this.emptyConstantCollisionShape;
++        }
++
++        @Override
 +        public final int moonrise$uniqueId1() {
 +            return this.id1;
 +        }
@@ -146,20 +157,15 @@
 +        }
 +
 +        @Override
-+        public final VoxelShape moonrise$getConstantCollisionShape() {
++        public final VoxelShape moonrise$getConstantContextCollisionShape() {
 +            return this.constantCollisionShape;
-+        }
-+
-+        @Override
-+        public final AABB moonrise$getConstantCollisionAABB() {
-+            return this.constantAABBCollision;
 +        }
 +        // Paper end - optimise collisions
 +
          protected BlockStateBase(Block p_60608_, Reference2ObjectArrayMap<Property<?>, Comparable<?>> p_326208_, MapCodec<BlockState> p_60610_) {
              super(p_60608_, p_326208_, p_60610_);
              BlockBehaviour.Properties blockbehaviour$properties = p_60608_.properties;
-@@ -472,6 +_,10 @@
+@@ -472,6 +_,33 @@
              }
  
              this.legacySolid = this.calculateSolid();
@@ -167,6 +173,29 @@
 +            this.isConditionallyFullOpaque = this.canOcclude & this.useShapeForLightOcclusion;
 +            this.opacityIfCached = this.cache == null || this.isConditionallyFullOpaque ? -1 : this.cache.lightBlock;
 +            // Paper end - rewrite chunk system
++            // Paper start - optimise collisions
++            if (this.cache != null) {
++                final VoxelShape collisionShape = this.cache.collisionShape;
++                if (this.isAir()) {
++                    this.constantCollisionShape = Shapes.empty();
++                } else {
++                    this.constantCollisionShape = null;
++                }
++                this.occludesFullBlock = ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)collisionShape).moonrise$occludesFullBlock();
++                this.emptyCollisionShape = collisionShape.isEmpty();
++                this.emptyConstantCollisionShape = this.constantCollisionShape != null && this.constantCollisionShape.isEmpty();
++                // init caches
++                initCaches(collisionShape, true);
++                if (this.constantCollisionShape != null) {
++                    initCaches(this.constantCollisionShape, true);
++                }
++            } else {
++                this.occludesFullBlock = false;
++                this.emptyCollisionShape = false;
++                this.emptyConstantCollisionShape = false;
++                this.constantCollisionShape = null;
++            }
++            // Paper end - optimise collisions
          }
  
          public Block getBlock() {

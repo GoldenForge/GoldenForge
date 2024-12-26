@@ -26,8 +26,40 @@
      private final EntityType<?> type;
      private int id = ENTITY_COUNTER.incrementAndGet();
      public boolean blocksBuilding;
-@@ -193,10 +_,12 @@
-     protected final RandomSource random = RandomSource.create();
+@@ -190,13 +_,43 @@
+     public double yOld;
+     public double zOld;
+     public boolean noPhysics;
+-    protected final RandomSource random = RandomSource.create();
++    protected final RandomSource random = SHARED_RANDOM;
++    // Paper start - Share random for entities to make them more random
++    public static RandomSource SHARED_RANDOM = new RandomRandomSource();
++    // Paper start - replace random
++    private static final class RandomRandomSource extends ca.spottedleaf.moonrise.common.util.ThreadUnsafeRandom {
++        public RandomRandomSource() {
++            this(net.minecraft.world.level.levelgen.RandomSupport.generateUniqueSeed());
++        }
++
++        public RandomRandomSource(long seed) {
++            super(seed);
++        }
++
++        // Paper end - replace random
++        private boolean locked = false;
++
++        @Override
++        public synchronized void setSeed(long seed) {
++            if (locked) {
++                LOGGER.error("Ignoring setSeed on Entity.SHARED_RANDOM", new Throwable());
++            } else {
++                super.setSeed(seed);
++                locked = true;
++            }
++        }
++
++        // Paper - replace random
++    }
++    // Paper end - Share random for entities to make them more random
      public int tickCount;
      private int remainingFireTicks = -this.getFireImmuneTicks();
 -    protected boolean wasTouchingWater;
