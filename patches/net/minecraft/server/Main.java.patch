@@ -1,6 +1,19 @@
 --- a/net/minecraft/server/Main.java
 +++ b/net/minecraft/server/Main.java
-@@ -62,9 +_,10 @@
+@@ -13,6 +_,7 @@
+ import java.nio.file.Files;
+ import java.nio.file.Path;
+ import java.nio.file.Paths;
++import java.util.Arrays;
+ import java.util.Optional;
+ import java.util.concurrent.Executor;
+ import java.util.function.BooleanSupplier;
+@@ -58,15 +_,31 @@
+ import net.minecraft.world.level.storage.LevelSummary;
+ import net.minecraft.world.level.storage.PrimaryLevelData;
+ import net.minecraft.world.level.storage.WorldData;
++import org.goldenforge.GoldenForgeEntryPoint;
+ import org.slf4j.Logger;
  
  public class Main {
      private static final Logger LOGGER = LogUtils.getLogger();
@@ -10,8 +23,25 @@
 -    public static void main(String[] p_129699_) {
 +    public static void main(String[] p_129699_) throws Exception {
          SharedConstants.tryDetectVersion();
-         OptionParser optionparser = new OptionParser();
+-        OptionParser optionparser = new OptionParser();
++        GoldenForgeEntryPoint.init();
++        OptionParser optionparser = new OptionParser() {
++            {
++                acceptsAll(Arrays.asList("paper-dir", "paper-settings-directory"), "Directory for Paper settings")
++                        .withRequiredArg()
++                        .ofType(File.class)
++                        .defaultsTo(new File(io.papermc.paper.configuration.PaperConfigurations.CONFIG_DIR))
++                        .describedAs("Config directory");
++                acceptsAll(Arrays.asList("paper", "paper-settings"), "File for Paper settings")
++                        .withRequiredArg()
++                        .ofType(File.class)
++                        .defaultsTo(new File("paper.yml"))
++                        .describedAs("Yml file");
++            }
++        };
          OptionSpec<Void> optionspec = optionparser.accepts("nogui");
+         OptionSpec<Void> optionspec1 = optionparser.accepts("initSettings", "Initializes 'server.properties' and 'eula.txt', then quits");
+         OptionSpec<Void> optionspec2 = optionparser.accepts("demo");
 @@ -83,6 +_,15 @@
          OptionSpec<Void> optionspec13 = optionparser.accepts("jfrProfile");
          OptionSpec<Path> optionspec14 = optionparser.accepts("pidFile").withRequiredArg().withValuesConvertedBy(new PathConverter());
@@ -64,7 +94,7 @@
 -
              File file1 = new File(optionset.valueOf(optionspec9));
 -            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1);
-+            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1, optionspec9);
++            Services services = Services.create(new YggdrasilAuthenticationService(Proxy.NO_PROXY), file1, new File("."), optionset);
              String s = Optional.ofNullable(optionset.valueOf(optionspec10)).orElse(dedicatedserversettings.getProperties().levelName);
 +            if (s == null || s.isEmpty() || new File(file1, s).getAbsolutePath().equals(new File(s).getAbsolutePath())) {
 +                LOGGER.error("Invalid world directory specified, must not be null, empty or the same directory as your universe! " + s);
