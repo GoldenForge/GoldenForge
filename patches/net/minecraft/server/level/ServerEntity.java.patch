@@ -48,7 +48,7 @@
          List<Entity> list = this.entity.getPassengers();
          if (!list.equals(this.lastPassengers)) {
              this.broadcast.accept(new ClientboundSetPassengersPacket(this.entity));
-@@ -99,26 +_,28 @@
+@@ -99,26 +_,29 @@
              this.lastPassengers = list;
          }
  
@@ -70,7 +70,8 @@
 +                    MapId mapid = entityitemframe.cachedMapId; // Paper - Perf: Cache map ids on item frames
 +                    MapItemSavedData mapitemsaveddata = MapItem.getSavedData(itemstack, this.level);
 +                    if (mapitemsaveddata != null) {
-+                        for (ServerPlayer serverplayer : this.level.players()) {
++                        for (ServerPlayerConnection connection : this.trackedPlayers) { // Paper
++                            final ServerPlayer serverplayer = connection.getPlayer(); // Paper
 +                            mapitemsaveddata.tickCarriedBy(serverplayer, itemstack);
 +                            Packet<?> packet = mapitemsaveddata.getUpdatePacket(mapid, serverplayer);
 +                            if (packet != null) {
