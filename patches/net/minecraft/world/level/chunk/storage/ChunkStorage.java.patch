@@ -43,6 +43,18 @@
      }
  
      public CompoundTag upgradeChunkTag(
+@@ -53,7 +_,10 @@
+                     p_188291_ = DataFixTypes.CHUNK.update(this.fixerUpper, p_188291_, i, 1493);
+                     if (p_188291_.getCompound("Level").getBoolean("hasLegacyStructureData")) {
+                         LegacyStructureDataHandler legacystructuredatahandler = this.getLegacyStructureHandler(p_188289_, p_188290_);
+-                        p_188291_ = legacystructuredatahandler.updateFromLegacy(p_188291_);
++
++                        synchronized (legacystructuredatahandler) { // Paper - rewrite chunk system
++                            p_188291_ = legacystructuredatahandler.updateFromLegacy(p_188291_);
++                        } // Paper - rewrite chunk system
+                     }
+                 }
+ 
 @@ -101,36 +_,73 @@
      public static int getVersion(CompoundTag p_63506_) {
          return NbtUtils.getDataVersion(p_63506_, -1);

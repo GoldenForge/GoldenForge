@@ -4,13 +4,13 @@
      private final Holder<NoiseGeneratorSettings> settings;
      private final Supplier<Aquifer.FluidPicker> globalFluidPicker;
  
-+    private int cachedSeaLevel; // Goldenforge: lithium: cache sea level
++    //private int cachedSeaLevel; // Goldenforge: lithium: cache sea level
 +
      public NoiseBasedChunkGenerator(BiomeSource p_256415_, Holder<NoiseGeneratorSettings> p_256182_) {
          super(p_256415_);
          this.settings = p_256182_;
          this.globalFluidPicker = Suppliers.memoize(() -> createFluidPicker(p_256182_.value()));
-+        this.cachedSeaLevel = this.settings.value().seaLevel(); // Goldenforge: lithium: cache sea level
++        //this.cachedSeaLevel = this.settings.value().seaLevel(); // Goldenforge: lithium: cache sea level
      }
  
      private static Aquifer.FluidPicker createFluidPicker(NoiseGeneratorSettings p_249264_) {
@@ -37,7 +37,7 @@
      @Override
      public int getSeaLevel() {
 -        return this.settings.value().seaLevel();
-+        return this.cachedSeaLevel; // Goldenforge: lithium: cache sea level
++        return this.settings.value().seaLevel(); // Goldenforge: lithium: cache sea level
      }
  
      @Override

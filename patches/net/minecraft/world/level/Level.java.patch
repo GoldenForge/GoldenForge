@@ -690,7 +690,7 @@
      }
  
      public void updateNeighborsAtExceptFromFacing(BlockPos p_46591_, Block p_46592_, Direction p_46593_) {
-@@ -489,41 +_,89 @@
+@@ -489,41 +_,90 @@
          (this.tickingBlockEntities ? this.pendingBlockEntityTickers : this.blockEntityTickers).add(p_151526_);
      }
  
@@ -714,9 +714,9 @@
              this.pendingBlockEntityTickers.clear();
          }
 -
--        Iterator<TickingBlockEntity> iterator = this.blockEntityTickers.iterator();
 +        // Spigot start
-+        // Iterator<TickingBlockEntity> iterator = this.blockEntityTickers.iterator();
++        // Goldenforge - MrCrayfishFurnitureMod-Refurbished inject here
+         Iterator<TickingBlockEntity> iterator = this.blockEntityTickers.iterator();
          boolean flag = this.tickRateManager().runsNormally();
  
 -        while (iterator.hasNext()) {

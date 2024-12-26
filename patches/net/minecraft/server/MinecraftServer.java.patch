@@ -6,7 +6,7 @@
  
 -public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, AutoCloseable {
 -    private static final Logger LOGGER = LogUtils.getLogger();
-+public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, AutoCloseable, ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer { // Paper - rewrite chunk system
++public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTask> implements ServerInfo, ChunkIOErrorReporter, CommandSource, ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer { // Paper - rewrite chunk system
 +    private static MinecraftServer SERVER; // Paper
 +    public static final Logger LOGGER = LogUtils.getLogger();
      public static final String VANILLA_BRAND = "vanilla";
@@ -33,7 +33,7 @@
      private long lastTickNanos = Util.getNanos();
      private long taskExecutionStartNanos = Util.getNanos();
      private long idleTimeNanos;
-@@ -262,10 +_,37 @@
+@@ -262,10 +_,36 @@
      private volatile boolean isSaving;
      private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
  
@@ -53,7 +53,6 @@
 +    public final io.papermc.paper.configuration.PaperConfigurations paperConfigurations; // Paper - add paper configuration files
 +    public static long currentTickLong = 0L; // Paper - track current tick as a long
 +    public boolean isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
-+
 +    public volatile Thread shutdownThread; // Paper
 +    public volatile boolean abnormalExit = false; // Paper
 +    public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
@@ -148,18 +147,11 @@
      public MinecraftServer(
          Thread p_236723_,
          LevelStorageSource.LevelStorageAccess p_236724_,
-@@ -287,6 +_,7 @@
-         ChunkProgressListenerFactory p_236730_
-     ) {
-         super("Server");
-+        SERVER = this; // Paper - better singleton
-         this.registries = p_236726_.registries();
-         this.worldData = p_236726_.worldData();
-         if (!this.registries.compositeAccess().registryOrThrow(Registries.LEVEL_STEM).containsKey(LevelStem.OVERWORLD)) {
-@@ -317,6 +_,8 @@
+@@ -317,6 +_,9 @@
              this.executor = Util.backgroundExecutor();
              this.potionBrewing = PotionBrewing.bootstrap(this.worldData.enabledFeatures());
          }
++        SERVER = this; // Paper - better singleton
 +        this.paperConfigurations = services.paperConfigurations(); // Paper - add paper configuration files
 +        Runtime.getRuntime().addShutdownHook(new org.bukkit.craftbukkit.util.ServerShutdownThread(this));
      }
@@ -534,14 +526,19 @@
      }
  
      @Override
-@@ -826,6 +_,12 @@
+@@ -826,6 +_,17 @@
      }
  
      protected TickTask wrapRunnable(Runnable p_129852_) {
 +        // Paper start - anything that does try to post to main during watchdog crash, run on watchdog
 +        if (this.hasStopped && Thread.currentThread().equals(shutdownThread)) {
 +            p_129852_.run();
-+            p_129852_ = () -> {};
++            p_129852_ = new Runnable() {
++                @Override
++                public void run() {
++
++                }
++            };
 +        }
 +        // Paper end
          return new TickTask(this.tickCount, p_129852_);
@@ -569,17 +566,23 @@
          }
      }
  
-@@ -900,15 +_,51 @@
+@@ -900,15 +_,57 @@
  
      public void tickServer(BooleanSupplier p_129871_) {
          long i = Util.getNanos();
 +
 +        // Paper start - move oversleep into full server tick
 +        isOversleep = true;
-+        this.managedBlock(() -> {
-+            return !this.canOversleep();
++        this.managedBlock(new BooleanSupplier() {
++            @Override
++            public boolean getAsBoolean() {
++                return !MinecraftServer.this.canOversleep();
++            }
 +        });
-+        isOversleep = false;
++//        this.managedBlock(() -> {
++//            return !this.canOversleep();
++//        });
++//        isOversleep = false;
 +        // Paper end
 +
          this.tickCount++;

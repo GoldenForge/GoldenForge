@@ -177,7 +177,7 @@
          SynchedEntityData.Builder synchedentitydata$builder = new SynchedEntityData.Builder(this);
          synchedentitydata$builder.define(DATA_SHARED_FLAGS_ID, (byte)0);
          synchedentitydata$builder.define(DATA_AIR_SUPPLY_ID, this.getMaxAirSupply());
-@@ -263,7 +_,10 @@
+@@ -263,7 +_,12 @@
          this.defineSynchedData(synchedentitydata$builder);
          this.entityData = synchedentitydata$builder.build();
          this.setPos(0.0, 0.0, 0.0);
@@ -185,6 +185,8 @@
 +        this.dimensions = sizeEvent.getNewSize();
          this.eyeHeight = this.dimensions.eyeHeight();
 +        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.entity.EntityEvent.EntityConstructing(this));
++
++        Runnable test = () -> {};
      }
  
      public boolean isColliding(BlockPos p_20040_, BlockState p_20041_) {
