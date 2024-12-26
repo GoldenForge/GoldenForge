@@ -468,7 +468,7 @@
      }
  
      private static boolean isChunkDataValid(CompoundTag p_214941_) {
-@@ -599,109 +_,43 @@
+@@ -599,91 +_,35 @@
  
      @Override
      public GenerationChunkHolder acquireGeneration(long p_347661_) {
@@ -567,14 +567,11 @@
      }
  
      private void onChunkReadyToSend(LevelChunk p_296003_) {
--        ChunkPos chunkpos = p_296003_.getPos();
--
--        for (ServerPlayer serverplayer : this.playerMap.getAllPlayers()) {
--            if (serverplayer.getChunkTrackingView().contains(chunkpos)) {
--                markChunkPendingToSend(serverplayer, p_296003_);
--            }
--        }
-+        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
+@@ -694,14 +_,11 @@
+                 markChunkPendingToSend(serverplayer, p_296003_);
+             }
+         }
++        //throw new UnsupportedOperationException(); // Paper - rewrite chunk system
      }
  
      public CompletableFuture<ChunkResult<LevelChunk>> prepareAccessibleChunk(ChunkHolder p_143110_) {
@@ -712,7 +709,7 @@
  
      private static void markChunkPendingToSend(ServerPlayer p_295834_, LevelChunk p_296281_) {
 -        p_295834_.connection.chunkSender.markChunkPendingToSend(p_296281_);
-+        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++        //throw new UnsupportedOperationException(); // Paper - rewrite chunk system
      }
  
      private static void dropChunk(ServerPlayer p_294215_, ChunkPos p_294758_) {
@@ -1052,7 +1049,7 @@
          }
  
          @Nullable
-@@ -1222,12 +_,90 @@
+@@ -1222,15 +_,93 @@
          }
      }
  
@@ -1144,7 +1141,11 @@
 +        // Paper end - optimise entity tracker
  
          public TrackedEntity(Entity p_140478_, int p_140479_, int p_140480_, boolean p_140481_) {
-             this.serverEntity = new ServerEntity(ChunkMap.this.level, p_140478_, p_140480_, p_140481_, this::broadcast);
+-            this.serverEntity = new ServerEntity(ChunkMap.this.level, p_140478_, p_140480_, p_140481_, this::broadcast);
++            this.serverEntity = new ServerEntity(ChunkMap.this.level, p_140478_, p_140480_, p_140481_, this::broadcast, this.seenBy); // CraftBukkit
+             this.entity = p_140478_;
+             this.range = p_140479_;
+             this.lastSectionPos = SectionPos.of(p_140478_);
 @@ -1273,14 +_,28 @@
  
          public void updatePlayer(ServerPlayer p_140498_) {
