@@ -14,13 +14,22 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.entity.*;
+import net.minecraft.world.level.entity.EntityInLevelCallback;
+import net.minecraft.world.level.entity.EntityTypeTest;
+import net.minecraft.world.level.entity.LevelCallback;
+import net.minecraft.world.level.entity.LevelEntityGetter;
+import net.minecraft.world.level.entity.Visibility;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -37,8 +46,6 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
 
     protected final SWMRLong2ObjectHashTable<ChunkSlicesRegion> regions = new SWMRLong2ObjectHashTable<>(128, 0.5f);
 
-    protected final int minSection; // inclusive
-    protected final int maxSection; // inclusive
     protected final LevelCallback<Entity> worldCallback;
 
     protected final ConcurrentLong2ReferenceChainedHashTable<Entity> entityById = new ConcurrentLong2ReferenceChainedHashTable<>();
@@ -47,8 +54,6 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
 
     public EntityLookup(final Level world, final LevelCallback<Entity> worldCallback) {
         this.world = world;
-        this.minSection = WorldUtil.getMinSection(world);
-        this.maxSection = WorldUtil.getMaxSection(world);
         this.worldCallback = worldCallback;
     }
 
@@ -82,7 +87,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
 
     protected abstract void entityEndTicking(final Entity entity);
 
-    protected abstract boolean screenEntity(final Entity entity);
+    protected abstract boolean screenEntity(final Entity entity, final boolean fromDisk, final boolean event);
 
     private static Entity maskNonAccessible(final Entity entity) {
         if (entity == null) {
@@ -204,7 +209,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
     @Override
     public void get(final AABB box, final Consumer<Entity> action) {
         List<Entity> entities = new ArrayList<>();
-        this.getEntitiesWithoutDragonParts(null, box, entities, null);
+        this.getEntities((Entity)null, box, entities, null);
         for (int i = 0, len = entities.size(); i < len; ++i) {
             action.accept(entities.get(i));
         }
@@ -213,7 +218,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
     @Override
     public <U extends Entity> void get(final EntityTypeTest<Entity, U> filter, final AABB box, final AbortableIterationConsumer<U> action) {
         List<Entity> entities = new ArrayList<>();
-        this.getEntitiesWithoutDragonParts(null, box, entities, null);
+        this.getEntities((Entity)null, box, entities, null);
         for (int i = 0, len = entities.size(); i < len; ++i) {
             final U casted = filter.tryCast(entities.get(i));
             if (casted != null && action.accept(casted).shouldAbort()) {
@@ -338,7 +343,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
     }
 
     protected void addRecursivelySafe(final Entity root, final boolean fromDisk) {
-        if (!this.addEntity(root, fromDisk)) {
+        if (!this.addEntity(root, fromDisk, true)) {
             // possible we are a passenger, and so should dismount from any valid entity in the world
             root.stopRiding();
             return;
@@ -373,11 +378,15 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
             }
 
             this.addRecursivelySafe(entity, fromDisk);
-         }
+        }
     }
 
     public boolean addNewEntity(final Entity entity) {
-        return this.addEntity(entity, false);
+        return this.addNewEntity(entity, true);
+    }
+
+    public boolean addNewEntity(final Entity entity, final boolean event) {
+        return this.addEntity(entity, false, event);
     }
 
     public static Visibility getEntityStatus(final Entity entity) {
@@ -388,10 +397,10 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
         return Visibility.fromFullChunkStatus(entityStatus == null ? FullChunkStatus.INACCESSIBLE : entityStatus);
     }
 
-    protected boolean addEntity(final Entity entity, final boolean fromDisk) {
+    protected boolean addEntity(final Entity entity, final boolean fromDisk, final boolean event) {
         final BlockPos pos = entity.blockPosition();
         final int sectionX = pos.getX() >> 4;
-        final int sectionY = Mth.clamp(pos.getY() >> 4, this.minSection, this.maxSection);
+        final int sectionY = Mth.clamp(pos.getY() >> 4, WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world));
         final int sectionZ = pos.getZ() >> 4;
         this.checkThread(sectionX, sectionZ, "Cannot add entity off-main thread");
 
@@ -405,7 +414,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
             return false;
         }
 
-        if (!this.screenEntity(entity)) {
+        if (!this.screenEntity(entity, fromDisk, event)) {
             return false;
         }
 
@@ -510,7 +519,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
         final int sectionZ = ((ChunkSystemEntity)entity).moonrise$getSectionZ();
         final BlockPos newPos = entity.blockPosition();
         final int newSectionX = newPos.getX() >> 4;
-        final int newSectionY = Mth.clamp(newPos.getY() >> 4, this.minSection, this.maxSection);
+        final int newSectionY = Mth.clamp(newPos.getY() >> 4, WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world));
         final int newSectionZ = newPos.getZ() >> 4;
 
         if (newSectionX == sectionX && newSectionY == sectionY && newSectionZ == sectionZ) {
@@ -549,45 +558,6 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
         );
 
         return slices;
-    }
-
-    public void getEntitiesWithoutDragonParts(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
-        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
-        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
-        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
-        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
-
-        final int minRegionX = minChunkX >> REGION_SHIFT;
-        final int minRegionZ = minChunkZ >> REGION_SHIFT;
-        final int maxRegionX = maxChunkX >> REGION_SHIFT;
-        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
-
-        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
-            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
-            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
-
-            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
-                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
-
-                if (region == null) {
-                    continue;
-                }
-
-                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
-                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
-
-                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
-                    for (int currX = minX; currX <= maxX; ++currX) {
-                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
-                        if (chunk == null || !chunk.status.isOrAfter(FullChunkStatus.FULL)) {
-                            continue;
-                        }
-
-                        chunk.getEntitiesWithoutDragonParts(except, box, into, predicate);
-                    }
-                }
-            }
-        }
     }
 
     public void getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate) {
@@ -750,48 +720,6 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
 
     //////// Limited ////////
 
-    public void getEntitiesWithoutDragonParts(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
-                                              final int maxCount) {
-        final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
-        final int minChunkZ = (Mth.floor(box.minZ) - 2) >> 4;
-        final int maxChunkX = (Mth.floor(box.maxX) + 2) >> 4;
-        final int maxChunkZ = (Mth.floor(box.maxZ) + 2) >> 4;
-
-        final int minRegionX = minChunkX >> REGION_SHIFT;
-        final int minRegionZ = minChunkZ >> REGION_SHIFT;
-        final int maxRegionX = maxChunkX >> REGION_SHIFT;
-        final int maxRegionZ = maxChunkZ >> REGION_SHIFT;
-
-        for (int currRegionZ = minRegionZ; currRegionZ <= maxRegionZ; ++currRegionZ) {
-            final int minZ = currRegionZ == minRegionZ ? minChunkZ & REGION_MASK : 0;
-            final int maxZ = currRegionZ == maxRegionZ ? maxChunkZ & REGION_MASK : REGION_MASK;
-
-            for (int currRegionX = minRegionX; currRegionX <= maxRegionX; ++currRegionX) {
-                final ChunkSlicesRegion region = this.getRegion(currRegionX, currRegionZ);
-
-                if (region == null) {
-                    continue;
-                }
-
-                final int minX = currRegionX == minRegionX ? minChunkX & REGION_MASK : 0;
-                final int maxX = currRegionX == maxRegionX ? maxChunkX & REGION_MASK : REGION_MASK;
-
-                for (int currZ = minZ; currZ <= maxZ; ++currZ) {
-                    for (int currX = minX; currX <= maxX; ++currX) {
-                        final ChunkEntitySlices chunk = region.get(currX | (currZ << REGION_SHIFT));
-                        if (chunk == null || !chunk.status.isOrAfter(FullChunkStatus.FULL)) {
-                            continue;
-                        }
-
-                        if (chunk.getEntitiesWithoutDragonParts(except, box, into, predicate, maxCount)) {
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     public void getEntities(final Entity except, final AABB box, final List<Entity> into, final Predicate<? super Entity> predicate,
                             final int maxCount) {
         final int minChunkX = (Mth.floor(box.minX) - 2) >> 4;
@@ -950,7 +878,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
 
     public ChunkEntitySlices getOrCreateChunk(final int chunkX, final int chunkZ) {
         final ChunkSlicesRegion region = this.getRegion(chunkX >> REGION_SHIFT, chunkZ >> REGION_SHIFT);
-        ChunkEntitySlices ret;
+        final ChunkEntitySlices ret;
         if (region == null || (ret = region.get((chunkX & REGION_MASK) | ((chunkZ & REGION_MASK) << REGION_SHIFT))) == null) {
             return this.createEntityChunk(chunkX, chunkZ, true);
         }
@@ -1048,7 +976,7 @@ public abstract class EntityLookup implements LevelEntityGetter<Entity> {
         @Override
         public void onRemove(final Entity.RemovalReason reason) {
             final Entity entity = this.entity;
-            EntityLookup.this.checkThread(entity, "Cannot remove entity off-main"); // Paper - rewrite chunk system
+            EntityLookup.this.checkThread(entity, "Cannot remove entity off-main");
             final Visibility tickingState = EntityLookup.getEntityStatus(entity);
 
             EntityLookup.this.removeEntity(entity);

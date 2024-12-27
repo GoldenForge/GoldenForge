@@ -56,7 +56,7 @@
      @Deprecated
      private final RandomSource threadSafeRandom = RandomSource.createThreadSafe();
      private final Holder<DimensionType> dimensionTypeRegistration;
-@@ -114,6 +_,572 @@
+@@ -114,6 +_,628 @@
      private final RegistryAccess registryAccess;
      private final DamageSources damageSources;
      private long subTickCount;
@@ -83,6 +83,8 @@
 +    public final Map<Explosion.CacheKey, Float> explosionDensityCache = new HashMap<>(); // Paper - Optimize explosions
 +    // Paper start - rewrite chunk system
 +    private ca.spottedleaf.moonrise.patches.chunk_system.level.entity.EntityLookup entityLookup;
++
++    private final ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable<ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData> chunkData = new ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable<>();
 +
 +    @Override
 +    public final ca.spottedleaf.moonrise.patches.chunk_system.level.entity.EntityLookup moonrise$getEntityLookup() {
@@ -149,6 +151,60 @@
 +    public void moonrise$midTickTasks() {
 +        // no-op on ClientLevel
 +    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData moonrise$getChunkData(final long chunkKey) {
++        return this.chunkData.get(chunkKey);
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData moonrise$getChunkData(final int chunkX, final int chunkZ) {
++        return this.chunkData.get(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(chunkX, chunkZ));
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData moonrise$requestChunkData(final long chunkKey) {
++        return this.chunkData.compute(chunkKey, (final long keyInMap, final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData valueInMap) -> {
++            if (valueInMap == null) {
++                final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData ret = new ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData();
++                ret.increaseRef();
++                return ret;
++            }
++
++            valueInMap.increaseRef();
++            return valueInMap;
++        });
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData moonrise$releaseChunkData(final long chunkKey) {
++        return this.chunkData.compute(chunkKey, (final long keyInMap, final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData chunkData) -> {
++            return chunkData.decreaseRef() == 0 ? null : chunkData;
++        });
++    }
++
++    @Override
++    public boolean moonrise$areChunksLoaded(final int fromX, final int fromZ, final int toX, final int toZ) {
++        final net.minecraft.world.level.chunk.ChunkSource chunkSource = this.getChunkSource();
++
++        for (int currZ = fromZ; currZ <= toZ; ++currZ) {
++            for (int currX = fromX; currX <= toX; ++currX) {
++                if (!chunkSource.hasChunk(currX, currZ)) {
++                    return false;
++                }
++            }
++        }
++
++        return true;
++    }
++
++    @Override
++    public boolean hasChunksAt(final int minBlockX, final int minBlockZ, final int maxBlockX, final int maxBlockZ) {
++        return this.moonrise$areChunksLoaded(
++                minBlockX >> 4, minBlockZ >> 4, maxBlockX >> 4, maxBlockZ >> 4
++        );
++    }
++
 +    /**
 +     * @reason Turn all getChunk(x, z, status) calls into virtual invokes, instead of interface invokes:
 +     *         1. The interface invoke is expensive

@@ -1,5 +1,6 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.level.entity.dfl;
 
+import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.entity.ChunkEntitySlices;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.entity.EntityLookup;
@@ -31,7 +32,7 @@ public final class DefaultEntityLookup extends EntityLookup {
     protected ChunkEntitySlices createEntityChunk(final int chunkX, final int chunkZ, final boolean transientChunk) {
         final ChunkEntitySlices ret = new ChunkEntitySlices(
                 this.world, chunkX, chunkZ, FullChunkStatus.FULL,
-                WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world)
+                null, WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world)
         );
 
         // note: not handled by superclass
@@ -83,7 +84,7 @@ public final class DefaultEntityLookup extends EntityLookup {
     }
 
     @Override
-    protected boolean screenEntity(final Entity entity) {
+    protected boolean screenEntity(final Entity entity, final boolean fromDisk, final boolean event) {
         return true;
     }
 

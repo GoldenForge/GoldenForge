@@ -818,6 +818,52 @@
      boolean anyPlayerCloseEnoughForSpawning(ChunkPos p_183880_) {
          if (!this.distanceManager.hasPlayersNearby(p_183880_.toLong())) {
              return false;
+@@ -929,20 +_,34 @@
+     }
+ 
+     public List<ServerPlayer> getPlayersCloseForSpawning(ChunkPos p_183889_) {
+-        long i = p_183889_.toLong();
+-        if (!this.distanceManager.hasPlayersNearby(i)) {
+-            return List.of();
+-        } else {
+-            Builder<ServerPlayer> builder = ImmutableList.builder();
+-
+-            for (ServerPlayer serverplayer : this.playerMap.getAllPlayers()) {
+-                if (this.playerIsCloseEnoughForSpawning(serverplayer, p_183889_)) {
+-                    builder.add(serverplayer);
++        // Paper start - chunk tick iteration optimisation
++        final ca.spottedleaf.moonrise.common.list.ReferenceList<ServerPlayer> players = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.level).moonrise$getNearbyPlayers().getPlayers(
++                p_183889_, ca.spottedleaf.moonrise.common.misc.NearbyPlayers.NearbyMapType.SPAWN_RANGE
++        );
++        if (players == null) {
++            return new ArrayList<>();
++        }
++
++        List<ServerPlayer> ret = null;
++
++        final ServerPlayer[] raw = players.getRawDataUnchecked();
++        final int len = players.size();
++
++        Objects.checkFromIndexSize(0, len, raw.length);
++        for (int i = 0; i < len; ++i) {
++            final ServerPlayer player = raw[i];
++            if (this.playerIsCloseEnoughForSpawning(player, p_183889_)) {
++                if (ret == null) {
++                    ret = new ArrayList<>(len - i);
++                    ret.add(player);
++                } else {
++                    ret.add(player);
+                 }
+             }
+-
+-            return builder.build();
+         }
++
++        return ret == null ? new ArrayList<>() : ret;
++        // Paper end - chunk tick iteration optimisation
+     }
+ 
+     private boolean playerIsCloseEnoughForSpawning(ServerPlayer p_183752_, ChunkPos p_183753_) {
 @@ -966,18 +_,22 @@
              this.updatePlayerPos(p_140193_);
              if (!flag) {
@@ -966,7 +1012,7 @@
                      chunkmap$trackedentity.updatePlayers(this.level.players());
                      if (p_140200_ instanceof ServerPlayer serverplayer) {
                          this.updatePlayerStatus(serverplayer, true);
-@@ -1107,9 +_,48 @@
+@@ -1107,9 +_,37 @@
          if (chunkmap$trackedentity1 != null) {
              chunkmap$trackedentity1.broadcastRemoved();
          }
@@ -976,7 +1022,6 @@
 +
 +    // Paper start - optimise entity tracker
 +    private void newTrackerTick() {
-+        final ca.spottedleaf.moonrise.common.misc.NearbyPlayers nearbyPlayers = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.level).moonrise$getNearbyPlayers();
 +        final ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup entityLookup = (ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup)((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.level).moonrise$getEntityLookup();;
 +
 +        final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.world.entity.Entity> trackerEntities = entityLookup.trackerEntities;
@@ -987,21 +1032,11 @@
 +            if (tracker == null) {
 +                continue;
 +            }
-+            ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$tick(nearbyPlayers.getChunk(entity.chunkPosition()));
-+            tracker.serverEntity.sendChanges();
-+        }
-+
-+        // process unloads
-+        final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.world.entity.Entity> unloadedEntities = entityLookup.trackerUnloadedEntities;
-+        final Entity[] unloadedEntitiesRaw = java.util.Arrays.copyOf(unloadedEntities.getRawDataUnchecked(), unloadedEntities.size());
-+        unloadedEntities.clear();
-+
-+        for (final Entity entity : unloadedEntitiesRaw) {
-+            final ChunkMap.TrackedEntity tracker = ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity)entity).moonrise$getTrackedEntity();
-+            if (tracker == null) {
-+                continue;
++            ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$tick(((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkData().nearbyPlayers);
++            if (((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$hasPlayers()
++                    || ((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)entity).moonrise$getChunkStatus().isOrAfter(FullChunkStatus.ENTITY_TICKING)) {
++                tracker.serverEntity.sendChanges();
 +            }
-+            ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity)tracker).moonrise$clearPlayers();
 +        }
 +    }
 +    // Paper end - optimise entity tracker
@@ -1049,7 +1084,7 @@
          }
  
          @Nullable
-@@ -1222,15 +_,93 @@
+@@ -1222,15 +_,99 @@
          }
      }
  
@@ -1138,6 +1173,12 @@
 +                this.removePlayer(player);
 +            }
 +        }
++
++        @Override
++        public final boolean moonrise$hasPlayers() {
++            return !this.seenBy.isEmpty();
++        }
++        // Paper end - optimise entity tracker
 +        // Paper end - optimise entity tracker
  
          public TrackedEntity(Entity p_140478_, int p_140479_, int p_140480_, boolean p_140481_) {

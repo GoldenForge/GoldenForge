@@ -3,14 +3,17 @@ package ca.spottedleaf.moonrise.common.misc;
 import ca.spottedleaf.moonrise.common.list.ReferenceList;
 import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 import ca.spottedleaf.moonrise.common.util.MoonriseConstants;
-import ca.spottedleaf.moonrise.common.util.ChunkSystem;
+import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel;
+import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
 import ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickConstants;
+import ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
+import java.util.ArrayList;
 
 public final class NearbyPlayers {
 
@@ -20,7 +23,27 @@ public final class NearbyPlayers {
         GENERAL_REALLY_SMALL,
         TICK_VIEW_DISTANCE,
         VIEW_DISTANCE,
-        SPAWN_RANGE, // Moonrise - chunk tick iteration
+        // Moonrise start - chunk tick iteration
+        SPAWN_RANGE {
+            @Override
+            void addTo(final ServerPlayer player, final ServerLevel world, final int chunkX, final int chunkZ) {
+                ((ChunkTickServerLevel)world).moonrise$addPlayerTickingRequest(chunkX, chunkZ);
+            }
+
+            @Override
+            void removeFrom(final ServerPlayer player, final ServerLevel world, final int chunkX, final int chunkZ) {
+                ((ChunkTickServerLevel)world).moonrise$removePlayerTickingRequest(chunkX, chunkZ);
+            }
+        };
+        // Moonrise end - chunk tick iteration
+
+        void addTo(final ServerPlayer player, final ServerLevel world, final int chunkX, final int chunkZ) {
+
+        }
+
+        void removeFrom(final ServerPlayer player, final ServerLevel world, final int chunkX, final int chunkZ) {
+
+        }
     }
 
     private static final NearbyMapType[] MAP_TYPES = NearbyMapType.values();
@@ -37,6 +60,12 @@ public final class NearbyPlayers {
     private final ServerLevel world;
     private final Reference2ReferenceOpenHashMap<ServerPlayer, TrackedPlayer[]> players = new Reference2ReferenceOpenHashMap<>();
     private final Long2ReferenceOpenHashMap<TrackedChunk> byChunk = new Long2ReferenceOpenHashMap<>();
+    private final Long2ReferenceOpenHashMap<ReferenceList<ServerPlayer>>[] directByChunk = new Long2ReferenceOpenHashMap[TOTAL_MAP_TYPES];
+    {
+        for (int i = 0; i < this.directByChunk.length; ++i) {
+            this.directByChunk[i] = new Long2ReferenceOpenHashMap<>();
+        }
+    }
 
     public NearbyPlayers(final ServerLevel world) {
         this.world = world;
@@ -70,6 +99,16 @@ public final class NearbyPlayers {
         }
     }
 
+    public void clear() {
+        if (this.players.isEmpty()) {
+            return;
+        }
+
+        for (final ServerPlayer player : new ArrayList<>(this.players.keySet())) {
+            this.removePlayer(player);
+        }
+    }
+
     public void tickPlayer(final ServerPlayer player) {
         final TrackedPlayer[] players = this.players.get(player);
         if (players == null) {
@@ -81,8 +120,8 @@ public final class NearbyPlayers {
         players[NearbyMapType.GENERAL.ordinal()].update(chunk.x, chunk.z, GENERAL_AREA_VIEW_DISTANCE);
         players[NearbyMapType.GENERAL_SMALL.ordinal()].update(chunk.x, chunk.z, GENERAL_SMALL_VIEW_DISTANCE);
         players[NearbyMapType.GENERAL_REALLY_SMALL.ordinal()].update(chunk.x, chunk.z, GENERAL_REALLY_SMALL_VIEW_DISTANCE);
-        players[NearbyMapType.TICK_VIEW_DISTANCE.ordinal()].update(chunk.x, chunk.z, ChunkSystem.getTickViewDistance(player));
-        players[NearbyMapType.VIEW_DISTANCE.ordinal()].update(chunk.x, chunk.z, ChunkSystem.getLoadViewDistance(player));
+        players[NearbyMapType.TICK_VIEW_DISTANCE.ordinal()].update(chunk.x, chunk.z, ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.getAPITickViewDistance(player));
+        players[NearbyMapType.VIEW_DISTANCE.ordinal()].update(chunk.x, chunk.z, ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.getAPIViewDistance(player));
         players[NearbyMapType.SPAWN_RANGE.ordinal()].update(chunk.x, chunk.z, ChunkTickConstants.PLAYER_SPAWN_TRACK_RANGE); // Moonrise - chunk tick iteration
     }
 
@@ -94,37 +133,40 @@ public final class NearbyPlayers {
         return this.byChunk.get(CoordinateUtils.getChunkKey(pos));
     }
 
-    public ReferenceList<ServerPlayer> getPlayers(final BlockPos pos, final NearbyMapType type) {
-        final TrackedChunk chunk = this.byChunk.get(CoordinateUtils.getChunkKey(pos));
+    public TrackedChunk getChunk(final int chunkX, final int chunkZ) {
+        return this.byChunk.get(CoordinateUtils.getChunkKey(chunkX, chunkZ));
+    }
 
-        return chunk == null ? null : chunk.players[type.ordinal()];
+    public ReferenceList<ServerPlayer> getPlayers(final BlockPos pos, final NearbyMapType type) {
+        return this.directByChunk[type.ordinal()].get(CoordinateUtils.getChunkKey(pos));
     }
 
     public ReferenceList<ServerPlayer> getPlayers(final ChunkPos pos, final NearbyMapType type) {
-        final TrackedChunk chunk = this.byChunk.get(CoordinateUtils.getChunkKey(pos));
-
-        return chunk == null ? null : chunk.players[type.ordinal()];
+        return this.directByChunk[type.ordinal()].get(CoordinateUtils.getChunkKey(pos));
     }
 
     public ReferenceList<ServerPlayer> getPlayersByChunk(final int chunkX, final int chunkZ, final NearbyMapType type) {
-        final TrackedChunk chunk = this.byChunk.get(CoordinateUtils.getChunkKey(chunkX, chunkZ));
-
-        return chunk == null ? null : chunk.players[type.ordinal()];
+        return this.directByChunk[type.ordinal()].get(CoordinateUtils.getChunkKey(chunkX, chunkZ));
     }
 
     public ReferenceList<ServerPlayer> getPlayersByBlock(final int blockX, final int blockZ, final NearbyMapType type) {
-        final TrackedChunk chunk = this.byChunk.get(CoordinateUtils.getChunkKey(blockX >> 4, blockZ >> 4));
-
-        return chunk == null ? null : chunk.players[type.ordinal()];
+        return this.directByChunk[type.ordinal()].get(CoordinateUtils.getChunkKey(blockX >> 4, blockZ >> 4));
     }
 
     public static final class TrackedChunk {
 
         private static final ServerPlayer[] EMPTY_PLAYERS_ARRAY = new ServerPlayer[0];
 
+        private final long chunkKey;
+        private final NearbyPlayers nearbyPlayers;
         private final ReferenceList<ServerPlayer>[] players = new ReferenceList[TOTAL_MAP_TYPES];
         private int nonEmptyLists;
         private long updateCount;
+
+        public TrackedChunk(final long chunkKey, final NearbyPlayers nearbyPlayers) {
+            this.chunkKey = chunkKey;
+            this.nearbyPlayers = nearbyPlayers;
+        }
 
         public boolean isEmpty() {
             return this.nonEmptyLists == 0;
@@ -145,7 +187,9 @@ public final class NearbyPlayers {
             final ReferenceList<ServerPlayer> list = this.players[idx];
             if (list == null) {
                 ++this.nonEmptyLists;
-                (this.players[idx] = new ReferenceList<>(EMPTY_PLAYERS_ARRAY)).add(player);
+                final ReferenceList<ServerPlayer> players = (this.players[idx] = new ReferenceList<>(EMPTY_PLAYERS_ARRAY));
+                this.nearbyPlayers.directByChunk[idx].put(this.chunkKey, players);
+                players.add(player);
                 return;
             }
 
@@ -169,6 +213,7 @@ public final class NearbyPlayers {
 
             if (list.size() == 0) {
                 this.players[idx] = null;
+                this.nearbyPlayers.directByChunk[idx].remove(this.chunkKey);
                 --this.nonEmptyLists;
             }
         }
@@ -187,9 +232,19 @@ public final class NearbyPlayers {
         protected void addCallback(final ServerPlayer parameter, final int chunkX, final int chunkZ) {
             final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
-            NearbyPlayers.this.byChunk.computeIfAbsent(chunkKey, (final long keyInMap) -> {
-                return new TrackedChunk();
-            }).addPlayer(parameter, this.type);
+            final TrackedChunk chunk = NearbyPlayers.this.byChunk.get(chunkKey);
+            final NearbyMapType type = this.type;
+            if (chunk != null) {
+                chunk.addPlayer(parameter, type);
+                type.addTo(parameter, NearbyPlayers.this.world, chunkX, chunkZ);
+            } else {
+                final TrackedChunk created = new TrackedChunk(chunkKey, NearbyPlayers.this);
+                NearbyPlayers.this.byChunk.put(chunkKey, created);
+                created.addPlayer(parameter, type);
+                type.addTo(parameter, NearbyPlayers.this.world, chunkX, chunkZ);
+
+                ((ChunkSystemLevel)NearbyPlayers.this.world).moonrise$requestChunkData(chunkKey).nearbyPlayers = created;
+            }
         }
 
         @Override
@@ -201,10 +256,16 @@ public final class NearbyPlayers {
                 throw new IllegalStateException("Chunk should exist at " + new ChunkPos(chunkKey));
             }
 
-            chunk.removePlayer(parameter, this.type);
+            final NearbyMapType type = this.type;
+            chunk.removePlayer(parameter, type);
+            type.removeFrom(parameter, NearbyPlayers.this.world, chunkX, chunkZ);
 
             if (chunk.isEmpty()) {
                 NearbyPlayers.this.byChunk.remove(chunkKey);
+                final ChunkData chunkData = ((ChunkSystemLevel)NearbyPlayers.this.world).moonrise$releaseChunkData(chunkKey);
+                if (chunkData != null) {
+                    chunkData.nearbyPlayers = null;
+                }
             }
         }
     }

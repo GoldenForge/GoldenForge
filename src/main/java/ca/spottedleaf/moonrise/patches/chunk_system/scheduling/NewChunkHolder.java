@@ -13,7 +13,9 @@ import ca.spottedleaf.moonrise.common.util.WorldUtil;
 import ca.spottedleaf.moonrise.patches.chunk_system.ChunkSystemFeatures;
 import ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData;
 import ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread;
+import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel;
+import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkSystemChunkHolder;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkSystemChunkStatus;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.entity.ChunkEntitySlices;
@@ -51,6 +53,8 @@ public final class NewChunkHolder {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(NewChunkHolder.class);
 
+    public final ChunkData holderData;
+
     public final ServerLevel world;
     public final int chunkX;
     public final int chunkZ;
@@ -82,7 +86,7 @@ public final class NewChunkHolder {
             if (this.entityChunk == null) {
                 ret = this.entityChunk = new ChunkEntitySlices(
                     this.world, this.chunkX, this.chunkZ, this.getChunkStatus(),
-                    WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world)
+                        this.holderData, WorldUtil.getMinSection(this.world), WorldUtil.getMaxSection(this.world)
                 );
 
                 ret.setTransient(transientChunk);
@@ -644,6 +648,7 @@ public final class NewChunkHolder {
                 world.getLightEngine(), null, world.getChunkSource().chunkMap
         );
         ((ChunkSystemChunkHolder)this.vanillaChunkHolder).moonrise$setRealChunkHolder(this);
+        this.holderData = ((ChunkSystemLevel)this.world).moonrise$requestChunkData(CoordinateUtils.getChunkKey(chunkX, chunkZ));
     }
 
     public ChunkAccess getCurrentChunk() {
@@ -745,6 +750,7 @@ public final class NewChunkHolder {
 
     void markUnloaded() {
         this.unloaded = true;
+        ((ChunkSystemLevel)this.world).moonrise$releaseChunkData(CoordinateUtils.getChunkKey(this.chunkX, this.chunkZ));
     }
 
     private boolean inUnloadQueue = false;

@@ -82,7 +82,7 @@
      private boolean invulnerable;
      protected UUID uuid = Mth.createInsecureUUID(this.random);
      protected String stringUUID = this.uuid.toString();
-@@ -244,6 +_,112 @@
+@@ -244,6 +_,123 @@
      @Nullable
      private BlockState inBlockState = null;
  
@@ -103,6 +103,7 @@
 +    // Paper start - rewrite chunk system
 +    private final boolean isHardColliding = this.moonrise$isHardCollidingUncached();
 +    private net.minecraft.server.level.FullChunkStatus chunkStatus;
++    private ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData chunkData;
 +    private int sectionX = Integer.MIN_VALUE;
 +    private int sectionY = Integer.MIN_VALUE;
 +    private int sectionZ = Integer.MIN_VALUE;
@@ -121,6 +122,16 @@
 +    @Override
 +    public final void moonrise$setChunkStatus(final net.minecraft.server.level.FullChunkStatus status) {
 +        this.chunkStatus = status;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData moonrise$getChunkData() {
++        return this.chunkData;
++    }
++
++    @Override
++    public final void moonrise$setChunkData(final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData chunkData) {
++        this.chunkData = chunkData;
 +    }
 +
 +    @Override
@@ -1039,6 +1050,21 @@
          this.levelCallback.onRemove(p_146876_);
      }
  
+@@ -3435,11 +_,9 @@
+ 
+     @Override
+     public boolean shouldBeSaved() {
+-        if (this.removalReason != null && !this.removalReason.shouldSave()) {
+-            return false;
+-        } else {
+-            return this.isPassenger() ? false : !this.isVehicle() || !this.hasExactlyOnePlayerPassenger();
+-        }
++        return (this.removalReason == null || this.removalReason.shouldSave())
++                && !this.isPassenger()
++                && (!this.isVehicle() || !((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)this).moonrise$hasAnyPlayerPassengers()); // Paper - rewrite chunk system
+     }
+ 
+     @Override
 @@ -3449,6 +_,128 @@
  
      public boolean mayInteract(Level p_146843_, BlockPos p_146844_) {
