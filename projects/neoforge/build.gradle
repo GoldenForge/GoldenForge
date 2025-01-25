@@ -150,6 +150,7 @@ dependencies {
     installer "io.sentry:sentry:5.4.0"
     implementation "curse.maven:snowudertrees-353942:5875647"
     implementation "curse.maven:immersiveportal-355440:6013197"
+    implementation "curse.maven:TheOvergrowth-714353:5616081"
 }
 
 runTypes {
