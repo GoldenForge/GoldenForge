@@ -312,7 +312,7 @@
 -        } finally {
 -            super.close();
 -        }
-+        throw new UnsupportedOperationException("Use ServerChunkCache#close"); // Paper - rewrite chunk system
++        this.level.chunkSource.close(); // Goldenforge: moonlight compat
      }
  
      protected void saveAllChunks(boolean p_140319_) {
@@ -956,7 +956,7 @@
 -            );
 -            p_294188_.setChunkTrackingView(p_294174_);
 -        }
-+        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++        //throw new UnsupportedOperationException(); // Paper - rewrite chunk system
      }
  
      @Override
