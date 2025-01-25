@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/DistanceManager.java
 +++ b/net/minecraft/server/level/DistanceManager.java
-@@ -35,60 +_,66 @@
+@@ -35,60 +_,72 @@
  import net.minecraft.world.level.chunk.LevelChunk;
  import org.slf4j.Logger;
  
@@ -20,18 +20,22 @@
 -    final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> ticketThrottlerInput;
 -    final ProcessorHandle<ChunkTaskPriorityQueueSorter.Release> ticketThrottlerReleaser;
 -    final LongSet ticketsToRelease = new LongOpenHashSet();
--    final Executor mainThreadExecutor;
-+//    final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>();
++    final Long2ObjectOpenHashMap<SortedArraySet<Ticket<?>>> tickets = new Long2ObjectOpenHashMap<>() {
++        @Override
++        public SortedArraySet<Ticket<?>> get(long k) {
++            return DistanceManager.this.getChunkHolderManager().getTicketsSyncronised(k);
++        }
++    };
 +//    private final DistanceManager.ChunkTicketTracker ticketTracker = new DistanceManager.ChunkTicketTracker();
 +//    private final DistanceManager.FixedPlayerDistanceChunkTracker naturalSpawnChunkCounter = new DistanceManager.FixedPlayerDistanceChunkTracker(8);
 +//    private final TickingTracker tickingTicketsTracker = new TickingTracker();
 +//    private final DistanceManager.PlayerTicketTracker playerTicketManager = new DistanceManager.PlayerTicketTracker(32);
 +//    final Set<ChunkHolder> chunksToUpdateFutures = Sets.newHashSet();
-+//    final ChunkTaskPriorityQueueSorter ticketThrottler;
++    final ChunkTaskPriorityQueueSorter ticketThrottler = null;
 +//    final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> ticketThrottlerInput;
 +//    final ProcessorHandle<ChunkTaskPriorityQueueSorter.Release> ticketThrottlerReleaser;
 +//    final LongSet ticketsToRelease = new LongOpenHashSet();
-+//    final Executor mainThreadExecutor;
+     final Executor mainThreadExecutor;
      private long ticketTickCounter;
 -    private int simulationDistance = 10;
 +  //  private int simulationDistance = 10;
@@ -44,9 +48,9 @@
 -        this.ticketThrottler = chunktaskpriorityqueuesorter;
 -        this.ticketThrottlerInput = chunktaskpriorityqueuesorter.getProcessor(processorhandle, true);
 -        this.ticketThrottlerReleaser = chunktaskpriorityqueuesorter.getReleaseProcessor(processorhandle);
--        this.mainThreadExecutor = p_140775_;
--    }
 +
+         this.mainThreadExecutor = p_140775_;
+-    }
 +        // Paper - rewrite chunk system
 +    }
 +

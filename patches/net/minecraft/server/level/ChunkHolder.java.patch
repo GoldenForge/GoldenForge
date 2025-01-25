@@ -261,7 +261,7 @@
 +            List list;
              if (!this.skyChangedLightSectionFilter.isEmpty() || !this.blockChangedLightSectionFilter.isEmpty()) {
 -                List<ServerPlayer> list = this.playerProvider.getPlayers(this.pos, true);
-+                list = this.moonrise$getPlayers(true); // Paper - rewrite chunk system
++                list = this.playerProvider.getPlayers(this.pos, true);
                  if (!list.isEmpty()) {
                      ClientboundLightUpdatePacket clientboundlightupdatepacket = new ClientboundLightUpdatePacket(
                          p_140055_.getPos(), this.lightEngine, this.skyChangedLightSectionFilter, this.blockChangedLightSectionFilter
@@ -270,7 +270,7 @@
  
              if (this.hasChangedSections) {
 -                List<ServerPlayer> list1 = this.playerProvider.getPlayers(this.pos, false);
-+                list = this.moonrise$getPlayers(false); // Paper - rewrite chunk system
++                list = this.playerProvider.getPlayers(this.pos, false);
  
                  for (int j = 0; j < this.changedBlocksPerSection.length; j++) {
                      ShortSet shortset = this.changedBlocksPerSection[j];

@@ -26,6 +26,9 @@ allprojects {
     repositories {
         mavenLocal()
         //maven { url = "https://repo.papermc.io/repository/maven-public/"}
+        maven {
+            url "https://cursemaven.com"
+        }
     }
 }
 
