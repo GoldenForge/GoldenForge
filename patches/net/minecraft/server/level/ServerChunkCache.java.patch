@@ -429,7 +429,7 @@
 +            List<ServerChunkCache.ChunkAndHolder> list;
 +            {
 +                final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> tickingChunks =
-+                        ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel) this.level).moonrise$getTickingChunks();
++                        ((ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel)this.level).moonrise$getPlayerTickingChunks();
 +
 +                final ServerChunkCache.ChunkAndHolder[] raw = tickingChunks.getRawDataUnchecked();
 +                final int size = tickingChunks.size();

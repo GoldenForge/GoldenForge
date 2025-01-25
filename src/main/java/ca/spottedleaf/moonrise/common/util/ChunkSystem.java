@@ -105,20 +105,24 @@ public final class ChunkSystem {
     }
 
     public static void onChunkTicking(final LevelChunk chunk, final ChunkHolder holder) {
-        ((ChunkSystemServerLevel)((ServerLevel)chunk.getLevel())).moonrise$getTickingChunks().add(
-                ((ChunkSystemLevelChunk)chunk).moonrise$getChunkAndHolder()
-        );
+        // Goldenforge: not used anymore?
+//        ((ChunkSystemServerLevel)((ServerLevel)chunk.getLevel())).moonrise$getTickingChunks().add(
+//                ((ChunkSystemLevelChunk)chunk).moonrise$getChunkAndHolder()
+//        );
         if (!((ChunkSystemLevelChunk)chunk).moonrise$isPostProcessingDone()) {
             chunk.postProcessGeneration();
         }
         ((ServerLevel)chunk.getLevel()).startTickingChunk(chunk);
         ((ServerLevel)chunk.getLevel()).getChunkSource().chunkMap.tickingGenerated.incrementAndGet();
+        ((ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel)(ServerLevel)chunk.getLevel()).moonrise$markChunkForPlayerTicking(chunk); // Moonrise - chunk tick iteration
     }
 
     public static void onChunkNotTicking(final LevelChunk chunk, final ChunkHolder holder) {
-        ((ChunkSystemServerLevel)((ServerLevel)chunk.getLevel())).moonrise$getTickingChunks().remove(
-                ((ChunkSystemLevelChunk)chunk).moonrise$getChunkAndHolder()
-        );
+        // Goldenforge: not used anymore?
+//        ((ChunkSystemServerLevel)((ServerLevel)chunk.getLevel())).moonrise$getTickingChunks().remove(
+//                ((ChunkSystemLevelChunk)chunk).moonrise$getChunkAndHolder()
+//        );
+        ((ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel)(ServerLevel)chunk.getLevel()).moonrise$removeChunkForPlayerTicking(chunk); // Moonrise - chunk tick iteration
     }
 
     public static void onChunkEntityTicking(final LevelChunk chunk, final ChunkHolder holder) {
