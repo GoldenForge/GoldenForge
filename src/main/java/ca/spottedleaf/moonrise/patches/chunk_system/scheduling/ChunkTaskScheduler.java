@@ -951,7 +951,7 @@ public final class ChunkTaskScheduler {
 
         ret.addProperty("removal-reason", removalReason == null ? "null" : removalReason.name());
 
-        ret.add("view-distances", ((ChunkSystemServerPlayer)player).moonrise$getViewDistanceHolder().toJson());
+        ret.add("view-distances", player.moonrise$getViewDistanceHolder().toJson());
 
         return ret;
     }
