@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/ai/village/poi/PoiManager.java
 +++ b/net/minecraft/world/entity/ai/village/poi/PoiManager.java
-@@ -38,234 +_,400 @@
+@@ -38,234 +_,384 @@
  import net.minecraft.world.level.chunk.storage.SectionStorage;
  import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
  
@@ -40,8 +40,7 @@
 +
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Accessing poi chunk off-main");
 +
-+        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager manager = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager;
-+        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk ret = manager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
++        final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk ret = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager.getPoiChunkIfLoaded(chunkX, chunkZ, true);
 +
 +        return ret == null ? Optional.empty() : ret.getSectionForVanilla(chunkY);
 +    }
@@ -95,9 +94,13 @@
 +    public final void moonrise$onUnload(final long coordinate) { // Paper - rewrite chunk system
 +        final int chunkX = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkX(coordinate);
 +        final int chunkZ = ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkZ(coordinate);
++
++        final int minY = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(this.world);
++        final int maxY = ca.spottedleaf.moonrise.common.util.WorldUtil.getMaxSection(this.world);
++
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Unloading poi chunk off-main");
-+        for (int section = this.levelHeightAccessor.getMinSection(); section < this.levelHeightAccessor.getMaxSection(); ++section) {
-+            final long sectionPos = SectionPos.asLong(chunkX, section, chunkZ);
++        for (int sectionY = minY; sectionY <= maxY; ++sectionY) {
++            final long sectionPos = SectionPos.asLong(chunkX, sectionY, chunkZ);
 +            this.updateDistanceTracking(sectionPos);
 +        }
 +    }
@@ -106,8 +109,12 @@
 +    public final void moonrise$loadInPoiChunk(final ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk poiChunk) {
 +        final int chunkX = poiChunk.chunkX;
 +        final int chunkZ = poiChunk.chunkZ;
++
++        final int minY = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(this.world);
++        final int maxY = ca.spottedleaf.moonrise.common.util.WorldUtil.getMaxSection(this.world);
++
 +        ca.spottedleaf.moonrise.common.util.TickThread.ensureTickThread(this.world, chunkX, chunkZ, "Loading poi chunk off-main");
-+        for (int sectionY = this.levelHeightAccessor.getMinSection(); sectionY < this.levelHeightAccessor.getMaxSection(); ++sectionY) {
++        for (int sectionY = minY; sectionY <= maxY; ++sectionY) {
 +            final PoiSection section = poiChunk.getSection(sectionY);
 +            if (section != null && !((ca.spottedleaf.moonrise.patches.chunk_system.level.poi.ChunkSystemPoiSection)section).moonrise$isEmpty()) {
 +                this.onSectionLoad(SectionPos.asLong(chunkX, sectionY, chunkZ));
@@ -126,29 +133,6 @@
 +        for (int section = minY; section <= maxY; ++section) {
 +            this.checkConsistencyWithBlocks(SectionPos.of(chunkX, section, chunkZ), sections[section - minY]);
 +        }
-+    }
-+
-+    @Override
-+    public final void moonrise$close() throws java.io.IOException {}
-+
-+    @Override
-+    public final net.minecraft.nbt.CompoundTag moonrise$read(final int chunkX, final int chunkZ) throws java.io.IOException {
-+        if (!ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.isRegionFileThread()) {
-+            return ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.loadData(
-+                    this.world, chunkX, chunkZ, ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.RegionFileType.POI_DATA,
-+                    ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.getIOBlockingPriorityForCurrentThread()
-+            );
-+        }
-+        return this.moonrise$getRegionStorage().read(new ChunkPos(chunkX, chunkZ));
-+    }
-+
-+    @Override
-+    public final void moonrise$write(final int chunkX, final int chunkZ, final net.minecraft.nbt.CompoundTag data) throws java.io.IOException {
-+        if (!ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.isRegionFileThread()) {
-+            ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.scheduleSave(this.world, chunkX, chunkZ, data, ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.RegionFileType.POI_DATA);
-+            return;
-+        }
-+        this.moonrise$getRegionStorage().write(new ChunkPos(chunkX, chunkZ), data);
 +    }
 +    // Paper end - rewrite chunk system
 +

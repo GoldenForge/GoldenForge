@@ -1,10 +1,12 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.scheduling.task;
 
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkSystemChunkStatus;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
+import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerChunkCache;
@@ -17,8 +19,8 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.status.WorldGenContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.lang.invoke.VarHandle;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,9 +37,9 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
 
     public ChunkUpgradeGenericStatusTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
                                          final int chunkZ, final ChunkAccess chunk, final StaticCache2D<GenerationChunkHolder> neighbours,
-                                         final ChunkStatus toStatus, final PrioritisedExecutor.Priority priority) {
+                                         final ChunkStatus toStatus, final Priority priority) {
         super(scheduler, world, chunkX, chunkZ);
-        if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+        if (!Priority.isValidPriority(priority)) {
             throw new IllegalArgumentException("Invalid priority " + priority);
         }
         this.fromChunk = chunk;
@@ -116,9 +118,9 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
             }
 
             this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                "Target status", ChunkTaskScheduler.stringIfNull(this.toStatus),
-                "From status", ChunkTaskScheduler.stringIfNull(this.fromStatus),
-                "Generation task", this
+                    "Target status", ChunkTaskScheduler.stringIfNull(this.toStatus),
+                    "From status", ChunkTaskScheduler.stringIfNull(this.fromStatus),
+                    "Generation task", this
             ), throwable);
 
             LOGGER.error(
@@ -186,29 +188,29 @@ public final class ChunkUpgradeGenericStatusTask extends ChunkProgressionTask im
     }
 
     @Override
-    public PrioritisedExecutor.Priority getPriority() {
+    public Priority getPriority() {
         return this.generateTask.getPriority();
     }
 
     @Override
-    public void lowerPriority(final PrioritisedExecutor.Priority priority) {
-        if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+    public void lowerPriority(final Priority priority) {
+        if (!Priority.isValidPriority(priority)) {
             throw new IllegalArgumentException("Invalid priority " + priority);
         }
         this.generateTask.lowerPriority(priority);
     }
 
     @Override
-    public void setPriority(final PrioritisedExecutor.Priority priority) {
-        if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+    public void setPriority(final Priority priority) {
+        if (!Priority.isValidPriority(priority)) {
             throw new IllegalArgumentException("Invalid priority " + priority);
         }
         this.generateTask.setPriority(priority);
     }
 
     @Override
-    public void raisePriority(final PrioritisedExecutor.Priority priority) {
-        if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+    public void raisePriority(final Priority priority) {
+        if (!Priority.isValidPriority(priority)) {
             throw new IllegalArgumentException("Invalid priority " + priority);
         }
         this.generateTask.raisePriority(priority);

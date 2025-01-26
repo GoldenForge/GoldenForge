@@ -1,12 +1,13 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.scheduling.task;
 
 import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.Priority;
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import ca.spottedleaf.moonrise.patches.chunk_system.ChunkSystemConverters;
-import ca.spottedleaf.moonrise.patches.chunk_system.ChunkSystemFeatures;
-import ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread;
+import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder;
@@ -22,7 +23,6 @@ import net.minecraft.world.level.chunk.storage.ChunkSerializer;
 import net.minecraft.world.level.levelgen.blending.BlendingData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.lang.invoke.VarHandle;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,7 +42,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     private final AtomicInteger taskCountToComplete = new AtomicInteger(3); // one for poi, one for entity, and one for chunk data
 
     public ChunkLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX, final int chunkZ,
-                         final NewChunkHolder chunkHolder, final PrioritisedExecutor.Priority priority) {
+                         final NewChunkHolder chunkHolder, final Priority priority) {
         super(scheduler, world, chunkX, chunkZ);
         this.chunkHolder = chunkHolder;
         this.loadTask = new ChunkDataLoadTask(scheduler, world, chunkX, chunkZ, priority);
@@ -171,12 +171,12 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     }
 
     @Override
-    public PrioritisedExecutor.Priority getPriority() {
+    public Priority getPriority() {
         return this.loadTask.getPriority();
     }
 
     @Override
-    public void lowerPriority(final PrioritisedExecutor.Priority priority) {
+    public void lowerPriority(final Priority priority) {
         final EntityDataLoadTask entityLoad = this.chunkHolder.getEntityDataLoadTask();
         if (entityLoad != null) {
             entityLoad.lowerPriority(priority);
@@ -192,7 +192,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     }
 
     @Override
-    public void setPriority(final PrioritisedExecutor.Priority priority) {
+    public void setPriority(final Priority priority) {
         final EntityDataLoadTask entityLoad = this.chunkHolder.getEntityDataLoadTask();
         if (entityLoad != null) {
             entityLoad.setPriority(priority);
@@ -208,7 +208,7 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     }
 
     @Override
-    public void raisePriority(final PrioritisedExecutor.Priority priority) {
+    public void raisePriority(final Priority priority) {
         final EntityDataLoadTask entityLoad = this.chunkHolder.getEntityDataLoadTask();
         if (entityLoad != null) {
             entityLoad.raisePriority(priority);
@@ -232,8 +232,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         protected static final VarHandle COMPLETED_HANDLE = ConcurrentUtil.getVarHandle(CallbackDataLoadTask.class, "completed", boolean.class);
 
         protected CallbackDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
-                                       final int chunkZ, final RegionFileIOThread.RegionFileType type,
-                                       final PrioritisedExecutor.Priority priority) {
+                                       final int chunkZ, final MoonriseRegionFileIO.RegionFileType type,
+                                       final Priority priority) {
             super(scheduler, world, chunkX, chunkZ, type, priority);
         }
 
@@ -243,9 +243,9 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                     consumer.accept(this.result);
                 } catch (final Throwable throwable) {
                     this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                        "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
-                        "Completed throwable", ChunkTaskScheduler.stringIfNull(this.result.right()),
-                        "CallbackDataLoadTask impl", this.getClass().getName()
+                            "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
+                            "Completed throwable", ChunkTaskScheduler.stringIfNull(this.result.right()),
+                            "CallbackDataLoadTask impl", this.getClass().getName()
                     ), throwable);
                 }
             }
@@ -263,9 +263,9 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
                     consumer.accept(result);
                 } catch (final Throwable throwable) {
                     this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                        "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
-                        "Completed throwable", ChunkTaskScheduler.stringIfNull(result.right()),
-                        "CallbackDataLoadTask impl", this.getClass().getName()
+                            "Consumer", ChunkTaskScheduler.stringIfNull(consumer),
+                            "Completed throwable", ChunkTaskScheduler.stringIfNull(result.right()),
+                            "CallbackDataLoadTask impl", this.getClass().getName()
                     ), throwable);
                     return;
                 }
@@ -273,10 +273,13 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
     }
 
-    private static final class ChunkDataLoadTask extends CallbackDataLoadTask<CompoundTag, ChunkAccess> {
+
+    private static record ReadChunk(ChunkAccess protoChunk, CompoundTag chunkData) {}
+
+    private static final class ChunkDataLoadTask extends CallbackDataLoadTask<ReadChunk, ChunkAccess> {
         private ChunkDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
-                                    final int chunkZ, final PrioritisedExecutor.Priority priority) {
-            super(scheduler, world, chunkX, chunkZ, RegionFileIOThread.RegionFileType.CHUNK_DATA, priority);
+                                  final int chunkZ, final Priority priority) {
+            super(scheduler, world, chunkX, chunkZ, MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, priority);
         }
 
         @Override
@@ -290,40 +293,42 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
 
         @Override
-        protected PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
+        protected PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final Priority priority) {
             return this.scheduler.loadExecutor.createTask(run, priority);
         }
 
         @Override
-        protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
+        protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final Priority priority) {
             return this.scheduler.createChunkTask(this.chunkX, this.chunkZ, run, priority);
         }
 
         @Override
-        protected TaskResult<ChunkAccess, Throwable> completeOnMainOffMain(final CompoundTag data, final Throwable throwable) {
+        protected TaskResult<ChunkAccess, Throwable> completeOnMainOffMain(final ReadChunk data, final Throwable throwable) {
             if (throwable != null) {
                 return new TaskResult<>(null, throwable);
             }
-            if (data == null) {
+
+            if (data == null || data.protoChunk() == null) {
                 return new TaskResult<>(this.getEmptyChunk(), null);
             }
 
-            if (ChunkSystemFeatures.supportsAsyncChunkDeserialization()) {
-                return this.deserialize(data);
+            if (!PlatformHooks.get().hasMainChunkLoadHook()) {
+                return new TaskResult<>(data.protoChunk(), null);
             }
-            // need to deserialize on main thread
+
+            // need to invoke the callback for loading on the main thread
             return null;
         }
 
         private ProtoChunk getEmptyChunk() {
             return new ProtoChunk(
-                new ChunkPos(this.chunkX, this.chunkZ), UpgradeData.EMPTY, this.world,
-                this.world.registryAccess().registryOrThrow(Registries.BIOME), (BlendingData)null
+                    new ChunkPos(this.chunkX, this.chunkZ), UpgradeData.EMPTY, this.world,
+                    this.world.registryAccess().registryOrThrow(Registries.BIOME), (BlendingData)null
             );
         }
 
         @Override
-        protected TaskResult<CompoundTag, Throwable> runOffMain(final CompoundTag data, final Throwable throwable) {
+        protected TaskResult<ReadChunk, Throwable> runOffMain(final CompoundTag data, final Throwable throwable) {
             if (throwable != null) {
                 LOGGER.error("Failed to load chunk data for task: " + this.toString() + ", chunk data will be lost", throwable);
                 return new TaskResult<>(null, null);
@@ -335,42 +340,33 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
 
             try {
                 // run converters
-                final CompoundTag converted = this.world.getChunkSource().chunkMap.upgradeChunkTag(data);
+                final CompoundTag converted = this.world.getChunkSource().chunkMap.upgradeChunkTag(data); // Paper
 
-                return new TaskResult<>(converted, null);
+                // read into ProtoChunk
+                final ChunkAccess chunk = ChunkSerializer.read(
+                        this.world, this.world.getPoiManager(), this.world.getChunkSource().chunkMap.storageInfo(), new ChunkPos(this.chunkX, this.chunkZ), data
+                );
+
+                return new TaskResult<>(new ReadChunk(chunk, converted), null);
             } catch (final Throwable thr2) {
                 LOGGER.error("Failed to parse chunk data for task: " + this.toString() + ", chunk data will be lost", thr2);
                 return new TaskResult<>(null, null);
             }
         }
 
-        private TaskResult<ChunkAccess, Throwable> deserialize(final CompoundTag data) {
-            try {
-                final ChunkAccess deserialized = ChunkSerializer.read(
-                        this.world, this.world.getPoiManager(), this.world.getChunkSource().chunkMap.storageInfo(), new ChunkPos(this.chunkX, this.chunkZ), data
-                );
-                return new TaskResult<>(deserialized, null);
-            } catch (final Throwable thr2) {
-                LOGGER.error("Failed to parse chunk data for task: " + this.toString() + ", chunk data will be lost", thr2);
-                return new TaskResult<>(this.getEmptyChunk(), null);
-            }
-        }
-
         @Override
-        protected TaskResult<ChunkAccess, Throwable> runOnMain(final CompoundTag data, final Throwable throwable) {
-            // data != null && throwable == null
-            if (ChunkSystemFeatures.supportsAsyncChunkDeserialization()) {
-                throw new UnsupportedOperationException();
-            }
-            return this.deserialize(data);
+        protected TaskResult<ChunkAccess, Throwable> runOnMain(final ReadChunk data, final Throwable throwable) {
+            PlatformHooks.get().mainChunkLoad(data.protoChunk(), data.chunkData());
+
+            return new TaskResult<>(data.protoChunk(), null);
         }
     }
 
     public static final class PoiDataLoadTask extends CallbackDataLoadTask<PoiChunk, PoiChunk> {
 
         public PoiDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
-                               final int chunkZ, final PrioritisedExecutor.Priority priority) {
-            super(scheduler, world, chunkX, chunkZ, RegionFileIOThread.RegionFileType.POI_DATA, priority);
+                               final int chunkZ, final Priority priority) {
+            super(scheduler, world, chunkX, chunkZ, MoonriseRegionFileIO.RegionFileType.POI_DATA, priority);
         }
 
         @Override
@@ -384,12 +380,12 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
 
         @Override
-        protected PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
+        protected PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final Priority priority) {
             return this.scheduler.loadExecutor.createTask(run, priority);
         }
 
         @Override
-        protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
+        protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final Priority priority) {
             throw new UnsupportedOperationException();
         }
 
@@ -431,8 +427,8 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
     public static final class EntityDataLoadTask extends CallbackDataLoadTask<CompoundTag, CompoundTag> {
 
         public EntityDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
-                                  final int chunkZ, final PrioritisedExecutor.Priority priority) {
-            super(scheduler, world, chunkX, chunkZ, RegionFileIOThread.RegionFileType.ENTITY_DATA, priority);
+                                  final int chunkZ, final Priority priority) {
+            super(scheduler, world, chunkX, chunkZ, MoonriseRegionFileIO.RegionFileType.ENTITY_DATA, priority);
         }
 
         @Override
@@ -446,12 +442,12 @@ public final class ChunkLoadTask extends ChunkProgressionTask {
         }
 
         @Override
-        protected PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
+        protected PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final Priority priority) {
             return this.scheduler.loadExecutor.createTask(run, priority);
         }
 
         @Override
-        protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final PrioritisedExecutor.Priority priority) {
+        protected PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final Priority priority) {
             throw new UnsupportedOperationException();
         }
 

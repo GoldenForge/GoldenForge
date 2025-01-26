@@ -1,5 +1,6 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server;
 
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import ca.spottedleaf.moonrise.common.list.ReferenceList;
 import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 import ca.spottedleaf.moonrise.common.util.TickThread;
@@ -62,6 +63,11 @@ public final class ServerEntityLookup extends EntityLookup {
         if (entity instanceof ServerPlayer player) {
             ((ChunkSystemServerLevel)this.serverWorld).moonrise$getNearbyPlayers().tickPlayer(player);
         }
+        PlatformHooks.get().entityMove(
+                entity,
+                CoordinateUtils.getChunkSectionKey(oldSectionX, oldSectionY, oldSectionZ),
+                CoordinateUtils.getChunkSectionKey(newSectionX, newSectionY, newSectionZ)
+        );
     }
 
     @Override
@@ -104,6 +110,6 @@ public final class ServerEntityLookup extends EntityLookup {
 
     @Override
     protected boolean screenEntity(final Entity entity, final boolean fromDisk, final boolean event) {
-        return true;
+        return PlatformHooks.get().screenEntity(this.serverWorld, entity, fromDisk, event);
     }
 }

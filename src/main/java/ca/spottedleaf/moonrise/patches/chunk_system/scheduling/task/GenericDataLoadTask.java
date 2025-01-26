@@ -1,12 +1,13 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.scheduling.task;
 
+import ca.spottedleaf.concurrentutil.completable.CallbackCompletable;
 import ca.spottedleaf.concurrentutil.completable.Completable;
 import ca.spottedleaf.concurrentutil.executor.Cancellable;
-import ca.spottedleaf.concurrentutil.executor.standard.DelayedPrioritisedTask;
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
-import ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread;
+import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder;
@@ -14,7 +15,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.lang.invoke.VarHandle;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,11 +48,11 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
     protected final ServerLevel world;
     protected final int chunkX;
     protected final int chunkZ;
-    protected final RegionFileIOThread.RegionFileType type;
+    protected final MoonriseRegionFileIO.RegionFileType type;
 
     public GenericDataLoadTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX,
-                               final int chunkZ, final RegionFileIOThread.RegionFileType type,
-                               final PrioritisedExecutor.Priority priority) {
+                               final int chunkZ, final MoonriseRegionFileIO.RegionFileType type,
+                               final Priority priority) {
         this.scheduler = scheduler;
         this.world = world;
         this.chunkX = chunkX;
@@ -90,9 +90,9 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
 
     protected abstract boolean hasOnMain();
 
-    protected abstract PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final PrioritisedExecutor.Priority priority);
+    protected abstract PrioritisedExecutor.PrioritisedTask createOffMain(final Runnable run, final Priority priority);
 
-    protected abstract PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final PrioritisedExecutor.Priority priority);
+    protected abstract PrioritisedExecutor.PrioritisedTask createOnMain(final Runnable run, final Priority priority);
 
     protected abstract TaskResult<OnMain, Throwable> runOffMain(final CompoundTag data, final Throwable throwable);
 
@@ -105,11 +105,11 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
     @Override
     public String toString() {
         return "GenericDataLoadTask{class: " + this.getClass().getName() + ", world: " + WorldUtil.getWorldName(this.world) +
-            ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
-            ", type: " + this.type.toString() + "}";
+                ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
+                ", type: " + this.type.toString() + "}";
     }
 
-    public PrioritisedExecutor.Priority getPriority() {
+    public Priority getPriority() {
         if (this.processOnMain != null) {
             return this.processOnMain.getPriority();
         } else {
@@ -117,7 +117,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         }
     }
 
-    public void lowerPriority(final PrioritisedExecutor.Priority priority) {
+    public void lowerPriority(final Priority priority) {
         // can't lower I/O tasks, we don't know what they affect
         if (this.processOffMain != null) {
             this.processOffMain.lowerPriority(priority);
@@ -127,7 +127,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         }
     }
 
-    public void setPriority(final PrioritisedExecutor.Priority priority) {
+    public void setPriority(final Priority priority) {
         // can't lower I/O tasks, we don't know what they affect
         this.loadDataFromDiskTask.raisePriority(priority);
         if (this.processOffMain != null) {
@@ -138,7 +138,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         }
     }
 
-    public void raisePriority(final PrioritisedExecutor.Priority priority) {
+    public void raisePriority(final Priority priority) {
         // can't lower I/O tasks, we don't know what they affect
         this.loadDataFromDiskTask.raisePriority(priority);
         if (this.processOffMain != null) {
@@ -152,7 +152,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
     // returns whether scheduleNow() needs to be called
     public boolean schedule(final boolean delay) {
         if (this.stageAndReferenceCount.get() != STAGE_NOT_STARTED ||
-            !this.stageAndReferenceCount.compareAndSet(STAGE_NOT_STARTED, (1L << 32) | STAGE_LOADING)) {
+                !this.stageAndReferenceCount.compareAndSet(STAGE_NOT_STARTED, (1L << 32) | STAGE_LOADING)) {
             // try and increment reference count
             int failures = 0;
             for (long curr = this.stageAndReferenceCount.get();;) {
@@ -213,7 +213,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 return false;
             }
 
-             if ((curr & STAGE_MASK) == STAGE_NOT_STARTED || (curr & ~STAGE_MASK) == (1L << 32)) {
+            if ((curr & STAGE_MASK) == STAGE_NOT_STARTED || (curr & ~STAGE_MASK) == (1L << 32)) {
                 // no other references, so we can cancel
                 final long newVal = STAGE_CANCELLED;
                 if (curr == (curr = this.stageAndReferenceCount.compareAndExchange(curr, newVal))) {
@@ -284,9 +284,9 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             } catch (final Throwable thr2) {
                 LOGGER.error("Failed I/O callback for task: " + GenericDataLoadTask.this.toString(), thr2);
                 GenericDataLoadTask.this.scheduler.unrecoverableChunkSystemFailure(
-                    GenericDataLoadTask.this.chunkX, GenericDataLoadTask.this.chunkZ, Map.of(
-                        "Callback throwable", ChunkTaskScheduler.stringIfNull(throwable)
-                    ), thr2
+                        GenericDataLoadTask.this.chunkX, GenericDataLoadTask.this.chunkZ, Map.of(
+                                "Callback throwable", ChunkTaskScheduler.stringIfNull(throwable)
+                        ), thr2
                 );
             }
         }
@@ -383,10 +383,10 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         private final int chunkX;
         private final int chunkZ;
 
-        private final RegionFileIOThread.RegionFileType type;
+        private final MoonriseRegionFileIO.RegionFileType type;
         private Cancellable dataLoadTask;
         private Cancellable dataUnloadCancellable;
-        private DelayedPrioritisedTask dataUnloadTask;
+        private PrioritisedExecutor.PrioritisedTask dataUnloadTask;
 
         private final BiConsumer<CompoundTag, Throwable> onComplete;
         private final AtomicBoolean scheduled = new AtomicBoolean();
@@ -394,10 +394,10 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
         // onComplete should be caller sensitive, it may complete synchronously with schedule() - which does
         // hold a priority lock.
         public LoadDataFromDiskTask(final ServerLevel world, final int chunkX, final int chunkZ,
-                                    final RegionFileIOThread.RegionFileType type,
+                                    final MoonriseRegionFileIO.RegionFileType type,
                                     final BiConsumer<CompoundTag, Throwable> onComplete,
-                                    final PrioritisedExecutor.Priority priority) {
-            if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+                                    final Priority priority) {
+            if (!Priority.isValidPriority(priority)) {
                 throw new IllegalArgumentException("Invalid priority " + priority);
             }
             this.world = world;
@@ -413,8 +413,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 this.onComplete.accept(data, throwable);
             } catch (final Throwable thr2) {
                 ((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                    "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable),
-                    "Regionfile type", ChunkTaskScheduler.stringIfNull(this.type)
+                        "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable),
+                        "Regionfile type", ChunkTaskScheduler.stringIfNull(this.type)
                 ), thr2);
             }
         }
@@ -427,8 +427,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             return (this.getPriorityVolatile() & PRIORITY_EXECUTED) != 0;
         }
 
-        public void lowerPriority(final PrioritisedExecutor.Priority priority) {
-            if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+        public void lowerPriority(final Priority priority) {
+            if (!Priority.isValidPriority(priority)) {
                 throw new IllegalArgumentException("Invalid priority " + priority);
             }
 
@@ -440,7 +440,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 }
 
                 if ((curr & PRIORITY_LOAD_SCHEDULED) != 0) {
-                    RegionFileIOThread.lowerPriority(this.world, this.chunkX, this.chunkZ, this.type, priority);
+                    MoonriseRegionFileIO.lowerPriority(this.world, this.chunkX, this.chunkZ, this.type, priority);
                     return;
                 }
 
@@ -468,8 +468,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             }
         }
 
-        public void setPriority(final PrioritisedExecutor.Priority priority) {
-            if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+        public void setPriority(final Priority priority) {
+            if (!Priority.isValidPriority(priority)) {
                 throw new IllegalArgumentException("Invalid priority " + priority);
             }
 
@@ -481,7 +481,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 }
 
                 if ((curr & PRIORITY_LOAD_SCHEDULED) != 0) {
-                    RegionFileIOThread.setPriority(this.world, this.chunkX, this.chunkZ, this.type, priority);
+                    MoonriseRegionFileIO.setPriority(this.world, this.chunkX, this.chunkZ, this.type, priority);
                     return;
                 }
 
@@ -505,8 +505,8 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             }
         }
 
-        public void raisePriority(final PrioritisedExecutor.Priority priority) {
-            if (!PrioritisedExecutor.Priority.isValidPriority(priority)) {
+        public void raisePriority(final Priority priority) {
+            if (!Priority.isValidPriority(priority)) {
                 throw new IllegalArgumentException("Invalid priority " + priority);
             }
 
@@ -518,7 +518,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 }
 
                 if ((curr & PRIORITY_LOAD_SCHEDULED) != 0) {
-                    RegionFileIOThread.raisePriority(this.world, this.chunkX, this.chunkZ, this.type, priority);
+                    MoonriseRegionFileIO.raisePriority(this.world, this.chunkX, this.chunkZ, this.type, priority);
                     return;
                 }
 
@@ -584,7 +584,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                 } // else: cancelled
             };
 
-            final PrioritisedExecutor.Priority initialPriority = PrioritisedExecutor.Priority.getPriority(priority);
+            final Priority initialPriority = Priority.getPriority(priority);
             boolean scheduledUnload = false;
 
             final NewChunkHolder holder = ((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(this.chunkX, this.chunkZ);
@@ -594,13 +594,13 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
                         consumer.accept(data, null);
                     } else {
                         // need to schedule task
-                        LoadDataFromDiskTask.this.schedule(false, consumer, PrioritisedExecutor.Priority.getPriority(LoadDataFromDiskTask.this.getPriorityVolatile() & ~PRIORITY_FLAGS));
+                        LoadDataFromDiskTask.this.schedule(false, consumer, Priority.getPriority(LoadDataFromDiskTask.this.getPriorityVolatile() & ~PRIORITY_FLAGS));
                     }
                 };
                 Cancellable unloadCancellable = null;
                 CompoundTag syncComplete = null;
                 final NewChunkHolder.UnloadTask unloadTask = holder.getUnloadTask(this.type); // can be null if no task exists
-                final Completable<CompoundTag> unloadCompletable = unloadTask == null ? null : unloadTask.completable();
+                final CallbackCompletable<CompoundTag> unloadCompletable = unloadTask == null ? null : unloadTask.completable();
                 if (unloadCompletable != null) {
                     unloadCancellable = unloadCompletable.addAsynchronousWaiter(unloadConsumer);
                     if (unloadCancellable == null) {
@@ -623,7 +623,7 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             this.schedule(scheduledUnload, consumer, initialPriority);
         }
 
-        private void schedule(final boolean scheduledUnload, final BiConsumer<CompoundTag, Throwable> consumer, final PrioritisedExecutor.Priority initialPriority) {
+        private void schedule(final boolean scheduledUnload, final BiConsumer<CompoundTag, Throwable> consumer, final Priority initialPriority) {
             int priority = this.getPriorityVolatile();
 
             if ((priority & PRIORITY_EXECUTED) != 0) {
@@ -632,9 +632,9 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
             }
 
             if (!scheduledUnload) {
-                this.dataLoadTask = RegionFileIOThread.loadDataAsync(
-                    this.world, this.chunkX, this.chunkZ, this.type, consumer,
-                    initialPriority.isHigherPriority(PrioritisedExecutor.Priority.NORMAL), initialPriority
+                this.dataLoadTask = MoonriseRegionFileIO.loadDataAsync(
+                        this.world, this.chunkX, this.chunkZ, this.type, consumer,
+                        initialPriority.isHigherPriority(Priority.NORMAL), initialPriority
                 );
             }
 
@@ -658,10 +658,10 @@ public abstract class GenericDataLoadTask<OnMain,FinalCompletion> {
 
                 if (scheduledUnload) {
                     if (this.dataUnloadTask != null) {
-                        this.dataUnloadTask.setPriority(PrioritisedExecutor.Priority.getPriority(priority & ~PRIORITY_FLAGS));
+                        this.dataUnloadTask.setPriority(Priority.getPriority(priority & ~PRIORITY_FLAGS));
                     }
                 } else {
-                    RegionFileIOThread.setPriority(this.world, this.chunkX, this.chunkZ, this.type, PrioritisedExecutor.Priority.getPriority(priority & ~PRIORITY_FLAGS));
+                    MoonriseRegionFileIO.setPriority(this.world, this.chunkX, this.chunkZ, this.type, Priority.getPriority(priority & ~PRIORITY_FLAGS));
                 }
 
                 ++failures;

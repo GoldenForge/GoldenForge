@@ -1,8 +1,8 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.scheduling.task;
 
 import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
 import net.minecraft.server.level.ServerLevel;
@@ -46,15 +46,15 @@ public abstract class ChunkProgressionTask {
     /* May be called multiple times */
     public abstract void cancel();
 
-    public abstract PrioritisedExecutor.Priority getPriority();
+    public abstract Priority getPriority();
 
     /* Schedule lock is always held for the priority update calls */
 
-    public abstract void lowerPriority(final PrioritisedExecutor.Priority priority);
+    public abstract void lowerPriority(final Priority priority);
 
-    public abstract void setPriority(final PrioritisedExecutor.Priority priority);
+    public abstract void setPriority(final Priority priority);
 
-    public abstract void raisePriority(final PrioritisedExecutor.Priority priority);
+    public abstract void raisePriority(final Priority priority);
 
     public final void onComplete(final BiConsumer<ChunkAccess, Throwable> onComplete) {
         if (!this.waiters.add(onComplete)) {
@@ -62,8 +62,8 @@ public abstract class ChunkProgressionTask {
                 onComplete.accept(this.completedChunk, this.completedThrowable);
             } catch (final Throwable throwable) {
                 this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                    "Consumer", ChunkTaskScheduler.stringIfNull(onComplete),
-                    "Completed throwable", ChunkTaskScheduler.stringIfNull(this.completedThrowable)
+                        "Consumer", ChunkTaskScheduler.stringIfNull(onComplete),
+                        "Completed throwable", ChunkTaskScheduler.stringIfNull(this.completedThrowable)
                 ), throwable);
             }
         }
@@ -74,7 +74,7 @@ public abstract class ChunkProgressionTask {
             this.complete0(chunk, throwable);
         } catch (final Throwable thr2) {
             this.scheduler.unrecoverableChunkSystemFailure(this.chunkX, this.chunkZ, Map.of(
-                "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable)
+                    "Completed throwable", ChunkTaskScheduler.stringIfNull(throwable)
             ), thr2);
         }
     }
@@ -95,7 +95,7 @@ public abstract class ChunkProgressionTask {
     @Override
     public String toString() {
         return "ChunkProgressionTask{class: " + this.getClass().getName() + ", for world: " + WorldUtil.getWorldName(this.world) +
-            ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
-            ", status: " + this.getTargetStatus().toString() + ", scheduled: " + this.isScheduled() + "}";
+                ", chunk: (" + this.chunkX + "," + this.chunkZ + "), hashcode: " + System.identityHashCode(this) + ", priority: " + this.getPriority() +
+                ", status: " + this.getTargetStatus().toString() + ", scheduled: " + this.isScheduled() + "}";
     }
 }

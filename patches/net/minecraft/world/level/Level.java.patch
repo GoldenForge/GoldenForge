@@ -966,7 +966,7 @@
      }
  
      public boolean isLoaded(BlockPos p_46750_) {
-@@ -795,23 +_,15 @@
+@@ -795,23 +_,17 @@
      }
  
      @Override
@@ -993,36 +993,117 @@
 +
 +        ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities(except, box, ret, predicate);
 +
++        ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, except, box, predicate, ret);
++
 +        return ret;
 +        // Paper end - rewrite chunk system
      }
  
      @Override
-@@ -837,6 +_,8 @@
-                 }
-             }
+@@ -825,34 +_,77 @@
+         this.getEntities(p_261899_, p_261837_, p_261519_, p_262046_, Integer.MAX_VALUE);
+     }
  
+-    public <T extends Entity> void getEntities(
+-        EntityTypeTest<Entity, T> p_261885_, AABB p_262086_, Predicate<? super T> p_261688_, List<? super T> p_262071_, int p_261858_
+-    ) {
++    // Paper start - rewrite chunk system
++    public <T extends Entity> void getEntities(final EntityTypeTest<Entity, T> entityTypeTest,
++                                               final AABB boundingBox, final Predicate<? super T> predicate,
++                                               final List<? super T> into, final int maxCount) {
+         this.getProfiler().incrementCounter("getEntities");
+-        this.getEntities().get(p_261885_, p_262086_, p_261454_ -> {
+-            if (p_261688_.test(p_261454_)) {
+-                p_262071_.add(p_261454_);
+-                if (p_262071_.size() >= p_261858_) {
+-                    return AbortableIterationConsumer.Continuation.ABORT;
+-                }
+-            }
+-
+-            if (p_261454_ instanceof EnderDragon enderdragon) {
+-                for (EnderDragonPart enderdragonpart : enderdragon.getSubEntities()) {
+-                    T t = p_261885_.tryCast(enderdragonpart);
+-                    if (t != null && p_261688_.test(t)) {
+-                        p_262071_.add(t);
+-                        if (p_262071_.size() >= p_261858_) {
+-                            return AbortableIterationConsumer.Continuation.ABORT;
+-                        }
+-                    }
+-                }
+-            }
+-
+-            return AbortableIterationConsumer.Continuation.CONTINUE;
+-        });
 +
-+            if (false)
-             if (p_261454_ instanceof EnderDragon enderdragon) {
-                 for (EnderDragonPart enderdragonpart : enderdragon.getSubEntities()) {
-                     T t = p_261885_.tryCast(enderdragonpart);
-@@ -851,6 +_,15 @@
- 
-             return AbortableIterationConsumer.Continuation.CONTINUE;
-         });
-+        for (net.neoforged.neoforge.entity.PartEntity<?> p : this.getPartEntities()) {
-+            T t = p_261885_.tryCast(p);
-+            if (t != null && t.getBoundingBox().intersects(p_262086_) && p_261688_.test(t)) {
-+                p_262071_.add(t);
-+                if (p_262071_.size() >= p_261858_) {
-+                    break;
++        if (entityTypeTest instanceof net.minecraft.world.entity.EntityType<T> byType) {
++            if (maxCount != Integer.MAX_VALUE) {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities(byType, boundingBox, into, predicate, maxCount);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            } else {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities(byType, boundingBox, into, predicate);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            }
++        }
++
++        if (entityTypeTest == null) {
++            if (maxCount != Integer.MAX_VALUE) {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities((Entity)null, boundingBox, (List)into, (Predicate)predicate, maxCount);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            } else {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities((Entity)null, boundingBox, (List)into, (Predicate)predicate);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            }
++        }
++
++        final Class<? extends Entity> base = entityTypeTest.getBaseClass();
++
++        final Predicate<? super T> modifiedPredicate;
++        if (predicate == null) {
++            modifiedPredicate = (final T obj) -> {
++                return entityTypeTest.tryCast(obj) != null;
++            };
++        } else {
++            modifiedPredicate = (final Entity obj) -> {
++                final T casted = entityTypeTest.tryCast(obj);
++                if (casted == null) {
++                    return false;
 +                }
++
++                return predicate.test(casted);
++            };
++        }
++
++        if (base == null || base == Entity.class) {
++            if (maxCount != Integer.MAX_VALUE) {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities((Entity)null, boundingBox, (List)into, (Predicate)modifiedPredicate, maxCount);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            } else {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities((Entity)null, boundingBox, (List)into, (Predicate)modifiedPredicate);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            }
++        } else {
++            if (maxCount != Integer.MAX_VALUE) {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities(base, null, boundingBox, (List)into, (Predicate)modifiedPredicate, maxCount);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
++            } else {
++                ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)this).moonrise$getEntityLookup().getEntities(base, null, boundingBox, (List)into, (Predicate)modifiedPredicate);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().addToGetEntities((Level)(Object)this, entityTypeTest, boundingBox, predicate, into, maxCount);
++                return;
 +            }
 +        }
      }
- 
+-
++    // Paper end - rewrite chunk system
      @Nullable
+     public abstract Entity getEntity(int p_46492_);
+ 
 @@ -979,16 +_,15 @@
      public abstract Scoreboard getScoreboard();
  

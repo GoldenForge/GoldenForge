@@ -5,7 +5,7 @@
  import org.slf4j.Logger;
  
 -public class ServerLevel extends Level implements WorldGenLevel {
-+public class ServerLevel extends Level implements WorldGenLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevelReader, ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel { // Paper - rewrite chunk system
++public class ServerLevel extends Level implements WorldGenLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevelReader, ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel { // Paper - rewrite chunk system // Paper - chunk tick iteration
      public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
      public static final IntProvider RAIN_DELAY = UniformInt.of(12000, 180000);
      public static final IntProvider RAIN_DURATION = UniformInt.of(12000, 24000);
@@ -24,7 +24,7 @@
      private final PersistentEntitySectionManager<Entity> entityManager;
      private final GameEventDispatcher gameEventDispatcher;
      public boolean noSave;
-@@ -199,12 +_,352 @@
+@@ -199,12 +_,350 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
      private EndDragonFight dragonFight;
@@ -70,24 +70,6 @@
 +
 +        return true;
 +    }
-+
-+    public final void loadChunksForMoveAsync(AABB axisalignedbb, ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
-+                                             java.util.function.Consumer<List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
-+        // Paper - rewrite chunk system
-+        int minBlockX = Mth.floor(axisalignedbb.minX - 1.0E-7D) - 3;
-+        int maxBlockX = Mth.floor(axisalignedbb.maxX + 1.0E-7D) + 3;
-+
-+        int minBlockZ = Mth.floor(axisalignedbb.minZ - 1.0E-7D) - 3;
-+        int maxBlockZ = Mth.floor(axisalignedbb.maxZ + 1.0E-7D) + 3;
-+
-+        int minChunkX = minBlockX >> 4;
-+        int maxChunkX = maxBlockX >> 4;
-+
-+        int minChunkZ = minBlockZ >> 4;
-+        int maxChunkZ = maxBlockZ >> 4;
-+
-+        this.moonrise$loadChunksAsync(minChunkX, maxChunkX, minChunkZ, maxChunkZ, priority, onLoad); // Paper - rewrite chunk system
-+    }
 +    // Paper end
 +
 +    // Paper start - optimise getPlayerByUUID
@@ -99,7 +81,6 @@
 +    }
 +    // Paper end - optimise getPlayerByUUID
 +    // Paper start - rewrite chunk system
-+    private boolean markedClosing;
 +    private final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder viewDistanceHolder = new ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.ViewDistanceHolder();
 +    private final ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader chunkLoader = new ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader((ServerLevel)(Object)this);
 +    private final ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.EntityDataController entityDataController;
@@ -154,17 +135,17 @@
 +    }
 +
 +    @Override
-+    public final ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.ChunkDataController moonrise$getChunkDataController() {
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController  moonrise$getChunkDataController() {
 +        return this.chunkDataController;
 +    }
 +
 +    @Override
-+    public final ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.ChunkDataController moonrise$getPoiChunkDataController() {
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController moonrise$getPoiChunkDataController() {
 +        return this.poiDataController;
 +    }
 +
 +    @Override
-+    public final ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.ChunkDataController moonrise$getEntityChunkDataController() {
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController moonrise$getEntityChunkDataController() {
 +        return this.entityDataController;
 +    }
 +
@@ -180,7 +161,7 @@
 +
 +    @Override
 +    public final void moonrise$loadChunksAsync(final BlockPos pos, final int radiusBlocks,
-+                                               final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final ca.spottedleaf.concurrentutil.util.Priority priority,
 +                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
 +        this.moonrise$loadChunksAsync(
 +                (pos.getX() - radiusBlocks) >> 4,
@@ -193,7 +174,7 @@
 +
 +    @Override
 +    public final void moonrise$loadChunksAsync(final BlockPos pos, final int radiusBlocks,
-+                                               final net.minecraft.world.level.chunk.status.ChunkStatus chunkStatus, final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final net.minecraft.world.level.chunk.status.ChunkStatus chunkStatus, final ca.spottedleaf.concurrentutil.util.Priority priority,
 +                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
 +        this.moonrise$loadChunksAsync(
 +                (pos.getX() - radiusBlocks) >> 4,
@@ -206,14 +187,14 @@
 +
 +    @Override
 +    public final void moonrise$loadChunksAsync(final int minChunkX, final int maxChunkX, final int minChunkZ, final int maxChunkZ,
-+                                               final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final ca.spottedleaf.concurrentutil.util.Priority priority,
 +                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
 +        this.moonrise$loadChunksAsync(minChunkX, maxChunkX, minChunkZ, maxChunkZ, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, priority, onLoad);
 +    }
 +
 +    @Override
 +    public final void moonrise$loadChunksAsync(final int minChunkX, final int maxChunkX, final int minChunkZ, final int maxChunkZ,
-+                                               final net.minecraft.world.level.chunk.status.ChunkStatus chunkStatus, final ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor.Priority priority,
++                                               final net.minecraft.world.level.chunk.status.ChunkStatus chunkStatus, final ca.spottedleaf.concurrentutil.util.Priority priority,
 +                                               final java.util.function.Consumer<java.util.List<net.minecraft.world.level.chunk.ChunkAccess>> onLoad) {
 +        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler chunkTaskScheduler = this.moonrise$getChunkTaskScheduler();
 +        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManager chunkHolderManager = chunkTaskScheduler.chunkHolderManager;
@@ -247,7 +228,9 @@
 +
 +        for (int cx = minChunkX; cx <= maxChunkX; ++cx) {
 +            for (int cz = minChunkZ; cz <= maxChunkZ; ++cz) {
-+                chunkTaskScheduler.scheduleChunkLoad(cx, cz, chunkStatus, true, priority, consumer);
++                ca.spottedleaf.moonrise.common.PlatformHooks.get().scheduleChunkLoad(
++                        this, cx, cz, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, true, priority, consumer
++                );
 +            }
 +        }
 +    }
@@ -285,6 +268,21 @@
 +    @Override
 +    public final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.server.level.ServerChunkCache.ChunkAndHolder> moonrise$getEntityTickingChunks() {
 +        return this.entityTickingChunks;
++    }
++
++    @Override
++    public final boolean moonrise$areChunksLoaded(final int fromX, final int fromZ, final int toX, final int toZ) {
++        final ServerChunkCache chunkSource = this.chunkSource;
++
++        for (int currZ = fromZ; currZ <= toZ; ++currZ) {
++            for (int currX = fromX; currX <= toX; ++currX) {
++                if (!chunkSource.hasChunk(currX, currZ)) {
++                    return false;
++                }
++            }
++        }
++
++        return true;
 +    }
 +    // Paper end - rewrite chunk system
 +    // Paper start - lag compensation
@@ -411,24 +409,25 @@
              () -> p_214999_.overworld().getDataStorage()
          );
          this.chunkSource.getGeneratorState().ensureStructuresGenerated();
-@@ -298,7 +_,33 @@
+@@ -298,7 +_,34 @@
          this.randomSequences = Objects.requireNonNullElseGet(
              p_288977_, () -> this.getDataStorage().computeIfAbsent(RandomSequences.factory(i), "random_sequences")
          );
 -    }
 +
 +        // Paper start - rewrite chunk system
++        this.moonrise$setEntityLookup(new ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup((ServerLevel)(Object)this, ((ServerLevel)(Object)this).new EntityCallbacks()));
++        this.chunkTaskScheduler = new ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler((ServerLevel)(Object)this);
 +        this.entityDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.EntityDataController(
 +                new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.EntityDataController.EntityRegionFileStorage(
 +                        new RegionStorageInfo(p_215001_.getLevelId(), p_215003_, "entities"),
 +                        p_215001_.getDimensionPath(p_215003_).resolve("entities"),
-+                        p_214999_.forceSynchronousWrites()
-+                )
++                        server.forceSynchronousWrites()
++                ),
++                this.chunkTaskScheduler
 +        );
-+        this.poiDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.PoiDataController((ServerLevel)(Object)this);
-+        this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this);
-+        this.moonrise$setEntityLookup(new ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup((ServerLevel)(Object)this, ((ServerLevel)(Object)this).new EntityCallbacks()));
-+        this.chunkTaskScheduler = new ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler((ServerLevel)(Object)this, ca.spottedleaf.moonrise.common.util.MoonriseCommon.WORKER_POOL);
++        this.poiDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.PoiDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
++        this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
 +        // Paper end - rewrite chunk system
 +
 +        net.neoforged.neoforge.attachment.LevelAttachmentsSavedData.init(this);

@@ -5,7 +5,7 @@
 
 package net.neoforged.neoforge.server.command.generation;
 
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.util.Priority;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
 import java.util.Comparator;
@@ -157,7 +157,7 @@ public class GenerationTask {
                 continue;
             }
 
-            chunkMap.level.moonrise$getChunkTaskScheduler().scheduleChunkLoad(holder.getPos().x, holder.getPos().z, true, ChunkStatus.FULL, true, PrioritisedExecutor.Priority.HIGH, (chunk -> {
+            chunkMap.level.moonrise$getChunkTaskScheduler().scheduleChunkLoad(holder.getPos().x, holder.getPos().z, true, ChunkStatus.FULL, true, Priority.HIGH, (chunk -> {
                ChunkResult<ChunkAccess> result = ChunkResult.of(chunk);
                 this.acceptChunkResult(chunkLongPos, result);
             }));

@@ -1,27 +1,16 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFileStorage.java
-@@ -1,7 +_,10 @@
- package net.minecraft.world.level.chunk.storage;
- 
- import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
-+import it.unimi.dsi.fastutil.objects.ObjectIterator;
-+import java.io.DataInput;
- import java.io.DataInputStream;
-+import java.io.DataOutput;
- import java.io.DataOutputStream;
- import java.io.IOException;
- import java.nio.file.Path;
-@@ -14,97 +_,397 @@
+@@ -14,97 +_,435 @@
  import net.minecraft.util.ExceptionCollector;
  import net.minecraft.world.level.ChunkPos;
  
 -public final class RegionFileStorage implements AutoCloseable {
 +public class RegionFileStorage implements AutoCloseable, ca.spottedleaf.moonrise.patches.chunk_system.io.ChunkSystemRegionFileStorage { // Paper - rewrite chunk system
-+
++    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger(); // Paper
      public static final String ANVIL_EXTENSION = ".mca";
      private static final int MAX_CACHE_SIZE = 256;
 -    private final Long2ObjectLinkedOpenHashMap<RegionFile> regionCache = new Long2ObjectLinkedOpenHashMap<>();
-+    public final Long2ObjectLinkedOpenHashMap<RegionFile> regionCache = new Long2ObjectLinkedOpenHashMap();
++    public final Long2ObjectLinkedOpenHashMap<RegionFile> regionCache = new Long2ObjectLinkedOpenHashMap<>();
      private final RegionStorageInfo info;
      private final Path folder;
      private final boolean sync;
@@ -39,10 +28,40 @@
 -            return regionfile;
 -        } else {
 -            if (this.regionCache.size() >= 256) {
++    // Paper start - recalculate region file headers
++    private final boolean isChunkData;
++
++    public static boolean isChunkDataFolder(Path path) {
++        return path.toFile().getName().equalsIgnoreCase("region");
++    }
++
++    @Nullable
++    public static ChunkPos getRegionFileCoordinates(Path file) {
++        String fileName = file.getFileName().toString();
++        if (!fileName.startsWith("r.") || !fileName.endsWith(".mca")) {
++            return null;
++        }
++
++        String[] split = fileName.split("\\.");
++
++        if (split.length != 4) {
++            return null;
++        }
++
++        try {
++            int x = Integer.parseInt(split[1]);
++            int z = Integer.parseInt(split[2]);
++
++            return new ChunkPos(x << 5, z << 5);
++        } catch (NumberFormatException ex) {
++            return null;
++        }
++    }
++    // Paper end
 +    // Paper start - rewrite chunk system
 +    private static final int REGION_SHIFT = 5;
-+    private static final int MAX_NON_EXISTING_CACHE = 1024 * 64;
-+    private final it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet nonExistingRegionFiles = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet(MAX_NON_EXISTING_CACHE+1);
++    private static final int MAX_NON_EXISTING_CACHE = 1024 * 4;
++    private final it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet nonExistingRegionFiles = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
 +    private static String getRegionFileName(final int chunkX, final int chunkZ) {
 +        return "r." + (chunkX >> REGION_SHIFT) + "." + (chunkZ >> REGION_SHIFT) + ".mca";
 +    }
@@ -117,52 +136,131 @@
 +
 +        return ret;
 +    }
-+    // Paper end - rewrite chunk system
-+    // Paper start - recalculate region file headers
-+    private final boolean isChunkData;
 +
-+    public static boolean isChunkDataFolder(Path path) {
-+        return path.toFile().getName().equalsIgnoreCase("region");
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData moonrise$startWrite(
++            final int chunkX, final int chunkZ, final CompoundTag compound
++    ) throws IOException {
++        if (compound == null) {
++            return new ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData(
++                    compound, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData.WriteResult.DELETE,
++                    null, null
++            );
++        }
++
++        final ChunkPos pos = new ChunkPos(chunkX, chunkZ);
++        final RegionFile regionFile = this.getRegionFile(pos);
++
++        // note: not required to keep regionfile loaded after this call, as the write param takes a regionfile as input
++        // (and, the regionfile parameter is unused for writing until the write call)
++        final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData writeData = ((ca.spottedleaf.moonrise.patches.chunk_system.storage.ChunkSystemRegionFile)regionFile).moonrise$startWrite(compound, pos);
++
++        try { // Paper - implement RegionFileSizeException
++            try {
++                NbtIo.write(compound, writeData.output());
++            } finally {
++                writeData.output().close();
++            }
++            // Paper start - implement RegionFileSizeException
++        } catch (final RegionFileSizeException ex) {
++            // note: it's OK if close() is called, as close() here will not issue a write to the RegionFile
++            // see startWrite
++            final int maxSize = RegionFile.MAX_CHUNK_SIZE / (1024 * 1024);
++            LOGGER.error("Chunk at (" + chunkX + "," + chunkZ + ") in regionfile '" + regionFile.getPath().toString() + "' exceeds max size of " + maxSize + "MiB, it has been deleted from disk.");
++            return new ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData(
++                    compound, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData.WriteResult.DELETE,
++                    null, null
++            );
++        }
++        // Paper end - implement RegionFileSizeException
++
++        return writeData;
 +    }
 +
-+    @Nullable
-+    public static ChunkPos getRegionFileCoordinates(Path file) {
-+        String fileName = file.getFileName().toString();
-+        if (!fileName.startsWith("r.") || !fileName.endsWith(".mca")) {
-+            return null;
++    @Override
++    public final void moonrise$finishWrite(
++            final int chunkX, final int chunkZ, final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData writeData
++    ) throws IOException {
++        final ChunkPos pos = new ChunkPos(chunkX, chunkZ);
++        if (writeData.result() == ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData.WriteResult.DELETE) {
++            final RegionFile regionFile = this.moonrise$getRegionFileIfExists(chunkX, chunkZ);
++            if (regionFile != null) {
++                regionFile.clear(pos);
++            } // else: didn't exist
++
++            return;
 +        }
 +
-+        String[] split = fileName.split("\\.");
++        writeData.write().run(this.getRegionFile(pos));
++    }
 +
-+        if (split.length != 4) {
-+            return null;
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData moonrise$readData(
++            final int chunkX, final int chunkZ
++    ) throws IOException {
++        final RegionFile regionFile = this.moonrise$getRegionFileIfExists(chunkX, chunkZ);
++
++        final DataInputStream input = regionFile == null ? null : regionFile.getChunkDataInputStream(new ChunkPos(chunkX, chunkZ));
++
++        if (input == null) {
++            return new ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData(
++                    ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData.ReadResult.NO_DATA, null, null
++            );
 +        }
 +
++        final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData ret = new ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData(
++                ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData.ReadResult.HAS_DATA, input, null
++        );
++
++        if (!(input instanceof ca.spottedleaf.moonrise.patches.chunk_system.util.stream.ExternalChunkStreamMarker)) {
++            // internal stream, which is fully read
++            return ret;
++        }
++
++        final CompoundTag syncRead = this.moonrise$finishRead(chunkX, chunkZ, ret);
++
++        if (syncRead == null) {
++            // need to try again
++            return this.moonrise$readData(chunkX, chunkZ);
++        }
++
++        return new ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData(
++                ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData.ReadResult.SYNC_READ, null, syncRead
++        );
++    }
++
++    // if the return value is null, then the caller needs to re-try with a new call to readData()
++    @Override
++    public final CompoundTag moonrise$finishRead(
++            final int chunkX, final int chunkZ, final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.ReadData readData
++    ) throws IOException {
 +        try {
-+            int x = Integer.parseInt(split[1]);
-+            int z = Integer.parseInt(split[2]);
-+
-+            return new ChunkPos(x << 5, z << 5);
-+        } catch (NumberFormatException ex) {
-+            return null;
++            return NbtIo.read(readData.input());
++        } finally {
++            readData.input().close();
 +        }
 +    }
-+    // Paper end
++    // Paper end - rewrite chunk system
++    // Paper start - rewrite chunk system
++    public RegionFile getRegionFile(ChunkPos chunkcoordintpair) throws IOException {
++        return this.getRegionFile(chunkcoordintpair, false);
++    }
++    // Paper end - rewrite chunk system
 +
-+    protected RegionFileStorage(RegionStorageInfo storageKey, Path directory, boolean dsync) { // Paper - protected
-+        this.folder = directory;
-+        this.sync = dsync;
-+        this.info = storageKey;
++    protected RegionFileStorage(RegionStorageInfo info, Path folder, boolean sync) { // Paper - protected
++        this.folder = folder;
++        this.sync = sync;
++        this.info = info;
 +        this.isChunkData = isChunkDataFolder(this.folder); // Paper - recalculate region file headers
 +    }
 +
-+    public RegionFile getRegionFile(ChunkPos chunkcoordintpair, boolean existingOnly) throws IOException { // CraftBukkit // Paper - public
++    @org.jetbrains.annotations.Contract("_, false -> !null") @Nullable private RegionFile getRegionFile(ChunkPos chunkPos, boolean existingOnly) throws IOException { // CraftBukkit
 +        // Paper start - rewrite chunk system
 +        if (existingOnly) {
-+            return this.moonrise$getRegionFileIfExists(chunkcoordintpair.x, chunkcoordintpair.z);
++            return this.moonrise$getRegionFileIfExists(chunkPos.x, chunkPos.z);
 +        }
 +        synchronized (this) {
-+            final long key = ChunkPos.asLong(chunkcoordintpair.x >> REGION_SHIFT, chunkcoordintpair.z >> REGION_SHIFT);
++            final long key = ChunkPos.asLong(chunkPos.x >> REGION_SHIFT, chunkPos.z >> REGION_SHIFT);
 +
 +            RegionFile ret = this.regionCache.getAndMoveToFirst(key);
 +            if (ret != null) {
@@ -173,7 +271,7 @@
                  this.regionCache.removeLast().close();
              }
  
-+            final Path regionPath = this.folder.resolve(getRegionFileName(chunkcoordintpair.x, chunkcoordintpair.z));
++            final Path regionPath = this.folder.resolve(getRegionFileName(chunkPos.x, chunkPos.z));
 +
 +            this.createRegionFile(key);
 +
@@ -203,7 +301,7 @@
 +        synchronized (regionfile) {
 +            try (DataInputStream datainputstream = regionfile.getChunkDataInputStream(chunkCoordinate)) {
 +                CompoundTag oversizedData = regionfile.getOversizedData(chunkCoordinate.x, chunkCoordinate.z);
-+                CompoundTag chunk = NbtIo.read((DataInput) datainputstream);
++                CompoundTag chunk = NbtIo.read(datainputstream);
 +                if (oversizedData == null) {
 +                    return chunk;
 +                }
@@ -234,203 +332,111 @@
      @Nullable
 -    public CompoundTag read(ChunkPos p_63707_) throws IOException {
 -        RegionFile regionfile = this.getRegionFile(p_63707_);
--
++    public CompoundTag read(ChunkPos chunkPos) throws IOException {
++        // CraftBukkit start - SPIGOT-5680: There's no good reason to preemptively create files on read, save that for writing
++        RegionFile regionFile = this.getRegionFile(chunkPos, true);
++        if (regionFile == null) {
++            return null;
++        }
++        // CraftBukkit end
++        // Paper start
++        if (regionFile.isOversized(chunkPos.x, chunkPos.z)) {
++            printOversizedLog("Loading Oversized Chunk!", regionFile.getPath(), chunkPos.x, chunkPos.z);
++            return readOversizedChunk(regionFile, chunkPos);
++        }
++        // Paper end
+ 
 -        CompoundTag compoundtag;
 -        try (DataInputStream datainputstream = regionfile.getChunkDataInputStream(p_63707_)) {
 -            if (datainputstream == null) {
--                return null;
--            }
--
++        CompoundTag var4;
++        try (DataInputStream chunkDataInputStream = regionFile.getChunkDataInputStream(chunkPos)) {
++            if (chunkDataInputStream == null) {
+                 return null;
+             }
+ 
 -            compoundtag = NbtIo.read(datainputstream);
--        }
--
++            var4 = NbtIo.read(chunkDataInputStream);
++//            // Paper start - recover from corrupt regionfile header
++//            if (this.isChunkData) {
++//                ChunkPos headerChunkPos = SerializableChunkData.getChunkCoordinate(var4);
++//                if (!headerChunkPos.equals(chunkPos)) {
++//                    net.minecraft.server.MinecraftServer.LOGGER.error("Attempting to read chunk data at " + chunkPos + " but got chunk data for " + headerChunkPos + " instead! Attempting regionfile recalculation for regionfile " + regionFile.getPath().toAbsolutePath());
++//                    if (regionFile.recalculateHeader()) {
++//                        return this.read(chunkPos);
++//                    }
++//                    net.minecraft.server.MinecraftServer.LOGGER.error("Can't recalculate regionfile header, regenerating chunk " + chunkPos + " for " + regionFile.getPath().toAbsolutePath());
++//                    return null;
++//                }
++//            }
++//            // Paper end - recover from corrupt regionfile header
+         }
+ 
 -        return compoundtag;
--    }
--
++        return var4;
+     }
+ 
 -    public void scanChunk(ChunkPos p_196957_, StreamTagVisitor p_196958_) throws IOException {
 -        RegionFile regionfile = this.getRegionFile(p_196957_);
--
++    public void scanChunk(ChunkPos chunkPos, StreamTagVisitor visitor) throws IOException {
++        // CraftBukkit start - SPIGOT-5680: There's no good reason to preemptively create files on read, save that for writing
++        RegionFile regionFile = this.getRegionFile(chunkPos, true);
++        if (regionFile == null) {
++            return;
++        }
++        // CraftBukkit end
+ 
 -        try (DataInputStream datainputstream = regionfile.getChunkDataInputStream(p_196957_)) {
 -            if (datainputstream != null) {
 -                NbtIo.parse(datainputstream, p_196958_, NbtAccounter.unlimitedHeap());
--            }
--        }
--    }
--
++        try (DataInputStream chunkDataInputStream = regionFile.getChunkDataInputStream(chunkPos)) {
++            if (chunkDataInputStream != null) {
++                NbtIo.parse(chunkDataInputStream, visitor, NbtAccounter.unlimitedHeap());
+             }
+         }
+     }
+ 
 -    protected void write(ChunkPos p_63709_, @Nullable CompoundTag p_63710_) throws IOException {
 -        RegionFile regionfile = this.getRegionFile(p_63709_);
 -        if (p_63710_ == null) {
 -            regionfile.clear(p_63709_);
--        } else {
--            try (DataOutputStream dataoutputstream = regionfile.getChunkDataOutputStream(p_63709_)) {
--                NbtIo.write(p_63710_, dataoutputstream);
--            }
--        }
--    }
--
--    @Override
--    public void close() throws IOException {
--        ExceptionCollector<IOException> exceptioncollector = new ExceptionCollector<>();
--
--        for (RegionFile regionfile : this.regionCache.values()) {
-+    public CompoundTag read(ChunkPos pos) throws IOException {
-+        // CraftBukkit start - SPIGOT-5680: There's no good reason to preemptively create files on read, save that for writing
-+        RegionFile regionfile = this.getRegionFile(pos, true);
-+        if (regionfile == null) {
-+            return null;
-+        }
-+        // CraftBukkit end
-+        DataInputStream datainputstream = regionfile.getChunkDataInputStream(pos);
-+
-+        // Paper start
-+        if (regionfile.isOversized(pos.x, pos.z)) {
-+            printOversizedLog("Loading Oversized Chunk!", regionfile.getPath(), pos.x, pos.z);
-+            return readOversizedChunk(regionfile, pos);
-+        }
-+        // Paper end
-+        CompoundTag nbttagcompound;
-+        label43:
-+        {
-             try {
--                regionfile.close();
--            } catch (IOException ioexception) {
--                exceptioncollector.add(ioexception);
--            }
--        }
--
--        exceptioncollector.throwIfPresent();
-+                if (datainputstream != null) {
-+                    nbttagcompound = NbtIo.read((DataInput) datainputstream);
-+//                    // Paper start - recover from corrupt regionfile header
-+//                    if (this.isChunkData) {
-+//                        ChunkPos chunkPos = ChunkSerializer.getChunkCoordinate(nbttagcompound);
-+//                        if (!chunkPos.equals(pos)) {
-+//                            net.minecraft.server.MinecraftServer.LOGGER.error("Attempting to read chunk data at " + pos + " but got chunk data for " + chunkPos + " instead! Attempting regionfile recalculation for regionfile " + regionfile.getPath().toAbsolutePath());
-+//                            if (regionfile.recalculateHeader()) {
-+//                                return this.read(pos);
-+//                            }
-+//                            net.minecraft.server.MinecraftServer.LOGGER.error("Can't recalculate regionfile header, regenerating chunk " + pos + " for " + regionfile.getPath().toAbsolutePath());
-+//                            return null;
-+//                        }
-+//                    }
-+//                    // Paper end - recover from corrupt regionfile header
-+                    break label43;
-+                }
-+
-+                nbttagcompound = null;
-+            } catch (Throwable throwable) {
-+                if (datainputstream != null) {
-+                    try {
-+                        datainputstream.close();
-+                    } catch (Throwable throwable1) {
-+                        throwable.addSuppressed(throwable1);
-+                    }
-+                }
-+
-+                throw throwable;
-+            }
-+
-+            if (datainputstream != null) {
-+                datainputstream.close();
-+            }
-+
-+            return nbttagcompound;
-+        }
-+
-+        if (datainputstream != null) {
-+            datainputstream.close();
-+        }
-+
-+        return nbttagcompound;
-+    }
-+
-+    public void scanChunk(ChunkPos chunkPos, StreamTagVisitor scanner) throws IOException {
-+        // CraftBukkit start - SPIGOT-5680: There's no good reason to preemptively create files on read, save that for writing
-+        RegionFile regionfile = this.getRegionFile(chunkPos, true);
-+        if (regionfile == null) {
-+            return;
-+        }
-+        // CraftBukkit end
-+        DataInputStream datainputstream = regionfile.getChunkDataInputStream(chunkPos);
-+
-+        try {
-+            if (datainputstream != null) {
-+                NbtIo.parse(datainputstream, scanner, NbtAccounter.unlimitedHeap());
-+            }
-+        } catch (Throwable throwable) {
-+            if (datainputstream != null) {
-+                try {
-+                    datainputstream.close();
-+                } catch (Throwable throwable1) {
-+                    throwable.addSuppressed(throwable1);
-+                }
-+            }
-+
-+            throw throwable;
-+        }
-+
-+        if (datainputstream != null) {
-+            datainputstream.close();
-+        }
-+
-+    }
-+
-+    public void write(ChunkPos pos, @Nullable CompoundTag nbt) throws IOException { // Paper - public
-+        RegionFile regionfile = this.getRegionFile(pos, nbt == null); // CraftBukkit // Paper - rewrite chunk system
++    public void write(ChunkPos chunkPos, @Nullable CompoundTag chunkData) throws IOException { // Paper - rewrite chunk system - public
++        RegionFile regionFile = this.getRegionFile(chunkPos, chunkData == null); // CraftBukkit // Paper - rewrite chunk system
 +        // Paper start - rewrite chunk system
-+        if (regionfile == null) {
++        if (regionFile == null) {
 +            // if the RegionFile doesn't exist, no point in deleting from it
 +            return;
 +        }
 +        // Paper end - rewrite chunk system
-+        // Paper start - Chunk save reattempt
-+        int attempts = 0;
-+        Exception lastException = null;
-+        while (attempts++ < 5) { try {
-+            // Paper end - Chunk save reattempt
-+
-+            if (nbt == null) {
-+                regionfile.clear(pos);
-+            } else {
-+                DataOutputStream dataoutputstream = regionfile.getChunkDataOutputStream(pos);
-+
-+                try {
-+                    NbtIo.write(nbt, (DataOutput) dataoutputstream);
-+                    regionfile.setOversized(pos.x, pos.z, false); // Paper - We don't do this anymore, mojang stores differently, but clear old meta flag if it exists to get rid of our own meta file once last oversized is gone
-+                    // Paper start - don't write garbage data to disk if writing serialization fails
-+                    dataoutputstream.close(); // Only write if successful
-+                } catch (final RegionFileSizeException e) {
-+                    attempts = 5; // Don't retry
-+                    regionfile.clear(pos);
-+                    throw e;
-+                    // Paper end - don't write garbage data to disk if writing serialization fails
-+                } catch (Throwable throwable) {
-+                    if (dataoutputstream != null) {
-+                        try {
-+                            //dataoutputstream.close(); // Paper - don't write garbage data to disk if writing serialization fails
-+                        } catch (Throwable throwable1) {
-+                            throwable.addSuppressed(throwable1);
-+                        }
-+                    }
-+
-+                    throw throwable;
-+                }
-+                // Paper - don't write garbage data to disk if writing serialization fails; move into try block to only write if successfully serialized
-+            }
-+            // Paper start - Chunk save reattempt
-+            return;
-+        } catch (Exception ex)  {
-+            lastException = ex;
-+        }
-+        }
-+
-+        if (lastException != null) {
-+            net.minecraft.server.MinecraftServer.LOGGER.error("Failed to save chunk {}", pos, lastException);
-+        }
-+        // Paper end - Chunk save reattempt
-+    }
-+
-+    public void close() throws IOException {
++        if (chunkData == null) {
++            regionFile.clear(chunkPos);
+         } else {
+-            try (DataOutputStream dataoutputstream = regionfile.getChunkDataOutputStream(p_63709_)) {
+-                NbtIo.write(p_63710_, dataoutputstream);
++            DataOutputStream chunkDataOutputStream = regionFile.getChunkDataOutputStream(chunkPos); // Paper - Only write if successful
++            try { // Paper - Only write if successful
++                NbtIo.write(chunkData, chunkDataOutputStream);
++                regionFile.setOversized(chunkPos.x, chunkPos.z, false); // Paper - We don't do this anymore, mojang stores differently, but clear old meta flag if it exists to get rid of our own meta file once last oversized is gone
++                // Paper start - don't write garbage data to disk if writing serialization fails
++                chunkDataOutputStream.close();
++            } catch (final RegionFileSizeException ex) {
++                regionFile.clear(chunkPos);
++                final int maxSize = RegionFile.MAX_CHUNK_SIZE / (1024 * 1024);
++                LOGGER.error("Chunk at (" + chunkPos.x + "," + chunkPos.z + ") in regionfile '" + regionFile.getPath().toString() + "' exceeds max size of " + maxSize + "MiB, it has been deleted from disk.");
++                // Paper end - don't write garbage data to disk if writing serialization fails
+             }
+         }
+     }
+ 
+     @Override
+     public void close() throws IOException {
+-        ExceptionCollector<IOException> exceptioncollector = new ExceptionCollector<>();
+-
+-        for (RegionFile regionfile : this.regionCache.values()) {
+-            try {
+-                regionfile.close();
+-            } catch (IOException ioexception) {
+-                exceptioncollector.add(ioexception);
 +        // Paper start - rewrite chunk system
 +        synchronized (this) {
 +            final ExceptionCollector<IOException> exceptionCollector = new ExceptionCollector<>();
@@ -440,10 +446,11 @@
 +                } catch (final IOException ex) {
 +                    exceptionCollector.add(ex);
 +                }
-+            }
-+
+             }
 +            exceptionCollector.throwIfPresent();
-+        }
+         }
+-
+-        exceptioncollector.throwIfPresent();
 +        // Paper end - rewrite chunk system
      }
  
@@ -464,7 +471,6 @@
 +            exceptionCollector.throwIfPresent();
          }
 +        // Paper end - rewrite chunk system
-+
      }
  
      public RegionStorageInfo info() {
@@ -474,7 +480,7 @@
 +    // Paper start - don't write garbage data to disk if writing serialization fails
 +    public static final class RegionFileSizeException extends RuntimeException {
 +
-+        public RegionFileSizeException(String message) {
++        public RegionFileSizeException(final String message) {
 +            super(message);
 +        }
 +    }

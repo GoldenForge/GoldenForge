@@ -1,10 +1,12 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.player;
 
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.Priority;
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import ca.spottedleaf.moonrise.common.misc.AllocatingRateLimiter;
 import ca.spottedleaf.moonrise.common.misc.SingleUserAreaMap;
 import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
+import ca.spottedleaf.moonrise.common.util.MoonriseConstants;
 import ca.spottedleaf.moonrise.common.util.TickThread;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel;
@@ -14,7 +16,11 @@ import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManage
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
 import ca.spottedleaf.moonrise.patches.chunk_system.util.ParallelSearchRadiusIteration;
 import com.google.gson.JsonObject;
-import it.unimi.dsi.fastutil.longs.*;
+import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongComparator;
+import it.unimi.dsi.fastutil.longs.LongHeapPriorityQueue;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
 import net.minecraft.network.protocol.game.ClientboundSetChunkCacheCenterPacket;
@@ -31,7 +37,6 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
-
 import java.lang.invoke.VarHandle;
 import java.util.ArrayDeque;
 import java.util.concurrent.TimeUnit;
@@ -105,19 +110,30 @@ public final class RegionizedPlayerChunkLoader {
     }
 
     public static final record ViewDistances(
-        int tickViewDistance,
-        int loadViewDistance,
-        int sendViewDistance
+            int tickViewDistance,
+            int loadViewDistance,
+            int sendViewDistance
     ) {
         public ViewDistances setTickViewDistance(final int distance) {
+            if (distance != -1 && (distance < (0) || distance > (MoonriseConstants.MAX_VIEW_DISTANCE))) {
+                throw new IllegalArgumentException(Integer.toString(distance));
+            }
             return new ViewDistances(distance, this.loadViewDistance, this.sendViewDistance);
         }
 
         public ViewDistances setLoadViewDistance(final int distance) {
+            // note: load view distance = api view distance + 1
+            if (distance != -1 && (distance < (2 + 1) || distance > (MoonriseConstants.MAX_VIEW_DISTANCE + 1))) {
+                throw new IllegalArgumentException(Integer.toString(distance));
+            }
             return new ViewDistances(this.tickViewDistance, distance, this.sendViewDistance);
         }
 
         public ViewDistances setSendViewDistance(final int distance) {
+            // note: send view distance <= load view distance - 1
+            if (distance != -1 && (distance < (0) || distance > (MoonriseConstants.MAX_VIEW_DISTANCE))) {
+                throw new IllegalArgumentException(Integer.toString(distance));
+            }
             return new ViewDistances(this.tickViewDistance, this.loadViewDistance, distance);
         }
 
@@ -142,16 +158,6 @@ public final class RegionizedPlayerChunkLoader {
     }
 
     public static int getAPIViewDistance(final ServerPlayer player) {
-        final ServerLevel level = player.serverLevel();
-        final PlayerChunkLoaderData data = ((ChunkSystemServerPlayer)player).moonrise$getChunkLoader();
-        if (data == null) {
-            return ((ChunkSystemServerLevel)level).moonrise$getPlayerChunkLoader().getAPIViewDistance();
-        }
-        // view distance = load distance + 1
-        return data.lastLoadDistance - 1;
-    }
-
-    public static int getLoadViewDistance(final ServerPlayer player) {
         final ServerLevel level = player.serverLevel();
         final PlayerChunkLoaderData data = ((ChunkSystemServerPlayer)player).moonrise$getChunkLoader();
         if (data == null) {
@@ -345,12 +351,12 @@ public final class RegionizedPlayerChunkLoader {
         private static final byte CHUNK_TICKET_STAGE_GENERATED      = 4;
         private static final byte CHUNK_TICKET_STAGE_TICK           = 5;
         private static final int[] TICKET_STAGE_TO_LEVEL = new int[] {
-            ChunkHolderManager.MAX_TICKET_LEVEL + 1,
-            LOADED_TICKET_LEVEL,
-            LOADED_TICKET_LEVEL,
-            GENERATED_TICKET_LEVEL,
-            GENERATED_TICKET_LEVEL,
-            TICK_TICKET_LEVEL
+                ChunkHolderManager.MAX_TICKET_LEVEL + 1,
+                LOADED_TICKET_LEVEL,
+                LOADED_TICKET_LEVEL,
+                GENERATED_TICKET_LEVEL,
+                GENERATED_TICKET_LEVEL,
+                TICK_TICKET_LEVEL
         };
         private final Long2ByteOpenHashMap chunkTicketStage = new Long2ByteOpenHashMap();
         {
@@ -375,8 +381,8 @@ public final class RegionizedPlayerChunkLoader {
             final int centerZ = PlayerChunkLoaderData.this.lastChunkZ;
 
             return Integer.compare(
-                Math.abs(c1x - centerX) + Math.abs(c1z - centerZ),
-                Math.abs(c2x - centerX) + Math.abs(c2z - centerZ)
+                    Math.abs(c1x - centerX) + Math.abs(c1z - centerZ),
+                    Math.abs(c2x - centerX) + Math.abs(c2z - centerZ)
             );
         };
         private final LongHeapPriorityQueue sendQueue = new LongHeapPriorityQueue(CLOSEST_MANHATTAN_DIST);
@@ -409,7 +415,11 @@ public final class RegionizedPlayerChunkLoader {
             if (this.sentChunks.add(CoordinateUtils.getChunkKey(chunkX, chunkZ))) {
                 ((ChunkSystemChunkHolder)((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
                         .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder).moonrise$addReceivedChunk(this.player);
-                PlayerChunkSender.sendChunk(this.player.connection, this.world, ((ChunkSystemLevel)this.world).moonrise$getFullChunkIfLoaded(chunkX, chunkZ));
+
+                final LevelChunk chunk = ((ChunkSystemLevel)this.world).moonrise$getFullChunkIfLoaded(chunkX, chunkZ);
+
+                PlatformHooks.get().onChunkWatch(this.world, chunk, this.player);
+                PlayerChunkSender.sendChunk(this.player.connection, this.world, chunk);
                 return;
             }
             throw new IllegalStateException();
@@ -423,12 +433,12 @@ public final class RegionizedPlayerChunkLoader {
         }
 
         private void sendUnloadChunkRaw(final int chunkX, final int chunkZ) {
+            PlatformHooks.get().onChunkUnWatch(this.world, new ChunkPos(chunkX, chunkZ), this.player);
             // Note: Check PlayerChunkSender#dropChunk for other logic
             // Note: drop isAlive() check so that chunks properly unload client-side when the player dies
             ((ChunkSystemChunkHolder)((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
-                .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder).moonrise$removeReceivedChunk(this.player);
-            final ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-            this.player.connection.send(new ClientboundForgetLevelChunkPacket(chunkPos));
+                    .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder).moonrise$removeReceivedChunk(this.player);
+            this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ)));
         }
 
         private final SingleUserAreaMap<PlayerChunkLoaderData> broadcastMap = new SingleUserAreaMap<>(this) {
@@ -508,7 +518,7 @@ public final class RegionizedPlayerChunkLoader {
                                            final int playerLoadViewDistance, final int worldLoadViewDistance) {
             return Math.min(
                     playerTickViewDistance < 0 ? worldTickViewDistance : playerTickViewDistance,
-                    playerLoadViewDistance < 0 ? worldLoadViewDistance : playerLoadViewDistance
+                    playerLoadViewDistance < 0 ? (worldLoadViewDistance - 1) : (playerLoadViewDistance - 1)
             );
         }
 
@@ -520,8 +530,8 @@ public final class RegionizedPlayerChunkLoader {
         private static int getSendViewDistance(final int loadViewDistance, final int clientViewDistance,
                                                final int playerSendViewDistance, final int worldSendViewDistance) {
             return Math.min(
-                loadViewDistance - 1,
-                playerSendViewDistance < 0 ? (!io.papermc.paper.configuration.GlobalConfiguration.get().chunkLoadingAdvanced.autoConfigSendDistance || clientViewDistance < 0 ? (worldSendViewDistance < 0 ? (loadViewDistance - 1) : worldSendViewDistance) : clientViewDistance + 1) : playerSendViewDistance
+                    loadViewDistance - 1,
+                    playerSendViewDistance < 0 ? (!PlatformHooks.get().configAutoConfigSendDistance() || clientViewDistance < 0 ? (worldSendViewDistance < 0 ? (loadViewDistance - 1) : worldSendViewDistance) : clientViewDistance + 1) : playerSendViewDistance
             );
         }
 
@@ -546,26 +556,26 @@ public final class RegionizedPlayerChunkLoader {
         }
 
         private double getMaxChunkLoadRate() {
-            final double configRate = io.papermc.paper.configuration.GlobalConfiguration.get().chunkLoadingBasic.playerMaxChunkLoadRate;
+            final double configRate = PlatformHooks.get().configPlayerMaxLoadRate();
 
             return configRate <= 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private double getMaxChunkGenRate() {
-            final double configRate = io.papermc.paper.configuration.GlobalConfiguration.get().chunkLoadingBasic.playerMaxChunkGenerateRate;
+            final double configRate = PlatformHooks.get().configPlayerMaxGenRate();
 
             return configRate <= 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private double getMaxChunkSendRate() {
-            final double configRate = io.papermc.paper.configuration.GlobalConfiguration.get().chunkLoadingBasic.playerMaxChunkSendRate;
+            final double configRate = PlatformHooks.get().configPlayerMaxSendRate();
 
             return configRate <= 0.0 || configRate > (double)MAX_RATE ? (double)MAX_RATE : Math.max(1.0, configRate);
         }
 
         private long getMaxChunkLoads() {
             final long radiusChunks = (2L * this.lastLoadDistance + 1L) * (2L * this.lastLoadDistance + 1L);
-            long configLimit = io.papermc.paper.configuration.GlobalConfiguration.get().chunkLoadingAdvanced.playerMaxConcurrentChunkLoads;
+            long configLimit = (long)PlatformHooks.get().configPlayerMaxConcurrentLoads();
             if (configLimit == 0L) {
                 // by default, only allow 1/5th of the chunks in the view distance to be concurrently active
                 configLimit = Math.max(5L, radiusChunks / 5L);
@@ -579,7 +589,7 @@ public final class RegionizedPlayerChunkLoader {
 
         private long getMaxChunkGenerates() {
             final long radiusChunks = (2L * this.lastLoadDistance + 1L) * (2L * this.lastLoadDistance + 1L);
-            long configLimit = io.papermc.paper.configuration.GlobalConfiguration.get().chunkLoadingAdvanced.playerMaxConcurrentChunkGenerates;
+            long configLimit = (long)PlatformHooks.get().configPlayerMaxConcurrentGens();
             if (configLimit == 0L) {
                 // by default, only allow 1/5th of the chunks in the view distance to be concurrently active
                 configLimit = Math.max(5L, radiusChunks / 5L);
@@ -595,7 +605,7 @@ public final class RegionizedPlayerChunkLoader {
             final int dx = this.lastChunkX - chunkX;
             final int dz = this.lastChunkZ - chunkZ;
             return (Math.max(Math.abs(dx), Math.abs(dz)) <= (this.lastSendDistance + 1)) && wantChunkLoaded(
-                this.lastChunkX, this.lastChunkZ, chunkX, chunkZ, this.lastSendDistance
+                    this.lastChunkX, this.lastChunkZ, chunkX, chunkZ, this.lastSendDistance
             );
         }
 
@@ -674,10 +684,10 @@ public final class RegionizedPlayerChunkLoader {
                         throw new IllegalStateException("Previous state should be " + CHUNK_TICKET_STAGE_NONE + ", not " + prev);
                     }
                     this.pushDelayedTicketOp(
-                        ChunkHolderManager.TicketOperation.addOp(
-                            chunk,
-                            PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
-                        )
+                            ChunkHolderManager.TicketOperation.addOp(
+                                    chunk,
+                                    PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
+                            )
                     );
                     chunks.add(chunk);
                     this.loadingQueue.enqueue(chunk);
@@ -701,7 +711,7 @@ public final class RegionizedPlayerChunkLoader {
                     final int queuedChunkX = CoordinateUtils.getChunkX(queuedLoadChunk);
                     final int queuedChunkZ = CoordinateUtils.getChunkZ(queuedLoadChunk);
                     ((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().scheduleChunkLoad(
-                        queuedChunkX, queuedChunkZ, ChunkStatus.EMPTY, false, PrioritisedExecutor.Priority.NORMAL, null
+                            queuedChunkX, queuedChunkZ, ChunkStatus.EMPTY, false, Priority.NORMAL, null
                     );
                     if (this.removed) {
                         return;
@@ -763,11 +773,11 @@ public final class RegionizedPlayerChunkLoader {
                     throw new IllegalStateException("Previous state should be " + CHUNK_TICKET_STAGE_LOADED + ", not " + prev);
                 }
                 this.pushDelayedTicketOp(
-                    ChunkHolderManager.TicketOperation.addAndRemove(
-                            chunkKey,
-                            PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed,
-                            PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
-                    )
+                        ChunkHolderManager.TicketOperation.addAndRemove(
+                                chunkKey,
+                                PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed,
+                                PLAYER_TICKET, LOADED_TICKET_LEVEL, this.idBoxed
+                        )
                 );
                 this.generatingQueue.enqueue(chunkKey);
             }
@@ -781,18 +791,18 @@ public final class RegionizedPlayerChunkLoader {
                 final int pendingChunkZ = CoordinateUtils.getChunkZ(pendingTicking);
 
                 if (!this.areNeighboursGenerated(pendingChunkX, pendingChunkZ,
-                    ChunkHolderManager.FULL_LOADED_TICKET_LEVEL - ChunkHolderManager.ENTITY_TICKING_TICKET_LEVEL)) {
+                        ChunkHolderManager.FULL_LOADED_TICKET_LEVEL - ChunkHolderManager.ENTITY_TICKING_TICKET_LEVEL)) {
                     break;
                 }
 
                 // only gets here if all neighbours were marked as generated or ticking themselves
                 this.tickingQueue.dequeueLong();
                 this.pushDelayedTicketOp(
-                    ChunkHolderManager.TicketOperation.addAndRemove(
-                            pendingTicking,
-                            PLAYER_TICKET, TICK_TICKET_LEVEL, this.idBoxed,
-                            PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed
-                    )
+                        ChunkHolderManager.TicketOperation.addAndRemove(
+                                pendingTicking,
+                                PLAYER_TICKET, TICK_TICKET_LEVEL, this.idBoxed,
+                                PLAYER_TICKET, GENERATED_TICKET_LEVEL, this.idBoxed
+                        )
                 );
                 // note: there is no queue to add after ticking
                 final byte prev = this.chunkTicketStage.put(pendingTicking, CHUNK_TICKET_STAGE_TICK);
@@ -856,7 +866,6 @@ public final class RegionizedPlayerChunkLoader {
             final int clientViewDistance = getClientViewDistance(this.player);
             final int sendViewDistance = getSendViewDistance(loadViewDistance, clientViewDistance, playerDistances.sendViewDistance, worldDistances.sendViewDistance);
 
-            // TODO check PlayerList diff in paper chunk system patch
             // send view distances
             this.player.connection.send(this.updateClientChunkRadius(sendViewDistance));
             this.player.connection.send(this.updateClientSimulationDistance(tickViewDistance));
@@ -887,8 +896,8 @@ public final class RegionizedPlayerChunkLoader {
             final BelowZeroRetrogen belowZeroRetrogen;
             // see PortalForcer#findPortalAround
             return chunkAccess != null && (
-                chunkAccess.getPersistedStatus() == ChunkStatus.FULL ||
-                    ((belowZeroRetrogen = chunkAccess.getBelowZeroRetrogen()) != null && belowZeroRetrogen.targetStatus().isOrAfter(ChunkStatus.SPAWN))
+                    chunkAccess.getPersistedStatus() == ChunkStatus.FULL ||
+                            ((belowZeroRetrogen = chunkAccess.getBelowZeroRetrogen()) != null && belowZeroRetrogen.targetStatus().isOrAfter(ChunkStatus.SPAWN))
             );
         }
 
@@ -920,16 +929,16 @@ public final class RegionizedPlayerChunkLoader {
 
             if (
                 // has view distance stayed the same?
-                sendViewDistance == this.lastSendDistance
-                    && loadViewDistance == this.lastLoadDistance
-                    && tickViewDistance == this.lastTickDistance
+                    sendViewDistance == this.lastSendDistance
+                            && loadViewDistance == this.lastLoadDistance
+                            && tickViewDistance == this.lastTickDistance
 
-                    // has our chunk stayed the same?
-                    && prevChunkX == currentChunkX
-                    && prevChunkZ == currentChunkZ
+                            // has our chunk stayed the same?
+                            && prevChunkX == currentChunkX
+                            && prevChunkZ == currentChunkZ
 
-                    // can we still generate chunks?
-                    && this.canGenerateChunks == canGenerateChunks
+                            // can we still generate chunks?
+                            && this.canGenerateChunks == canGenerateChunks
             ) {
                 // nothing we care about changed, so we're not re-calculating
                 return;
@@ -984,7 +993,7 @@ public final class RegionizedPlayerChunkLoader {
                 // Note: Vanilla may want to send chunks outside the send view distance, so we do need
                 // the dist <= view check
                 final boolean sendChunk = (squareDistance <= (sendViewDistance + 1))
-                    && wantChunkLoaded(currentChunkX, currentChunkZ, chunkX, chunkZ, sendViewDistance);
+                        && wantChunkLoaded(currentChunkX, currentChunkZ, chunkX, chunkZ, sendViewDistance);
                 final boolean sentChunk = sendChunk ? this.sentChunks.contains(chunk) : this.sentChunks.remove(chunk);
 
                 if (!sendChunk && sentChunk) {
@@ -1071,7 +1080,6 @@ public final class RegionizedPlayerChunkLoader {
             // now all tickets should be removed, which is all of our external state
         }
 
-        // For external checks
         public LongOpenHashSet getSentChunksRaw() {
             return this.sentChunks;
         }

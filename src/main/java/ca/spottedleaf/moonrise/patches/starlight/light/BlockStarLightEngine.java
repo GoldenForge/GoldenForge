@@ -1,5 +1,6 @@
 package ca.spottedleaf.moonrise.patches.starlight.light;
 
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import ca.spottedleaf.moonrise.patches.starlight.blockstate.StarlightAbstractBlockState;
 import ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk;
 import net.minecraft.core.BlockPos;
@@ -205,6 +206,8 @@ public final class BlockStarLightEngine extends StarLightEngine {
         final int offX = chunk.getPos().x << 4;
         final int offZ = chunk.getPos().z << 4;
 
+        final PlatformHooks platformHooks = PlatformHooks.get();
+
         final LevelChunkSection[] sections = chunk.getSections();
         for (int sectionY = this.minSection; sectionY <= this.maxSection; ++sectionY) {
             final LevelChunkSection section = sections[sectionY - this.minSection];
@@ -212,9 +215,7 @@ public final class BlockStarLightEngine extends StarLightEngine {
                 // no sources in empty sections
                 continue;
             }
-            if (!section.maybeHas((final BlockState state) -> {
-                return state.getLightEmission() > 0;
-            })) {
+            if (!section.maybeHas(platformHooks.maybeHasLightEmission())) {
                 // no light sources in palette
                 continue;
             }

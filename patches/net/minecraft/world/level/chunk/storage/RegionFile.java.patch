@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/storage/RegionFile.java
 +++ b/net/minecraft/world/level/chunk/storage/RegionFile.java
-@@ -15,8 +_,11 @@
+@@ -15,14 +_,17 @@
  import java.nio.file.Path;
  import java.nio.file.StandardCopyOption;
  import java.nio.file.StandardOpenOption;
@@ -12,6 +12,35 @@
  import net.minecraft.resources.ResourceLocation;
  import net.minecraft.util.profiling.jfr.JvmProfiler;
  import net.minecraft.world.level.ChunkPos;
+ import org.slf4j.Logger;
+ 
+-public class RegionFile implements AutoCloseable {
++public class RegionFile implements AutoCloseable, ca.spottedleaf.moonrise.patches.chunk_system.storage.ChunkSystemRegionFile { // Paper - rewrite chunk system
+     private static final Logger LOGGER = LogUtils.getLogger();
+     private static final int SECTOR_BYTES = 4096;
+     @VisibleForTesting
+@@ -45,6 +_,21 @@
+     @VisibleForTesting
+     protected final RegionBitmap usedSectors = new RegionBitmap();
+ 
++    // Paper start - rewrite chunk system
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData moonrise$startWrite(final net.minecraft.nbt.CompoundTag data, final ChunkPos pos) throws IOException {
++        final RegionFile.ChunkBuffer buffer = ((RegionFile)(Object)this).new ChunkBuffer(pos);
++        ((ca.spottedleaf.moonrise.patches.chunk_system.storage.ChunkSystemChunkBuffer)buffer).moonrise$setWriteOnClose(false);
++
++        final DataOutputStream out = new DataOutputStream(this.version.wrap(buffer));
++
++        return new ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData(
++                data, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionDataController.WriteData.WriteResult.WRITE,
++                out, ((ca.spottedleaf.moonrise.patches.chunk_system.storage.ChunkSystemChunkBuffer)buffer)::moonrise$write
++        );
++    }
++    // Paper end - rewrite chunk system
++
+     public RegionFile(RegionStorageInfo p_326174_, Path p_196950_, Path p_196951_, boolean p_196952_) throws IOException {
+         this(p_326174_, p_196950_, p_196951_, RegionFileVersion.getSelected(), p_196952_);
+     }
 @@ -376,9 +_,98 @@
          }
      }

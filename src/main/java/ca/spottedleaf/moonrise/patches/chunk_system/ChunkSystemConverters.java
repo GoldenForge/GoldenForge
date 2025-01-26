@@ -1,10 +1,11 @@
 package ca.spottedleaf.moonrise.patches.chunk_system;
 
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.util.datafix.fixes.References;
 
 public final class ChunkSystemConverters {
 
@@ -19,29 +20,19 @@ public final class ChunkSystemConverters {
 
     private static int getDataVersion(final CompoundTag data, final int dfl) {
         return !data.contains(SharedConstants.DATA_VERSION_TAG, Tag.TAG_ANY_NUMERIC)
-            ? dfl : data.getInt(SharedConstants.DATA_VERSION_TAG);
+                ? dfl : data.getInt(SharedConstants.DATA_VERSION_TAG);
     }
 
     public static CompoundTag convertPoiCompoundTag(final CompoundTag data, final ServerLevel world) {
         final int dataVersion = getDataVersion(data, DEFAULT_POI_DATA_VERSION);
 
-        return DataFixTypes.POI_CHUNK.update(world.getServer().getFixerUpper(), data, dataVersion, getCurrentVersion());
-        //TODO: check this
-//        // Paper start - dataconverter
-//        return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(
-//            ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.POI_CHUNK, data, dataVersion, getCurrentVersion()
-//        );
-//        // Paper end - dataconverter
+        return PlatformHooks.get().convertNBT(References.POI_CHUNK, world.getServer().getFixerUpper(), data, dataVersion, getCurrentVersion());
     }
 
     public static CompoundTag convertEntityChunkCompoundTag(final CompoundTag data, final ServerLevel world) {
         final int dataVersion = getDataVersion(data, DEFAULT_ENTITY_CHUNK_DATA_VERSION);
-        return DataFixTypes.ENTITY_CHUNK.update(world.getServer().getFixerUpper(), data, dataVersion, getCurrentVersion());
-//        // Paper start - dataconverter
-//        return ca.spottedleaf.dataconverter.minecraft.MCDataConverter.convertTag(
-//            ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry.ENTITY_CHUNK, data, dataVersion, getCurrentVersion()
-//        );
-//        // Paper end - dataconverter
+
+        return PlatformHooks.get().convertNBT(References.ENTITY_CHUNK, world.getServer().getFixerUpper(), data, dataVersion, getCurrentVersion());
     }
 
     private ChunkSystemConverters() {}

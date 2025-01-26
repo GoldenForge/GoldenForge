@@ -13,7 +13,7 @@
      private final Long2ObjectMap<Optional<R>> storage = new Long2ObjectOpenHashMap<>();
      private final LongLinkedOpenHashSet dirty = new LongLinkedOpenHashSet();
      private final Function<Runnable, Codec<R>> codec;
-@@ -43,26 +_,36 @@
+@@ -43,26 +_,39 @@
      private final ChunkIOErrorReporter errorReporter;
      protected final LevelHeightAccessor levelHeightAccessor;
  
@@ -24,6 +24,9 @@
 +    public final RegionFileStorage moonrise$getRegionStorage() {
 +        return this.regionStorage;
 +    }
++
++    @Override
++    public void moonrise$close() throws IOException {}
 +    // Paper end - rewrite chunk system
 +
      public SectionStorage(
@@ -94,7 +97,7 @@
                  if (optional == null) {
                      throw (IllegalStateException)Util.pauseInIde(new IllegalStateException());
                  } else {
-@@ -94,140 +_,116 @@
+@@ -94,140 +_,98 @@
          }
      }
  
@@ -173,6 +176,18 @@
 -    private void writeColumn(ChunkPos p_63826_) {
 -        RegistryOps<Tag> registryops = this.registryAccess.createSerializationContext(NbtOps.INSTANCE);
 -        Dynamic<Tag> dynamic = this.writeColumn(p_63826_, registryops);
+-        Tag tag = dynamic.getValue();
+-        if (tag instanceof CompoundTag) {
+-            this.simpleRegionStorage.write(p_63826_, (CompoundTag)tag).exceptionally(p_351992_ -> {
+-                this.errorReporter.reportChunkSaveFailure(p_351992_, this.simpleRegionStorage.storageInfo(), p_63826_);
+-                return null;
+-            });
+-        } else {
+-            LOGGER.error("Expected compound tag, got {}", tag);
+-        }
+-    }
+-
+-    private <T> Dynamic<T> writeColumn(ChunkPos p_63799_, DynamicOps<T> p_63800_) {
 +                R object = this.factory.apply(() -> this.setDirty(pos));
 +                this.storage.put(pos, Optional.of(object));
 +                return object;
@@ -187,13 +202,8 @@
 +    }
 +
 +    private CompletableFuture<Optional<CompoundTag>> tryRead(ChunkPos pos) {
-+        // Paper start - rewrite chunk system
-+        try {
-+            return CompletableFuture.completedFuture(Optional.ofNullable(this.moonrise$read(pos.x, pos.z)));
-+        } catch (final Throwable thr) {
-+            return CompletableFuture.failedFuture(thr);
-+        }
-+        // Paper end - rewrite chunk system
++        throw new IllegalStateException("Only chunk system can read state, offending class:" + this.getClass().getName()); // Paper - rewrite chunk system
++
 +    }
 +
 +    private void readColumn(ChunkPos pos, RegistryOps<Tag> ops, @Nullable CompoundTag nbt) {
@@ -201,27 +211,9 @@
 +    }
 +
 +    private void writeColumn(ChunkPos pos) {
-+        RegistryOps<Tag> registryOps = this.registryAccess.createSerializationContext(NbtOps.INSTANCE);
-+        Dynamic<Tag> dynamic = this.writeColumn(pos, registryOps);
-         Tag tag = dynamic.getValue();
-         if (tag instanceof CompoundTag) {
--            this.simpleRegionStorage.write(p_63826_, (CompoundTag)tag).exceptionally(p_351992_ -> {
--                this.errorReporter.reportChunkSaveFailure(p_351992_, this.simpleRegionStorage.storageInfo(), p_63826_);
--                return null;
--            });
-+            // Paper start - rewrite chunk system
-+            try {
-+                this.moonrise$write(pos.x, pos.z, (net.minecraft.nbt.CompoundTag)tag);
-+            } catch (final IOException ex) {
-+                LOGGER.error("Error writing poi chunk data to disk for chunk " + pos, ex);
-+            }
-+            // Paper end - rewrite chunk system
-         } else {
-             LOGGER.error("Expected compound tag, got {}", tag);
-         }
-     }
- 
--    private <T> Dynamic<T> writeColumn(ChunkPos p_63799_, DynamicOps<T> p_63800_) {
++        throw new IllegalStateException("Only chunk system can write state, offending class:" + this.getClass().getName()); // Paper - rewrite chunk system
++    }
++
 +    private <T> Dynamic<T> writeColumn(ChunkPos chunkPos, DynamicOps<T> ops) {
          Map<T, T> map = Maps.newHashMap();
  

@@ -1,10 +1,28 @@
 package ca.spottedleaf.concurrentutil.map;
 
-import ca.spottedleaf.concurrentutil.util.*;
-
+import ca.spottedleaf.concurrentutil.util.CollectionUtil;
+import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.HashUtil;
+import ca.spottedleaf.concurrentutil.util.IntegerUtil;
+import ca.spottedleaf.concurrentutil.util.Validate;
 import java.lang.invoke.VarHandle;
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.IntFunction;
+import java.util.function.Predicate;
 
 /**
  * <p>
@@ -104,7 +122,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
     /**
      * Constructs this map with the specified capacity and load factor.
      * @param capacity specified capacity, > 0
-     * @param loadFactor specified load factor, > 0 && finite
+     * @param loadFactor specified load factor, {@code > 0 && finite}
      */
     public SWMRHashTable(final int capacity, final float loadFactor) {
         final int tableSize = getCapacityFor(capacity);
@@ -152,7 +170,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * with the specified load factor.
      * All of the specified map's entries are copied into this map.
      * @param capacity specified capacity, > 0
-     * @param loadFactor specified load factor, > 0 && finite
+     * @param loadFactor specified load factor, {@code > 0 && finite}
      * @param other The specified map.
      */
     public SWMRHashTable(final int capacity, final float loadFactor, final Map<K, V> other) {

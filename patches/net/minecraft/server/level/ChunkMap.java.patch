@@ -7,6 +7,15 @@
  import com.google.common.collect.ImmutableList;
  import com.google.common.collect.Iterables;
  import com.google.common.collect.Lists;
+@@ -98,7 +_,7 @@
+ import org.apache.commons.lang3.mutable.MutableBoolean;
+ import org.slf4j.Logger;
+ 
+-public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider, GeneratingChunkMap {
++public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider, GeneratingChunkMap, ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemChunkMap { // Paper - rewrite chunk system
+     private static final ChunkResult<List<ChunkAccess>> UNLOADED_CHUNK_LIST_RESULT = ChunkResult.error("Unloaded chunks found in range");
+     private static final CompletableFuture<ChunkResult<List<ChunkAccess>>> UNLOADED_CHUNK_LIST_FUTURE = CompletableFuture.completedFuture(
+         UNLOADED_CHUNK_LIST_RESULT
 @@ -113,11 +_,21 @@
      public static final int MIN_VIEW_DISTANCE = 2;
      public static final int MAX_VIEW_DISTANCE = 32;
@@ -34,17 +43,18 @@
      private final ThreadedLevelLightEngine lightEngine;
      private final BlockableEventLoop<Runnable> mainThreadExecutor;
      private final RandomState randomState;
-@@ -126,21 +_,21 @@
+@@ -126,21 +_,29 @@
      private final PoiManager poiManager;
      final LongSet toDrop = new LongOpenHashSet();
      private boolean modified;
 -    private final ChunkTaskPriorityQueueSorter queueSorter;
 -    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> worldgenMailbox;
 -    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> mainThreadMailbox;
+-    private final ChunkProgressListener progressListener;
 +//    private final ChunkTaskPriorityQueueSorter queueSorter;
 +//    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> worldgenMailbox;
 +//    private final ProcessorHandle<ChunkTaskPriorityQueueSorter.Message<Runnable>> mainThreadMailbox;
-     private final ChunkProgressListener progressListener;
++    public final ChunkProgressListener progressListener;
      private final ChunkStatusUpdateListener chunkStatusListener;
      private final ChunkMap.DistanceManager distanceManager;
 -    private final AtomicInteger tickingGenerated = new AtomicInteger();
@@ -60,6 +70,14 @@
 +//    private final Queue<Runnable> unloadQueue = Queues.newConcurrentLinkedQueue();
 +    public int serverViewDistance;
 +    public final WorldGenContext worldGenContext;
++
++    // Paper start - rewrite chunk system
++    @Override
++    public final void moonrise$writeFinishCallback(final ChunkPos pos) throws IOException {
++        // see ChunkStorage#write
++        this.handleLegacyStructureIndex(pos);
++    }
++    // Paper end - rewrite chunk system
  
      public ChunkMap(
          ServerLevel p_214836_,
@@ -254,10 +272,10 @@
                  );
          stringbuilder.append("Updating:").append(System.lineSeparator());
 -        this.updatingChunkMap.values().forEach(consumer);
-+        ca.spottedleaf.moonrise.common.util.ChunkSystem.getUpdatingChunkHolders(this.level).forEach(consumer); // Paper
++        ca.spottedleaf.moonrise.common.PlatformHooks.get().getUpdatingChunkHolders(this.level).forEach(consumer); // Paper
          stringbuilder.append("Visible:").append(System.lineSeparator());
 -        this.visibleChunkMap.values().forEach(consumer);
-+        ca.spottedleaf.moonrise.common.util.ChunkSystem.getVisibleChunkHolders(this.level).forEach(consumer); // Paper
++        ca.spottedleaf.moonrise.common.PlatformHooks.get().getVisibleChunkHolders(this.level).forEach(consumer); // Paper
          CrashReport crashreport = CrashReport.forThrowable(p_203752_, "Chunk loading");
          CrashReportCategory crashreportcategory = crashreport.addCategory("Chunk loading");
          crashreportcategory.setDetail("Details", p_203753_);
@@ -584,7 +602,7 @@
      }
  
      public int getTickingGenerated() {
-@@ -709,119 +_,82 @@
+@@ -709,119 +_,78 @@
      }
  
      private boolean saveChunkIfNeeded(ChunkHolder p_198875_) {
@@ -696,7 +714,7 @@
  
      int getPlayerViewDistance(ServerPlayer p_295024_) {
 -        return Mth.clamp(p_295024_.requestedViewDistance(), 2, this.serverViewDistance);
-+        return ca.spottedleaf.moonrise.common.util.ChunkSystem.getSendViewDistance(p_295024_); // Paper - rewrite chunk system
++        return ca.spottedleaf.moonrise.common.PlatformHooks.get().getSendViewDistance(p_295024_); // Paper - rewrite chunk system
      }
  
      private void markChunkPendingToSend(ServerPlayer p_294638_, ChunkPos p_296183_) {
@@ -721,38 +739,34 @@
 +    // Paper start - rewrite chunk system
 +    @Override
 +    public CompletableFuture<Optional<CompoundTag>> read(final ChunkPos pos) {
-+        if (!ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.isRegionFileThread()) {
-+            try {
-+                return CompletableFuture.completedFuture(
-+                        Optional.ofNullable(
-+                                ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.loadData(
-+                                        this.level, pos.x, pos.z, ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.RegionFileType.CHUNK_DATA,
-+                                        ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.getIOBlockingPriorityForCurrentThread()
-+                                )
-+                        )
-+                );
-+            } catch (final Throwable thr) {
-+                return CompletableFuture.failedFuture(thr);
-+            }
-+        }
-+        return super.read(pos);
++        final CompletableFuture<Optional<CompoundTag>> ret = new CompletableFuture<>();
++
++        ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.loadDataAsync(
++                this.level, pos.x, pos.z, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType.CHUNK_DATA,
++                (final CompoundTag data, final Throwable thr) -> {
++                    if (thr != null) {
++                        ret.completeExceptionally(thr);
++                    } else {
++                        ret.complete(Optional.ofNullable(data));
++                    }
++                }, false
++        );
++
++        return ret;
 +    }
 +
 +    @Override
 +    public CompletableFuture<Void> write(final ChunkPos pos, final CompoundTag tag) {
-+        if (!ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.isRegionFileThread()) {
-+            ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.scheduleSave(
-+                    this.level, pos.x, pos.z, tag,
-+                    ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.RegionFileType.CHUNK_DATA);
-+            return null;
-+        }
-+        super.write(pos, tag);
++        ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.scheduleSave(
++                this.level, pos.x, pos.z, tag,
++                ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType.CHUNK_DATA
++        );
 +        return null;
 +    }
 +
 +    @Override
 +    public void flushWorker() {
-+        ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread.flush();
++        ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.flush(this.level);
 +    }
 +    // Paper end - rewrite chunk system
  
@@ -763,7 +777,7 @@
  
      public int size() {
 -        return this.visibleChunkMap.size();
-+        return ca.spottedleaf.moonrise.common.util.ChunkSystem.getVisibleChunkHolderCount(this.level); // Paper
++        return ca.spottedleaf.moonrise.common.PlatformHooks.get().getVisibleChunkHolderCount(this.level); // Paper
      }
  
      public net.minecraft.server.level.DistanceManager getDistanceManager() {
@@ -772,7 +786,7 @@
  
      protected Iterable<ChunkHolder> getChunks() {
 -        return Iterables.unmodifiableIterable(this.visibleChunkMap.values());
-+        return Iterables.unmodifiableIterable(ca.spottedleaf.moonrise.common.util.ChunkSystem.getVisibleChunkHolders(this.level)); // Paper
++        return Iterables.unmodifiableIterable(ca.spottedleaf.moonrise.common.PlatformHooks.get().getVisibleChunkHolders(this.level)); // Paper
      }
  
      void dumpChunks(Writer p_140275_) throws IOException {
@@ -782,7 +796,7 @@
  
 -        for (Entry<ChunkHolder> entry : this.visibleChunkMap.long2ObjectEntrySet()) {
 -            long i = entry.getLongKey();
-+        for (ChunkHolder playerchunk : ca.spottedleaf.moonrise.common.util.ChunkSystem.getVisibleChunkHolders(this.level)) {
++        for (ChunkHolder playerchunk : ca.spottedleaf.moonrise.common.PlatformHooks.get().getVisibleChunkHolders(this.level)) { // Paper - Moonrise
 +            long i = playerchunk.pos.toLong();
              ChunkPos chunkpos = new ChunkPos(i);
 -            ChunkHolder chunkholder = entry.getValue();
@@ -874,7 +888,7 @@
  
              p_140193_.setChunkTrackingView(ChunkTrackingView.EMPTY);
 -            this.updateChunkTracking(p_140193_);
-+            ca.spottedleaf.moonrise.common.util.ChunkSystem.addPlayerToDistanceMaps(this.level, p_140193_); // Paper - rewrite chunk system
++            ca.spottedleaf.moonrise.common.PlatformHooks.get().addPlayerToDistanceMaps(this.level, p_140193_); // Paper - rewrite chunk system
          } else {
              SectionPos sectionpos = p_140193_.getLastSectionPos();
              this.playerMap.removePlayer(p_140193_);
@@ -885,7 +899,7 @@
              }
  
 -            this.applyChunkTrackingView(p_140193_, ChunkTrackingView.EMPTY);
-+            ca.spottedleaf.moonrise.common.util.ChunkSystem.removePlayerFromDistanceMaps(this.level, p_140193_); // Paper - rewrite chunk system
++            ca.spottedleaf.moonrise.common.PlatformHooks.get().removePlayerFromDistanceMaps(this.level, p_140193_); // Paper - rewrite chunk system
          }
      }
  
@@ -923,7 +937,7 @@
 +//            //PATCH 1.20.2: Figure out the firing of the watch and unwatch events when chunk tracking updates.
 +//            this.updateChunkTracking(p_140185_);
          }
-+        ca.spottedleaf.moonrise.common.util.ChunkSystem.updateMaps(this.level, p_140185_); // Paper - rewrite chunk system
++        ca.spottedleaf.moonrise.common.PlatformHooks.get().updateMaps(this.level, p_140185_); // Paper - rewrite chunk system
      }
  
      private void updateChunkTracking(ServerPlayer p_183755_) {
@@ -1218,14 +1232,41 @@
                  if (flag) {
                      if (this.seenBy.add(p_140498_.connection)) {
                          this.serverEntity.addPairing(p_140498_);
-@@ -1297,6 +_,7 @@
+@@ -1296,16 +_,24 @@
+         }
  
          private int getEffectiveRange() {
-             int i = this.range;
-+            i = org.spigotmc.TrackingRange.getEntityTrackingRange(entity, i); // Paper
+-            int i = this.range;
+-
+-            for (Entity entity : this.entity.getIndirectPassengers()) {
+-                int j = entity.getType().clientTrackingRange() * 16;
+-                if (j > i) {
+-                    i = j;
+-                }
+-            }
+-
+-            return this.scaledRange(i);
++            // Paper start - optimise entity tracker
++            final Entity entity = this.entity;
++            int range = this.range;
++
++            if (entity.getPassengers() == ImmutableList.<Entity>of()) {
++                return this.scaledRange(range);
++            }
++
++            // note: we change to List
++            final List<Entity> passengers = (List<Entity>)entity.getIndirectPassengers();
++            for (int i = 0, len = passengers.size(); i < len; ++i) {
++                final Entity passenger = passengers.get(i);
++                // note: max should be branchless
++                range = Math.max(range, ca.spottedleaf.moonrise.common.PlatformHooks.get().modifyEntityTrackingRange(passenger, passenger.getType().clientTrackingRange() << 4));
++            }
++
++            return this.scaledRange(range);
++            // Paper end - optimise entity tracker
+         }
  
-             for (Entity entity : this.entity.getIndirectPassengers()) {
-                 int j = entity.getType().clientTrackingRange() * 16;
+         public void updatePlayers(List<ServerPlayer> p_140488_) {
 @@ -1314,4 +_,19 @@
              }
          }

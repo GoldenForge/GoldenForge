@@ -1,5 +1,6 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.level.entity;
 
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import ca.spottedleaf.moonrise.common.list.EntityList;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
 import ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity;
@@ -103,7 +104,7 @@ public final class ChunkEntitySlices {
 
         final ListTag entitiesTag = new ListTag();
         final java.util.Map<net.minecraft.world.entity.EntityType<?>, Integer> savedEntityCounts = new java.util.HashMap<>(); // Paper - Entity load/save limit per chunk
-        for (final Entity entity : entities) {
+        for (final Entity entity : PlatformHooks.get().modifySavedEntities(world, chunkPos.x, chunkPos.z, entities)) {
             // Paper start - Entity load/save limit per chunk
             final EntityType<?> entityType = entity.getType();
             final int saveLimit = world.paperConfig().chunks.entityPerChunkSaveLimit.getOrDefault(entityType, -1);
@@ -160,12 +161,12 @@ public final class ChunkEntitySlices {
                 continue;
             }
             if (entity.shouldBeSaved()) {
-                entity.setRemoved(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                PlatformHooks.get().unloadEntity(entity);
                 if (entity.isVehicle()) {
                     // we cannot assume that these entities are contained within this chunk, because entities can
                     // desync - so we need to remove them all
                     for (final Entity passenger : entity.getIndirectPassengers()) {
-                        passenger.setRemoved(Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                        PlatformHooks.get().unloadEntity(passenger);
                     }
                 }
             }

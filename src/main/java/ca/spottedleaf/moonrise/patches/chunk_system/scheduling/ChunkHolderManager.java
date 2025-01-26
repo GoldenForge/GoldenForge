@@ -1,13 +1,13 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.scheduling;
 
-import ca.spottedleaf.concurrentutil.executor.standard.PrioritisedExecutor;
 import ca.spottedleaf.concurrentutil.lock.ReentrantAreaLock;
 import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
+import ca.spottedleaf.concurrentutil.util.Priority;
+import ca.spottedleaf.moonrise.common.PlatformHooks;
 import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 import ca.spottedleaf.moonrise.common.util.TickThread;
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
-import ca.spottedleaf.moonrise.common.util.ChunkSystem;
-import ca.spottedleaf.moonrise.patches.chunk_system.io.RegionFileIOThread;
+import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.entity.ChunkEntitySlices;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk;
@@ -39,6 +39,7 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.util.SortedArraySet;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.LevelChunk;
 import org.slf4j.Logger;
 import java.io.IOException;
 import java.text.DecimalFormat;
@@ -115,10 +116,10 @@ public final class ChunkHolderManager {
         final List<NewChunkHolder> changedFullStatus = new ArrayList<>();
         final boolean ret;
         final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
-                            ((posX >> ticketShift) - 1) << ticketShift,
-                            ((posZ >> ticketShift) - 1) << ticketShift,
-                            (((posX >> ticketShift) + 1) << ticketShift) | ticketMask,
-                            (((posZ >> ticketShift) + 1) << ticketShift) | ticketMask
+                ((posX >> ticketShift) - 1) << ticketShift,
+                ((posZ >> ticketShift) - 1) << ticketShift,
+                (((posX >> ticketShift) + 1) << ticketShift) | ticketMask,
+                (((posZ >> ticketShift) + 1) << ticketShift) | ticketMask
         );
         try {
             ret = this.processTicketUpdatesNoLock(posX >> ticketShift, posZ >> ticketShift, scheduledTasks, changedFullStatus);
@@ -188,7 +189,7 @@ public final class ChunkHolderManager {
         if (halt) {
             LOGGER.info("Waiting 60s for chunk system to halt for world '" + WorldUtil.getWorldName(this.world) + "'");
             if (!this.taskScheduler.halt(true, TimeUnit.SECONDS.toNanos(60L))) {
-                LOGGER.warn("Failed to halt world generation/loading tasks for world '" + WorldUtil.getWorldName(this.world) + "'");
+                LOGGER.warn("Failed to halt generation/loading tasks for world '" + WorldUtil.getWorldName(this.world) + "'");
             } else {
                 LOGGER.info("Halted chunk system for world '" + WorldUtil.getWorldName(this.world) + "'");
             }
@@ -198,25 +199,27 @@ public final class ChunkHolderManager {
             this.saveAllChunks(true, true, true);
         }
 
-        boolean hasTasks = false;
-        for (final RegionFileIOThread.RegionFileType type : RegionFileIOThread.RegionFileType.values()) {
-            if (RegionFileIOThread.getControllerFor(this.world, type).hasTasks()) {
-                hasTasks = true;
-                break;
+        MoonriseRegionFileIO.flush(this.world);
+
+        if (halt) {
+            LOGGER.info("Waiting 60s for chunk I/O to halt for world '" + WorldUtil.getWorldName(this.world) + "'");
+            if (!this.taskScheduler.haltIO(true, TimeUnit.SECONDS.toNanos(60L))) {
+                LOGGER.warn("Failed to halt I/O tasks for world '" + WorldUtil.getWorldName(this.world) + "'");
+            } else {
+                LOGGER.info("Halted I/O scheduler for world '" + WorldUtil.getWorldName(this.world) + "'");
             }
-        }
-        if (hasTasks) {
-            RegionFileIOThread.flush();
         }
 
         // kill regionfile cache
-        for (final RegionFileIOThread.RegionFileType type : RegionFileIOThread.RegionFileType.values()) {
+        for (final MoonriseRegionFileIO.RegionFileType type : MoonriseRegionFileIO.RegionFileType.values()) {
             try {
-                RegionFileIOThread.getControllerFor(this.world, type).getCache().close();
+                MoonriseRegionFileIO.getControllerFor(this.world, type).getCache().close();
             } catch (final IOException ex) {
                 LOGGER.error("Failed to close '" + type.name() + "' regionfile cache for world '" + WorldUtil.getWorldName(this.world) + "'", ex);
             }
         }
+
+        this.taskScheduler.setShutdown(true);
     }
 
     void ensureInAutosave(final NewChunkHolder holder) {
@@ -229,8 +232,8 @@ public final class ChunkHolderManager {
     public void autoSave() {
         final List<NewChunkHolder> reschedule = new ArrayList<>();
         final long currentTick = this.currentTick;
-        final long maxSaveTime = currentTick - Math.max(1L, this.world.paperConfig().chunks.autoSaveInterval.value());
-        final int maxToSave = this.world.paperConfig().chunks.maxAutoSaveChunksPerTick;
+        final long maxSaveTime = currentTick - Math.max(1L, PlatformHooks.get().configAutoSaveInterval(this.world));
+        final int maxToSave = PlatformHooks.get().configMaxAutoSavePerTick(this.world);
         for (int autoSaved = 0; autoSaved < maxToSave && !this.autoSaveQueue.isEmpty();) {
             final NewChunkHolder holder = this.autoSaveQueue.first();
 
@@ -270,55 +273,74 @@ public final class ChunkHolderManager {
 
         long start = System.nanoTime();
         long lastLog = start;
-        boolean needsFlush = false;
-        final int flushInterval = 50;
+        final int flushInterval = 200;
+        int lastFlush = 0;
 
         int savedChunk = 0;
         int savedEntity = 0;
         int savedPoi = 0;
 
+        if (shutdown) {
+            // Normal unload process does not occur during shutdown: fire event manually
+            // for mods that expect ChunkEvent.Unload to fire on shutdown (before LevelEvent.Unload)
+            for (int i = 0, len = holders.size(); i < len; ++i) {
+                final NewChunkHolder holder = holders.get(i);
+                if (holder.getCurrentChunk() instanceof LevelChunk levelChunk) {
+                    PlatformHooks.get().chunkUnloadFromWorld(levelChunk);
+                }
+            }
+        }
         for (int i = 0, len = holders.size(); i < len; ++i) {
             final NewChunkHolder holder = holders.get(i);
             try {
                 final NewChunkHolder.SaveStat saveStat = holder.save(shutdown);
                 if (saveStat != null) {
-                    ++saved;
-                    needsFlush = flush;
                     if (saveStat.savedChunk()) {
                         ++savedChunk;
+                        ++saved;
                     }
                     if (saveStat.savedEntityChunk()) {
                         ++savedEntity;
+                        ++saved;
                     }
                     if (saveStat.savedPoiChunk()) {
                         ++savedPoi;
+                        ++saved;
                     }
                 }
             } catch (final Throwable thr) {
                 LOGGER.error("Failed to save chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
             }
-            if (needsFlush && (saved % flushInterval) == 0) {
-                needsFlush = false;
-                RegionFileIOThread.partialFlush(flushInterval / 2);
+            if (flush && (saved - lastFlush) > (flushInterval / 2)) {
+                lastFlush = saved;
+                MoonriseRegionFileIO.partialFlush(this.world, flushInterval / 2);
             }
             if (logProgress) {
                 final long currTime = System.nanoTime();
                 if ((currTime - lastLog) > TimeUnit.SECONDS.toNanos(10L)) {
                     lastLog = currTime;
-                    LOGGER.info("Saved " + saved + " chunks (" + format.format((double)(i+1)/(double)len * 100.0) + "%) in world '" + WorldUtil.getWorldName(this.world) + "'");
+                    LOGGER.info(
+                            "Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi
+                                    + " poi chunks in world '" + WorldUtil.getWorldName(this.world) + "', progress: "
+                                    + format.format((double)(i+1)/(double)len * 100.0)
+                    );
                 }
             }
         }
         if (flush) {
-            RegionFileIOThread.flush();
+            MoonriseRegionFileIO.flush(this.world);
             try {
-                RegionFileIOThread.flushRegionStorages(this.world);
+                MoonriseRegionFileIO.flushRegionStorages(this.world);
             } catch (final IOException ex) {
                 LOGGER.error("Exception when flushing regions in world '" + WorldUtil.getWorldName(this.world) + "'", ex);
             }
         }
         if (logProgress) {
-            LOGGER.info("Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi + " poi chunks in world '" + WorldUtil.getWorldName(this.world) + "' in " + format.format(1.0E-9 * (System.nanoTime() - start)) + "s");
+            LOGGER.info(
+                    "Saved " + savedChunk + " block chunks, " + savedEntity + " entity chunks, " + savedPoi
+                            + " poi chunks in world '" + WorldUtil.getWorldName(this.world) + "' in "
+                            + format.format(1.0E-9 * (System.nanoTime() - start)) + "s"
+            );
         }
     }
 
@@ -412,13 +434,13 @@ public final class ChunkHolderManager {
         for (final PrimitiveIterator.OfLong iterator = this.tickets.keyIterator(); iterator.hasNext();) {
             final long coord = iterator.nextLong();
             sections.computeIfAbsent(
-                CoordinateUtils.getChunkKey(
-                    CoordinateUtils.getChunkX(coord) >> sectionShift,
-                    CoordinateUtils.getChunkZ(coord) >> sectionShift
-                ),
-                (final long keyInMap) -> {
-                    return new LongArrayList();
-                }
+                    CoordinateUtils.getChunkKey(
+                            CoordinateUtils.getChunkX(coord) >> sectionShift,
+                            CoordinateUtils.getChunkZ(coord) >> sectionShift
+                    ),
+                    (final long keyInMap) -> {
+                        return new LongArrayList();
+                    }
             ).add(coord);
         }
 
@@ -429,8 +451,8 @@ public final class ChunkHolderManager {
             final LongArrayList coordinates = entry.getValue();
 
             final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
-                CoordinateUtils.getChunkX(sectionKey) << sectionShift,
-                CoordinateUtils.getChunkZ(sectionKey) << sectionShift
+                    CoordinateUtils.getChunkX(sectionKey) << sectionShift,
+                    CoordinateUtils.getChunkZ(sectionKey) << sectionShift
             );
             try {
                 for (final LongIterator iterator2 = coordinates.iterator(); iterator2.hasNext();) {
@@ -478,8 +500,8 @@ public final class ChunkHolderManager {
 
         final int sectionShift = ((ChunkSystemServerLevel)this.world).moonrise$getRegionChunkShift();
         final long sectionKey = CoordinateUtils.getChunkKey(
-            chunkX >> sectionShift,
-            chunkZ >> sectionShift
+                chunkX >> sectionShift,
+                chunkZ >> sectionShift
         );
 
         this.sectionToChunkToExpireCount.computeIfAbsent(sectionKey, (final long keyInMap) -> {
@@ -492,8 +514,8 @@ public final class ChunkHolderManager {
 
         final int sectionShift = ((ChunkSystemServerLevel)this.world).moonrise$getRegionChunkShift();
         final long sectionKey = CoordinateUtils.getChunkKey(
-            chunkX >> sectionShift,
-            chunkZ >> sectionShift
+                chunkX >> sectionShift,
+                chunkZ >> sectionShift
         );
 
         final Long2IntOpenHashMap removeCounts = this.sectionToChunkToExpireCount.get(sectionKey);
@@ -676,8 +698,8 @@ public final class ChunkHolderManager {
             final LongArrayList coordinates = entry.getValue();
 
             final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
-                CoordinateUtils.getChunkX(sectionKey) << sectionShift,
-                CoordinateUtils.getChunkZ(sectionKey) << sectionShift
+                    CoordinateUtils.getChunkX(sectionKey) << sectionShift,
+                    CoordinateUtils.getChunkZ(sectionKey) << sectionShift
             );
             try {
                 for (final LongIterator iterator2 = coordinates.iterator(); iterator2.hasNext();) {
@@ -714,8 +736,8 @@ public final class ChunkHolderManager {
             }
 
             final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
-                CoordinateUtils.getChunkX(sectionKey) << sectionShift,
-                CoordinateUtils.getChunkZ(sectionKey) << sectionShift
+                    CoordinateUtils.getChunkX(sectionKey) << sectionShift,
+                    CoordinateUtils.getChunkZ(sectionKey) << sectionShift
             );
 
             try {
@@ -778,21 +800,21 @@ public final class ChunkHolderManager {
         return this.chunkHolders.get(position);
     }
 
-    public void raisePriority(final int x, final int z, final PrioritisedExecutor.Priority priority) {
+    public void raisePriority(final int x, final int z, final Priority priority) {
         final NewChunkHolder chunkHolder = this.getChunkHolder(x, z);
         if (chunkHolder != null) {
             chunkHolder.raisePriority(priority);
         }
     }
 
-    public void setPriority(final int x, final int z, final PrioritisedExecutor.Priority priority) {
+    public void setPriority(final int x, final int z, final Priority priority) {
         final NewChunkHolder chunkHolder = this.getChunkHolder(x, z);
         if (chunkHolder != null) {
             chunkHolder.setPriority(priority);
         }
     }
 
-    public void lowerPriority(final int x, final int z, final PrioritisedExecutor.Priority priority) {
+    public void lowerPriority(final int x, final int z, final Priority priority) {
         final NewChunkHolder chunkHolder = this.getChunkHolder(x, z);
         if (chunkHolder != null) {
             chunkHolder.lowerPriority(priority);
@@ -802,7 +824,7 @@ public final class ChunkHolderManager {
     private NewChunkHolder createChunkHolder(final long position) {
         final NewChunkHolder ret = new NewChunkHolder(this.world, CoordinateUtils.getChunkX(position), CoordinateUtils.getChunkZ(position), this.taskScheduler);
 
-        ChunkSystem.onChunkHolderCreate(this.world, ret.vanillaChunkHolder);
+        PlatformHooks.get().onChunkHolderCreate(this.world, ret.vanillaChunkHolder);
 
         return ret;
     }
@@ -875,7 +897,7 @@ public final class ChunkHolderManager {
                         final ChunkLoadTask.EntityDataLoadTask entityLoad = current.getEntityDataLoadTask();
 
                         if (entityLoad != null) {
-                            entityLoad.raisePriority(PrioritisedExecutor.Priority.BLOCKING);
+                            entityLoad.raisePriority(Priority.BLOCKING);
                         }
                     }
                 }
@@ -951,7 +973,7 @@ public final class ChunkHolderManager {
                     final ChunkLoadTask.PoiDataLoadTask poiLoad = current.getPoiDataLoadTask();
 
                     if (poiLoad != null) {
-                        poiLoad.raisePriority(PrioritisedExecutor.Priority.BLOCKING);
+                        poiLoad.raisePriority(Priority.BLOCKING);
                     }
                 }
             } finally {
@@ -998,7 +1020,7 @@ public final class ChunkHolderManager {
                 }
 
                 ChunkHolderManager.this.processPendingFullUpdate();
-            }, PrioritisedExecutor.Priority.HIGHEST);
+            }, Priority.HIGHEST);
         } else {
             final ArrayDeque<NewChunkHolder> pendingFullLoadUpdate = this.pendingFullLoadUpdate;
             for (int i = 0, len = changedFullStatus.size(); i < len; ++i) {
@@ -1008,11 +1030,10 @@ public final class ChunkHolderManager {
     }
 
     private void removeChunkHolder(final NewChunkHolder holder) {
-        holder.markUnloaded();
+        holder.onUnload();
         this.autoSaveQueue.remove(holder);
-        ChunkSystem.onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
+        PlatformHooks.get().onChunkHolderDelete(this.world, holder.vanillaChunkHolder);
         this.chunkHolders.remove(CoordinateUtils.getChunkKey(holder.chunkX, holder.chunkZ));
-
     }
 
     // note: never call while inside the chunk system, this will absolutely break everything
@@ -1027,7 +1048,7 @@ public final class ChunkHolderManager {
         int unloadCountTentative = 0;
         for (final ChunkUnloadQueue.SectionToUnload sectionRef : unloadSectionsForRegion) {
             final ChunkUnloadQueue.UnloadSection section
-                = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
+                    = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
 
             if (section == null) {
                 // removed concurrently
@@ -1064,7 +1085,7 @@ public final class ChunkHolderManager {
                 final ReentrantAreaLock.Node scheduleLock = this.taskScheduler.schedulingLockArea.lock(sectionLowerX, sectionLowerZ);
                 try {
                     final ChunkUnloadQueue.UnloadSection section
-                        = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
+                            = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
 
                     if (section == null) {
                         // removed concurrently
@@ -1173,9 +1194,9 @@ public final class ChunkHolderManager {
     }
 
     public static record TicketOperation<T, V> (
-        TicketOperationType op, long chunkCoord,
-        TicketType<T> ticketType, int ticketLevel, T identifier,
-        TicketType<V> ticketType2, int ticketLevel2, V identifier2
+            TicketOperationType op, long chunkCoord,
+            TicketType<T> ticketType, int ticketLevel, T identifier,
+            TicketType<V> ticketType2, int ticketLevel2, V identifier2
     ) {
 
         private TicketOperation(TicketOperationType op, long chunkCoord,
@@ -1211,8 +1232,8 @@ public final class ChunkHolderManager {
                                                                   final TicketType<T> addType, final int addLevel, final T addIdentifier,
                                                                   final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
             return new TicketOperation<>(
-                TicketOperationType.ADD_IF_REMOVED, chunk, addType, addLevel, addIdentifier,
-                removeType, removeLevel, removeIdentifier
+                    TicketOperationType.ADD_IF_REMOVED, chunk, addType, addLevel, addIdentifier,
+                    removeType, removeLevel, removeIdentifier
             );
         }
 
@@ -1220,8 +1241,8 @@ public final class ChunkHolderManager {
                                                                 final TicketType<T> addType, final int addLevel, final T addIdentifier,
                                                                 final TicketType<V> removeType, final int removeLevel, final V removeIdentifier) {
             return new TicketOperation<>(
-                TicketOperationType.ADD_AND_REMOVE, chunk, addType, addLevel, addIdentifier,
-                removeType, removeLevel, removeIdentifier
+                    TicketOperationType.ADD_AND_REMOVE, chunk, addType, addLevel, addIdentifier,
+                    removeType, removeLevel, removeIdentifier
             );
         }
     }
@@ -1239,18 +1260,18 @@ public final class ChunkHolderManager {
             }
             case ADD_IF_REMOVED: {
                 ret |= this.addIfRemovedTicket(
-                    operation.chunkCoord,
-                    operation.ticketType, operation.ticketLevel, operation.identifier,
-                    operation.ticketType2, operation.ticketLevel2, operation.identifier2
+                        operation.chunkCoord,
+                        operation.ticketType, operation.ticketLevel, operation.identifier,
+                        operation.ticketType2, operation.ticketLevel2, operation.identifier2
                 );
                 break;
             }
             case ADD_AND_REMOVE: {
                 ret = true;
                 this.addAndRemoveTickets(
-                    operation.chunkCoord,
-                    operation.ticketType, operation.ticketLevel, operation.identifier,
-                    operation.ticketType2, operation.ticketLevel2, operation.identifier2
+                        operation.chunkCoord,
+                        operation.ticketType, operation.ticketLevel, operation.identifier,
+                        operation.ticketType2, operation.ticketLevel2, operation.identifier2
                 );
                 break;
             }
@@ -1293,6 +1314,9 @@ public final class ChunkHolderManager {
         if (BLOCK_TICKET_UPDATES.get() == Boolean.TRUE) {
             throw new IllegalStateException("Cannot update ticket level while unloading chunks or updating entity manager");
         }
+        if (!PlatformHooks.get().allowAsyncTicketUpdates() && !TickThread.isTickThread()) {
+            TickThread.ensureTickThread("Cannot asynchronously process ticket updates");
+        }
 
         List<NewChunkHolder> changedFullStatus = null;
 
@@ -1308,10 +1332,15 @@ public final class ChunkHolderManager {
             }
             changedFullStatus = new ArrayList<>();
 
-            ret |= this.ticketLevelPropagator.performUpdates(
-                this.ticketLockArea, this.taskScheduler.schedulingLockArea,
-                scheduledTasks, changedFullStatus
-            );
+            this.blockTicketUpdates();
+            try {
+                ret |= this.ticketLevelPropagator.performUpdates(
+                        this.ticketLockArea, this.taskScheduler.schedulingLockArea,
+                        scheduledTasks, changedFullStatus
+                );
+            } finally {
+                this.unblockTicketUpdates(Boolean.FALSE);
+            }
         }
 
         if (changedFullStatus != null) {
@@ -1370,7 +1399,7 @@ public final class ChunkHolderManager {
         ret.add("tickets", allTicketsJson);
 
         for (final Iterator<ConcurrentLong2ReferenceChainedHashTable.TableEntry<SortedArraySet<Ticket<?>>>> iterator = this.tickets.entryIterator();
-            iterator.hasNext();) {
+             iterator.hasNext();) {
             final ConcurrentLong2ReferenceChainedHashTable.TableEntry<SortedArraySet<Ticket<?>>> coordinateTickets = iterator.next();
             final long coordinate = coordinateTickets.getKey();
             final SortedArraySet<Ticket<?>> tickets = coordinateTickets.getValue();
