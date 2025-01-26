@@ -658,17 +658,17 @@
          ServerChunkCache serverchunkcache = this.getChunkSource();
          if (!p_8646_) {
              if (p_8644_ != null) {
-@@ -801,12 +_,20 @@
+@@ -801,12 +_,19 @@
                  p_8644_.progressStage(Component.translatable("menu.savingChunks"));
              }
  
-+            if (!close) { serverchunkcache.save(p_8645_); } // Paper - add close param
-+
-             serverchunkcache.save(p_8645_);
+-            serverchunkcache.save(p_8645_);
 -            if (p_8645_) {
 -                this.entityManager.saveAll();
 -            } else {
 -                this.entityManager.autoSave();
++            if (!close) { serverchunkcache.save(p_8645_); } // Paper - add close param
++
 +            // Paper start - add close param
 +            if (close) {
 +                try {
