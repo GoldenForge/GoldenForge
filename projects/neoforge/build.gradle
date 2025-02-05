@@ -154,6 +154,10 @@ dependencies {
     implementation "curse.maven:TheOvergrowth-714353:5616081"
 }
 
+tasks.register('genPatches') {
+    dependsOn(tasks.named('unpackSourcePatches'))
+}
+
 runTypes {
     client {
         singleInstance false
