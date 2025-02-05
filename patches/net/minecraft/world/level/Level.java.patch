@@ -232,7 +232,7 @@
 +    public boolean isUnobstructed(final Entity entity) {
 +        final AABB boundingBox = entity.getBoundingBox();
 +        if (ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.isEmpty(boundingBox)) {
-+            return false;
++            return true;
 +        }
 +
 +        final List<Entity> entities = this.getEntities(
