@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-@@ -42,6 +_,10 @@
+@@ -42,6 +_,11 @@
      private boolean closed = false;
      private int latency;
      private volatile boolean suspendFlushingOnServerThread = false;
@@ -8,6 +8,7 @@
 +     * Holds the current connection type, based on the types of payloads that have been received so far.
 +     */
 +    protected net.neoforged.neoforge.network.connection.ConnectionType connectionType;
++    public boolean processedDisconnect;
  
      public ServerCommonPacketListenerImpl(MinecraftServer p_295057_, Connection p_294822_, CommonListenerCookie p_301980_) {
          this.server = p_295057_;

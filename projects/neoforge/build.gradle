@@ -152,6 +152,7 @@ dependencies {
     implementation "curse.maven:snowudertrees-353942:5875647"
     implementation "curse.maven:immersiveportal-355440:6013197"
     implementation "curse.maven:TheOvergrowth-714353:5616081"
+    implementation "curse.maven:chunky-485681:5437053"
 }
 
 tasks.register('genPatches') {

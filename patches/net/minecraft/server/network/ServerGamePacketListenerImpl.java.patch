@@ -17,6 +17,16 @@
      }
  
      @Override
+@@ -307,7 +_,8 @@
+ 
+         if (this.player.getLastActionTime() > 0L
+             && this.server.getPlayerIdleTimeout() > 0
+-            && Util.getMillis() - this.player.getLastActionTime() > (long)this.server.getPlayerIdleTimeout() * 1000L * 60L) {
++            && Util.getMillis() - this.player.getLastActionTime() > (long)this.server.getPlayerIdleTimeout() * 1000L * 60L && !this.player.wonGame) { // Paper - Prevent AFK kick while watching end credits
++            this.player.resetLastActionTime(); // CraftBukkit - SPIGOT-854
+             this.disconnect(Component.translatable("multiplayer.disconnect.idling"));
+         }
+     }
 @@ -397,9 +_,9 @@
                  double d0 = entity.getX();
                  double d1 = entity.getY();
@@ -169,6 +179,20 @@
          ServerLevel serverlevel = this.player.serverLevel();
          InteractionHand interactionhand = p_9930_.getHand();
          ItemStack itemstack = this.player.getItemInHand(interactionhand);
+@@ -1178,6 +_,13 @@
+ 
+     @Override
+     public void onDisconnect(DisconnectionDetails p_350554_) {
++        // CraftBukkit start - Rarely it would send a disconnect line twice
++        if (this.processedDisconnect) {
++            return;
++        } else {
++            this.processedDisconnect = true;
++        }
++        // CraftBukkit end
+         LOGGER.info("{} lost connection: {}", this.player.getName().getString(), p_350554_.reason().getString());
+         this.removePlayerFromWorld();
+         super.onDisconnect(p_350554_);
 @@ -1219,6 +_,12 @@
  
      @Override
