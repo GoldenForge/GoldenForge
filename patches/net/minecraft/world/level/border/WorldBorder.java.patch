@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/level/border/WorldBorder.java
++++ b/net/minecraft/world/level/border/WorldBorder.java
+@@ -33,6 +_,20 @@
+         return this.isWithinBounds((double)p_61938_.getX(), (double)p_61938_.getZ());
+     }
+ 
++    // Paper start - Bound treasure maps to world border
++    private final BlockPos.MutableBlockPos mutPos = new BlockPos.MutableBlockPos();
++
++    public boolean isBlockInBounds(int chunkX, int chunkZ) {
++        this.mutPos.set(chunkX, 64, chunkZ);
++        return this.isWithinBounds(this.mutPos);
++    }
++
++    public boolean isChunkInBounds(int chunkX, int chunkZ) {
++        this.mutPos.set(((chunkX << 4) + 15), 64, (chunkZ << 4) + 15);
++        return this.isWithinBounds(this.mutPos);
++    }
++    // Paper end - Bound treasure maps to world border
++
+     public boolean isWithinBounds(Vec3 p_352959_) {
+         return this.isWithinBounds(p_352959_.x, p_352959_.z);
+     }
