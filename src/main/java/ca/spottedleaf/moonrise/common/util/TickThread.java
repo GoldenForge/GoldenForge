@@ -98,7 +98,7 @@ public class TickThread extends Thread {
     }
 
     public TickThread(final Runnable run, final String name) {
-        this(null, run, name);
+        this(net.neoforged.fml.util.thread.SidedThreadGroups.SERVER, run, name);
     }
 
     public TickThread(final ThreadGroup group, final Runnable run, final String name) {

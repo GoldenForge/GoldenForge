@@ -20,10 +20,7 @@ import io.papermc.paper.configuration.transformation.world.FeatureSeedsGeneratio
 import io.papermc.paper.configuration.transformation.world.versioned.V29_ZeroWorldHeight;
 import io.papermc.paper.configuration.transformation.world.versioned.V30_RenameFilterNbtFromSpawnEgg;
 import io.papermc.paper.configuration.transformation.world.versioned.V31_SpawnLoadedRangeToGameRule;
-import io.papermc.paper.configuration.type.BooleanOrDefault;
-import io.papermc.paper.configuration.type.Duration;
-import io.papermc.paper.configuration.type.DurationOrDisabled;
-import io.papermc.paper.configuration.type.EngineMode;
+import io.papermc.paper.configuration.type.*;
 import io.papermc.paper.configuration.type.fallback.FallbackValueSerializer;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
@@ -221,6 +218,7 @@ public class PaperConfigurations extends Configurations<GlobalConfiguration, Wor
                                 .register(new TypeToken<Reference2IntMap<?>>() {}, new FastutilMapSerializer.SomethingToPrimitive<Reference2IntMap<?>>(Reference2IntOpenHashMap::new, Integer.TYPE))
                                 .register(new TypeToken<Reference2LongMap<?>>() {}, new FastutilMapSerializer.SomethingToPrimitive<Reference2LongMap<?>>(Reference2LongOpenHashMap::new, Long.TYPE))
                                 .register(new TypeToken<Table<?, ?, ?>>() {}, new TableSerializer())
+                                .register(DespawnRange.class, DespawnRange.SERIALIZER)
                                 .register(StringRepresentableSerializer::isValidFor, new StringRepresentableSerializer())
                                 .register(EngineMode.SERIALIZER)
                                 .register(FallbackValueSerializer.create(MinecraftServer::getServer))

@@ -222,6 +222,15 @@
                              this.setItemInHand(p_36159_, ItemStack.EMPTY);
                          }
  
+@@ -1052,7 +_,7 @@
+     }
+ 
+     @Override
+-    protected boolean isImmobile() {
++    public boolean isImmobile() {
+         return super.isImmobile() || this.isSleeping();
+     }
+ 
 @@ -1062,6 +_,7 @@
      }
  

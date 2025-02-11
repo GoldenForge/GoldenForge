@@ -1,5 +1,16 @@
 --- a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
+@@ -49,8 +_,8 @@
+     @Nullable
+     private SynchronizeRegistriesTask synchronizeRegistriesTask;
+ 
+-    public ServerConfigurationPacketListenerImpl(MinecraftServer p_294645_, Connection p_295787_, CommonListenerCookie p_302003_) {
+-        super(p_294645_, p_295787_, p_302003_);
++    public ServerConfigurationPacketListenerImpl(MinecraftServer p_294645_, Connection p_295787_, CommonListenerCookie p_302003_, ServerPlayer serverPlayer) {
++        super(p_294645_, p_295787_, p_302003_, serverPlayer);
+         this.gameProfile = p_302003_.gameProfile();
+         this.clientInformation = p_302003_.clientInformation();
+     }
 @@ -72,6 +_,15 @@
      }
  
@@ -74,7 +85,15 @@
  
          try {
              PlayerList playerlist = this.server.getPlayerList();
-@@ -141,7 +_,7 @@
+@@ -134,14 +_,14 @@
+                 return;
+             }
+ 
+-            Component component = playerlist.canPlayerLogin(this.connection.getRemoteAddress(), this.gameProfile);
++            Component component = null;
+             if (component != null) {
+                 this.disconnect(component);
+                 return;
              }
  
              ServerPlayer serverplayer = playerlist.getPlayerForLogin(this.gameProfile, this.clientInformation);

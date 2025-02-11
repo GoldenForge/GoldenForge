@@ -19,7 +19,7 @@
      private static final Logger LOGGER = LogUtils.getLogger();
      private static final int SECTOR_BYTES = 4096;
      @VisibleForTesting
-@@ -45,6 +_,21 @@
+@@ -45,8 +_,23 @@
      @VisibleForTesting
      protected final RegionBitmap usedSectors = new RegionBitmap();
  
@@ -39,8 +39,11 @@
 +    // Paper end - rewrite chunk system
 +
      public RegionFile(RegionStorageInfo p_326174_, Path p_196950_, Path p_196951_, boolean p_196952_) throws IOException {
-         this(p_326174_, p_196950_, p_196951_, RegionFileVersion.getSelected(), p_196952_);
+-        this(p_326174_, p_196950_, p_196951_, RegionFileVersion.getSelected(), p_196952_);
++        this(p_326174_, p_196950_, p_196951_,  RegionFileVersion.getCompressionFormat(), p_196952_); // Paper - Configurable region compression format
      }
+ 
+     public RegionFile(RegionStorageInfo p_326221_, Path p_63633_, Path p_63634_, RegionFileVersion p_63635_, boolean p_63636_) throws IOException {
 @@ -376,9 +_,98 @@
          }
      }

@@ -454,6 +454,18 @@
              }
  
              this.wakeUpAllPlayers();
+@@ -360,9 +_,9 @@
+         if (!this.isDebug() && flag) {
+             long k = this.getGameTime();
+             profilerfiller.push("blockTicks");
+-            this.blockTicks.tick(k, 65536, this::tickBlock);
++            this.blockTicks.tick(k, paperConfig().environment.maxBlockTicks, this::tickBlock); // Paper - configurable max block ticks
+             profilerfiller.popPush("fluidTicks");
+-            this.fluidTicks.tick(k, 65536, this::tickFluid);
++            this.fluidTicks.tick(k, paperConfig().environment.maxFluidTicks, this::tickFluid); // Paper - configurable max fluid ticks
+             profilerfiller.pop();
+         }
+ 
 @@ -380,7 +_,7 @@
  
          this.handlingTick = false;
@@ -471,6 +483,15 @@
              this.entityTickList.forEach(p_308566_ -> {
                  if (!p_308566_.isRemoved()) {
                      if (this.shouldDiscardEntity(p_308566_)) {
+@@ -401,7 +_,7 @@
+                         profilerfiller.push("checkDespawn");
+                         p_308566_.checkDespawn();
+                         profilerfiller.pop();
+-                        if (this.chunkSource.chunkMap.getDistanceManager().inEntityTickingRange(p_308566_.chunkPosition().toLong())) {
++                        if (true) { // Paper - rewrite chunk system
+                             Entity entity = p_308566_.getVehicle();
+                             if (entity != null) {
+                                 if (!entity.isRemoved() && entity.hasPassenger(p_308566_)) {
 @@ -412,7 +_,9 @@
                              }
  
@@ -767,7 +788,41 @@
          this.gameEventDispatcher.post(p_316597_, p_215042_, p_215043_);
      }
  
-@@ -1057,11 +_,16 @@
+@@ -1031,17 +_,28 @@
+ 
+         this.getChunkSource().blockChanged(p_8755_);
+         this.pathTypesByPosCache.invalidate(p_8755_);
++        if (this.paperConfig().misc.updatePathfindingOnBlockUpdate) { // Paper - option to disable pathfinding updates
+         VoxelShape voxelshape1 = p_8756_.getCollisionShape(this, p_8755_);
+         VoxelShape voxelshape = p_8757_.getCollisionShape(this, p_8755_);
+         if (Shapes.joinIsNotEmpty(voxelshape1, voxelshape, BooleanOp.NOT_SAME)) {
+             List<PathNavigation> list = new ObjectArrayList<>();
+ 
++            try { // Paper - catch CME see below why
+             for (Mob mob : this.navigatingMobs) {
+                 PathNavigation pathnavigation = mob.getNavigation();
+                 if (pathnavigation.shouldRecomputePath(p_8755_)) {
+                     list.add(pathnavigation);
+                 }
+             }
++            // Paper start - catch CME see below why
++            } catch (final java.util.ConcurrentModificationException concurrentModificationException) {
++                // This can happen because the pathfinder update below may trigger a chunk load, which in turn may cause more navigators to register
++                // In this case we just run the update again across all the iterators as the chunk will then be loaded
++                // As this is a relative edge case it is much faster than copying navigators (on either read or write)
++                this.sendBlockUpdated(p_8755_, p_8756_, p_8757_, p_8758_);
++                return;
++            }
++            // Paper end - catch CME see below why
+ 
+             try {
+                 this.isUpdatingNavigations = true;
+@@ -1053,15 +_,21 @@
+                 this.isUpdatingNavigations = false;
+             }
+         }
++        } // Paper - option to disable pathfinding updates
+     }
  
      @Override
      public void updateNeighborsAt(BlockPos p_215045_, Block p_215046_) {
@@ -947,6 +1002,14 @@
 +        crashreportcategory.setDetail("Loaded entity count", () -> String.valueOf(this.moonrise$getEntityLookup().getEntityCount()));
          return crashreportcategory;
      }
+ 
+@@ -1688,6 +_,7 @@
+         }
+ 
+         public void onTickingStart(Entity p_143363_) {
++            if (p_143363_ instanceof net.minecraft.world.entity.Marker && !paperConfig().entities.markers.tick) return; // Paper - Configurable marker ticking
+             ServerLevel.this.entityTickList.add(p_143363_);
+         }
  
 @@ -1696,6 +_,7 @@
          }

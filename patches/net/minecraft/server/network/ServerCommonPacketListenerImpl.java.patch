@@ -1,27 +1,49 @@
 --- a/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerCommonPacketListenerImpl.java
-@@ -42,6 +_,11 @@
+@@ -23,6 +_,7 @@
+ import net.minecraft.network.protocol.cookie.ServerboundCookieResponsePacket;
+ import net.minecraft.server.MinecraftServer;
+ import net.minecraft.server.level.ClientInformation;
++import net.minecraft.server.level.ServerPlayer;
+ import net.minecraft.util.VisibleForDebug;
+ import org.slf4j.Logger;
+ 
+@@ -35,20 +_,31 @@
+     protected final MinecraftServer server;
+     protected final Connection connection;
+     private final boolean transferred;
+-    private long keepAliveTime;
++    private long keepAliveTime = Util.getMillis(); // Paper
+     private boolean keepAlivePending;
+     private long keepAliveChallenge;
+     private long closedListenerTime;
      private boolean closed = false;
      private int latency;
      private volatile boolean suspendFlushingOnServerThread = false;
+-
+-    public ServerCommonPacketListenerImpl(MinecraftServer p_295057_, Connection p_294822_, CommonListenerCookie p_301980_) {
 +    /**
 +     * Holds the current connection type, based on the types of payloads that have been received so far.
 +     */
 +    protected net.neoforged.neoforge.network.connection.ConnectionType connectionType;
 +    public boolean processedDisconnect;
- 
-     public ServerCommonPacketListenerImpl(MinecraftServer p_295057_, Connection p_294822_, CommonListenerCookie p_301980_) {
++    protected final net.minecraft.server.level.ServerPlayer player;
++    private static final long KEEPALIVE_LIMIT = Long.getLong("paper.playerconnection.keepalive", 30) * 1000; // Paper - provide property to set keepalive limit
++
++
++    public ServerCommonPacketListenerImpl(MinecraftServer p_295057_, Connection p_294822_, CommonListenerCookie p_301980_, ServerPlayer serverPlayer) {
          this.server = p_295057_;
-@@ -49,6 +_,8 @@
+         this.connection = p_294822_;
          this.keepAliveTime = Util.getMillis();
          this.latency = p_301980_.latency();
          this.transferred = p_301980_.transferred();
 +        // Neo: Set the connection type based on the cookie from the previous phase.
 +        this.connectionType = p_301980_.connectionType();
++        this.player = serverPlayer;
      }
  
      private void close() {
-@@ -83,6 +_,32 @@
+@@ -83,6 +_,36 @@
  
      @Override
      public void handleCustomPayload(ServerboundCustomPayloadPacket p_294276_) {
@@ -51,20 +73,55 @@
 +            net.neoforged.neoforge.network.registration.NetworkRegistry.handleModdedPayload(this, p_294276_);
 +            return;
 +        }
++    }
++
++    public final boolean isDisconnected() {
++        return (!this.player.joining && !this.connection.isConnected()) || this.processedDisconnect; // Paper - Fix duplication bugs
      }
  
      @Override
-@@ -141,7 +_,10 @@
+@@ -102,9 +_,15 @@
+     protected void keepConnectionAlive() {
+         this.server.getProfiler().push("keepAlive");
+         long i = Util.getMillis();
+-        if (!this.isSingleplayerOwner() && i - this.keepAliveTime >= 15000L) {
++        // Paper start - give clients a longer time to respond to pings as per pre 1.12.2 timings
++        // This should effectively place the keepalive handling back to "as it was" before 1.12.2
++        final long elapsedTime = i - this.keepAliveTime;
++        if (!this.isSingleplayerOwner() && elapsedTime >= 15000L) { // use vanilla's 15000L between keep alive packets
+             if (this.keepAlivePending) {
+-                this.disconnect(TIMEOUT_DISCONNECTION_MESSAGE);
++                if (!this.processedDisconnect && elapsedTime >= KEEPALIVE_LIMIT) { // check keepalive limit, don't fire if already disconnected
++                    this.disconnect(TIMEOUT_DISCONNECTION_MESSAGE);
++                }
++                // Paper end - give clients a longer time to respond to pings as per pre 1.12.2 timings
+             } else if (this.checkIfClosed(i)) {
+                 this.keepAlivePending = true;
+                 this.keepAliveTime = i;
+@@ -141,7 +_,14 @@
          this.send(p_294278_, null);
      }
  
 +    @Override
      public void send(Packet<?> p_295099_, @Nullable PacketSendListener p_296321_) {
 +        net.neoforged.neoforge.network.registration.NetworkRegistry.checkPacket(p_295099_, this);
-+
++        // CraftBukkit start
++        if (p_295099_ == null || this.processedDisconnect) { // Spigot
++            return;
++        }
++        // CraftBukkit end
          if (p_295099_.isTerminal()) {
              this.close();
          }
+@@ -165,7 +_,7 @@
+     public void disconnect(DisconnectionDetails p_350316_) {
+         this.connection.send(new ClientboundDisconnectPacket(p_350316_.reason()), PacketSendListener.thenRun(() -> this.connection.disconnect(p_350316_)));
+         this.connection.setReadOnly();
+-        this.server.executeBlocking(this.connection::handleDisconnection);
++        this.server.scheduleOnMain(this.connection::handleDisconnection); // Paper
+     }
+ 
+     protected boolean isSingleplayerOwner() {
 @@ -183,7 +_,41 @@
          return this.latency;
      }

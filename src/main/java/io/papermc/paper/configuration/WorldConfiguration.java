@@ -5,19 +5,14 @@ import com.google.common.collect.Table;
 import com.mojang.logging.LogUtils;
 import io.papermc.paper.configuration.mapping.MergeMap;
 import io.papermc.paper.configuration.serializer.NbtPathSerializer;
+import io.papermc.paper.configuration.serializer.collections.MapSerializer;
 import io.papermc.paper.configuration.transformation.world.FeatureSeedsGeneration;
-import io.papermc.paper.configuration.type.BooleanOrDefault;
-import io.papermc.paper.configuration.type.Duration;
-import io.papermc.paper.configuration.type.DurationOrDisabled;
-import io.papermc.paper.configuration.type.EngineMode;
+import io.papermc.paper.configuration.type.*;
 import io.papermc.paper.configuration.type.fallback.AutosavePeriod;
 import io.papermc.paper.configuration.type.number.BelowZeroToEmpty;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
-import it.unimi.dsi.fastutil.objects.Reference2IntMap;
-import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
-import it.unimi.dsi.fastutil.objects.Reference2LongMap;
-import it.unimi.dsi.fastutil.objects.Reference2LongOpenHashMap;
+import it.unimi.dsi.fastutil.objects.*;
 import net.minecraft.Util;
 import net.minecraft.commands.arguments.NbtPathArgument;
 import net.minecraft.core.Holder;
@@ -44,6 +39,7 @@ import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.PostProcess;
 import org.spongepowered.configurate.objectmapping.meta.Required;
 import org.spongepowered.configurate.objectmapping.meta.Setting;
+import org.spongepowered.configurate.serialize.SerializationException;
 
 import java.util.Arrays;
 import java.util.IdentityHashMap;
@@ -154,15 +150,31 @@ public class WorldConfiguration extends ConfigurationPart {
             public boolean scanForLegacyEnderDragon = true;
             @MergeMap
             public Reference2IntMap<MobCategory> spawnLimits = Util.make(new Reference2IntOpenHashMap<>(NaturalSpawner.SPAWNING_CATEGORIES.length), map -> Arrays.stream(NaturalSpawner.SPAWNING_CATEGORIES).forEach(mobCategory -> map.put(mobCategory, -1)));
+            public DespawnRange.Shape despawnRangeShape = DespawnRange.Shape.ELLIPSOID;
             @MergeMap
-            public Map<MobCategory, DespawnRange> despawnRanges = Arrays.stream(MobCategory.values()).collect(Collectors.toMap(Function.identity(), category -> new DespawnRange(category.getNoDespawnDistance(), category.getDespawnDistance())));
+            public Map<MobCategory, DespawnRangePair> despawnRanges = Arrays.stream(MobCategory.values()).collect(Collectors.toMap(Function.identity(), category -> DespawnRangePair.createDefault()));
             @MergeMap
             public Reference2IntMap<MobCategory> ticksPerSpawn = Util.make(new Reference2IntOpenHashMap<>(NaturalSpawner.SPAWNING_CATEGORIES.length), map -> Arrays.stream(NaturalSpawner.SPAWNING_CATEGORIES).forEach(mobCategory -> map.put(mobCategory, -1)));
 
             @ConfigSerializable
-            public record DespawnRange(@Required int soft, @Required int hard) {
+            public record DespawnRangePair(@Required DespawnRange hard, @Required DespawnRange soft) {
+                public static DespawnRangePair createDefault() {
+                    return new DespawnRangePair(
+                            new DespawnRange(IntOr.Default.USE_DEFAULT),
+                            new DespawnRange(IntOr.Default.USE_DEFAULT)
+                    );
+                }
             }
 
+            @PostProcess
+            public void precomputeDespawnDistances() throws SerializationException {
+                for (Map.Entry<MobCategory, DespawnRangePair> entry : this.despawnRanges.entrySet()) {
+                    final MobCategory category = entry.getKey();
+                    final DespawnRangePair range = entry.getValue();
+                    range.hard().preComputed(category.getDespawnDistance(), category.getSerializedName());
+                    range.soft().preComputed(category.getNoDespawnDistance(), category.getSerializedName());
+                }
+            }
             public WaterAnimalSpawnHeight wateranimalSpawnHeight;
 
             public class WaterAnimalSpawnHeight extends ConfigurationPart {

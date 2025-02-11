@@ -107,7 +107,9 @@ public class GlobalConfiguration extends ConfigurationPart {
                 }
             }
         }
+
         public boolean proxyProtocol = false;
+
         public boolean isProxyOnlineMode() {
             return MinecraftServer.getServer().usesAuthentication() || (this.velocity.enabled && this.velocity.onlineMode);
         }
@@ -117,30 +119,12 @@ public class GlobalConfiguration extends ConfigurationPart {
         }
     }
 
-    public Console console;
-
-    public class Console extends ConfigurationPart {
-        public boolean enableBrigadierHighlighting = true;
-        public boolean enableBrigadierCompletions = true;
-        public boolean hasAllPermissions = false;
-    }
-
     public Watchdog watchdog;
 
     public class Watchdog extends ConfigurationPart {
         public int timeoutTime = 60;
         public int earlyWarningEvery = 5000;
         public int earlyWarningDelay = 10000;
-    }
-
-    public SpamLimiter spamLimiter;
-
-    public class SpamLimiter extends ConfigurationPart {
-        public int tabSpamIncrement = 1;
-        public int tabSpamLimit = 500;
-        public int recipeSpamIncrement = 1;
-        public int recipeSpamLimit = 20;
-        public int incomingPacketThreshold = 300;
     }
 
     public UnsupportedSettings unsupportedSettings;
@@ -165,6 +149,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         public enum CompressionFormat {
             GZIP,
             ZLIB,
+            LZ4,
             NONE
         }
     }
@@ -172,8 +157,6 @@ public class GlobalConfiguration extends ConfigurationPart {
     public Commands commands;
 
     public class Commands extends ConfigurationPart {
-        public boolean suggestPlayerNamesWhenNullTabCompletions = true;
-        public boolean fixTargetSelectorTagCompletion = true;
         public boolean timeCommandAffectsAllWorlds = false;
     }
 
@@ -181,13 +164,6 @@ public class GlobalConfiguration extends ConfigurationPart {
 
     public class Logging extends ConfigurationPart {
         public boolean deobfuscateStacktraces = true;
-    }
-
-    public Scoreboards scoreboards;
-
-    public class Scoreboards extends ConfigurationPart {
-        public boolean trackPluginScoreboards = false;
-        public boolean saveEmptyScoreboardTeams = true;
     }
 
     @SuppressWarnings("unused") // used in postProcess
@@ -297,11 +273,10 @@ public class GlobalConfiguration extends ConfigurationPart {
         public int regionFileCacheSize = 256;
         @Comment("See https://luckformula.emc.gs")
         public boolean useAlternativeLuckFormula = false;
-        public boolean useDimensionTypeForCustomSpawners = false;
-        public boolean strictAdvancementDimensionCheck = false;
         public IntOr.Default compressionLevel = IntOr.Default.USE_DEFAULT;
         @Comment("Defines the leniency distance added on the server to the interaction range of a player when validating interact packets.")
         public DoubleOr.Default clientInteractionLeniencyDistance = DoubleOr.Default.USE_DEFAULT;
+        public static double movedTooQuicklyMultiplier = 10.0D;
     }
 
     public BlockUpdates blockUpdates;

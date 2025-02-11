@@ -26,6 +26,15 @@
      private final EntityType<?> type;
      private int id = ENTITY_COUNTER.incrementAndGet();
      public boolean blocksBuilding;
+@@ -169,7 +_,7 @@
+     public float yRotO;
+     public float xRotO;
+     private AABB bb = INITIAL_AABB;
+-    private boolean onGround;
++    public boolean onGround;
+     public boolean horizontalCollision;
+     public boolean verticalCollision;
+     public boolean verticalCollisionBelow;
 @@ -190,13 +_,43 @@
      public double yOld;
      public double zOld;
@@ -999,7 +1008,7 @@
      }
  
      public void addDeltaMovement(Vec3 p_250128_) {
-@@ -3308,8 +_,19 @@
+@@ -3308,8 +_,29 @@
      }
  
      public final void setPosRaw(double p_20344_, double p_20345_, double p_20346_) {
@@ -1012,6 +1021,16 @@
 +            return;
 +        }
 +        // Paper end - rewrite chunk system
++        // Paper start - Fix MC-4
++        if (this instanceof ItemEntity) {
++            if (io.papermc.paper.configuration.GlobalConfiguration.get().misc.fixEntityPositionDesync) {
++                // encode/decode from ClientboundMoveEntityPacket
++                p_20344_ = Mth.lfloor(p_20344_ * 4096.0) * (1 / 4096.0);
++                p_20345_ = Mth.lfloor(p_20345_ * 4096.0) * (1 / 4096.0);
++                p_20346_ = Mth.lfloor(p_20346_ * 4096.0) * (1 / 4096.0);
++            }
++        }
++        // Paper end - Fix MC-4
          if (this.position.x != p_20344_ || this.position.y != p_20345_ || this.position.z != p_20346_) {
 -            this.position = new Vec3(p_20344_, p_20345_, p_20346_);
 +            synchronized (this.posLock) { // Paper

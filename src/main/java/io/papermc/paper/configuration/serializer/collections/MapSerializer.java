@@ -2,7 +2,16 @@ package io.papermc.paper.configuration.serializer.collections;
 
 import com.mojang.logging.LogUtils;
 import io.leangen.geantyref.TypeToken;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.AnnotatedType;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.spongepowered.configurate.BasicConfigurationNode;
 import org.spongepowered.configurate.ConfigurationNode;
@@ -10,31 +19,39 @@ import org.spongepowered.configurate.ConfigurationOptions;
 import org.spongepowered.configurate.NodePath;
 import org.spongepowered.configurate.serialize.SerializationException;
 import org.spongepowered.configurate.serialize.TypeSerializer;
+import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.*;
+import javax.annotation.Nullable;
 
 import static java.util.Objects.requireNonNull;
 
 /**
  * Map serializer that does not throw errors on individual entry serialization failures.
  */
-public class MapSerializer implements TypeSerializer<Map<?, ?>> {
+public class MapSerializer implements TypeSerializer.Annotated<Map<?, ?>> {
 
     public static final TypeToken<Map<?, ?>> TYPE = new TypeToken<Map<?, ?>>() {};
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private final boolean clearInvalids;
+    private final TypeSerializer<Map<?, ?>> fallback;
 
     public MapSerializer(boolean clearInvalids) {
         this.clearInvalids = clearInvalids;
+        this.fallback = requireNonNull(TypeSerializerCollection.defaults().get(TYPE), "Could not find default Map<?, ?> serializer");
     }
 
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface ThrowExceptions {}
+
     @Override
-    public Map<?, ?> deserialize(Type type, ConfigurationNode node) throws SerializationException {
+    public Map<?, ?> deserialize(AnnotatedType annotatedType, ConfigurationNode node) throws SerializationException {
+        if (annotatedType.isAnnotationPresent(ThrowExceptions.class)) {
+            return this.fallback.deserialize(annotatedType, node);
+        }
         final Map<Object, Object> map = new LinkedHashMap<>();
+        final Type type = annotatedType.getType();
         if (node.isMap()) {
             if (!(type instanceof ParameterizedType parameterizedType)) {
                 throw new SerializationException(type, "Raw types are not supported for collections");
@@ -82,13 +99,18 @@ public class MapSerializer implements TypeSerializer<Map<?, ?>> {
             return serializer.deserialize(type, node);
         } catch (SerializationException ex) {
             ex.initPath(node::path);
-            LOGGER.error("Could not deserialize {} {} into {} at {}", mapPart, node.raw(), type, path);
+            LOGGER.error("Could not deserialize {} {} into {} at {}: {}", mapPart, node.raw(), type, path, ex.rawMessage());
         }
         return null;
     }
 
     @Override
-    public void serialize(Type type, @Nullable Map<?, ?> obj, ConfigurationNode node) throws SerializationException {
+    public void serialize(AnnotatedType annotatedType, @Nullable Map<?, ?> obj, ConfigurationNode node) throws SerializationException {
+        if (annotatedType.isAnnotationPresent(ThrowExceptions.class)) {
+            this.fallback.serialize(annotatedType, obj, node);
+            return;
+        }
+        final Type type = annotatedType.getType();
         if (!(type instanceof ParameterizedType parameterizedType)) {
             throw new SerializationException(type, "Raw types are not supported for collections");
         }
@@ -143,13 +165,16 @@ public class MapSerializer implements TypeSerializer<Map<?, ?>> {
             return true;
         } catch (SerializationException ex) {
             ex.initPath(node::path);
-            LOGGER.error("Could not serialize {} {} from {} at {}", mapPart, object, type, path);
+            LOGGER.error("Could not serialize {} {} from {} at {}: {}", mapPart, object, type, path, ex.rawMessage());
         }
         return false;
     }
 
     @Override
-    public @Nullable Map<?, ?> emptyValue(Type specificType, ConfigurationOptions options) {
+    public @Nullable Map<?, ?> emptyValue(AnnotatedType specificType, ConfigurationOptions options) {
+        if (specificType.isAnnotationPresent(ThrowExceptions.class)) {
+            return this.fallback.emptyValue(specificType, options);
+        }
         return new LinkedHashMap<>();
     }
 

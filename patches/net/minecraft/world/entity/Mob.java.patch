@@ -100,7 +100,7 @@
          return itemattributemodifiers.compute(this.getAttributeBaseValue(Attributes.ATTACK_DAMAGE), EquipmentSlot.MAINHAND);
      }
  
-@@ -701,6 +_,7 @@
+@@ -701,23 +_,31 @@
  
      @Override
      public void checkDespawn() {
@@ -108,6 +108,40 @@
          if (this.level().getDifficulty() == Difficulty.PEACEFUL && this.shouldDespawnInPeaceful()) {
              this.discard();
          } else if (!this.isPersistenceRequired() && !this.requiresCustomPersistence()) {
+             Entity entity = this.level().getNearestPlayer(this, -1.0);
+             if (entity != null) {
+-                double d0 = entity.distanceToSqr(this);
+-                int i = this.getType().getCategory().getDespawnDistance();
+-                int j = i * i;
+-                if (d0 > (double)j && this.removeWhenFarAway(d0)) {
+-                    this.discard();
++                // Paper start - Configurable despawn distances
++                final io.papermc.paper.configuration.WorldConfiguration.Entities.Spawning.DespawnRangePair despawnRangePair = this.level().paperConfig().entities.spawning.despawnRanges.get(this.getType().getCategory());
++                final io.papermc.paper.configuration.type.DespawnRange.Shape shape = this.level().paperConfig().entities.spawning.despawnRangeShape;
++                final double dy = Math.abs(entity.getY() - this.getY());
++                final double dySqr = Math.pow(dy, 2);
++                final double dxSqr = Math.pow(entity.getX() - this.getX(), 2);
++                final double dzSqr = Math.pow(entity.getZ() - this.getZ(), 2);
++                final double distanceSquared = dxSqr + dzSqr + dySqr;
++                // Despawn if hard/soft limit is exceeded
++                if (despawnRangePair.hard().shouldDespawn(shape, dxSqr, dySqr, dzSqr, dy) && this.removeWhenFarAway(distanceSquared)) {
++                    this.discard(); // CraftBukkit - add Bukkit remove cause
+                 }
+ 
+-                int k = this.getType().getCategory().getNoDespawnDistance();
+-                int l = k * k;
+-                if (this.noActionTime > 600 && this.random.nextInt(800) == 0 && d0 > (double)l && this.removeWhenFarAway(d0)) {
+-                    this.discard();
+-                } else if (d0 < (double)l) {
++                if (despawnRangePair.soft().shouldDespawn(shape, dxSqr, dySqr, dzSqr, dy)) {
++                    if (this.noActionTime > 600 && this.random.nextInt(800) == 0 && this.removeWhenFarAway(distanceSquared)) {
++                        this.discard(); // CraftBukkit - add Bukkit remove cause
++                    }
++                } else {
++                    // Paper end - Configurable despawn distances
+                     this.noActionTime = 0;
+                 }
+             }
 @@ -1133,6 +_,11 @@
          }
      }

@@ -22,10 +22,11 @@
              ServerPlayer.this.connection.send(new ClientboundContainerSetDataPacket(p_143455_.containerId, p_143456_, p_143457_));
          }
      };
-@@ -277,6 +_,44 @@
+@@ -277,6 +_,45 @@
      private int containerCounter;
      public boolean wonGame;
  
++    public boolean joining = true;
 +    // Paper start - Optional per player mob spawns
 +    private int containerUpdateDelay; // Paper - Configurable container update tick rate
 +    public static final int MOBCATEGORY_TOTAL_ENUMS = net.minecraft.world.entity.MobCategory.values().length;
@@ -67,6 +68,18 @@
      public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_301997_) {
          super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
          this.textFilter = p_254143_.createTextFilterForPlayer(this);
+@@ -489,6 +_,11 @@
+ 
+     @Override
+     public void tick() {
++        // CraftBukkit start
++        if (this.joining) {
++            this.joining = false;
++        }
++        // CraftBukkit end
+         this.gameMode.tick();
+         this.wardenSpawnTracker.tick();
+         this.spawnInvulnerableTime--;
 @@ -496,7 +_,12 @@
              this.invulnerableTime--;
          }
@@ -410,3 +423,14 @@
      }
  
      public boolean allowsListing() {
+@@ -1967,5 +_,10 @@
+             Vec3 vec3 = Vec3.atBottomCenterOf(p_348467_).subtract(p_348686_).normalize();
+             return (float)Mth.wrapDegrees(Mth.atan2(vec3.z, vec3.x) * 180.0F / (float)Math.PI - 90.0);
+         }
++    }
++
++    @Override
++    public boolean isImmobile() {
++        return super.isImmobile() || (this.connection != null && this.connection.isDisconnected()); // Paper - Fix duplication bugs
+     }
+ }
