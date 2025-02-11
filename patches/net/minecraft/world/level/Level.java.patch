@@ -47,6 +47,15 @@
      public static final Codec<ResourceKey<Level>> RESOURCE_KEY_CODEC = ResourceKey.codec(Registries.DIMENSION);
      public static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION, ResourceLocation.withDefaultNamespace("overworld"));
      public static final ResourceKey<Level> NETHER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.withDefaultNamespace("the_nether"));
+@@ -88,7 +_,7 @@
+     public static final int TICKS_PER_DAY = 24000;
+     public static final int MAX_ENTITY_SPAWN_Y = 20000000;
+     public static final int MIN_ENTITY_SPAWN_Y = -20000000;
+-    protected final List<TickingBlockEntity> blockEntityTickers = Lists.newArrayList();
++    public final net.sparklypower.sparklypaper.BlockEntityTickersList blockEntityTickers = new net.sparklypower.sparklypaper.BlockEntityTickersList(); // Paper - public // SparklyPaper - optimize block entity removals
+     protected final NeighborUpdater neighborUpdater;
+     private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();
+     private boolean tickingBlockEntities;
 @@ -101,7 +_,7 @@
      public float rainLevel;
      public float oThunderLevel;
@@ -832,7 +841,7 @@
      }
  
      public void updateNeighborsAtExceptFromFacing(BlockPos p_46591_, Block p_46592_, Direction p_46593_) {
-@@ -489,41 +_,98 @@
+@@ -489,41 +_,97 @@
          (this.tickingBlockEntities ? this.pendingBlockEntityTickers : this.blockEntityTickers).add(p_151526_);
      }
  
@@ -872,8 +881,6 @@
 -        while (iterator.hasNext()) {
 -            TickingBlockEntity tickingblockentity = iterator.next();
 +        int tickedEntities = 0; // Paper - rewrite chunk system
-+
-+        int tilesThisCycle = 0;
 +        var toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<TickingBlockEntity>(); // Paper - Fix MC-117075; use removeAll
 +        toRemove.add(null); // Paper - Fix MC-117075
 +        for (tileTickPosition = 0; tileTickPosition < this.blockEntityTickers.size(); tileTickPosition++) { // Paper - Disable tick limiters
@@ -884,8 +891,7 @@
              if (tickingblockentity.isRemoved()) {
 -                iterator.remove();
 +                // Spigot start
-+                tilesThisCycle--;
-+                toRemove.add(tickingblockentity); // Paper - Fix MC-117075; use removeAll
++                this.blockEntityTickers.markAsRemoved(this.tileTickPosition); // toRemove.add(tickingBlockEntity); // SparklyPaper - optimize block entity removals // Paper - Fix MC-117075; use removeAll
 +                // Spigot end
              } else if (flag && this.shouldTickBlocksAt(tickingblockentity.getPos())) {
                  tickingblockentity.tick();
@@ -896,9 +902,10 @@
 +                // Paper end - rewrite chunk system
              }
          }
--
 +        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075
-+        
++
++        this.blockEntityTickers.removeMarkedEntries(); // SparklyPaper - optimize block entity removals
+ 
          this.tickingBlockEntities = false;
 -        profilerfiller.pop();
 +        gameprofilerfiller.pop();
