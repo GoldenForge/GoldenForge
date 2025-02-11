@@ -326,36 +326,7 @@
      }
  
      private boolean isLevelRunningNormally() {
-@@ -2003,17 +_,17 @@
- 
-         try {
-             p_261564_.saveDataTag(p_261470_.registries().compositeAccess(), p_261470_.worldData());
--            Services services = Services.create(this.authenticationService, this.gameDirectory);
--            services.profileCache().setExecutor(this);
--            SkullBlockEntity.setup(services, this);
--            GameProfileCache.setUsesAuthentication(false);
--            this.singleplayerServer = MinecraftServer.spin(
--                p_231361_ -> new IntegratedServer(p_231361_, this, p_261564_, p_261826_, p_261470_, services, p_319374_ -> {
--                        StoringChunkProgressListener storingchunkprogresslistener = StoringChunkProgressListener.createFromGameruleRadius(p_319374_ + 0);
--                        this.progressListener.set(storingchunkprogresslistener);
--                        return ProcessorChunkProgressListener.createStarted(storingchunkprogresslistener, this.progressTasks::add);
--                    })
--            );
-+//            Services services = Services.create(this.authenticationService, this.gameDirectory);
-+//            services.profileCache().setExecutor(this);
-+//            SkullBlockEntity.setup(services, this);
-+//            GameProfileCache.setUsesAuthentication(false);
-+//            this.singleplayerServer = MinecraftServer.spin(
-+//                p_231361_ -> new IntegratedServer(p_231361_, this, p_261564_, p_261826_, p_261470_, services, p_319374_ -> {
-+//                        StoringChunkProgressListener storingchunkprogresslistener = StoringChunkProgressListener.createFromGameruleRadius(p_319374_ + 0);
-+//                        this.progressListener.set(storingchunkprogresslistener);
-+//                        return ProcessorChunkProgressListener.createStarted(storingchunkprogresslistener, this.progressTasks::add);
-+//                    })
-+//            );
-             this.isLocalServer = true;
-             this.updateReportEnvironment(ReportEnvironment.local());
-             this.quickPlayLog.setWorldData(QuickPlayLog.Type.SINGLEPLAYER, p_261564_.getLevelId(), p_261470_.worldData().getLevelName());
-@@ -2056,13 +_,14 @@
+@@ -2056,7 +_,8 @@
      }
  
      public void setLevel(ClientLevel p_91157_, ReceivingLevelScreen.Reason p_341652_) {
@@ -365,16 +336,7 @@
          this.level = p_91157_;
          this.updateLevelInEngines(p_91157_);
          if (!this.isLocalServer) {
--            Services services = Services.create(this.authenticationService, this.gameDirectory);
--            services.profileCache().setExecutor(this);
--            SkullBlockEntity.setup(services, this);
-+//            Services services = Services.create(this.authenticationService, this.gameDirectory);
-+//            services.profileCache().setExecutor(this);
-+//            SkullBlockEntity.setup(services, this);
-             GameProfileCache.setUsesAuthentication(false);
-         }
-     }
-@@ -2093,6 +_,7 @@
+@@ -2093,13 +_,16 @@
          IntegratedServer integratedserver = this.singleplayerServer;
          this.singleplayerServer = null;
          this.gameRenderer.resetData();
@@ -382,7 +344,8 @@
          this.gameMode = null;
          this.narrator.clear();
          this.clientLevelTeardownInProgress = true;
-@@ -2100,6 +_,7 @@
+ 
++        var shouldRevertRegistriesToFrozen = this.getConnection() != null && this.getConnection().getConnection() != null; // Neo: Track whether to revert registries after disconnect
          try {
              this.updateScreenAndTick(p_320248_);
              if (this.level != null) {
@@ -390,6 +353,14 @@
                  if (integratedserver != null) {
                      this.profiler.push("waitForServer");
  
+@@ -2122,6 +_,7 @@
+         }
+ 
+         SkullBlockEntity.clear();
++        if(shouldRevertRegistriesToFrozen) net.neoforged.neoforge.registries.RegistryManager.revertToFrozen(); // Neo: Revert registries to frozen on disconnect
+     }
+ 
+     public void clearDownloadedResourcePacks() {
 @@ -2258,6 +_,7 @@
  
      private void pickBlock() {
