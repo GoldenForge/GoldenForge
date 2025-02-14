@@ -1,0 +1,64 @@
+--- a/net/minecraft/world/level/GameRules.java
++++ b/net/minecraft/world/level/GameRules.java
+@@ -203,6 +_,7 @@
+         })
+     );
+     private final Map<GameRules.Key<?>, GameRules.Value<?>> rules;
++    private final GameRules.Value<?>[] gameruleArray; // Paper - Perf: Use array for gamerule storage
+ 
+     public static <T extends GameRules.Value<T>> GameRules.Key<T> register(String p_46190_, GameRules.Category p_46191_, GameRules.Type<T> p_46192_) {
+         GameRules.Key<T> key = new GameRules.Key<>(p_46190_, p_46191_);
+@@ -221,14 +_,41 @@
+ 
+     public GameRules() {
+         this.rules = GAME_RULE_TYPES.entrySet().stream().collect(ImmutableMap.toImmutableMap(Entry::getKey, p_46210_ -> p_46210_.getValue().createRule()));
++
++        // Paper start - Perf: Use array for gamerule storage
++        int arraySize = GameRules.Key.lastGameRuleIndex + 1;
++        GameRules.Value<?>[] values = new GameRules.Value[arraySize];
++
++        for (Entry<GameRules.Key<?>, GameRules.Value<?>> entry : rules.entrySet()) {
++            values[entry.getKey().gameRuleIndex] = entry.getValue();
++        }
++
++        this.gameruleArray = values;
++        // Paper end - Perf: Use array for gamerule storage
+     }
+ 
+     private GameRules(Map<GameRules.Key<?>, GameRules.Value<?>> p_46162_) {
+         this.rules = p_46162_;
++
++        // Paper start - Perf: Use array for gamerule storage
++        int arraySize = GameRules.Key.lastGameRuleIndex + 1;
++        GameRules.Value<?>[] values = new GameRules.Value[arraySize];
++
++        for (Entry<GameRules.Key<?>, GameRules.Value<?>> entry : rules.entrySet()) {
++            values[entry.getKey().gameRuleIndex] = entry.getValue();
++        }
++
++        this.gameruleArray = values;
++        // Paper end - Perf: Use array for gamerule storage
+     }
+ 
+     public <T extends GameRules.Value<T>> T getRule(GameRules.Key<T> p_46171_) {
+-        return (T)this.rules.get(p_46171_);
++        T value = p_46171_ == null ? null : (T) this.gameruleArray[p_46171_.gameRuleIndex]; // Paper - Perf: Use array for gamerule storage
++        if (value == null) {
++            throw new IllegalArgumentException("Tried to access invalid game rule");
++        } else {
++            return value;
++        }
+     }
+ 
+     public CompoundTag createTag() {
+@@ -462,6 +_,10 @@
+     }
+ 
+     public static final class Key<T extends GameRules.Value<T>> {
++        // Paper start - Perf: Use array for gamerule storage
++        public static int lastGameRuleIndex = 0;
++        public final int gameRuleIndex = lastGameRuleIndex++;
++        // Paper end - Perf: Use array for gamerule storage
+         final String id;
+         private final GameRules.Category category;
+ 
