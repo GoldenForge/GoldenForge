@@ -1,0 +1,12 @@
+--- a/net/minecraft/world/level/biome/BiomeManager.java
++++ b/net/minecraft/world/level/biome/BiomeManager.java
+@@ -98,8 +_,7 @@
+     }
+ 
+     private static double getFiddle(long p_186690_) {
+-        double d0 = (double)Math.floorMod(p_186690_ >> 24, 1024) / 1024.0;
+-        return (d0 - 0.5) * 0.9;
++        return (double)(((p_186690_ >> 24) & (1024 - 1)) - (1024/2)) * (0.9 / 1024.0); // Paper - avoid floorMod, fp division, and fp subtraction
+     }
+ 
+     public interface NoiseBiomeSource {
