@@ -82,7 +82,7 @@
              BlockState blockstate1 = p_256464_.getBlockState(p_76037_.below());
              FluidState fluidstate1 = blockstate1.getFluidState();
              if (blockstate1.isSolid() || this.isSourceBlockOfThisType(fluidstate1)) {
-@@ -193,38 +_,47 @@
+@@ -193,51 +_,81 @@
          }
      }
  
@@ -161,7 +161,18 @@
  
      public abstract Fluid getFlowing();
  
-@@ -235,9 +_,23 @@
+     public FluidState getFlowing(int p_75954_, boolean p_75955_) {
+-        return this.getFlowing().defaultFluidState().setValue(LEVEL, Integer.valueOf(p_75954_)).setValue(FALLING, Boolean.valueOf(p_75955_));
++        // Paper start - fluid method optimisations
++        final int amount = p_75954_;
++        if (!this.init) {
++            this.init();
++        }
++        final int index = (p_75955_ ? 1 : 0) | ((amount - MIN_LEVEL) << 1);
++        return this.flowingLookUp[index];
++        // Paper end - fluid method optimisations
+     }
+ 
      public abstract Fluid getSource();
  
      public FluidState getSource(boolean p_76069_) {
