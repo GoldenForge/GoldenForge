@@ -1,6 +1,5 @@
 package org.spigotmc;
 
-import io.papermc.paper.configuration.PaperConfigurations;
 import io.papermc.paper.configuration.WorldConfiguration;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -17,6 +16,7 @@ import net.minecraft.world.entity.boss.EnderDragonPart;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
@@ -47,10 +47,10 @@ public class ActivationRange
     // Paper start
 
     static Activity[] VILLAGER_PANIC_IMMUNITIES = {
-        Activity.HIDE,
-        Activity.PRE_RAID,
-        Activity.RAID,
-        Activity.PANIC
+            Activity.HIDE,
+            Activity.PRE_RAID,
+            Activity.RAID,
+            Activity.PANIC
     };
 
     private static int checkInactiveWakeup(Entity entity) {
@@ -244,11 +244,9 @@ public class ActivationRange
      * @param entity
      * @return
      */
-    public static int checkEntityImmunities(Entity entity) // Paper - return # of ticks to get immunity
-    {
-        // Paper start
-        WorldConfiguration config = entity.level().paperConfig();
-        int inactiveWakeUpImmunity = checkInactiveWakeup(entity);
+    public static int checkEntityImmunities(final Entity entity) { // return # of ticks to get immunity
+        final WorldConfiguration config = entity.level().paperConfig();
+        final int inactiveWakeUpImmunity = checkInactiveWakeup(entity);
         if (inactiveWakeUpImmunity > -1) {
             return inactiveWakeUpImmunity;
         }
@@ -258,59 +256,44 @@ public class ActivationRange
         if (entity.activatedImmunityTick >= MinecraftServer.currentTick) {
             return 1;
         }
-        long inactiveFor = MinecraftServer.currentTick - entity.activatedTick;
-        // Paper end
-        // quick checks.
-        if ( (entity.activationType != ActivationType.WATER && entity.wasTouchingWater && entity.isPushedByFluid()) ) // Paper
-        {
-            return 100; // Paper
-        }
-        // Paper start
-        if ( !entity.onGround() || entity.getDeltaMovement().horizontalDistanceSqr() > 9.999999747378752E-6D )
-        {
+        final long inactiveFor = MinecraftServer.currentTick - entity.activatedTick;
+        if ((entity.activationType != ActivationType.WATER && entity.isInWater() && entity.isPushedByFluid())) {
             return 100;
         }
-        // Paper end
-        if ( !( entity instanceof AbstractArrow ) )
-        {
-            if ( (!entity.onGround() && !(entity instanceof FlyingMob)) ) // Paper - remove passengers logic
-            {
-                return 10; // Paper
+        if (!entity.onGround() || entity.getDeltaMovement().horizontalDistanceSqr() > 9.999999747378752E-6D) {
+            return 100;
+        }
+        if (!(entity instanceof final AbstractArrow arrow)) {
+            if ((!entity.onGround() && !(entity instanceof FlyingMob))) {
+                return 10;
             }
-        } else if ( !( (AbstractArrow) entity ).inGround )
-        {
-            return 1; // Paper
+        } else if (!arrow.inGround) {
+            return 1;
         }
         // special cases.
-        if ( entity instanceof LivingEntity )
-        {
-            LivingEntity living = (LivingEntity) entity;
-            if ( living.onClimableCached() || living.jumping || living.hurtTime > 0 || living.activeEffects.size() > 0 || living.isFreezing()) // Paper // Pufferfish - use cached
-            {
-                return 1; // Paper
+        if (entity instanceof final LivingEntity living) {
+            if (living.onClimableCached() || living.jumping || living.hurtTime > 0 || !living.activeEffects.isEmpty() || living.isFreezing()) {
+                return 1;
             }
-            if ( entity instanceof Mob && ((Mob) entity ).getTarget() != null) // Paper
-            {
-                return 20; // Paper
+            if (entity instanceof final Mob mob && mob.getTarget() != null) {
+                return 20;
             }
-            // Paper start
-            if (entity instanceof Bee) {
-                Bee bee = (Bee)entity;
-                BlockPos movingTarget = bee.getMovingTarget();
+            if (entity instanceof final Bee bee) {
+                final BlockPos movingTarget = bee.getMovingTarget();
                 if (bee.isAngry() ||
-                    (bee.getHivePos() != null && bee.getHivePos().equals(movingTarget)) ||
-                    (bee.getSavedFlowerPos() != null && bee.getSavedFlowerPos().equals(movingTarget))
+                        (bee.getHivePos() != null && bee.getHivePos().equals(movingTarget)) ||
+                        (bee.getSavedFlowerPos() != null && bee.getSavedFlowerPos().equals(movingTarget))
                 ) {
                     return 20;
                 }
             }
-            if ( entity instanceof Villager ) {
-                Brain<Villager> behaviorController = ((Villager) entity).getBrain();
+            if (entity instanceof final Villager villager) {
+                final Brain<Villager> behaviorController = villager.getBrain();
 
                 if (config.spigotConfigs.villagersActiveForPanic) {
-                    for (Activity activity : VILLAGER_PANIC_IMMUNITIES) {
+                    for (final Activity activity : VILLAGER_PANIC_IMMUNITIES) {
                         if (behaviorController.isActive(activity)) {
-                            return 20*5;
+                            return 20 * 5;
                         }
                     }
                 }
@@ -321,41 +304,32 @@ public class ActivationRange
                     }
                 }
             }
-            if ( entity instanceof Llama && ( (Llama) entity ).inCaravan() )
-            {
+            if (entity instanceof final Llama llama && llama.inCaravan()) {
                 return 1;
             }
-            // Paper end
-            if ( entity instanceof Animal )
-            {
-                Animal animal = (Animal) entity;
-                if ( animal.isBaby() || animal.isInLove() )
-                {
-                    return 5; // Paper
+            if (entity instanceof final Animal animal) {
+                if (animal.isBaby() || animal.isInLove()) {
+                    return 5;
                 }
-                if ( entity instanceof Sheep && ( (Sheep) entity ).isSheared() )
-                {
-                    return 1; // Paper
+                if (entity instanceof final Sheep sheep && sheep.isSheared()) {
+                    return 1;
                 }
             }
-            if (entity instanceof Creeper && ((Creeper) entity).isIgnited()) { // isExplosive
-                return 20; // Paper
+            if (entity instanceof final Creeper creeper && creeper.isIgnited()) { // isExplosive
+                return 20;
             }
-            // Paper start
-            if (entity instanceof Mob && ((Mob) entity).targetSelector.hasTasks() ) {
+            if (entity instanceof final Mob mob && mob.targetSelector.hasTasks()) {
                 return 0;
             }
-            if (entity instanceof Pillager) {
-                Pillager pillager = (Pillager) entity;
+            if (entity instanceof final Pillager pillager) {
                 // TODO:?
             }
-            // Paper end
         }
         // SPIGOT-6644: Otherwise the target refresh tick will be missed
         if (entity instanceof ExperienceOrb) {
-            return 20; // Paper
+            return 20;
         }
-        return -1; // Paper
+        return -1;
     }
 
     /**
@@ -364,48 +338,38 @@ public class ActivationRange
      * @param entity
      * @return
      */
-    public static boolean checkIfActive(Entity entity)
-    {
-        // Never safe to skip fireworks or entities not yet added to chunk
-        if ( entity instanceof FireworkRocketEntity ) {
+    public static boolean checkIfActive(final Entity entity) {
+        // Never safe to skip fireworks or item gravity
+        if (entity instanceof FireworkRocketEntity || (entity instanceof ItemEntity && (entity.tickCount + entity.getId()) % 4 == 0)) { // Needed for item gravity, see ItemEntity tick
             return true;
         }
-        // Paper start - special case always immunities
-        // immunize brand new entities, dead entities, and portal scenarios
-        if (entity.defaultActivationState || entity.tickCount < 20*10 || !entity.isAlive() || (entity.portalProcess != null && !entity.portalProcess.hasExpired()) || entity.portalCooldown > 0) {
+        // special case always immunities
+        // immunize brand-new entities, dead entities, and portal scenarios
+        if (entity.defaultActivationState || entity.tickCount < 20 * 10 || !entity.isAlive() || (entity.portalProcess != null && !entity.portalProcess.hasExpired()) || entity.portalCooldown > 0) {
             return true;
         }
         // immunize leashed entities
-        if (entity instanceof Mob && ((Mob)entity).getLeashHolder() instanceof Player) {
+        if (entity instanceof final Mob mob && mob.getLeashHolder() instanceof Player) {
             return true;
         }
-        // Paper end
 
         boolean isActive = entity.activatedTick >= MinecraftServer.currentTick;
-        entity.isTemporarilyActive = false; // Paper
+        entity.isTemporarilyActive = false;
 
         // Should this entity tick?
-        if ( !isActive )
-        {
-            if ( ( MinecraftServer.currentTick - entity.activatedTick - 1 ) % 20 == 0 )
-            {
+        if (!isActive) {
+            if ((MinecraftServer.currentTick - entity.activatedTick - 1) % 20 == 0) {
                 // Check immunities every 20 ticks.
-                // Paper start
-                int immunity = checkEntityImmunities(entity);
+                final int immunity = checkEntityImmunities(entity);
                 if (immunity >= 0) {
                     entity.activatedTick = MinecraftServer.currentTick + immunity;
                 } else {
                     entity.isTemporarilyActive = true;
                 }
-                // Paper end
                 isActive = true;
-
             }
-            // Add a little performance juice to active entities. Skip 1/4 if not immune.
-        } else if ( (entity.tickCount + entity.getId()) % 4 == 0 && ActivationRange.checkEntityImmunities( entity ) < 0 ) // Paper
-        {
-            isActive = false;
         }
+        // removed the original's dumb tick skipping for active entities
         return isActive;
     }
 }
