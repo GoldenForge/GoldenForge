@@ -145,11 +145,27 @@
                                          WorldDimensions.Complete worlddimensions$complete = worlddimensions.bake(registry);
                                          Lifecycle lifecycle = worlddimensions$complete.lifecycle().add(p_307161_.datapackWorldgen().allRegistriesLifecycle());
                                          return new WorldLoader.DataLoadOutput<>(
-@@ -273,6 +_,7 @@
-                 @Override
-                 public void run() {
-                     dedicatedserver.halt(true);
-+                    org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
+@@ -269,14 +_,15 @@
+                     return dedicatedserver1;
                  }
-             };
-             thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
+             );
+-            Thread thread = new Thread("Server Shutdown Thread") {
+-                @Override
+-                public void run() {
+-                    dedicatedserver.halt(true);
+-                }
+-            };
+-            thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
+-            Runtime.getRuntime().addShutdownHook(thread);
++//            Thread thread = new Thread("Server Shutdown Thread") {
++//                @Override
++//                public void run() {
++//                    dedicatedserver.halt(true);
++//                    org.apache.logging.log4j.LogManager.shutdown(); // we're manually managing the logging shutdown on the server. Make sure we do it here at the end.
++//                }
++//            };
++//            thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
++//            Runtime.getRuntime().addShutdownHook(thread);
+         } catch (Exception exception1) {
+             LOGGER.error(LogUtils.FATAL_MARKER, "Failed to start the minecraft server", (Throwable)exception1);
+         }
