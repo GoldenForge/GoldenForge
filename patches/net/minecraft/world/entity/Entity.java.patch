@@ -26,7 +26,13 @@
      private final EntityType<?> type;
      private int id = ENTITY_COUNTER.incrementAndGet();
      public boolean blocksBuilding;
-@@ -169,7 +_,7 @@
+@@ -164,12 +_,12 @@
+     private BlockPos blockPosition;
+     private ChunkPos chunkPosition;
+     private Vec3 deltaMovement = Vec3.ZERO;
+-    private float yRot;
++    public float yRot;
+     private float xRot;
      public float yRotO;
      public float xRotO;
      private AABB bb = INITIAL_AABB;
