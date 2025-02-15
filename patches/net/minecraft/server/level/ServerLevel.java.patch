@@ -391,12 +391,11 @@
          this.serverLevelData = p_215002_;
          ChunkGenerator chunkgenerator = p_215004_.generator();
          boolean flag = p_214999_.forceSynchronousWrites();
-@@ -248,7 +_,7 @@
-             this,
+@@ -249,6 +_,7 @@
              p_214999_
          );
--        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
-+        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage, this.moonrise$getEntityLookup());
+         this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++        this.entityManager.setEntityGetter(this.moonrise$getEntityLookup());
          this.chunkSource = new ServerChunkCache(
              this,
              p_215001_,

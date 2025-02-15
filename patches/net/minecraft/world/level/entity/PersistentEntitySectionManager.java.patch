@@ -1,18 +1,23 @@
 --- a/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
 +++ b/net/minecraft/world/level/entity/PersistentEntitySectionManager.java
-@@ -42,14 +_,14 @@
+@@ -36,7 +_,7 @@
+     private final EntityPersistentStorage<T> permanentStorage;
+     private final EntityLookup<T> visibleEntityStorage;
+     final EntitySectionStorage<T> sectionStorage;
+-    private final LevelEntityGetter<T> entityGetter;
++    private LevelEntityGetter<T> entityGetter;
+     private final Long2ObjectMap<Visibility> chunkVisibility = new Long2ObjectOpenHashMap<>();
+     private final Long2ObjectMap<PersistentEntitySectionManager.ChunkLoadStatus> chunkLoadStatuses = new Long2ObjectOpenHashMap<>();
      private final LongSet chunksToUnload = new LongOpenHashSet();
-     private final Queue<ChunkEntities<T>> loadingInbox = Queues.newConcurrentLinkedQueue();
- 
--    public PersistentEntitySectionManager(Class<T> p_157503_, LevelCallback<T> p_157504_, EntityPersistentStorage<T> p_157505_) {
-+    public PersistentEntitySectionManager(Class<T> p_157503_, LevelCallback<T> p_157504_, EntityPersistentStorage<T> p_157505_, ca.spottedleaf.moonrise.patches.chunk_system.level.entity.EntityLookup entityLookup) {
-         this.visibleEntityStorage = new EntityLookup<>();
-         this.sectionStorage = new EntitySectionStorage<>(p_157503_, this.chunkVisibility);
-         this.chunkVisibility.defaultReturnValue(Visibility.HIDDEN);
+@@ -49,7 +_,11 @@
          this.chunkLoadStatuses.defaultReturnValue(PersistentEntitySectionManager.ChunkLoadStatus.FRESH);
          this.callbacks = p_157504_;
          this.permanentStorage = p_157505_;
 -        this.entityGetter = new LevelEntityGetterAdapter<>(this.visibleEntityStorage, this.sectionStorage);
++    }
++
++    // Goldenforge: in case mod use it.. can't be in the constructor since moonlight inject here
++    public void setEntityGetter(ca.spottedleaf.moonrise.patches.chunk_system.level.entity.EntityLookup entityLookup) {
 +        this.entityGetter = (LevelEntityGetter<T>) entityLookup;
      }
  
