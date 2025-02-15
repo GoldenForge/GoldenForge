@@ -52,7 +52,7 @@
      public static final int MAX_ENTITY_SPAWN_Y = 20000000;
      public static final int MIN_ENTITY_SPAWN_Y = -20000000;
 -    protected final List<TickingBlockEntity> blockEntityTickers = Lists.newArrayList();
-+    public final net.sparklypower.sparklypaper.BlockEntityTickersList blockEntityTickers = new net.sparklypower.sparklypaper.BlockEntityTickersList(); // Paper - public // SparklyPaper - optimize block entity removals
++    public final List<TickingBlockEntity>blockEntityTickers = new net.sparklypower.sparklypaper.BlockEntityTickersList(); // Paper - public // SparklyPaper - optimize block entity removals
      protected final NeighborUpdater neighborUpdater;
      private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();
      private boolean tickingBlockEntities;
@@ -900,7 +900,7 @@
              if (tickingblockentity.isRemoved()) {
 -                iterator.remove();
 +                // Spigot start
-+                this.blockEntityTickers.markAsRemoved(this.tileTickPosition); // toRemove.add(tickingBlockEntity); // SparklyPaper - optimize block entity removals // Paper - Fix MC-117075; use removeAll
++                ((net.sparklypower.sparklypaper.BlockEntityTickersList) this.blockEntityTickers).markAsRemoved(this.tileTickPosition); // toRemove.add(tickingBlockEntity); // SparklyPaper - optimize block entity removals // Paper - Fix MC-117075; use removeAll
 +                // Spigot end
              } else if (flag && this.shouldTickBlocksAt(tickingblockentity.getPos())) {
                  tickingblockentity.tick();
@@ -913,7 +913,7 @@
          }
 +        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075
 +
-+        this.blockEntityTickers.removeMarkedEntries(); // SparklyPaper - optimize block entity removals
++        ((net.sparklypower.sparklypaper.BlockEntityTickersList) this.blockEntityTickers).removeMarkedEntries(); // SparklyPaper - optimize block entity removals
  
          this.tickingBlockEntities = false;
 -        profilerfiller.pop();
