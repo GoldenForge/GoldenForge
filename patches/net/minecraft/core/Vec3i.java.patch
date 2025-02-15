@@ -1,0 +1,24 @@
+--- a/net/minecraft/core/Vec3i.java
++++ b/net/minecraft/core/Vec3i.java
+@@ -16,9 +_,9 @@
+             p_123313_ -> IntStream.of(p_123313_.getX(), p_123313_.getY(), p_123313_.getZ())
+         );
+     public static final Vec3i ZERO = new Vec3i(0, 0, 0);
+-    private int x;
+-    private int y;
+-    private int z;
++    protected int x; // Paper - Perf: Manually inline methods in BlockPosition; protected
++    protected int y; // Paper - Perf: Manually inline methods in BlockPosition; protected
++    protected int z; // Paper - Perf: Manually inline methods in BlockPosition; protected
+ 
+     public static Codec<Vec3i> offsetCodec(int p_194651_) {
+         return CODEC.validate(
+@@ -35,7 +_,7 @@
+     }
+ 
+     @Override
+-    public boolean equals(Object p_123327_) {
++    public final boolean equals(Object p_123327_) { // Paper - Perf: Final for inline
+         if (this == p_123327_) {
+             return true;
+         } else if (!(p_123327_ instanceof Vec3i vec3i)) {
