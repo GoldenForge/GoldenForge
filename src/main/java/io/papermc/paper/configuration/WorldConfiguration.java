@@ -104,6 +104,12 @@ public class WorldConfiguration extends ConfigurationPart {
         public int otherTrackingRange = 64;
     }
 
+    public Experimental experimental;
+
+    public class Experimental extends ConfigurationPart {
+        public boolean throttleInactiveGoalSelectorTick = true;
+    }
+
     public Entities entities;
 
     public class Entities extends ConfigurationPart {
