@@ -37,3 +37,23 @@
      }
  
      public static long asLong(int p_45590_, int p_45591_) {
+@@ -78,13 +_,13 @@
+         return i ^ j;
+     }
+ 
++    //Goldenforge: c2me math opts
+     @Override
+-    public boolean equals(Object p_45607_) {
+-        if (this == p_45607_) {
+-            return true;
+-        } else {
+-            return !(p_45607_ instanceof ChunkPos chunkpos) ? false : this.x == chunkpos.x && this.z == chunkpos.z;
+-        }
++    public boolean equals(Object obj) {
++        if (obj == this) return true;
++        if (obj == null || obj.getClass() != this.getClass()) return false;
++        var that = (ChunkPos) obj;
++        return this.x == that.x && this.z == that.z;
+     }
+ 
+     public int getMiddleBlockX() {
