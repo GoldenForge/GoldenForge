@@ -1,5 +1,112 @@
 --- a/net/minecraft/world/level/biome/BiomeManager.java
 +++ b/net/minecraft/world/level/biome/BiomeManager.java
+@@ -14,6 +_,7 @@
+     private static final int ZOOM_MASK = 3;
+     private final BiomeManager.NoiseBiomeSource noiseBiomeSource;
+     private final long biomeZoomSeed;
++    private static final double maxOffset = 0.4500000001D; // Leaf - Carpet-Fixes - Optimized getBiome method
+ 
+     public BiomeManager(BiomeManager.NoiseBiomeSource p_186677_, long p_186678_) {
+         this.noiseBiomeSource = p_186677_;
+@@ -29,39 +_,67 @@
+     }
+ 
+     public Holder<Biome> getBiome(BlockPos p_204215_) {
+-        int i = p_204215_.getX() - 2;
+-        int j = p_204215_.getY() - 2;
+-        int k = p_204215_.getZ() - 2;
+-        int l = i >> 2;
+-        int i1 = j >> 2;
+-        int j1 = k >> 2;
+-        double d0 = (double)(i & 3) / 4.0;
+-        double d1 = (double)(j & 3) / 4.0;
+-        double d2 = (double)(k & 3) / 4.0;
+-        int k1 = 0;
+-        double d3 = Double.POSITIVE_INFINITY;
+-
+-        for (int l1 = 0; l1 < 8; l1++) {
+-            boolean flag = (l1 & 4) == 0;
+-            boolean flag1 = (l1 & 2) == 0;
+-            boolean flag2 = (l1 & 1) == 0;
+-            int i2 = flag ? l : l + 1;
+-            int j2 = flag1 ? i1 : i1 + 1;
+-            int k2 = flag2 ? j1 : j1 + 1;
+-            double d4 = flag ? d0 : d0 - 1.0;
+-            double d5 = flag1 ? d1 : d1 - 1.0;
+-            double d6 = flag2 ? d2 : d2 - 1.0;
+-            double d7 = getFiddledDistance(this.biomeZoomSeed, i2, j2, k2, d4, d5, d6);
+-            if (d3 > d7) {
+-                k1 = l1;
+-                d3 = d7;
++        // Leaf start - Carpet-Fixes - Optimized getBiome method
++        int xMinus2 = p_204215_.getX() - 2;
++        int yMinus2 = p_204215_.getY() - 2;
++        int zMinus2 = p_204215_.getZ() - 2;
++        int x = xMinus2 >> 2; // BlockPos to BiomePos
++        int y = yMinus2 >> 2;
++        int z = zMinus2 >> 2;
++        double quartX = (double) (xMinus2 & 3) / 4.0; // quartLocal divided by 4
++        double quartY = (double) (yMinus2 & 3) / 4.0; // 0/4, 1/4, 2/4, 3/4
++        double quartZ = (double) (zMinus2 & 3) / 4.0; // [0, 0.25, 0.5, 0.75]
++        int smallestX = 0;
++        double smallestDist = Double.POSITIVE_INFINITY;
++        for (int biomeX = 0; biomeX < 8; ++biomeX) {
++            boolean everyOtherQuad = (biomeX & 4) == 0; // 1 1 1 1 0 0 0 0
++            boolean everyOtherPair = (biomeX & 2) == 0; // 1 1 0 0 1 1 0 0
++            boolean everyOther = (biomeX & 1) == 0; // 1 0 1 0 1 0 1 0
++            double quartXX = everyOtherQuad ? quartX : quartX - 1.0; //[-1.0,-0.75,-0.5,-0.25,0.0,0.25,0.5,0.75]
++            double quartYY = everyOtherPair ? quartY : quartY - 1.0;
++            double quartZZ = everyOther ? quartZ : quartZ - 1.0;
++
++            //This code block is new
++            double maxQuartYY = 0.0, maxQuartZZ = 0.0;
++            if (biomeX != 0) {
++                maxQuartYY = Mth.square(Math.max(quartYY + maxOffset, Math.abs(quartYY - maxOffset)));
++                maxQuartZZ = Mth.square(Math.max(quartZZ + maxOffset, Math.abs(quartZZ - maxOffset)));
++                double maxQuartXX = Mth.square(Math.max(quartXX + maxOffset, Math.abs(quartXX - maxOffset)));
++                if (smallestDist < maxQuartXX + maxQuartYY + maxQuartZZ) continue;
++            }
++            int xx = everyOtherQuad ? x : x + 1;
++            int yy = everyOtherPair ? y : y + 1;
++            int zz = everyOther ? z : z + 1;
++
++            //I transferred the code from method_38106 to here, so I could call continue halfway through
++            long seed = LinearCongruentialGenerator.next(this.biomeZoomSeed, xx);
++            seed = LinearCongruentialGenerator.next(seed, yy);
++            seed = LinearCongruentialGenerator.next(seed, zz);
++            seed = LinearCongruentialGenerator.next(seed, xx);
++            seed = LinearCongruentialGenerator.next(seed, yy);
++            seed = LinearCongruentialGenerator.next(seed, zz);
++            double offsetX = getFiddle(seed);
++            double sqrX = Mth.square(quartXX + offsetX);
++            if (biomeX != 0 && smallestDist < sqrX + maxQuartYY + maxQuartZZ) continue; //skip the rest of the loop
++            seed = LinearCongruentialGenerator.next(seed, this.biomeZoomSeed);
++            double offsetY = getFiddle(seed);
++            double sqrY = Mth.square(quartYY + offsetY);
++            if (biomeX != 0 && smallestDist < sqrX + sqrY + maxQuartZZ) continue; // skip the rest of the loop
++            seed = LinearCongruentialGenerator.next(seed, this.biomeZoomSeed);
++            double offsetZ = getFiddle(seed);
++            double biomeDist = sqrX + sqrY + Mth.square(quartZZ + offsetZ);
++
++            if (smallestDist > biomeDist) {
++                smallestX = biomeX;
++                smallestDist = biomeDist;
+             }
+         }
+-
+-        int l2 = (k1 & 4) == 0 ? l : l + 1;
+-        int i3 = (k1 & 2) == 0 ? i1 : i1 + 1;
+-        int j3 = (k1 & 1) == 0 ? j1 : j1 + 1;
+-        return this.noiseBiomeSource.getNoiseBiome(l2, i3, j3);
++        return this.noiseBiomeSource.getNoiseBiome(
++                (smallestX & 4) == 0 ? x : x + 1,
++                (smallestX & 2) == 0 ? y : y + 1,
++                (smallestX & 1) == 0 ? z : z + 1
++        );
++        // Leaf end - Carpet-Fixes - Optimized getBiome method
+     }
+ 
+     public Holder<Biome> getNoiseBiomeAtPosition(double p_204207_, double p_204208_, double p_204209_) {
 @@ -98,8 +_,7 @@
      }
  
