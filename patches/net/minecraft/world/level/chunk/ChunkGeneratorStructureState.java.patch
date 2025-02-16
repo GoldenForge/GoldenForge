@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/ChunkGeneratorStructureState.java
++++ b/net/minecraft/world/level/chunk/ChunkGeneratorStructureState.java
+@@ -159,7 +_,7 @@
+                 }
+             }
+ 
+-            return Util.sequence(list).thenApply(p_256372_ -> {
++            return (true == true ? Util.faster_sequence(list) : Util.sequence(list)).thenApply(p_256372_ -> { // Goldenforge: faster_sequence
+                 double d2 = (double)stopwatch.stop().elapsed(TimeUnit.MILLISECONDS) / 1000.0;
+                 LOGGER.debug("Calculation for {} took {}s", p_255966_, d2);
+                 return p_256372_;

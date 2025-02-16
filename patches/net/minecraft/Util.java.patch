@@ -81,6 +81,35 @@
                  throw illegalargumentexception;
              }
          }
+@@ -473,6 +_,28 @@
+         }
+     }
+ 
++    //Goldenforge: from leaf
++    public static <V> CompletableFuture<List<V>> faster_sequence(List<? extends CompletableFuture<V>> p_137568_) {
++        if (p_137568_.isEmpty()) {
++            return CompletableFuture.completedFuture(List.of());
++        } else if (p_137568_.size() == 1) {
++            return p_137568_.get(0).thenApply(List::of);
++        } else {
++            CompletableFuture<Void> completablefuture = CompletableFuture.allOf(p_137568_.toArray(new CompletableFuture[0]));
++            return completablefuture.thenCompose(void_ ->
++                    CompletableFuture.supplyAsync(() -> {
++                                List<V> list = new java.util.ArrayList<>();
++
++                                for (CompletableFuture<V> future : p_137568_) {
++                                    list.add(future.join());
++                                }
++
++                                return list;
++                            }
++                    ));
++        }
++    }
++
+     public static <V> CompletableFuture<List<V>> sequenceFailFast(List<? extends CompletableFuture<? extends V>> p_143841_) {
+         CompletableFuture<List<V>> completablefuture = new CompletableFuture<>();
+         return fallibleSequence(p_143841_, completablefuture::completeExceptionally).applyToEither(completablefuture, Function.identity());
 @@ -526,20 +_,20 @@
  
      public static void logAndPauseIfInIde(String p_143786_) {
