@@ -11,6 +11,8 @@ import ca.spottedleaf.moonrise.common.misc.LazyRunnable;
 import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 import ca.spottedleaf.moonrise.common.util.TickThread;
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
+import ca.spottedleaf.moonrise.patches.chunk_system.ChunkSystemFeatures;
+import ca.spottedleaf.moonrise.patches.chunk_system.async_save.AsyncChunkSaveData;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
 import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel;
@@ -1739,6 +1741,57 @@ public final class NewChunkHolder {
                 : null;
     }
 
+    static final class AsyncChunkSerializeTask implements Runnable {
+
+        private final ServerLevel world;
+        private final ChunkAccess chunk;
+        private final AsyncChunkSaveData asyncSaveData;
+        private final NewChunkHolder toComplete;
+
+        public AsyncChunkSerializeTask(final ServerLevel world, final ChunkAccess chunk, final AsyncChunkSaveData asyncSaveData,
+                                       final NewChunkHolder toComplete) {
+            this.world = world;
+            this.chunk = chunk;
+            this.asyncSaveData = asyncSaveData;
+            this.toComplete = toComplete;
+        }
+
+        @Override
+        public void run() {
+            final CompoundTag toSerialize;
+            try {
+                toSerialize = ChunkSystemFeatures.saveChunkAsync(this.world, this.chunk, this.asyncSaveData);
+            } catch (final Throwable throwable) {
+                LOGGER.error("Failed to asynchronously save chunk " + this.chunk.getPos() + " for world '" + WorldUtil.getWorldName(this.world) + "', falling back to synchronous save", throwable);
+                final ChunkPos pos = this.chunk.getPos();
+                ((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().scheduleChunkTask(pos.x, pos.z, () -> {
+                    final CompoundTag synchronousSave;
+                    try {
+                        synchronousSave = ChunkSystemFeatures.saveChunkAsync(AsyncChunkSerializeTask.this.world, AsyncChunkSerializeTask.this.chunk, AsyncChunkSerializeTask.this.asyncSaveData);
+                    } catch (final Throwable throwable2) {
+                        LOGGER.error("Failed to synchronously save chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + WorldUtil.getWorldName(AsyncChunkSerializeTask.this.world) + "', chunk data will be lost", throwable2);
+                        AsyncChunkSerializeTask.this.toComplete.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, null);
+                        return;
+                    }
+
+                    AsyncChunkSerializeTask.this.toComplete.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, synchronousSave);
+                    LOGGER.info("Successfully serialized chunk " + AsyncChunkSerializeTask.this.chunk.getPos() + " for world '" + WorldUtil.getWorldName(AsyncChunkSerializeTask.this.world) + "' synchronously");
+
+                }, Priority.HIGHEST);
+                return;
+            }
+            this.toComplete.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, toSerialize);
+        }
+
+        @Override
+        public String toString() {
+            return "AsyncChunkSerializeTask{" +
+                    "chunk={pos=" + this.chunk.getPos() + ",world=\"" + WorldUtil.getWorldName(this.world) + "\"}" +
+                    "}";
+        }
+    }
+
+
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
         if (!chunk.isUnsaved()) {
             if (unloading) {
@@ -1746,39 +1799,45 @@ public final class NewChunkHolder {
             }
             return false;
         }
+        boolean completing = false;
+        boolean failedAsyncPrepare = false;
         try {
-            final CompoundTag chunkData = ChunkSerializer.write(this.world, chunk);
-            PlatformHooks.get().chunkSyncSave(this.world, chunk, chunkData);
+            if (unloading && ChunkSystemFeatures.supportsAsyncChunkSave()) {
+                try {
+                    final AsyncChunkSaveData asyncSaveData = ChunkSystemFeatures.getAsyncSaveData(this.world, chunk);
 
-            chunk.setUnsaved(false);
+                    this.chunkDataUnload.toRun().setRunnable(new AsyncChunkSerializeTask(this.world, chunk, asyncSaveData, this));
 
-            final CallbackCompletable<CompoundTag> completable = new CallbackCompletable<>();
+                    chunk.setUnsaved(false);
 
-            final Runnable run = () -> {
-                final CompoundTag data = chunkData;
+                    this.chunkDataUnload.task().queue();
 
-                completable.complete(data);
-
-                if (unloading) {
-                    NewChunkHolder.this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, data);
+                    return true;
+                } catch (final Throwable thr) {
+                    LOGGER.error("Failed to prepare async chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "', falling back to synchronous save", thr);
+                    failedAsyncPrepare = true;
+                    // fall through to synchronous save
                 }
-            };
-
-            final PrioritisedExecutor.PrioritisedTask task;
-            if (unloading) {
-                this.chunkDataUnload.toRun().setRunnable(run);
-                task = this.chunkDataUnload.task();
-            } else {
-                task = this.scheduler.saveExecutor.createTask(run);
             }
 
-            task.queue();
+            final CompoundTag save = ChunkSerializer.write(this.world, chunk);
+            PlatformHooks.get().chunkSyncSave(this.world, chunk, save);
 
-            MoonriseRegionFileIO.scheduleSave(
-                    this.world, this.chunkX, this.chunkZ, completable, task, MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, Priority.NORMAL
-            );
+            if (unloading) {
+                completing = true;
+                this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, save);
+                if (failedAsyncPrepare) {
+                    LOGGER.info("Successfully serialized chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "' synchronously");
+                }
+            } else {
+                MoonriseRegionFileIO.scheduleSave(this.world, this.chunkX, this.chunkZ, save, MoonriseRegionFileIO.RegionFileType.CHUNK_DATA);
+            }
+            chunk.setUnsaved(false);
         } catch (final Throwable thr) {
             LOGGER.error("Failed to save chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
+            if (unloading && !completing) {
+                this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, null);
+            }
         }
 
         return true;
