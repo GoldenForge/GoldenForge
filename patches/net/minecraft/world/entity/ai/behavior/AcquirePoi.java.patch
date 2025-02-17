@@ -1,6 +1,14 @@
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-@@ -73,11 +_,11 @@
+@@ -1,6 +_,7 @@
+ package net.minecraft.world.entity.ai.behavior;
+ 
+ import com.mojang.datafixers.util.Pair;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.longs.Long2ObjectMap.Entry;
+@@ -73,29 +_,25 @@
                                              return true;
                                          }
                                      };
@@ -9,11 +17,76 @@
 -                                        )
 -                                        .limit(5L)
 -                                        .collect(Collectors.toSet());
+-                                    Path path = findPathToPois(p_258293_, set);
+-                                    if (path != null && path.canReach()) {
+-                                        BlockPos blockpos = path.getTarget();
+-                                        poimanager.getType(blockpos).ifPresent(p_340720_ -> {
+-                                            poimanager.take(p_260007_, (p_217108_, p_217109_) -> p_217109_.equals(blockpos), blockpos, 1);
+-                                            p_258300_.set(GlobalPos.of(p_258292_.dimension(), blockpos));
+-                                            p_260129_.ifPresent(p_147369_ -> p_258292_.broadcastEntityEvent(p_258293_, p_147369_));
+-                                            long2objectmap.clear();
+-                                            DebugPackets.sendPoiTicketCountPacket(p_258292_, blockpos);
 +                                    // Paper start - optimise POI access
 +                                    java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
 +                                    io.papermc.paper.util.PoiAccess.findNearestPoiPositions(poimanager, p_260007_, predicate, p_258293_.blockPosition(), 48, 48*48, PoiManager.Occupancy.HAS_SPACE, false, 5, poiposes);
 +                                    Set<Pair<Holder<PoiType>, BlockPos>> set = new java.util.HashSet<>(poiposes);
 +                                    // Paper end - optimise POI access
-                                     Path path = findPathToPois(p_258293_, set);
-                                     if (path != null && path.canReach()) {
-                                         BlockPos blockpos = path.getTarget();
++                                    // Kaiiju start - petal - Async path processing
++                                    if (GlobalConfiguration.get().asyncPathFinding.enabled) {
++                                        // await on path async
++                                        Path possiblePath = findPathToPois(p_258293_, set);
++
++                                        // wait on the path to be processed
++                                        org.dreeam.leaf.async.path.AsyncPathProcessor.awaitProcessing(possiblePath, path -> {
++                                            processPath(p_260007_, p_260129_, (Long2ObjectMap<JitteredLinearRetry>) long2objectmap, p_258300_, p_258292_, p_258293_, p_258294_, poimanager, set, path);
+                                         });
+                                     } else {
+-                                        for (Pair<Holder<PoiType>, BlockPos> pair : set) {
+-                                            long2objectmap.computeIfAbsent(
+-                                                pair.getSecond().asLong(), p_264881_ -> new AcquirePoi.JitteredLinearRetry(p_258292_.random, p_258294_)
+-                                            );
+-                                        }
+-                                    }
+-
++                                        // Kaiiju end
++                                        Path path = findPathToPois(p_258293_, set);
++                                        processPath(p_260007_, p_260129_, (Long2ObjectMap<JitteredLinearRetry>) long2objectmap, p_258300_, p_258292_, p_258293_, p_258294_, poimanager, set, path);
++                                    } // Kaiiju - Async path processing
+                                     return true;
+                                 }
+                             }
+@@ -105,6 +_,34 @@
+             ? oneshot
+             : BehaviorBuilder.create(p_258269_ -> p_258269_.group(p_258269_.absent(p_259129_)).apply(p_258269_, p_258302_ -> oneshot));
+     }
++
++    // Leaf start - Kaiiju - Async path processing
++    private static void processPath(Predicate<Holder<PoiType>> acquirablePois,
++                                    Optional<Byte> entityEventId,
++                                    Long2ObjectMap<JitteredLinearRetry> map,
++                                    net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor<com.mojang.datafixers.kinds.Const.Mu<com.mojang.datafixers.util.Unit>, GlobalPos> memoryAccessor,
++                                    ServerLevel level,
++                                    PathfinderMob mob,
++                                    long time,
++                                    PoiManager poiManager,
++                                    Set<Pair<Holder<PoiType>, BlockPos>> set,
++                                    Path path) {
++        if (path != null && path.canReach()) {
++            BlockPos target = path.getTarget();
++            poiManager.getType(target).ifPresent(holder -> {
++                poiManager.take(acquirablePois, (holder1, blockPos) -> blockPos.equals(target), target, 1);
++                memoryAccessor.set(GlobalPos.of(level.dimension(), target));
++                entityEventId.ifPresent(id -> level.broadcastEntityEvent(mob, id));
++                map.clear();
++                DebugPackets.sendPoiTicketCountPacket(level, target);
++            });
++        } else {
++            for (Pair<Holder<PoiType>, BlockPos> pair : set) {
++                map.computeIfAbsent(pair.getSecond().asLong(), l -> new JitteredLinearRetry(level.random, time));
++            }
++        }
++    }
++    // Leaf end - Kaiiju - Async path processing
+ 
+     @Nullable
+     public static Path findPathToPois(Mob p_217098_, Set<Pair<Holder<PoiType>, BlockPos>> p_217099_) {

@@ -85,3 +85,21 @@
              if (Bee.this.level().getBlockEntity(Bee.this.hivePos) instanceof BeehiveBlockEntity beehiveblockentity) {
                  beehiveblockentity.addOccupant(Bee.this);
              }
+@@ -799,7 +_,7 @@
+                         } else {
+                             Bee.this.pathfindRandomlyTowards(Bee.this.hivePos);
+                         }
+-                    } else {
++                    } else if (navigation.getPath() != null && navigation.getPath().isProcessed()) { // Kaiiju - petal - check processing
+                         boolean flag = this.pathfindDirectlyTowards(Bee.this.hivePos);
+                         if (!flag) {
+                             this.dropAndBlacklistHive();
+@@ -857,7 +_,7 @@
+                 return true;
+             } else {
+                 Path path = Bee.this.navigation.getPath();
+-                return path != null && path.getTarget().equals(p_28002_) && path.canReach() && path.isDone();
++                return path != null && path.isProcessed() && path.getTarget().equals(p_28002_) && path.canReach() && path.isDone(); // Kaiiju - petal - ensure path is processed
+             }
+         }
+     }

@@ -1,5 +1,60 @@
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -5,6 +_,8 @@
+ import java.util.stream.Collectors;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Vec3i;
+ import net.minecraft.network.protocol.game.DebugPackets;
+@@ -135,6 +_,10 @@
+             return null;
+         } else if (!this.canUpdatePath()) {
+             return null;
++            // Kaiiju start - petal - catch early if it's still processing these positions let it keep processing
++        } else if (this.path instanceof org.dreeam.leaf.async.path.AsyncPath asyncPath && !asyncPath.isProcessed() && asyncPath.hasSameProcessingPositions(p_148223_)) {
++            return this.path;
++            // Kaiiju end
+         } else if (this.path != null && !this.path.isDone() && p_148223_.contains(this.targetPos)) {
+             return this.path;
+         } else {
+@@ -144,11 +_,29 @@
+             PathNavigationRegion pathnavigationregion = new PathNavigationRegion(this.level, blockpos.offset(-i, -i, -i), blockpos.offset(i, i, i));
+             Path path = this.pathFinder.findPath(pathnavigationregion, this.mob, p_148223_, p_148227_, p_148226_, this.maxVisitedNodesMultiplier);
+             this.level.getProfiler().pop();
+-            if (path != null && path.getTarget() != null) {
+-                this.targetPos = path.getTarget();
+-                this.reachRange = p_148226_;
+-                this.resetStuckTimeout();
+-            }
++            // Kaiiju start - petal - async path processing
++            if (GlobalConfiguration.get().asyncPathFinding.enabled) {
++                // assign early a target position. most calls will only have 1 position
++                if (!p_148223_.isEmpty()) this.targetPos = p_148223_.iterator().next();
++
++                org.dreeam.leaf.async.path.AsyncPathProcessor.awaitProcessing(path, processedPath -> {
++                    // check that processing didn't take so long that we calculated a new path
++                    if (processedPath != this.path) return;
++
++                    if (processedPath != null && processedPath.getTarget() != null) {
++                        this.targetPos = processedPath.getTarget();
++                        this.reachRange = p_148226_;
++                        this.resetStuckTimeout();
++                    }
++                });
++            } else {
++                // Kaiiju end
++                if (path != null && path.getTarget() != null) {
++                    this.targetPos = path.getTarget();
++                    this.reachRange = p_148226_;
++                    this.resetStuckTimeout();
++                }
++            } // Kaiiju - async path processing
+ 
+             return path;
+         }
 @@ -162,9 +_,29 @@
          return this.moveTo(this.createPath(p_334082_, p_333723_, p_333873_, p_333757_), p_333795_);
      }
@@ -31,7 +86,30 @@
      }
  
      public boolean moveTo(@Nullable Path p_26537_, double p_26538_) {
-@@ -232,10 +_,10 @@
+@@ -179,8 +_,8 @@
+             if (this.isDone()) {
+                 return false;
+             } else {
+-                this.trimPath();
+-                if (this.path.getNodeCount() <= 0) {
++                if (path.isProcessed()) this.trimPath(); // Kaiiju - petal - only trim if processed
++                if (path.isProcessed() && this.path.getNodeCount() <= 0) { // Kaiiju - petal - only check node count if processed
+                     return false;
+                 } else {
+                     this.speedModifier = p_26538_;
+@@ -203,6 +_,7 @@
+         if (this.hasDelayedRecomputation) {
+             this.recomputePath();
+         }
++        if (this.path != null && !this.path.isProcessed()) return; // Kaiiju - petal - skip pathfinding if we're still processing
+ 
+         if (!this.isDone()) {
+             if (this.canUpdatePath()) {
+@@ -229,13 +_,14 @@
+     }
+ 
+     protected void followThePath() {
++        if (!this.path.isProcessed()) return; // Kaiiju - petal - skip if not processed
          Vec3 vec3 = this.getTempMobPos();
          this.maxDistanceToWaypoint = this.mob.getBbWidth() > 0.75F ? this.mob.getBbWidth() / 2.0F : 0.75F - this.mob.getBbWidth() / 2.0F;
          Vec3i vec3i = this.path.getNextNodePos();
@@ -45,3 +123,12 @@
          if (flag || this.canCutCorner(this.path.getNextNode().type) && this.shouldTargetNextNodeInDirection(vec3)) {
              this.path.advance();
          }
+@@ -385,7 +_,7 @@
+     public boolean shouldRecomputePath(BlockPos p_200904_) {
+         if (this.hasDelayedRecomputation) {
+             return false;
+-        } else if (this.path != null && !this.path.isDone() && this.path.getNodeCount() != 0) {
++        } else if (this.path != null && this.path.isProcessed() && !this.path.isDone() && this.path.getNodeCount() != 0) { // Kaiiju - petal - Skip if not processed
+             Node node = this.path.getEndNode();
+             Vec3 vec3 = new Vec3(((double)node.x + this.mob.getX()) / 2.0, ((double)node.y + this.mob.getY()) / 2.0, ((double)node.z + this.mob.getZ()) / 2.0);
+             return p_200904_.closerToCenterThan(vec3, (double)(this.path.getNodeCount() - this.path.getNextNodeIndex()));

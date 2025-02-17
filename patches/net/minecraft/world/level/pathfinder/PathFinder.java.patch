@@ -1,7 +1,51 @@
 --- a/net/minecraft/world/level/pathfinder/PathFinder.java
 +++ b/net/minecraft/world/level/pathfinder/PathFinder.java
-@@ -38,13 +_,12 @@
+@@ -11,6 +_,8 @@
+ import java.util.function.Function;
+ import java.util.stream.Collectors;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.util.profiling.ProfilerFiller;
+ import net.minecraft.util.profiling.metrics.MetricCategory;
+@@ -24,46 +_,92 @@
+     private final NodeEvaluator nodeEvaluator;
+     private static final boolean DEBUG = false;
+     private final BinaryHeap openSet = new BinaryHeap();
+-
+-    public PathFinder(NodeEvaluator p_77425_, int p_77426_) {
+-        this.nodeEvaluator = p_77425_;
+-        this.maxVisitedNodes = p_77426_;
++    private final @Nullable org.dreeam.leaf.async.path.NodeEvaluatorGenerator nodeEvaluatorGenerator; // Kaiiju - petal - we use this later to generate an evaluator
++
++    public PathFinder(NodeEvaluator nodeEvaluator, int maxVisitedNodes, @Nullable org.dreeam.leaf.async.path.NodeEvaluatorGenerator nodeEvaluatorGenerator) { // Kaiiju - petal - add nodeEvaluatorGenerator
++        this.nodeEvaluator = nodeEvaluator;
++        this.maxVisitedNodes = maxVisitedNodes;
++        // Kaiiju start - petal - support nodeEvaluatorgenerators
++        this.nodeEvaluatorGenerator = nodeEvaluatorGenerator;
++    }
++
++    public PathFinder(NodeEvaluator nodeEvaluator, int maxVisitedNodes) {
++        this(nodeEvaluator, maxVisitedNodes, null);
++        // Kaiiju end
+     }
+ 
+     @Nullable
+     public Path findPath(PathNavigationRegion p_77428_, Mob p_77429_, Set<BlockPos> p_77430_, float p_77431_, int p_77432_, float p_77433_) {
++        if (!GlobalConfiguration.get().asyncPathFinding.enabled)
+         this.openSet.clear();
+         this.nodeEvaluator.prepare(p_77428_, p_77429_);
+-        Node node = this.nodeEvaluator.getStart();
++        // Kaiiju start - petal - use a generated evaluator if we have one otherwise run sync
++        NodeEvaluator nodeEvaluator = this.nodeEvaluatorGenerator == null
++                ? this.nodeEvaluator
++                : org.dreeam.leaf.async.path.NodeEvaluatorCache.takeNodeEvaluator(this.nodeEvaluatorGenerator, this.nodeEvaluator);
++        nodeEvaluator.prepare(p_77428_, p_77429_);
++        Node node = nodeEvaluator.getStart();
++        // Kaiiju end
          if (node == null) {
++            org.dreeam.leaf.async.path.NodeEvaluatorCache.removeNodeEvaluator(nodeEvaluator); // Kaiiju - petal - handle nodeEvaluatorGenerator=
              return null;
          } else {
 -            Map<Target, BlockPos> map = p_77430_.stream()
@@ -11,22 +55,54 @@
 -                        Function.identity()
 -                    )
 -                );
+-            Path path = this.findPath(p_77428_.getProfiler(), node, map, p_77431_, p_77432_, p_77433_);
 +            // Paper start - Perf: remove streams and optimize collection
 +            List<Map.Entry<Target, BlockPos>> map = Lists.newArrayList();
 +            for (final BlockPos pos : p_77430_) {
 +                map.add(new java.util.AbstractMap.SimpleEntry<>(this.nodeEvaluator.getTarget(pos.getX(), pos.getY(), pos.getZ()), pos));
 +            }
 +            // Paper end - Perf: remove streams and optimize collection
-             Path path = this.findPath(p_77428_.getProfiler(), node, map, p_77431_, p_77432_, p_77433_);
++            // Kaiiju start - petal - async path processing
++            if (this.nodeEvaluatorGenerator == null) {
++                // run sync :(
++                org.dreeam.leaf.async.path.NodeEvaluatorCache.removeNodeEvaluator(nodeEvaluator);
++                return this.findPath0(p_77428_.getProfiler(), node, map, p_77431_, p_77432_, p_77433_);
++            }
++
++            return new org.dreeam.leaf.async.path.AsyncPath(Lists.newArrayList(), p_77430_, () -> {
++                try {
++                    return this.findPath(p_77428_.getProfiler(), nodeEvaluator, node, map, p_77431_, p_77432_, p_77433_);
++                } catch (Exception e) {
++                    e.printStackTrace();
++                    return null;
++                } finally {
++                    nodeEvaluator.done();
++                    org.dreeam.leaf.async.path.NodeEvaluatorCache.returnNodeEvaluator(nodeEvaluator);
++                }
++            });
++            // Kaiiju end
++        }
++    }
++
++    @Nullable
++    private Path findPath0(ProfilerFiller p_164717_, Node node, List<Map.Entry<Target, BlockPos>> positions, float maxRange, int accuracy, float searchDepthMultiplier) { // Paper - optimize collection
++        // Kaiiju start - petal - split pathfinding into the original sync method for compat and processing for delaying
++        try {
++            return this.findPath(p_164717_, this.nodeEvaluator, node, positions, maxRange, accuracy, searchDepthMultiplier);
++        } catch (Exception e) {
++            e.printStackTrace();
++            return null;
++        } finally {
              this.nodeEvaluator.done();
-             return path;
-@@ -52,18 +_,19 @@
+-            return path;
+         }
      }
  
      @Nullable
 -    private Path findPath(ProfilerFiller p_164717_, Node p_164718_, Map<Target, BlockPos> p_164719_, float p_164720_, int p_164721_, float p_164722_) {
 +    // Paper start - Perf: remove streams and optimize collection
-+    private Path findPath(ProfilerFiller p_164717_, Node p_164718_, List<Map.Entry<Target, BlockPos>> positions, float p_164720_, int p_164721_, float p_164722_) {
++    private synchronized Path findPath(ProfilerFiller p_164717_, NodeEvaluator nodeEvaluator, Node p_164718_, List<Map.Entry<Target, BlockPos>> positions, float p_164720_, int p_164721_, float p_164722_) {
++        org.apache.commons.lang3.Validate.isTrue(!positions.isEmpty()); // ensure that we have at least one position, which means we'll always return a path
          p_164717_.push("find_path");
          p_164717_.markForCharting(MetricCategory.PATH_FINDING);
 -        Set<Target> set = p_164719_.keySet();
@@ -45,7 +121,7 @@
          int j = (int)((float)this.maxVisitedNodes * p_164722_);
  
          while (!this.openSet.isEmpty()) {
-@@ -74,14 +_,18 @@
+@@ -74,19 +_,23 @@
              Node node = this.openSet.pop();
              node.closed = true;
  
@@ -67,6 +143,12 @@
                  break;
              }
  
+             if (!(node.distanceTo(p_164718_) >= p_164720_)) {
+-                int k = this.nodeEvaluator.getNeighbors(this.neighbors, node);
++                int k = nodeEvaluator.getNeighbors(this.neighbors, node); // Kaiiju - petal - use provided nodeEvaluator
+ 
+                 for (int l = 0; l < k; l++) {
+                     Node node1 = this.neighbors[l];
 @@ -96,7 +_,7 @@
                      if (node1.walkedDistance < p_164720_ && (!node1.inOpenSet() || f1 < node1.g)) {
                          node1.cameFrom = node;

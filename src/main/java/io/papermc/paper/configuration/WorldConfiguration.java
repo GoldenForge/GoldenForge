@@ -32,6 +32,7 @@ import net.minecraft.world.level.NaturalSpawner;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.levelgen.feature.ConfiguredFeature;
+import org.dreeam.leaf.async.path.PathfindTaskRejectPolicy;
 import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
@@ -108,6 +109,77 @@ public class WorldConfiguration extends ConfigurationPart {
 
     public class Experimental extends ConfigurationPart {
         public boolean throttleInactiveGoalSelectorTick = true;
+    }
+
+    public SmallOptimizations smallOptimizations;
+
+    public class SmallOptimizations extends ConfigurationPart {
+
+        public boolean saveFireworks = true; // Gale - EMC - make saving fireworks configurable
+        public boolean useOptimizedSheepOffspringColor = true; // Gale - carpet-fixes - optimize sheep offspring color
+
+        // Gale start - Airplane - reduce projectile chunk loading
+        public MaxProjectileChunkLoads maxProjectileChunkLoads;
+
+        public class MaxProjectileChunkLoads extends ConfigurationPart {
+
+            public int perTick = 10;
+
+            public PerProjectile perProjectile;
+
+            public class PerProjectile extends ConfigurationPart {
+                public int max = 10;
+                public boolean resetMovementAfterReachLimit = false;
+                public boolean removeFromWorldAfterReachLimit = false;
+            }
+
+        }
+        // Gale end - Airplane - reduce projectile chunk loading
+        public ReducedIntervals reducedIntervals;
+
+        public class ReducedIntervals extends ConfigurationPart {
+
+            public int acquirePoiForStuckEntity = 60; // Gale - Airplane - reduce acquire POI for stuck entities
+            public int checkStuckInWall = 10; // Gale - Pufferfish - reduce in wall checks
+            public int villagerItemRepickup = 100; // Gale - EMC - reduce villager item re-pickup
+
+            public CheckNearbyItem checkNearbyItem;
+
+            public class CheckNearbyItem extends ConfigurationPart {
+
+                // Gale start - EMC - reduce hopper item checks
+                public Hopper hopper;
+
+                public class Hopper extends ConfigurationPart {
+
+                    public int interval = 1;
+
+                    public Minecart minecart;
+
+                    public class Minecart extends ConfigurationPart {
+
+                        public int interval = 1;
+
+                        public TemporaryImmunity temporaryImmunity;
+
+                        public class TemporaryImmunity extends ConfigurationPart {
+                            public int duration = 100;
+                            public int nearbyItemMaxAge = 1200;
+                            public int checkForMinecartNearItemInterval = 20;
+                            public boolean checkForMinecartNearItemWhileActive = false; // Leaf - Reduce active items finding hopper nearby check
+                            public boolean checkForMinecartNearItemWhileInactive = true;
+                            public double maxItemHorizontalDistance = 24.0;
+                            public double maxItemVerticalDistance = 4.0;
+                        }
+
+                    }
+
+                }
+                // Gale end - EMC - reduce hopper item checks
+
+            }
+
+        }
     }
 
     public Entities entities;

@@ -4,20 +4,13 @@ import com.mojang.logging.LogUtils;
 import io.papermc.paper.configuration.constraint.Constraints;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ServerboundPlaceRecipePacket;
 import net.minecraft.server.MinecraftServer;
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.dreeam.leaf.async.path.PathfindTaskRejectPolicy;
+import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
-import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.PostProcess;
-import org.spongepowered.configurate.objectmapping.meta.Required;
 import org.spongepowered.configurate.objectmapping.meta.Setting;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
 @SuppressWarnings({"CanBeFinal", "FieldCanBeLocal", "FieldMayBeFinal", "NotNullFieldNotInitialized", "InnerClassMayBeStatic"})
 public class GlobalConfiguration extends ConfigurationPart {
@@ -286,5 +279,35 @@ public class GlobalConfiguration extends ConfigurationPart {
         public boolean disableTripwireUpdates = false;
         public boolean disableChorusPlantUpdates = false;
         public boolean disableMushroomBlockUpdates = false;
+    }
+
+    public AsyncPathFinding asyncPathFinding;
+
+    public class AsyncPathFinding extends ConfigurationPart {
+        public boolean enabled = false;
+        public int asyncPathfindingMaxThreads = 0;
+        public int asyncPathfindingKeepalive = 60;
+        public int asyncPathfindingQueueSize = 0;
+        @Comment(" The policy to use when the queue is full and a new task is submitted.\n" +
+                "            FLUSH_ALL: All pending tasks will be run on server thread.\n" +
+                "            CALLER_RUNS: Newly submitted task will be run on server thread.")
+        public PathfindTaskRejectPolicy asyncPathfindingRejectPolicy = PathfindTaskRejectPolicy.FLUSH_ALL;
+
+        @PostProcess
+        public void onLoaded() {
+            final int availableProcessors = Runtime.getRuntime().availableProcessors();
+
+            if (asyncPathfindingMaxThreads < 0)
+                asyncPathfindingMaxThreads = Math.max(availableProcessors + asyncPathfindingMaxThreads, 1);
+            else if (asyncPathfindingMaxThreads == 0)
+                asyncPathfindingMaxThreads = Math.max(availableProcessors / 4, 1);
+            if (!enabled)
+                asyncPathfindingMaxThreads = 0;
+            else
+                GoldenForge.LOGGER.info("Using {} threads for Async Pathfinding", asyncPathfindingMaxThreads);
+
+            if (asyncPathfindingQueueSize <= 0)
+                asyncPathfindingQueueSize = asyncPathfindingMaxThreads * 256;
+        }
     }
 }
