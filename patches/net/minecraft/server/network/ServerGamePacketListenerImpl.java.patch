@@ -177,7 +177,7 @@
  
              this.player
 -                .absMoveTo(
-+                    .moveTo( // Paper - Fix Entity Teleportation and cancel velocity if teleported
++                    .absMoveTo(
                      this.awaitingPositionFromClient.x,
                      this.awaitingPositionFromClient.y,
                      this.awaitingPositionFromClient.z,
