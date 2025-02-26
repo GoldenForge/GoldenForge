@@ -1,6 +1,26 @@
 --- a/net/minecraft/world/level/chunk/HashMapPalette.java
 +++ b/net/minecraft/world/level/chunk/HashMapPalette.java
-@@ -20,7 +_,7 @@
+@@ -8,19 +_,26 @@
+ import net.minecraft.network.VarInt;
+ import net.minecraft.util.CrudeIncrementalIntIdentityHashBiMap;
+ 
+-public class HashMapPalette<T> implements Palette<T> {
++public class HashMapPalette<T> implements Palette<T>, ca.spottedleaf.moonrise.patches.fast_palette.FastPalette<T> { // Paper - optimise palette reads
+     private final IdMap<T> registry;
+     private final CrudeIncrementalIntIdentityHashBiMap<T> values;
+     private final PaletteResize<T> resizeHandler;
+     private final int bits;
+ 
++    // Paper start - optimise palette reads
++    @Override
++    public final T[] moonrise$getRawPalette(final ca.spottedleaf.moonrise.patches.fast_palette.FastPaletteData<T> container) {
++        return ((ca.spottedleaf.moonrise.patches.fast_palette.FastPalette<T>)this.values).moonrise$getRawPalette(container);
++    }
++    // Paper end - optimise palette reads
++
+     public HashMapPalette(IdMap<T> p_187908_, int p_187909_, PaletteResize<T> p_187910_, List<T> p_187911_) {
+         this(p_187908_, p_187909_, p_187910_);
+         p_187911_.forEach(this.values::add);
      }
  
      public HashMapPalette(IdMap<T> p_187904_, int p_187905_, PaletteResize<T> p_187906_) {

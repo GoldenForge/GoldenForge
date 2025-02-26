@@ -1,6 +1,6 @@
 --- a/net/minecraft/util/ClassInstanceMultiMap.java
 +++ b/net/minecraft/util/ClassInstanceMultiMap.java
-@@ -4,17 +_,15 @@
+@@ -4,19 +_,17 @@
  import com.google.common.collect.Iterators;
  import com.google.common.collect.Lists;
  import com.google.common.collect.Maps;
@@ -21,40 +21,53 @@
 -    private final Map<Class<?>, List<T>> byClass = Maps.newHashMap();
 +    private final Map<Class<?>, List<T>> byClass = new Reference2ReferenceOpenHashMap<>(); // Goldenforge: lithium
      private final Class<T> baseClass;
-     private final List<T> allInstances = Lists.newArrayList();
+-    private final List<T> allInstances = Lists.newArrayList();
++    private final List<T> allInstances = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(); // VMP
  
-@@ -56,13 +_,27 @@
+     public ClassInstanceMultiMap(Class<T> p_13531_) {
+         this.baseClass = p_13531_;
+@@ -55,14 +_,37 @@
+         return this.find(p_13540_.getClass()).contains(p_13540_);
      }
  
-     public <S> Collection<S> find(Class<S> p_13534_) {
+-    public <S> Collection<S> find(Class<S> p_13534_) {
 -        if (!this.baseClass.isAssignableFrom(p_13534_)) {
 -            throw new IllegalArgumentException("Don't know how to search for " + p_13534_);
 -        } else {
 -            List<? extends T> list = this.byClass
 -                .computeIfAbsent(p_13534_, p_337572_ -> this.allInstances.stream().filter(p_337572_::isInstance).collect(Util.toMutableList()));
 -            return (Collection<S>)Collections.unmodifiableCollection(list);
--        }
-+        Collection<T> collection = this.byClass.get(p_13534_);
++    public <S> Collection<S> find(Class<S> type) {
++        // Gale start - Lithium/VMP - avoid Class#isAssignableFrom call in ClassInstanceMultiMap
++        /*
++        Only perform the slow Class#isAssignableFrom(Class) if a list doesn't exist for the type, otherwise
++        we can assume it's already valid. The slow-path code is moved to a separate method to help the JVM inline this.
++        */
++        Collection<T> collection = this.byClass.get(type);
 +
 +        if (collection == null) {
-+            collection = this.createAllOfType(p_13534_);
-+        }
++            collection = this.createAllOfType(type);
+         }
 +
-+        return (Collection<S>) Collections.unmodifiableCollection(collection);
++        return (Collection<S>) collection;
 +    }
 +
 +    private <S> Collection<T> createAllOfType(Class<S> type) {
-+        List<T> list = new ArrayList<>();
++        return this.byClass.computeIfAbsent(
++                type,
++                clazz -> {
++                    it.unimi.dsi.fastutil.objects.ObjectArrayList<T> ts = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(this.allInstances.size());
 +
-+        for (T allElement : this.allInstances) {
-+            if (type.isInstance(allElement)) {
-+                list.add(allElement);
-+            }
-+        }
++                    for (T _allElement : ((it.unimi.dsi.fastutil.objects.ObjectArrayList<T>) this.allInstances).elements()) {
++                        if (clazz.isInstance(_allElement)) {
++                            ts.add(_allElement);
++                        }
++                    }
 +
-+        this.byClass.put(type, list);
-+
-+        return list;
++                    return ts;
++                }
++        );
++        // Gale end - Lithium/VMP - avoid Class#isAssignableFrom call in ClassInstanceMultiMap
      }
  
      @Override

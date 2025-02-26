@@ -30,7 +30,7 @@
          return 0;
      }
  
-@@ -62,4 +_,22 @@
+@@ -62,4 +_,24 @@
      public BitStorage copy() {
          return this;
      }
@@ -52,4 +52,6 @@
 +        return ret;
 +    }
 +    // Paper end - block counting
++
++    @Override public <T> void compact(net.minecraft.world.level.chunk.Palette<T> srcPalette, net.minecraft.world.level.chunk.Palette<T> dstPalette, short[] out) {}  // Gale - Lithium - faster chunk serialization
  }

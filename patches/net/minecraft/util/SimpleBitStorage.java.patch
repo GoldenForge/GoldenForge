@@ -145,11 +145,10 @@
      }
  
      @Override
-@@ -361,6 +_,67 @@
-     public BitStorage copy() {
+@@ -362,9 +_,110 @@
          return new SimpleBitStorage(this.bits, this.size, (long[])this.data.clone());
      }
-+
+ 
 +    // Paper start - block counting
 +    @Override
 +    public final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> moonrise$countEntries() {
@@ -210,6 +209,50 @@
 +        }
 +    }
 +    // Paper end - block counting
- 
++
      public static class InitializationException extends RuntimeException {
          InitializationException(String p_184746_) {
+             super(p_184746_);
+         }
+     }
++
++    // Gale start - Lithium - faster chunk serialization
++    @Override
++    public <T> void compact(net.minecraft.world.level.chunk.Palette<T> srcPalette, net.minecraft.world.level.chunk.Palette<T> dstPalette, short[] out) {
++        if (this.size >= Short.MAX_VALUE) {
++            throw new IllegalStateException("Array too large");
++        }
++
++        if (this.size != out.length) {
++            throw new IllegalStateException("Array size mismatch");
++        }
++
++        short[] mappings = new short[(int) (this.mask + 1)];
++
++        int idx = 0;
++
++        for (long word : this.data) {
++            long bits = word;
++
++            for (int elementIdx = 0; elementIdx < this.valuesPerLong; ++elementIdx) {
++                int value = (int) (bits & this.mask);
++                int remappedId = mappings[value];
++
++                if (remappedId == 0) {
++                    remappedId = dstPalette.idFor(srcPalette.valueFor(value)) + 1;
++                    mappings[value] = (short) remappedId;
++                }
++
++                out[idx] = (short) (remappedId - 1);
++                bits >>= this.bits;
++
++                ++idx;
++
++                if (idx >= this.size) {
++                    return;
++                }
++            }
++        }
++    }
++    // Gale end - Lithium - faster chunk serialization
+ }
