@@ -678,15 +678,11 @@
          ServerChunkCache serverchunkcache = this.getChunkSource();
          if (!p_8646_) {
              if (p_8644_ != null) {
-@@ -801,12 +_,19 @@
+@@ -801,11 +_,21 @@
                  p_8644_.progressStage(Component.translatable("menu.savingChunks"));
              }
  
 -            serverchunkcache.save(p_8645_);
--            if (p_8645_) {
--                this.entityManager.saveAll();
--            } else {
--                this.entityManager.autoSave();
 +            if (!close) { serverchunkcache.save(p_8645_); } // Paper - add close param
 +
 +            // Paper start - add close param
@@ -696,13 +692,18 @@
 +                } catch (IOException never) {
 +                    throw new RuntimeException(never);
 +                }
-             }
++            }
 +            // Paper end - add close param
 +
 +            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.LevelEvent.Save(this));
+             if (p_8645_) {
+-                this.entityManager.saveAll();
+-            } else {
+-                this.entityManager.autoSave();
++                net.neoforged.neoforge.common.IOUtilities.waitUntilIOWorkerComplete();
+             }
          }
      }
- 
 @@ -896,6 +_,7 @@
      }
  
