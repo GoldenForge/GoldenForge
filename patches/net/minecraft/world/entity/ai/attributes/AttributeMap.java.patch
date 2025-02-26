@@ -9,12 +9,16 @@
  import net.minecraft.Util;
  import net.minecraft.core.Holder;
  import net.minecraft.core.registries.BuiltInRegistries;
-@@ -19,7 +_,7 @@
+@@ -19,9 +_,9 @@
  
  public class AttributeMap {
      private static final Logger LOGGER = LogUtils.getLogger();
 -    private final Map<Holder<Attribute>, AttributeInstance> attributes = new Object2ObjectOpenHashMap<>();
+-    private final Set<AttributeInstance> attributesToSync = new ObjectOpenHashSet<>();
+-    private final Set<AttributeInstance> attributesToUpdate = new ObjectOpenHashSet<>();
 +    private final Map<Holder<Attribute>, AttributeInstance> attributes = new Reference2ReferenceOpenHashMap<>(0); // Goldenforge: lithium
-     private final Set<AttributeInstance> attributesToSync = new ObjectOpenHashSet<>();
-     private final Set<AttributeInstance> attributesToUpdate = new ObjectOpenHashSet<>();
++    private final Set<AttributeInstance> attributesToSync = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(0); // Goldenforge: lithium
++    private final Set<AttributeInstance> attributesToUpdate = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(0); // Goldenforge: lithium
      private final AttributeSupplier supplier;
+ 
+     public AttributeMap(AttributeSupplier p_22144_) {
