@@ -1,0 +1,84 @@
+--- a/net/minecraft/world/level/block/entity/trialspawner/TrialSpawnerState.java
++++ b/net/minecraft/world/level/block/entity/trialspawner/TrialSpawnerState.java
+@@ -1,10 +_,6 @@
+ package net.minecraft.world.level.block.entity.trialspawner;
+ 
+-import java.util.List;
+-import java.util.Objects;
+-import java.util.Optional;
+-import java.util.Set;
+-import java.util.UUID;
++import java.util.*;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
+ import net.minecraft.Util;
+@@ -170,17 +_,20 @@
+     }
+ 
+     private static Optional<Vec3> calculatePositionToSpawnSpawner(ServerLevel p_338436_, BlockPos p_338583_, TrialSpawner p_338226_, TrialSpawnerData p_338461_) {
+-        List<Player> list = p_338461_.detectedPlayers
+-            .stream()
+-            .map(p_338436_::getPlayerByUUID)
+-            .filter(Objects::nonNull)
+-            .filter(
+-                p_350236_ -> !p_350236_.isCreative()
++        // Leaf start - Remove stream in trial spawner ticking
++        List<Player> list = new ArrayList<>();
++        for (UUID detectedPlayer : p_338461_.detectedPlayers) {
++            Player p_350236_ = p_338436_.getPlayerByUUID(detectedPlayer);
++            if (p_350236_ != null) {
++                if (!p_350236_.isCreative()
+                         && !p_350236_.isSpectator()
+                         && p_350236_.isAlive()
+-                        && p_350236_.distanceToSqr(p_338583_.getCenter()) <= (double)Mth.square(p_338226_.getRequiredPlayerRange())
+-            )
+-            .toList();
++                        && p_350236_.distanceToSqr(p_338583_.getCenter()) <= (double) Mth.square(p_338226_.getRequiredPlayerRange())) {
++                    list.add(p_350236_);
++                }
++            }
++        }
++        // Leaf end - Remove stream in trial spawner ticking
+         if (list.isEmpty()) {
+             return Optional.empty();
+         } else {
+@@ -202,18 +_,29 @@
+     private static Entity selectEntityToSpawnItemAbove(
+         List<Player> p_338467_, Set<UUID> p_338224_, TrialSpawner p_338687_, BlockPos p_338268_, ServerLevel p_338524_
+     ) {
+-        Stream<Entity> stream = p_338224_.stream()
+-            .map(p_338524_::getEntity)
+-            .filter(Objects::nonNull)
+-            .filter(
+-                p_338051_ -> p_338051_.isAlive() && p_338051_.distanceToSqr(p_338268_.getCenter()) <= (double)Mth.square(p_338687_.getRequiredPlayerRange())
+-            );
+-        List<? extends Entity> list = p_338524_.random.nextBoolean() ? stream.toList() : p_338467_;
+-        if (list.isEmpty()) {
+-            return null;
++        // Leaf start - Remove stream in trial spawner ticking
++        if (p_338524_.random.nextBoolean()) {
++            List<Entity> list = new java.util.ArrayList<>();
++            for (UUID uuid : p_338224_) {
++                Entity entity = p_338524_.getEntity(uuid);
++                if (entity != null && entity.isAlive() && entity.distanceToSqr(p_338268_.getCenter()) <= Mth.square(p_338687_.getRequiredPlayerRange())) {
++                    list.add(entity);
++                }
++            }
++
++            if (list.isEmpty()) {
++                return null;
++            } else {
++                return list.size() == 1 ? list.getFirst() : Util.getRandom(list, p_338524_.random);
++            }
+         } else {
+-            return list.size() == 1 ? list.getFirst() : Util.getRandom(list, p_338524_.random);
++            if (p_338467_.isEmpty()) {
++                return null;
++            } else {
++                return p_338467_.size() == 1 ? p_338467_.getFirst() : Util.getRandom(p_338467_, p_338524_.random);
++            }
+         }
++        // Leaf end - Remove stream in trial spawner ticking
+     }
+ 
+     private boolean timeToSpawnItemSpawner(ServerLevel p_338741_, TrialSpawnerData p_338296_) {

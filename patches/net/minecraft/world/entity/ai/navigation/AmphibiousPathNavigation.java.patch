@@ -1,0 +1,36 @@
+--- a/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/AmphibiousPathNavigation.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.entity.ai.navigation;
+ 
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.world.entity.Mob;
+ import net.minecraft.world.level.Level;
+@@ -12,10 +_,26 @@
+         super(p_217788_, p_217789_);
+     }
+ 
++    // Kaiiju start - petal - async path processing
++    private static final org.dreeam.leaf.async.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (org.dreeam.leaf.async.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++        AmphibiousNodeEvaluator nodeEvaluator = new AmphibiousNodeEvaluator(false);
++        nodeEvaluator.setCanPassDoors(nodeEvaluatorFeatures.canPassDoors());
++        nodeEvaluator.setCanFloat(nodeEvaluatorFeatures.canFloat());
++        nodeEvaluator.setCanWalkOverFences(nodeEvaluatorFeatures.canWalkOverFences());
++        nodeEvaluator.setCanOpenDoors(nodeEvaluatorFeatures.canOpenDoors());
++        return nodeEvaluator;
++    };
++    // Kaiiju end
++
+     @Override
+     protected PathFinder createPathFinder(int p_217792_) {
+         this.nodeEvaluator = new AmphibiousNodeEvaluator(false);
+         this.nodeEvaluator.setCanPassDoors(true);
++        // Kaiiju start - petal - async path processing
++        if (GlobalConfiguration.get().asyncPathFinding.enabled) {
++            return new PathFinder(this.nodeEvaluator, p_217792_, nodeEvaluatorGenerator);
++        }
++        // Kaiiju end
+         return new PathFinder(this.nodeEvaluator, p_217792_);
+     }
+ 

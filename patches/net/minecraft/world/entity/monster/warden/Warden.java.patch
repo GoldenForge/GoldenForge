@@ -1,0 +1,28 @@
+--- a/net/minecraft/world/entity/monster/warden/Warden.java
++++ b/net/minecraft/world/entity/monster/warden/Warden.java
+@@ -7,6 +_,8 @@
+ import java.util.Optional;
+ import java.util.function.BiConsumer;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.particles.BlockParticleOption;
+@@ -567,6 +_,16 @@
+             protected PathFinder createPathFinder(int p_219479_) {
+                 this.nodeEvaluator = new WalkNodeEvaluator();
+                 this.nodeEvaluator.setCanPassDoors(true);
++                // Kaiiju start - petal - async path processing
++                if (GlobalConfiguration.get().asyncPathFinding.enabled) {
++                    return new PathFinder(this.nodeEvaluator, p_219479_, GroundPathNavigation.nodeEvaluatorGenerator) {
++                        @Override
++                        protected float distance(Node first, Node second) {
++                            return first.distanceToXZ(second);
++                        }
++                    };
++                }
++                // Kaiiju end
+                 return new PathFinder(this.nodeEvaluator, p_219479_) {
+                     @Override
+                     protected float distance(Node p_219486_, Node p_219487_) {

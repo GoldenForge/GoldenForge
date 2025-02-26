@@ -1,0 +1,36 @@
+--- a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
+@@ -1,5 +_,6 @@
+ package net.minecraft.world.entity.ai.navigation;
+ 
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.SectionPos;
+ import net.minecraft.util.Mth;
+@@ -23,10 +_,26 @@
+         super(p_26448_, p_26449_);
+     }
+ 
++    // Kaiiju start - petal - async path processing
++    protected static final org.dreeam.leaf.async.path.NodeEvaluatorGenerator nodeEvaluatorGenerator = (org.dreeam.leaf.async.path.NodeEvaluatorFeatures nodeEvaluatorFeatures) -> {
++        WalkNodeEvaluator nodeEvaluator = new WalkNodeEvaluator();
++        nodeEvaluator.setCanPassDoors(nodeEvaluatorFeatures.canPassDoors());
++        nodeEvaluator.setCanFloat(nodeEvaluatorFeatures.canFloat());
++        nodeEvaluator.setCanWalkOverFences(nodeEvaluatorFeatures.canWalkOverFences());
++        nodeEvaluator.setCanOpenDoors(nodeEvaluatorFeatures.canOpenDoors());
++        return nodeEvaluator;
++    };
++    // Kaiiju end
++
+     @Override
+     protected PathFinder createPathFinder(int p_26453_) {
+         this.nodeEvaluator = new WalkNodeEvaluator();
+         this.nodeEvaluator.setCanPassDoors(true);
++        // Kaiiju start - petal - async path processing
++        if (GlobalConfiguration.get().asyncPathFinding.enabled) {
++            return new PathFinder(this.nodeEvaluator, p_26453_, nodeEvaluatorGenerator);
++        }
++        // Kaiiju end
+         return new PathFinder(this.nodeEvaluator, p_26453_);
+     }
+ 

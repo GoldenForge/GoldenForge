@@ -1,0 +1,38 @@
+--- a/net/minecraft/world/level/pathfinder/Path.java
++++ b/net/minecraft/world/level/pathfinder/Path.java
+@@ -11,7 +_,7 @@
+ import net.minecraft.world.phys.Vec3;
+ 
+ public class Path {
+-    private final List<Node> nodes;
++    public final List<Node> nodes;
+     @Nullable
+     private Path.DebugData debugData;
+     private int nextNodeIndex;
+@@ -26,6 +_,18 @@
+         this.reached = p_77373_;
+     }
+ 
++    // Kaiiju start - petal - async path processing
++    /**
++     * checks if the path is completely processed in the case of it being computed async
++     *
++     * @return true if the path is processed
++     */
++    public boolean isProcessed() {
++        return true;
++    }
++    // Kaiiju end
++
++
+     public void advance() {
+         this.nextNodeIndex++;
+     }
+@@ -99,6 +_,7 @@
+     }
+ 
+     public boolean sameAs(@Nullable Path p_77386_) {
++        if (p_77386_ == this) return true; // Kaiiju - petal - short circuit
+         if (p_77386_ == null) {
+             return false;
+         } else if (p_77386_.nodes.size() != this.nodes.size()) {

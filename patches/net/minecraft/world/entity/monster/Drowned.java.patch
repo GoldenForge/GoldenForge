@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/entity/monster/Drowned.java
++++ b/net/minecraft/world/entity/monster/Drowned.java
+@@ -238,7 +_,7 @@
+ 
+     protected boolean closeToNextPos() {
+         Path path = this.getNavigation().getPath();
+-        if (path != null) {
++        if (path != null && path.isProcessed()) { // Kaiiju - petal - ensure path is processed
+             BlockPos blockpos = path.getTarget();
+             if (blockpos != null) {
+                 double d0 = this.distanceToSqr((double)blockpos.getX(), (double)blockpos.getY(), (double)blockpos.getZ());

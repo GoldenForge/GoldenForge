@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/chunk/Palette.java
++++ b/net/minecraft/world/level/chunk/Palette.java
+@@ -5,7 +_,7 @@
+ import net.minecraft.core.IdMap;
+ import net.minecraft.network.FriendlyByteBuf;
+ 
+-public interface Palette<T> {
++public interface Palette<T> extends ca.spottedleaf.moonrise.patches.fast_palette.FastPalette<T> { // Paper - optimise palette reads
+     int idFor(T p_63061_);
+ 
+     boolean maybeHas(Predicate<T> p_63062_);
