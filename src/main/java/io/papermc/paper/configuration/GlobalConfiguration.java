@@ -108,7 +108,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         }
 
         public boolean shouldEnableCrossStitch() {
-            return this.velocity.enabled && this.velocity.enableCrossStitch;
+            return this.velocity.enableCrossStitch;
         }
     }
 

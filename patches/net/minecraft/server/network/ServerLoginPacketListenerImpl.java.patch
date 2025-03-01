@@ -94,47 +94,6 @@
              if (this.server.getCompressionThreshold() >= 0 && !this.connection.isMemoryConnection()) {
                  this.connection
                      .send(
-@@ -227,6 +_,40 @@
- 
-     @Override
-     public void handleCustomQueryPacket(ServerboundCustomQueryAnswerPacket p_295398_) {
-+        // Paper start - Add Velocity IP Forwarding Support
-+        if (io.papermc.paper.configuration.GlobalConfiguration.get().proxies.velocity.enabled && p_295398_.transactionId() == this.velocityLoginMessageId) {
-+            ServerboundCustomQueryAnswerPacket.QueryAnswerPayload payload = (ServerboundCustomQueryAnswerPacket.QueryAnswerPayload) p_295398_.payload();
-+            if (payload == null) {
-+                this.disconnect(Component.literal("This server requires you to connect with Velocity."));
-+                return;
-+            }
-+
-+            net.minecraft.network.FriendlyByteBuf buf = payload.buffer;
-+
-+            if (!com.destroystokyo.paper.proxy.VelocityProxy.checkIntegrity(buf)) {
-+                this.disconnect(Component.literal("Unable to verify player details"));
-+                return;
-+            }
-+
-+            int version = buf.readVarInt();
-+            if (version > com.destroystokyo.paper.proxy.VelocityProxy.MAX_SUPPORTED_FORWARDING_VERSION) {
-+                throw new IllegalStateException("Unsupported forwarding version " + version + ", wanted upto " + com.destroystokyo.paper.proxy.VelocityProxy.MAX_SUPPORTED_FORWARDING_VERSION);
-+            }
-+
-+            java.net.SocketAddress listening = this.connection.getRemoteAddress();
-+            int port = 0;
-+            if (listening instanceof java.net.InetSocketAddress) {
-+                port = ((java.net.InetSocketAddress) listening).getPort();
-+            }
-+            this.connection.address = new java.net.InetSocketAddress(com.destroystokyo.paper.proxy.VelocityProxy.readAddress(buf), port);
-+
-+            this.authenticatedProfile = com.destroystokyo.paper.proxy.VelocityProxy.createProfile(buf);
-+
-+            //TODO Update handling for lazy sessions, might not even have to do anything?
-+            ServerLoginPacketListenerImpl.this.startClientVerification(authenticatedProfile);
-+            return;
-+        }
-+        // Paper end - Add Velocity IP Forwarding Support
-         this.disconnect(ServerCommonPacketListenerImpl.DISCONNECT_UNEXPECTED_QUERY);
-     }
- 
 @@ -236,7 +_,7 @@
          this.connection.setupOutboundProtocol(ConfigurationProtocols.CLIENTBOUND);
          CommonListenerCookie commonlistenercookie = CommonListenerCookie.createInitial(Objects.requireNonNull(this.authenticatedProfile), this.transferred);
