@@ -376,14 +376,11 @@
      public ServerLevel(
          MinecraftServer p_214999_,
          Executor p_215000_,
-@@ -228,11 +_,12 @@
-             false,
-             p_215006_,
+@@ -230,9 +_,10 @@
              p_215007_,
--            p_214999_.getMaxChainedNeighborUpdates()
-+            p_214999_.getMaxChainedNeighborUpdates(),
-+            p_214999_.paperConfigurations.createWorldConfig(io.papermc.paper.configuration.PaperConfigurations.createWorldContextMap(p_215001_.getDimensionPath(p_215003_), p_215002_.getLevelName(), p_215003_.location(), p_214999_.registryAccess(), p_215002_.getGameRules()))
+             p_214999_.getMaxChainedNeighborUpdates()
          );
++        this.setPaperConfig(p_214999_.paperConfigurations.createWorldConfig(io.papermc.paper.configuration.PaperConfigurations.createWorldContextMap(p_215001_.getDimensionPath(p_215003_), p_215002_.getLevelName(), p_215003_.location(), p_214999_.registryAccess(), p_215002_.getGameRules())));
 +        this.convertable = p_215001_;
          this.tickTime = p_215009_;
          this.server = p_214999_;

@@ -83,7 +83,7 @@
 +    public int wakeupInactiveRemainingVillagers;
 +    // Paper end
 +    // Paper start - add paper world config
-+    private final io.papermc.paper.configuration.WorldConfiguration paperConfig;
++    private io.papermc.paper.configuration.WorldConfiguration paperConfig;
 +    public io.papermc.paper.configuration.WorldConfiguration paperConfig() {
 +        return this.paperConfig;
 +    }
@@ -109,7 +109,7 @@
 +    }
 +
 +    @Override
-+    public final <T extends Entity> List<T> getEntitiesOfClass(final Class<T> entityClass, final AABB boundingBox, final Predicate<? super T> predicate) {
++    public <T extends Entity> List<T> getEntitiesOfClass(final Class<T> entityClass, final AABB boundingBox, final Predicate<? super T> predicate) {
 +        this.getProfiler().incrementCounter("getEntities");
 +        final List<T> ret = new java.util.ArrayList<>();
 +
@@ -694,13 +694,9 @@
  
      protected Level(
          WritableLevelData p_270739_,
-@@ -124,8 +_,19 @@
-         boolean p_270904_,
-         boolean p_270470_,
+@@ -126,6 +_,15 @@
          long p_270248_,
--        int p_270466_
-+        int p_270466_,
-+        io.papermc.paper.configuration.WorldConfiguration paperWorldConfig
+         int p_270466_
      ) {
 +        // Paper start - getblock optimisations - cache world height/sections
 +        final DimensionType dimType = p_270240_.value();
@@ -711,16 +707,19 @@
 +        this.maxSectionY = this.maxY >> 4;
 +        this.sectionsCount = this.maxSectionY - this.minSectionY + 1;
 +        // Paper end - getblock optimisations - cache world height/sections
-+        this.paperConfig = paperWorldConfig;
          this.profiler = p_270692_;
          this.levelData = p_270739_;
          this.dimensionTypeRegistration = p_270240_;
-@@ -154,6 +_,8 @@
+@@ -154,6 +_,12 @@
          this.neighborUpdater = new CollectingNeighborUpdater(this, p_270466_);
          this.registryAccess = p_270200_;
          this.damageSources = new DamageSources(p_270200_);
 +
 +        this.entityLookup = new ca.spottedleaf.moonrise.patches.chunk_system.level.entity.dfl.DefaultEntityLookup(this); // Paper - rewrite chunk system
++    }
++
++    public void setPaperConfig(io.papermc.paper.configuration.WorldConfiguration paperWorldConfig) {
++        this.paperConfig = paperWorldConfig;
      }
  
      @Override
