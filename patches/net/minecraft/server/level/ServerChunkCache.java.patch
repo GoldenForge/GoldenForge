@@ -436,7 +436,7 @@
              this.tickChunks();
              this.chunkMap.tick();
          }
-@@ -324,68 +_,168 @@
+@@ -324,68 +_,163 @@
      }
  
      private void tickChunks() {
@@ -565,11 +565,6 @@
 +
 +                        if (true) { // Paper - rewrite chunk system
 +                            this.level.tickChunk(chunk1, l);
-+                            // Paper start - rewrite chunk system
-+                            if ((++chunksTicked & 7L) == 0L) {
-+                                ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.level.getServer()).moonrise$executeMidTickTasks();
-+                            }
-+                            // Paper end - rewrite chunk system
 +                        }
 +                    }
 +                }
