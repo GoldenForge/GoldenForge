@@ -17,13 +17,14 @@
      @Nullable
      BlockEntity getBlockEntity(BlockPos p_45570_);
  
-@@ -29,10 +_,21 @@
+@@ -29,10 +_,22 @@
  
      BlockState getBlockState(BlockPos p_45571_);
  
-+    // TODO:Goldenforge: we should maybe have a default impl for mod compat
 +    // Paper start - if loaded util
-+    @Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition);
++    default @Nullable BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++        return this.getBlockState(blockposition);
++    }
 +
 +    default @Nullable Block getBlockIfLoaded(BlockPos blockposition) {
 +        BlockState type = this.getBlockStateIfLoaded(blockposition);

@@ -129,7 +129,7 @@
 +    }
 +
 +    @Override
-+    public final boolean hasChunkAt(BlockPos pos) {
++    public boolean hasChunkAt(BlockPos pos) {
 +        return getChunkIfLoaded(pos.getX() >> 4, pos.getZ() >> 4) != null; // Paper - Perf: Optimize Level.hasChunkAt(BlockPosition)Z
 +    }
 +
