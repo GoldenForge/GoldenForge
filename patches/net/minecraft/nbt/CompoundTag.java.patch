@@ -40,6 +40,33 @@
          return this.tags.put(p_128366_, p_128367_);
      }
  
+@@ -392,7 +_,7 @@
+             throw new ReportedException(this.createReport(p_128464_, ByteArrayTag.TYPE, classcastexception));
+         }
+ 
+-        return new byte[0];
++        return me.titaniumtown.ArrayConstants.emptyByteArray; // Gale - JettPack - reduce array allocations
+     }
+ 
+     public int[] getIntArray(String p_128466_) {
+@@ -404,7 +_,7 @@
+             throw new ReportedException(this.createReport(p_128466_, IntArrayTag.TYPE, classcastexception));
+         }
+ 
+-        return new int[0];
++        return me.titaniumtown.ArrayConstants.emptyIntArray; // Gale - JettPack - reduce array allocations
+     }
+ 
+     public long[] getLongArray(String p_128468_) {
+@@ -416,7 +_,7 @@
+             throw new ReportedException(this.createReport(p_128468_, LongArrayTag.TYPE, classcastexception));
+         }
+ 
+-        return new long[0];
++        return me.titaniumtown.ArrayConstants.emptyLongArray; // Gale - JettPack - reduce array allocations
+     }
+ 
+     public CompoundTag getCompound(String p_128470_) {
 @@ -479,8 +_,16 @@
      }
  

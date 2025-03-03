@@ -376,8 +376,6 @@ public final class ChunkEntitySlices {
     }
 
     private static final class BasicEntityList<E extends Entity> {
-
-        private static final Entity[] EMPTY = new Entity[0];
         private static final int DEFAULT_CAPACITY = 4;
 
         private E[] storage;
@@ -388,7 +386,7 @@ public final class ChunkEntitySlices {
         }
 
         public BasicEntityList(final int cap) {
-            this.storage = (E[])(cap <= 0 ? EMPTY : new Entity[cap]);
+            this.storage = (E[])(cap <= 0 ? me.titaniumtown.ArrayConstants.emptyEntityArray : new Entity[cap]); // Gale - JettPack - reduce array allocations
         }
 
         public boolean isEmpty() {
@@ -400,7 +398,7 @@ public final class ChunkEntitySlices {
         }
 
         private void resize() {
-            if (this.storage == EMPTY) {
+            if (this.storage == me.titaniumtown.ArrayConstants.emptyEntityArray) { // Gale - JettPack - reduce array allocations
                 this.storage = (E[])new Entity[DEFAULT_CAPACITY];
             } else {
                 this.storage = Arrays.copyOf(this.storage, this.storage.length * 2);

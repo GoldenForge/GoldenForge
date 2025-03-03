@@ -1,0 +1,20 @@
+--- a/net/minecraft/nbt/ListTag.java
++++ b/net/minecraft/nbt/ListTag.java
+@@ -257,7 +_,7 @@
+             }
+         }
+ 
+-        return new int[0];
++        return me.titaniumtown.ArrayConstants.emptyIntArray; // Gale - JettPack - reduce array allocations
+     }
+ 
+     public long[] getLongArray(int p_177992_) {
+@@ -268,7 +_,7 @@
+             }
+         }
+ 
+-        return new long[0];
++        return me.titaniumtown.ArrayConstants.emptyLongArray; // Gale - JettPack - reduce array allocations
+     }
+ 
+     public double getDouble(int p_128773_) {

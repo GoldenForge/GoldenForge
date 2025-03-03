@@ -12,7 +12,7 @@
      }
  
      public void placeNewPlayer(Connection p_11262_, ServerPlayer p_11263_, CommonListenerCookie p_301988_) {
-+        p_11263_.isRealPlayer = true;
++        p_11263_.isRealPlayer = true; // Paper
          GameProfile gameprofile = p_11263_.getGameProfile();
          GameProfileCache gameprofilecache = this.server.getProfileCache();
          String s;
@@ -33,10 +33,20 @@
          servergamepacketlistenerimpl.send(new ClientboundUpdateRecipesPacket(this.server.getRecipeManager().getOrderedRecipes()));
          this.sendPlayerPermissionLevel(p_11263_);
          p_11263_.getStats().markAllDirty();
-@@ -265,6 +_,7 @@
+@@ -265,6 +_,17 @@
          }
  
          p_11263_.initInventoryMenu();
++        // Paper start - Send empty chunk, so players aren't stuck in the world loading screen with our chunk system not sending chunks when dead
++        if (p_11263_.isDeadOrDying()) {
++            net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> plains = serverlevel1.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BIOME)
++                    .getOrThrow(net.minecraft.world.level.biome.Biomes.PLAINS);
++            p_11263_.connection.send(new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
++                    new net.minecraft.world.level.chunk.EmptyLevelChunk(serverlevel1, p_11263_.chunkPosition(), plains),
++                    serverlevel1.getLightEngine(), (java.util.BitSet)null, (java.util.BitSet) null)
++            );
++        }
++        // Paper end - Send empty chunk
 +        net.neoforged.neoforge.event.EventHooks.firePlayerLoggedIn( p_11263_ );
      }
  
@@ -58,14 +68,23 @@
          this.playerIo.save(p_11277_);
          ServerStatsCounter serverstatscounter = this.stats.get(p_11277_.getUUID());
          if (serverstatscounter != null) {
-@@ -351,6 +_,7 @@
+@@ -351,8 +_,16 @@
      }
  
      public void remove(ServerPlayer p_11287_) {
 +        net.neoforged.neoforge.event.EventHooks.firePlayerLoggedOut(p_11287_);
          ServerLevel serverlevel = p_11287_.serverLevel();
          p_11287_.awardStat(Stats.LEAVE_GAME);
++        // Paper - Drop carried item when player has disconnected
++        if (!p_11287_.containerMenu.getCarried().isEmpty()) {
++            net.minecraft.world.item.ItemStack carried = p_11287_.containerMenu.getCarried();
++            p_11287_.containerMenu.setCarried(net.minecraft.world.item.ItemStack.EMPTY);
++            p_11287_.drop(carried, false);
++        }
++        // Paper end - Drop carried item when player has disconnected
          this.save(p_11287_);
+         if (p_11287_.isPassenger()) {
+             Entity entity = p_11287_.getRootVehicle();
 @@ -379,35 +_,78 @@
          this.broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(p_11287_.getUUID())));
      }

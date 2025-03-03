@@ -8,14 +8,12 @@ import java.util.NoSuchElementException;
 
 public final class ReferenceList<E> implements Iterable<E> {
 
-    private static final Object[] EMPTY_LIST = new Object[0];
-
     private final Reference2IntOpenHashMap<E> referenceToIndex;
     private E[] references;
     private int count;
 
     public ReferenceList() {
-        this((E[])EMPTY_LIST);
+        this((E[]) me.titaniumtown.ArrayConstants.emptyObjectArray); // Gale - JettPack - reduce array allocations
     }
 
     public ReferenceList(final E[] referenceArray) {

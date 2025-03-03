@@ -1,6 +1,10 @@
 --- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
-@@ -50,8 +_,8 @@
+@@ -47,11 +_,12 @@
+ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+     private static final AtomicInteger UNIQUE_THREAD_ID = new AtomicInteger(0);
+     static final Logger LOGGER = LogUtils.getLogger();
++    private static final java.util.concurrent.ExecutorService authenticatorPool = java.util.concurrent.Executors.newCachedThreadPool(new com.google.common.util.concurrent.ThreadFactoryBuilder().setNameFormat("User Authenticator #%d").setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER)).build()); // Paper - Cache authenticator threads
      private static final int MAX_TICKS_BEFORE_LOGIN = 600;
      private final byte[] challenge;
      final MinecraftServer server;
@@ -53,10 +57,11 @@
          this.requestedUsername = p_10047_.name();
          GameProfile gameprofile = this.server.getSingleplayerProfile();
          if (gameprofile != null && this.requestedUsername.equalsIgnoreCase(gameprofile.getName())) {
-@@ -125,22 +_,36 @@
+@@ -125,22 +_,45 @@
                  this.state = ServerLoginPacketListenerImpl.State.KEY;
                  this.connection.send(new ClientboundHelloPacket("", this.server.getKeyPair().getPublic().getEncoded(), this.challenge, true));
              } else {
+-                this.startClientVerification(UUIDUtil.createOfflineProfile(this.requestedUsername));
 +                // Paper start - Add Velocity IP Forwarding Support
 +                if (io.papermc.paper.configuration.GlobalConfiguration.get().proxies.velocity.enabled) {
 +                    this.velocityLoginMessageId = java.util.concurrent.ThreadLocalRandom.current().nextInt();
@@ -67,7 +72,16 @@
 +                    return;
 +                }
 +                // Paper end - Add Velocity IP Forwarding Support
-                 this.startClientVerification(UUIDUtil.createOfflineProfile(this.requestedUsername));
++                // Paper start - Cache authenticator threads
++                authenticatorPool.execute(() -> {
++                    try {
++                        this.startClientVerification(UUIDUtil.createOfflineProfile(this.requestedUsername));
++                    } catch (Exception ex) {
++                        ServerLoginPacketListenerImpl.this.disconnect(Component.literal("Failed to verify username!"));
++                        ServerLoginPacketListenerImpl.this.server.LOGGER.warn("Exception verifying " + ServerLoginPacketListenerImpl.this.requestedUsername, ex);
++                    }
++                });
++                // Paper end - Cache authenticator threads
              }
          }
      }
@@ -94,6 +108,28 @@
              if (this.server.getCompressionThreshold() >= 0 && !this.connection.isMemoryConnection()) {
                  this.connection
                      .send(
+@@ -184,7 +_,8 @@
+             throw new IllegalStateException("Protocol error", cryptexception);
+         }
+ 
+-        Thread thread = new Thread("User Authenticator #" + UNIQUE_THREAD_ID.incrementAndGet()) {
++        // Paper start - Cache authenticator threads
++        authenticatorPool.execute(new Runnable() {
+             @Override
+             public void run() {
+                 String s1 = Objects.requireNonNull(ServerLoginPacketListenerImpl.this.requestedUsername, "Player name not initialized");
+@@ -220,9 +_,8 @@
+                     ? ((InetSocketAddress)socketaddress).getAddress()
+                     : null;
+             }
+-        };
+-        thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
+-        thread.start();
++        });
++        // Paper end - Cache authenticator threads
+     }
+ 
+     @Override
 @@ -236,7 +_,7 @@
          this.connection.setupOutboundProtocol(ConfigurationProtocols.CLIENTBOUND);
          CommonListenerCookie commonlistenercookie = CommonListenerCookie.createInitial(Objects.requireNonNull(this.authenticatedProfile), this.transferred);

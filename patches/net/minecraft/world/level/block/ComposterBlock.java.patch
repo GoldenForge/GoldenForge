@@ -52,12 +52,37 @@
          if ((i != 0 || !(f > 0.0F)) && !(p_270151_.getRandom().nextDouble() < (double)f)) {
              return p_270603_;
          } else {
-@@ -392,7 +_,7 @@
+@@ -353,7 +_,7 @@
+ 
+         @Override
+         public int[] getSlotsForFace(Direction p_52012_) {
+-            return new int[0];
++            return me.titaniumtown.ArrayConstants.emptyIntArray; // Gale - JettPack - reduce array allocations
+         }
+ 
+         @Override
+@@ -387,12 +_,12 @@
+ 
+         @Override
+         public int[] getSlotsForFace(Direction p_52032_) {
+-            return p_52032_ == Direction.UP ? new int[]{0} : new int[0];
++            return p_52032_ == Direction.UP ? me.titaniumtown.ArrayConstants.zeroSingletonIntArray : me.titaniumtown.ArrayConstants.emptyIntArray; // Gale - JettPack - reduce array allocations
+         }
  
          @Override
          public boolean canPlaceItemThroughFace(int p_52028_, ItemStack p_52029_, @Nullable Direction p_52030_) {
 -            return !this.changed && p_52030_ == Direction.UP && ComposterBlock.COMPOSTABLES.containsKey(p_52029_.getItem());
 +            return !this.changed && p_52030_ == Direction.UP && getValue(p_52029_) > 0f;
+         }
+ 
+         @Override
+@@ -432,7 +_,8 @@
+ 
+         @Override
+         public int[] getSlotsForFace(Direction p_52053_) {
+-            return p_52053_ == Direction.DOWN ? new int[]{0} : new int[0];
++            return p_52053_ == Direction.DOWN ? me.titaniumtown.ArrayConstants.zeroSingletonIntArray : me.titaniumtown.ArrayConstants.emptyIntArray; // Gale - JettPack - reduce array allocations
++
          }
  
          @Override
