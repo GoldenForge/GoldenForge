@@ -1091,7 +1091,7 @@
      }
  
      @Override
-@@ -1675,7 +_,7 @@
+@@ -1675,12 +_,13 @@
      @Override
      public CrashReportCategory fillReportDetails(CrashReport p_307518_) {
          CrashReportCategory crashreportcategory = super.fillReportDetails(p_307518_);
@@ -1100,6 +1100,12 @@
          return crashreportcategory;
      }
  
+     final class EntityCallbacks implements LevelCallback<Entity> {
+         public void onCreated(Entity p_143355_) {
++            p_143355_.setOldPosAndRot(); // Paper - update old pos / rot for new entities as it will default to Vec3.ZERO
+         }
+ 
+         public void onDestroyed(Entity p_143359_) {
 @@ -1688,6 +_,7 @@
          }
  
