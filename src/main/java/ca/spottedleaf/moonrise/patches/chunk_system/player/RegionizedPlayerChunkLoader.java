@@ -16,6 +16,7 @@ import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkHolderManage
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
 import ca.spottedleaf.moonrise.patches.chunk_system.util.ParallelSearchRadiusIteration;
 import com.google.gson.JsonObject;
+import io.papermc.paper.configuration.GlobalConfiguration;
 import it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongComparator;
@@ -342,7 +343,7 @@ public final class RegionizedPlayerChunkLoader {
         private boolean canGenerateChunks = true;
 
         private final ArrayDeque<ChunkHolderManager.TicketOperation<?, ?>> delayedTicketOps = new ArrayDeque<>();
-        private final LongOpenHashSet sentChunks = new LongOpenHashSet();
+        private final LongOpenHashSet sentChunks = GlobalConfiguration.get().multithreadedTracker.enabled && !GlobalConfiguration.get().multithreadedTracker.compatModeEnabled ? new org.dreeam.leaf.util.map.ConcurrentLongHashSet() : new LongOpenHashSet(); // Leaf - Multithreaded tracker
 
         private static final byte CHUNK_TICKET_STAGE_NONE           = 0;
         private static final byte CHUNK_TICKET_STAGE_LOADING        = 1;

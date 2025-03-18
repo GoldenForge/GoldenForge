@@ -1002,7 +1002,7 @@
 -    public void addWorldGenChunkEntities(Stream<Entity> p_143328_) {
 -        this.entityManager.addWorldGenChunkEntities(p_143328_);
 -    }
-+        org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot
++        //org.spigotmc.AsyncCatcher.catchOp("Chunk getEntities call"); // Spigot // Leaf - Multithreaded tracker
 +        return this.moonrise$getEntityLookup(); // Paper - rewrite chunk system
 +    }
 +

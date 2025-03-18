@@ -7,6 +7,14 @@
  import com.google.common.collect.ImmutableList;
  import com.google.common.collect.Iterables;
  import com.google.common.collect.Lists;
+@@ -9,6 +_,7 @@
+ import com.mojang.datafixers.DataFixer;
+ import com.mojang.datafixers.util.Pair;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.longs.Long2ByteMap;
 @@ -98,7 +_,7 @@
  import org.apache.commons.lang3.mutable.MutableBoolean;
  import org.slf4j.Logger;
@@ -103,7 +111,7 @@
          this.distanceManager = new ChunkMap.DistanceManager(p_214840_, p_214841_);
          this.overworldDataStorage = p_214846_;
          this.poiManager = new PoiManager(
-@@ -201,8 +_,49 @@
+@@ -201,8 +_,58 @@
              p_214836_
          );
          this.setServerViewDistance(p_214847_);
@@ -126,6 +134,15 @@
 +            return;
 +        }
 +        final ServerPlayer[] backingSet = inRange.getRawDataUnchecked();
++        // Leaf start - Multithreaded tracker
++        if (GlobalConfiguration.get().multithreadedTracker.enabled)
++            for (int i = 0, len = inRange.size(); i < len; i++) {
++                final ServerPlayer player = backingSet[i];
++                if (player == null) continue;
++                ++(player.mobCounts[index]);
++            }
++        else
++            // Leaf end - Multithreaded tracker
 +        for (int i = 0, len = inRange.size(); i < len; i++) {
 +            ++(backingSet[i].mobCounts[index]);
 +        }
@@ -1026,7 +1043,7 @@
                      chunkmap$trackedentity.updatePlayers(this.level.players());
                      if (p_140200_ instanceof ServerPlayer serverplayer) {
                          this.updatePlayerStatus(serverplayer, true);
-@@ -1107,9 +_,37 @@
+@@ -1107,9 +_,44 @@
          if (chunkmap$trackedentity1 != null) {
              chunkmap$trackedentity1.broadcastRemoved();
          }
@@ -1056,6 +1073,13 @@
 +    // Paper end - optimise entity tracker
  
      protected void tick() {
++        // Leaf start - Multithreaded tracker
++        if (GlobalConfiguration.get().multithreadedTracker.enabled) {
++            final ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel level = this.level;
++            org.dreeam.leaf.async.tracker.MultithreadedTracker.tick(level);
++            return;
++        }
++        // Leaf end - Multithreaded tracker
 +        // Paper start - optimise entity tracker
 +        if (true) {
 +            this.newTrackerTick();
@@ -1098,18 +1122,19 @@
          }
  
          @Nullable
-@@ -1222,15 +_,99 @@
+@@ -1222,15 +_,133 @@
          }
      }
  
 -    class TrackedEntity {
+-        final ServerEntity serverEntity;
 +    public class TrackedEntity implements ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerTrackedEntity { // Paper - optimise entity tracker
-         final ServerEntity serverEntity;
++        public final ServerEntity serverEntity;
          final Entity entity;
          private final int range;
          SectionPos lastSectionPos;
 -        private final Set<ServerPlayerConnection> seenBy = Sets.newIdentityHashSet();
-+        public final Set<ServerPlayerConnection> seenBy = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(); // Paper - Perf: optimise map impl
++        public final Set<ServerPlayerConnection> seenBy = GlobalConfiguration.get().multithreadedTracker.enabled ? com.google.common.collect.Sets.newConcurrentHashSet() : new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(); // Paper - Perf: optimise map impl // Leaf - petal - Multithreaded tracker
 +
 +        // Paper start - optimise entity tracker
 +        private long lastChunkUpdate = -1L;
@@ -1136,21 +1161,55 @@
 +            this.lastTrackedChunk = chunk;
 +
 +            final ServerPlayer[] playersRaw = players.getRawDataUnchecked();
++            final int playersLen = players.size(); // Ensure length won't change in the future tasks
 +
-+            for (int i = 0, len = players.size(); i < len; ++i) {
-+                final ServerPlayer player = playersRaw[i];
-+                this.updatePlayer(player);
-+            }
++            // Leaf start - Multithreaded tracker
++            if (GlobalConfiguration.get().multithreadedTracker.enabled && GlobalConfiguration.get().multithreadedTracker.compatModeEnabled) {
++                final boolean isServerPlayer = this.entity instanceof ServerPlayer;
++                final boolean isRealPlayer = isServerPlayer && ((ca.spottedleaf.moonrise.patches.chunk_system.player.ChunkSystemServerPlayer) this.entity).moonrise$isRealPlayer();
++                Runnable updatePlayerTasks = () -> {
++                    for (int i = 0; i < playersLen; ++i) {
++                        final ServerPlayer player = playersRaw[i];
++                        this.updatePlayer(player);
++                    }
 +
-+            if (lastChunkUpdate != currChunkUpdate || lastTrackedChunk != chunk) {
-+                // need to purge any players possible not in the chunk list
-+                for (final ServerPlayerConnection conn : new java.util.ArrayList<>(this.seenBy)) {
-+                    final ServerPlayer player = conn.getPlayer();
-+                    if (!players.contains(player)) {
-+                        this.removePlayer(player);
++                    if (lastChunkUpdate != currChunkUpdate || lastTrackedChunk != chunk) {
++                        // need to purge any players possible not in the chunk list
++                        for (final ServerPlayerConnection conn : new java.util.ArrayList<>(this.seenBy)) {
++                            final ServerPlayer player = conn.getPlayer();
++                            if (!players.contains(player)) {
++                                this.removePlayer(player);
++                            }
++                        }
++                    }
++                };
++
++                // Only update asynchronously for real player, and sync update for fake players
++                // This can fix compatibility issue with NPC plugins using real entity type, like Citizens
++                // To prevent visible issue with player type NPCs
++                // btw, still recommend to use packet based NPC plugins, like ZNPC Plus, Adyeshach, Fancy NPC, etc.
++                if (isRealPlayer || !isServerPlayer) {
++                    org.dreeam.leaf.async.tracker.MultithreadedTracker.getTrackerExecutor().execute(updatePlayerTasks);
++                } else {
++                    updatePlayerTasks.run();
++                }
++            } else {
++                for (int i = 0, len = players.size(); i < len; ++i) {
++                    final ServerPlayer player = playersRaw[i];
++                    this.updatePlayer(player);
++                }
++
++                if (lastChunkUpdate != currChunkUpdate || lastTrackedChunk != chunk) {
++                    // need to purge any players possible not in the chunk list
++                    for (final ServerPlayerConnection conn : new java.util.ArrayList<>(this.seenBy)) {
++                        final ServerPlayer player = conn.getPlayer();
++                        if (!players.contains(player)) {
++                            this.removePlayer(player);
++                        }
 +                    }
 +                }
 +            }
++            // Leaf end - Multithreaded tracker
 +        }
 +
 +        @Override
@@ -1201,11 +1260,30 @@
              this.entity = p_140478_;
              this.range = p_140479_;
              this.lastSectionPos = SectionPos.of(p_140478_);
-@@ -1273,14 +_,28 @@
+@@ -1247,7 +_,7 @@
+         }
+ 
+         public void broadcast(Packet<?> p_140490_) {
+-            for (ServerPlayerConnection serverplayerconnection : this.seenBy) {
++            for (ServerPlayerConnection serverplayerconnection : this.seenBy.toArray(new ServerPlayerConnection[0])) {// Leaf - petal - Multithreaded tracker
+                 serverplayerconnection.send(p_140490_);
+             }
+         }
+@@ -1260,7 +_,7 @@
+         }
+ 
+         public void broadcastRemoved() {
+-            for (ServerPlayerConnection serverplayerconnection : this.seenBy) {
++            for (ServerPlayerConnection serverplayerconnection : this.seenBy.toArray(new ServerPlayerConnection[0])) {// Leaf - petal - Multithreaded tracker
+                 this.serverEntity.removePairing(serverplayerconnection.getPlayer());
+             }
+         }
+@@ -1273,14 +_,29 @@
  
          public void updatePlayer(ServerPlayer p_140498_) {
              if (p_140498_ != this.entity) {
 -                Vec3 vec3 = p_140498_.position().subtract(this.entity.position());
++                if (GlobalConfiguration.get().multithreadedTracker.enabled && p_140498_ == null) return; // Leaf - Multithreaded tracker
 +                // Paper start - remove allocation of Vec3D here
 +                // Vec3 vec3d = player.position().subtract(this.entity.position());
 +                double vec3d_dx = p_140498_.getX() - this.entity.getX();

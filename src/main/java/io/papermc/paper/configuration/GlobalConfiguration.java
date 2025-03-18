@@ -310,4 +310,30 @@ public class GlobalConfiguration extends ConfigurationPart {
                 asyncPathfindingQueueSize = asyncPathfindingMaxThreads * 256;
         }
     }
+
+    public MultithreadedTracker multithreadedTracker;
+
+    public class MultithreadedTracker extends ConfigurationPart {
+        public boolean enabled = false;
+        public boolean compatModeEnabled = false;
+        public int asyncEntityTrackerMaxThreads = 0;
+        public int asyncEntityTrackerKeepalive = 60;
+        public int asyncEntityTrackerQueueSize = 0;
+
+        @PostProcess
+        public void onLoaded() {
+            if (asyncEntityTrackerMaxThreads < 0)
+                asyncEntityTrackerMaxThreads = Math.max(Runtime.getRuntime().availableProcessors() + asyncEntityTrackerMaxThreads, 1);
+            else if (asyncEntityTrackerMaxThreads == 0)
+                asyncEntityTrackerMaxThreads = Math.max(Runtime.getRuntime().availableProcessors() / 4, 1);
+
+            if (!enabled)
+                asyncEntityTrackerMaxThreads = 0;
+            else
+                GoldenForge.LOGGER.info("Using {} threads for Async Entity Tracker", asyncEntityTrackerMaxThreads);
+
+            if (asyncEntityTrackerQueueSize <= 0)
+                asyncEntityTrackerQueueSize = asyncEntityTrackerMaxThreads * 384;
+        }
+    }
 }

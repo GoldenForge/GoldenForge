@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/entity/ai/attributes/AttributeMap.java
 +++ b/net/minecraft/world/entity/ai/attributes/AttributeMap.java
+@@ -2,6 +_,7 @@
+ 
+ import com.google.common.collect.Multimap;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+ import java.util.Collection;
 @@ -9,6 +_,8 @@
  import java.util.Set;
  import java.util.stream.Collectors;
@@ -9,16 +17,21 @@
  import net.minecraft.Util;
  import net.minecraft.core.Holder;
  import net.minecraft.core.registries.BuiltInRegistries;
-@@ -19,9 +_,9 @@
+@@ -19,9 +_,14 @@
  
  public class AttributeMap {
      private static final Logger LOGGER = LogUtils.getLogger();
 -    private final Map<Holder<Attribute>, AttributeInstance> attributes = new Object2ObjectOpenHashMap<>();
 -    private final Set<AttributeInstance> attributesToSync = new ObjectOpenHashSet<>();
 -    private final Set<AttributeInstance> attributesToUpdate = new ObjectOpenHashSet<>();
-+    private final Map<Holder<Attribute>, AttributeInstance> attributes = new Reference2ReferenceOpenHashMap<>(0); // Goldenforge: lithium
-+    private final Set<AttributeInstance> attributesToSync = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(0); // Goldenforge: lithium
-+    private final Set<AttributeInstance> attributesToUpdate = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(0); // Goldenforge: lithium
++    // Leaf start - Multithreaded tracker
++    private final boolean multiThreadedTrackingEnabled = GlobalConfiguration.get().multithreadedTracker.enabled;
++    // Gale start - Lithium - replace AI attributes with optimized collections
++    private final Map<Holder<Attribute>, AttributeInstance> attributes = multiThreadedTrackingEnabled ? new java.util.concurrent.ConcurrentHashMap<>() : new it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap<>(0);
++    private final Set<AttributeInstance> attributesToSync = multiThreadedTrackingEnabled ? com.google.common.collect.Sets.newConcurrentHashSet() : new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(0);
++    private final Set<AttributeInstance> attributesToUpdate = multiThreadedTrackingEnabled ? com.google.common.collect.Sets.newConcurrentHashSet() : new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>(0);
++    // Gale end - Lithium - replace AI attributes with optimized collections
++    // Leaf end - Multithreaded tracker
      private final AttributeSupplier supplier;
  
      public AttributeMap(AttributeSupplier p_22144_) {

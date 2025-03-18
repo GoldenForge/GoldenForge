@@ -1,5 +1,14 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
+@@ -11,6 +_,8 @@
+ import java.util.function.Consumer;
+ import java.util.stream.Stream;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.component.DataComponents;
+ import net.minecraft.network.protocol.Packet;
+ import net.minecraft.network.protocol.game.ClientGamePacketListener;
 @@ -28,6 +_,7 @@
  import net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket;
  import net.minecraft.network.protocol.game.VecDeltaCodec;
@@ -28,7 +37,7 @@
          this.level = p_8528_;
          this.broadcast = p_8532_;
          this.entity = p_8529_;
-@@ -83,7 +_,19 @@
+@@ -83,42 +_,65 @@
          this.trackedDataValues = p_8529_.getEntityData().getNonDefaultValues();
      }
  
@@ -48,7 +57,26 @@
          List<Entity> list = this.entity.getPassengers();
          if (!list.equals(this.lastPassengers)) {
              this.broadcast.accept(new ClientboundSetPassengersPacket(this.entity));
-@@ -99,26 +_,29 @@
+             removedPassengers(list, this.lastPassengers)
+                 .forEach(
+                     p_352697_ -> {
+-                        if (p_352697_ instanceof ServerPlayer serverplayer1) {
+-                            serverplayer1.connection
+-                                .teleport(serverplayer1.getX(), serverplayer1.getY(), serverplayer1.getZ(), serverplayer1.getYRot(), serverplayer1.getXRot());
++                        if (p_352697_ instanceof ServerPlayer serverPlayer1) {
++                            // Leaf start - Multithreaded tracker - Ensure teleport is executed on server thread
++                            if (GlobalConfiguration.get().multithreadedTracker.enabled && Thread.currentThread() instanceof org.dreeam.leaf.async.tracker.MultithreadedTracker.MultithreadedTrackerThread) {
++                                net.minecraft.server.MinecraftServer.getServer().scheduleOnMain(() -> serverPlayer1.connection
++                                        .teleport(serverPlayer1.getX(), serverPlayer1.getY(), serverPlayer1.getZ(), serverPlayer1.getYRot(), serverPlayer1.getXRot())
++                                );
++                            } else {
++                                serverPlayer1.connection
++                                        .teleport(serverPlayer1.getX(), serverPlayer1.getY(), serverPlayer1.getZ(), serverPlayer1.getYRot(), serverPlayer1.getXRot());
++                            }
++                            // Leaf end - Multithreaded tracker - Ensure teleport is executed on server thread
+                         }
+                     }
+                 );
              this.lastPassengers = list;
          }
  
@@ -155,3 +183,15 @@
          if (this.trackedDataValues != null) {
              p_289563_.accept(new ClientboundSetEntityDataPacket(this.entity.getId(), this.trackedDataValues));
          }
+@@ -328,7 +_,10 @@
+         if (this.entity instanceof LivingEntity) {
+             Set<AttributeInstance> set = ((LivingEntity)this.entity).getAttributes().getAttributesToSync();
+             if (!set.isEmpty()) {
+-                this.broadcastAndSend(new ClientboundUpdateAttributesPacket(this.entity.getId(), set));
++                // Leaf start - petal - Multithreaded tracker - send in main thread
++                final Set<AttributeInstance> copy = new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>(set);
++                this.broadcastAndSend(new ClientboundUpdateAttributesPacket(this.entity.getId(), copy));
++                // Leaf end - petal - Multithreaded tracker - send in main thread
+             }
+ 
+             set.clear();
