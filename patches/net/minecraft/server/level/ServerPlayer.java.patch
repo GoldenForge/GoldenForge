@@ -149,7 +149,7 @@
                  serverlevel1.getProfiler().push("moving");
                  if (resourcekey == Level.OVERWORLD && serverlevel.dimension() == Level.NETHER) {
                      this.enteredNetherPosition = this.position();
-@@ -895,10 +_,12 @@
+@@ -895,16 +_,18 @@
                  playerlist.sendLevelInfo(this, serverlevel);
                  playerlist.sendAllPlayerInfo(this);
                  playerlist.sendActivePlayerEffects(this);
@@ -162,6 +162,13 @@
                  return this;
              }
          }
+     }
+ 
+-    private void triggerDimensionChangeTriggers(ServerLevel p_9210_) {
++    public void triggerDimensionChangeTriggers(ServerLevel p_9210_) {
+         ResourceKey<Level> resourcekey = p_9210_.dimension();
+         ResourceKey<Level> resourcekey1 = this.level().dimension();
+         CriteriaTriggers.CHANGED_DIMENSION.trigger(this, resourcekey, resourcekey1);
 @@ -934,6 +_,15 @@
  
      @Override
@@ -423,7 +430,7 @@
      }
  
      public boolean allowsListing() {
-@@ -1967,5 +_,10 @@
+@@ -1967,5 +_,32 @@
              Vec3 vec3 = Vec3.atBottomCenterOf(p_348467_).subtract(p_348686_).normalize();
              return (float)Mth.wrapDegrees(Mth.atan2(vec3.z, vec3.x) * 180.0F / (float)Math.PI - 90.0);
          }
@@ -432,5 +439,27 @@
 +    @Override
 +    public boolean isImmobile() {
 +        return super.isImmobile() || (this.connection != null && this.connection.isDisconnected()); // Paper - Fix duplication bugs
++    }
++
++    public void reset() {
++        float exp = 0;
++
++        this.setHealth(this.getMaxHealth());
++        this.stopUsingItem(); // CraftBukkit - SPIGOT-6682: Clear active item on reset
++        this.setAirSupply(this.getMaxAirSupply()); // Paper - Reset players airTicks on respawn
++        this.setRemainingFireTicks(0);
++        this.fallDistance = 0;
++        this.foodData = new net.minecraft.world.food.FoodData();
++        this.experienceProgress = 0;
++        this.deathTime = 0;
++        this.setArrowCount(0);
++        this.removeAllEffects();
++        this.effectsDirty = true;
++        this.containerMenu = this.inventoryMenu;
++        this.lastHurtByPlayer = null;
++        this.lastHurtByMob = null;
++        this.combatTracker = new net.minecraft.world.damagesource.CombatTracker(this);
++        this.lastSentExp = -1;
++        this.setDeltaMovement(0, 0, 0); // CraftBukkit - SPIGOT-6948: Reset velocity on death
      }
  }
