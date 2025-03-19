@@ -8,6 +8,136 @@
      public final double minX;
      public final double minY;
      public final double minZ;
+@@ -17,6 +_,15 @@
+     public final double maxY;
+     public final double maxZ;
+ 
++    // Leaf start - Lithium - fast util
++    static {
++        assert Direction.Axis.X.ordinal() == 0;
++        assert Direction.Axis.Y.ordinal() == 1;
++        assert Direction.Axis.Z.ordinal() == 2;
++        assert Direction.Axis.values().length == 3;
++    }
++    // Leaf end - Lithium - fast util
++
+     public AABB(double p_82295_, double p_82296_, double p_82297_, double p_82298_, double p_82299_, double p_82300_) {
+         this.minX = Math.min(p_82295_, p_82298_);
+         this.minY = Math.min(p_82296_, p_82299_);
+@@ -92,11 +_,33 @@
+     }
+ 
+     public double min(Direction.Axis p_82341_) {
+-        return p_82341_.choose(this.minX, this.minY, this.minZ);
++        // Leaf start - Lithium - fast util
++        switch (p_82341_.ordinal()) {
++            case 0: //X
++                return this.minX;
++            case 1: //Y
++                return this.minY;
++            case 2: //Z
++                return this.minZ;
++        }
++
++        throw new IllegalArgumentException();
++        // Leaf end - Lithium - fast util
+     }
+ 
+     public double max(Direction.Axis p_82375_) {
+-        return p_82375_.choose(this.maxX, this.maxY, this.maxZ);
++        // Leaf start - Lithium - fast util
++        switch (p_82375_.ordinal()) {
++            case 0: //X
++                return this.maxX;
++            case 1: //Y
++                return this.maxY;
++            case 2: //Z
++                return this.maxZ;
++        }
++
++        throw new IllegalArgumentException();
++        // Leaf end - Lithium - fast util
+     }
+ 
+     @Override
+@@ -209,13 +_,16 @@
+     }
+ 
+     public AABB intersect(AABB p_82324_) {
+-        double d0 = Math.max(this.minX, p_82324_.minX);
+-        double d1 = Math.max(this.minY, p_82324_.minY);
+-        double d2 = Math.max(this.minZ, p_82324_.minZ);
+-        double d3 = Math.min(this.maxX, p_82324_.maxX);
+-        double d4 = Math.min(this.maxY, p_82324_.maxY);
+-        double d5 = Math.min(this.maxZ, p_82324_.maxZ);
+-        return new AABB(d0, d1, d2, d3, d4, d5);
++        // Leaf start - Optimize AABB
++        return new AABB(
++                this.minX > p_82324_.minX ? this.minX : p_82324_.minX,
++                this.minY > p_82324_.minY ? this.minY : p_82324_.minY,
++                this.minZ > p_82324_.minZ ? this.minZ : p_82324_.minZ,
++                this.maxX < p_82324_.maxX ? this.maxX : p_82324_.maxX,
++                this.maxY < p_82324_.maxY ? this.maxY : p_82324_.maxY,
++                this.maxZ < p_82324_.maxZ ? this.maxZ : p_82324_.maxZ
++        );
++        // Leaf end - Optimize AABB
+     }
+ 
+     public AABB minmax(AABB p_82368_) {
+@@ -252,21 +_,39 @@
+     }
+ 
+     public boolean intersects(AABB p_82382_) {
+-        return this.intersects(p_82382_.minX, p_82382_.minY, p_82382_.minZ, p_82382_.maxX, p_82382_.maxY, p_82382_.maxZ);
+-    }
+-
+-    public boolean intersects(double p_82315_, double p_82316_, double p_82317_, double p_82318_, double p_82319_, double p_82320_) {
+-        return this.minX < p_82318_ && this.maxX > p_82315_ && this.minY < p_82319_ && this.maxY > p_82316_ && this.minZ < p_82320_ && this.maxZ > p_82317_;
+-    }
+-
+-    public boolean intersects(Vec3 p_82336_, Vec3 p_82337_) {
++        // Leaf start - Optimize AABB
++        // Removed redundant method call overhead
++        return this.minX < p_82382_.maxX &&
++                this.maxX > p_82382_.minX &&
++                this.minY < p_82382_.maxY &&
++                this.maxY > p_82382_.minY &&
++                this.minZ < p_82382_.maxZ &&
++                this.maxZ > p_82382_.minZ;
++        // Leaf end - Optimize AABB
++    }
++
++    public boolean intersects(double x1, double y1, double z1, double x2, double y2, double z2) {
++        // Leaf start - Optimize AABB
++        // No temporary variables needed, direct comparison
++        return this.minX < x2 &&
++                this.maxX > x1 &&
++                this.minY < y2 &&
++                this.maxY > y1 &&
++                this.minZ < z2 &&
++                this.maxZ > z1;
++        // Leaf end - Optimize AABB
++    }
++
++    public boolean intersects(Vec3 min, Vec3 max) {
+         return this.intersects(
+-            Math.min(p_82336_.x, p_82337_.x),
+-            Math.min(p_82336_.y, p_82337_.y),
+-            Math.min(p_82336_.z, p_82337_.z),
+-            Math.max(p_82336_.x, p_82337_.x),
+-            Math.max(p_82336_.y, p_82337_.y),
+-            Math.max(p_82336_.z, p_82337_.z)
++                // Leaf start - Optimize AABB
++                min.x < max.x ? min.x : max.x,
++                min.y < max.y ? min.y : max.y,
++                min.z < max.z ? min.z : max.z,
++                min.x > max.x ? min.x : max.x,
++                min.y > max.y ? min.y : max.y,
++                min.z > max.z ? min.z : max.z
++                // Leaf end - Optimize AABB
+         );
+     }
+ 
 @@ -340,7 +_,7 @@
      }
  
