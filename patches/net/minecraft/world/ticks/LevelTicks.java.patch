@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/ticks/LevelTicks.java
++++ b/net/minecraft/world/ticks/LevelTicks.java
+@@ -193,7 +_,7 @@
+     }
+ 
+     private void cleanupAfterTick() {
+-        this.toRunThisTick.clear();
++        //this.toRunThisTick.clear(); // Leaf - Avoid useless deque clear on LevelTicks#cleanupAfterTick - This method runs after toRunThisTick is polled so this is always empty
+         this.containersToTick.clear();
+         this.alreadyRunThisTick.clear();
+         this.toRunThisTickSet.clear();
