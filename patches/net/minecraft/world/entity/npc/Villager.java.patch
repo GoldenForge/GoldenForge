@@ -105,3 +105,22 @@
              && this.getInventory().canAddItem(p_35543_);
      }
  
+@@ -845,7 +_,17 @@
+ 
+     private int countFoodPointsInInventory() {
+         SimpleContainer simplecontainer = this.getInventory();
+-        return FOOD_POINTS.entrySet().stream().mapToInt(p_186300_ -> simplecontainer.countItem(p_186300_.getKey()) * p_186300_.getValue()).sum();
++        // Leaf start - Remove stream in villagers
++        int sum = 0;
++
++        for (Map.Entry<Item, Integer> entry : FOOD_POINTS.entrySet()) {
++            Item item = entry.getKey();
++            int points = entry.getValue();
++            sum += simplecontainer.countItem(item) * points;
++        }
++
++        return sum;
++        // Leaf end - Remove stream in villagers
+     }
+ 
+     public boolean hasFarmSeeds() {
