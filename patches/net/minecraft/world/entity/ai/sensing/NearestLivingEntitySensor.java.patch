@@ -1,6 +1,12 @@
 --- a/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
 +++ b/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
-@@ -12,14 +_,35 @@
+@@ -7,19 +_,43 @@
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.entity.LivingEntity;
+ import net.minecraft.world.entity.ai.Brain;
++import net.minecraft.world.entity.ai.attributes.Attributes;
+ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+ import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
  import net.minecraft.world.phys.AABB;
  
  public class NearestLivingEntitySensor<T extends LivingEntity> extends Sensor<T> {
@@ -18,28 +24,34 @@
 +        }
 +    }
 +    // Leaf end - Smart sort entities in NearestLivingEntitySensor
++
      @Override
-     protected void doTick(ServerLevel p_26710_, T p_26711_) {
-         AABB aabb = p_26711_.getBoundingBox().inflate((double)this.radiusXZ(), (double)this.radiusY(), (double)this.radiusXZ());
-         List<LivingEntity> list = p_26710_.getEntitiesOfClass(LivingEntity.class, aabb, p_26717_ -> p_26717_ != p_26711_ && p_26717_.isAlive());
+-    protected void doTick(ServerLevel p_26710_, T p_26711_) {
+-        AABB aabb = p_26711_.getBoundingBox().inflate((double)this.radiusXZ(), (double)this.radiusY(), (double)this.radiusXZ());
+-        List<LivingEntity> list = p_26710_.getEntitiesOfClass(LivingEntity.class, aabb, p_26717_ -> p_26717_ != p_26711_ && p_26717_.isAlive());
 -        list.sort(Comparator.comparingDouble(p_26711_::distanceToSqr));
+-        Brain<?> brain = p_26711_.getBrain();
+-        brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, list);
+-        brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(p_26711_, list));
++    protected void doTick(ServerLevel level, T entity) {
++        AABB aabb = entity.getBoundingBox().inflate((double)this.radiusXZ(), (double)this.radiusY(), (double)this.radiusXZ());
++        List<LivingEntity> entitiesOfClass = level.getEntitiesOfClass(
++                LivingEntity.class, aabb, matchableEntity -> matchableEntity != entity && matchableEntity.isAlive()
++        );
 +        // Leaf start - Use smart sorting for entities
-+        LivingEntity[] sortedEntities = smartSortEntities(list.toArray(new LivingEntity[0]), p_26711_);
++        LivingEntity[] sortedEntities = smartSortEntities(entitiesOfClass.toArray(new LivingEntity[0]), entity);
 +        List<LivingEntity> sortedList = java.util.Arrays.asList(sortedEntities);
 +        // Leaf end - Use smart sorting for entities
 +
-         Brain<?> brain = p_26711_.getBrain();
--        brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, list);
--        brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(p_26711_, list));
++        Brain<?> brain = entity.getBrain();
 +        // Leaf start - Use smart sorting for entities
 +        brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, sortedList);
-+        brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(p_26711_, sortedList));
++        brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(entity, sortedList));
 +        // Leaf end - Use smart sorting for entities
-+
      }
  
      protected int radiusXZ() {
-@@ -29,6 +_,135 @@
+@@ -29,6 +_,134 @@
      protected int radiusY() {
          return 16;
      }
@@ -171,7 +183,6 @@
 +        }
 +    }
 +    // Leaf end - Smart entity sorting implementation
-+
  
      @Override
      public Set<MemoryModuleType<?>> requires() {
