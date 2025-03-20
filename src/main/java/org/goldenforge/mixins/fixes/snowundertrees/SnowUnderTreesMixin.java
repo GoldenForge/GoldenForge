@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(SnowUnderTrees.class)
 public class SnowUnderTreesMixin {
 
-     @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/neoforged/fml/ModList;isLoaded(Ljava/lang/String;)Z"))
+     @Redirect(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/neoforged/fml/ModList;isLoaded(Ljava/lang/String;)Z", ordinal = 3))
     public boolean routeToMoonriseLogic(ModList instance, String modTarget) {
         return true;
      }

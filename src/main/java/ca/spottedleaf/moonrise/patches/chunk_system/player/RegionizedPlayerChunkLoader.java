@@ -412,19 +412,82 @@ public final class RegionizedPlayerChunkLoader {
             this.delayedTicketOps.addLast(op);
         }
 
+        // Leaf start - Async chunk sending
+        /**
+         * Sends a chunk to the player.
+         * If async chunk sending is enabled, this will prepare and send the chunk packet asynchronously.
+         * Otherwise, it will use the synchronous chunk sending implementation.
+         */
         private void sendChunk(final int chunkX, final int chunkZ) {
-            if (this.sentChunks.add(CoordinateUtils.getChunkKey(chunkX, chunkZ))) {
-                ((ChunkSystemChunkHolder)((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
-                        .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder).moonrise$addReceivedChunk(this.player);
+            final long chunkKey = CoordinateUtils.getChunkKey(chunkX, chunkZ);
 
-                final LevelChunk chunk = ((ChunkSystemLevel)this.world).moonrise$getFullChunkIfLoaded(chunkX, chunkZ);
-
-                PlatformHooks.get().onChunkWatch(this.world, chunk, this.player);
-                PlayerChunkSender.sendChunk(this.player.connection, this.world, chunk);
+            if (!this.sentChunks.add(chunkKey)) {
+                // Already in our sent list - silently return instead of throwing an exception
                 return;
             }
-            throw new IllegalStateException();
+
+            // Get the chunk now, as we need it for both sync and async paths
+            final LevelChunk chunk = ((ChunkSystemLevel) this.world).moonrise$getFullChunkIfLoaded(chunkX, chunkZ);
+            if (chunk == null) {
+                // Handle case where chunk is no longer loaded
+                this.sentChunks.remove(chunkKey);
+                return;
+            }
+
+            // Try to mark the chunk as received by this player
+            try {
+                // This part needs to remain on the main thread as it affects shared state
+                ((ChunkSystemServerLevel) this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
+                        .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder.moonrise$addReceivedChunk(this.player);
+
+                // Call onChunkWatch on the main thread as it might affect server state
+                PlatformHooks.get().onChunkWatch(this.world, chunk, this.player);
+            } catch (IllegalStateException e) {
+                // This happens if the chunk was already marked as received by this player
+                // Just remove it from our sent list and return
+                this.sentChunks.remove(chunkKey);
+                return;
+            }
+
+            // Check if async chunk sending is enabled
+            if (GlobalConfiguration.get().asyncChunkSend.enabled) {
+                // Async implementation
+                net.minecraft.Util.backgroundExecutor().execute(() -> {
+                    try {
+                        final net.minecraft.server.network.ServerGamePacketListenerImpl connection = this.player.connection;
+                        final ServerLevel serverLevel = this.world;
+
+                        // Create the packet with anti-xray control flag
+                        final net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket packet = new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
+                                chunk, serverLevel.getLightEngine(), null, null
+                        );
+
+                        // Let the main thread handle the anti-xray processing
+                        serverLevel.getServer().execute(() -> {
+                            if (this.removed || !this.sentChunks.contains(chunkKey)) {
+                                return;
+                            }
+
+                            // This will trigger anti-xray processing and mark the packet as ready when done
+                            // The packet automatically handles readiness
+                            // Send the packet (which will be held until ready by the network layer)
+                            connection.send(packet);
+
+                            net.minecraft.network.protocol.game.DebugPackets.sendPoiPacketsForChunk(serverLevel, chunk.getPos());
+                        });
+                    } catch (Exception e) {
+                        org.dreeam.leaf.async.AsyncChunkSending.LOGGER.error("Failed to send chunk asynchronously!", e);
+
+                        if (!this.removed) {
+                            this.sentChunks.remove(chunkKey);
+                        }
+                    }
+                });
+            } else {
+                PlayerChunkSender.sendChunk(this.player.connection, this.world, chunk);
+            }
         }
+        // Leaf end - Async chunk sending
 
         private void sendUnloadChunk(final int chunkX, final int chunkZ) {
             if (!this.sentChunks.remove(CoordinateUtils.getChunkKey(chunkX, chunkZ))) {

@@ -5,6 +5,7 @@ import io.papermc.paper.configuration.constraint.Constraints;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
 import net.minecraft.server.MinecraftServer;
+import org.checkerframework.checker.units.qual.C;
 import org.dreeam.leaf.async.path.PathfindTaskRejectPolicy;
 import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
@@ -335,5 +336,11 @@ public class GlobalConfiguration extends ConfigurationPart {
             if (asyncEntityTrackerQueueSize <= 0)
                 asyncEntityTrackerQueueSize = asyncEntityTrackerMaxThreads * 384;
         }
+    }
+
+    public AsyncChunkSend asyncChunkSend;
+
+    public class AsyncChunkSend extends ConfigurationPart {
+        public boolean enabled = false;
     }
 }

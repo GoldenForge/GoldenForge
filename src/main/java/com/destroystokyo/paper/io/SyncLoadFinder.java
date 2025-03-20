@@ -17,7 +17,7 @@ import java.util.WeakHashMap;
 
 public class SyncLoadFinder {
 
-    public static final boolean ENABLED = Boolean.getBoolean("paper.debug-sync-loads");
+    public static final boolean ENABLED = true || Boolean.getBoolean("paper.debug-sync-loads");
 
     private static final WeakHashMap<Level, Object2ObjectOpenHashMap<ThrowableWithEquals, SyncLoadInformation>> SYNC_LOADS = new WeakHashMap<>();
 

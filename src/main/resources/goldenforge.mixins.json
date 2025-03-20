@@ -8,7 +8,8 @@
     "fixes.immersiveportal.McHelperMixin",
     "fixes.immersiveportal.CollisionhelperMixin",
     "fixes.theovergrowth.UtilsMixin",
-    "fixes.theovergrowth.SpawnEntitiesMixin"
+    "fixes.theovergrowth.SpawnEntitiesMixin",
+    "fixes.industrialforegoing.ProcessExplosionMixin",
   ],
   "client": [],
   "injectors": {
