@@ -18,6 +18,19 @@
      public void validate() {
          this.featuresPerStep.get();
      }
+@@ -112,10 +_,10 @@
+     }
+ 
+     public CompletableFuture<ChunkAccess> createBiomes(RandomState p_223160_, Blender p_223161_, StructureManager p_223162_, ChunkAccess p_223163_) {
+-        return CompletableFuture.supplyAsync(Util.wrapThreadWithTaskName("init_biomes", () -> {
++        return CompletableFuture.supplyAsync(() -> {
+             p_223163_.fillBiomesFromNoise(this.biomeSource, p_223160_.sampler());
+             return p_223163_;
+-        }), Util.backgroundExecutor());
++        }, Runnable::run);  // Paper - rewrite chunk system
+     }
+ 
+     public abstract void applyCarvers(
 @@ -227,6 +_,7 @@
              BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
  
