@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/LevelReader.java
 +++ b/net/minecraft/world/level/LevelReader.java
-@@ -22,9 +_,23 @@
+@@ -22,9 +_,25 @@
  import net.minecraft.world.level.levelgen.Heightmap;
  import net.minecraft.world.phys.AABB;
  
@@ -20,7 +20,9 @@
      @Nullable
      ChunkAccess getChunk(int p_46823_, int p_46824_, ChunkStatus p_330944_, boolean p_46826_);
 +
-+    @Nullable ChunkAccess getChunkIfLoadedImmediately(int x, int z); // Paper - ifLoaded api (we need this since current impl blocks if the chunk is loading)
++    @Nullable default ChunkAccess getChunkIfLoadedImmediately(int x, int z) { // Paper - ifLoaded api (we need this since current impl blocks if the chunk is loading)
++        return this.getChunk(x, z, ChunkStatus.FULL);
++    }
 +    @Nullable default ChunkAccess getChunkIfLoadedImmediately(BlockPos pos) { return this.getChunkIfLoadedImmediately(pos.getX() >> 4, pos.getZ() >> 4);}
  
      @Deprecated

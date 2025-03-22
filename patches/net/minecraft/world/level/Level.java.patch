@@ -65,7 +65,7 @@
      @Deprecated
      private final RandomSource threadSafeRandom = RandomSource.createThreadSafe();
      private final Holder<DimensionType> dimensionTypeRegistration;
-@@ -114,6 +_,628 @@
+@@ -114,6 +_,650 @@
      private final RegistryAccess registryAccess;
      private final DamageSources damageSources;
      private long subTickCount;
@@ -138,7 +138,7 @@
 +    }
 +
 +    public @Nullable LevelChunk getChunkIfLoaded(int x, int z) { // Overridden in WorldServer for ABI compat which has final
-+        return ((ServerLevel) this).getChunkSource().getChunkAtIfLoadedImmediately(x, z);
++        return this.getChunkSource().getChunkNow(x, z);
 +    }
 +
 +    @Override
@@ -690,7 +690,29 @@
 +    public int getSectionYFromSectionIndex(final int sectionIdx) {
 +        return sectionIdx + this.minSectionY;
 +    }
++
++    @Override
++    public int getMinBuildHeight() {
++        return this.minY;
++    }
++
 +    // Paper end - getblock optimisations - cache world height/sections
++    // Paper start - optimise random ticking
++    @Override
++    public abstract Holder<Biome> getUncachedNoiseBiome(final int x, final int y, final int z);
++
++    /**
++     * @reason Make getChunk and getUncachedNoiseBiome virtual calls instead of interface calls
++     *         by implementing the superclass method in this class.
++     * @author Spottedleaf
++     */
++    @Override
++    public Holder<Biome> getNoiseBiome(final int x, final int y, final int z) {
++        final ChunkAccess chunk = this.getChunk(x >> 2, z >> 2, ChunkStatus.BIOMES, false);
++
++        return chunk != null ? chunk.getNoiseBiome(x, y, z) : this.getUncachedNoiseBiome(x, y, z);
++    }
++    // Paper end - optimise random ticking
  
      protected Level(
          WritableLevelData p_270739_,
@@ -723,19 +745,23 @@
      }
  
      @Override
-@@ -188,7 +_,14 @@
+@@ -188,7 +_,18 @@
      }
  
      public LevelChunk getChunk(int p_46727_, int p_46728_) {
 -        return (LevelChunk)this.getChunk(p_46727_, p_46728_, ChunkStatus.FULL);
-+        // Paper start - Perf: make sure loaded chunks get the inlined variant of this function
-+        net.minecraft.server.level.ServerChunkCache cps = ((ServerLevel)this).getChunkSource();
-+        LevelChunk ifLoaded = cps.getChunkAtIfLoadedImmediately(p_46727_, p_46728_);
-+        if (ifLoaded != null) {
-+            return ifLoaded;
++        if (this instanceof ServerLevel) {
++            // Paper start - Perf: make sure loaded chunks get the inlined variant of this function
++            net.minecraft.server.level.ServerChunkCache cps = ((ServerLevel)this).getChunkSource();
++            LevelChunk ifLoaded = cps.getChunkAtIfLoadedImmediately(p_46727_, p_46728_);
++            if (ifLoaded != null) {
++                return ifLoaded;
++            }
++            return (LevelChunk) cps.getChunk(p_46727_, p_46728_, ChunkStatus.FULL, true); // Paper - avoid a method jump
++            // Paper end - Perf: make sure loaded chunks get the inlined variant of this function
 +        }
-+        return (LevelChunk) cps.getChunk(p_46727_, p_46728_, ChunkStatus.FULL, true); // Paper - avoid a method jump
-+        // Paper end - Perf: make sure loaded chunks get the inlined variant of this function
++        // We are propably in a create level instance
++        return (LevelChunk) this.getChunkSource().getChunk(p_46727_, p_46728_, ChunkStatus.FULL, true);
      }
  
      @Nullable
@@ -849,7 +875,7 @@
              return levelchunk.getBlockState(p_46732_);
          }
      }
-@@ -489,41 +_,97 @@
+@@ -489,41 +_,93 @@
          (this.tickingBlockEntities ? this.pendingBlockEntityTickers : this.blockEntityTickers).add(p_151526_);
      }
  
@@ -889,8 +915,6 @@
 -        while (iterator.hasNext()) {
 -            TickingBlockEntity tickingblockentity = iterator.next();
 +        int tickedEntities = 0; // Paper - rewrite chunk system
-+        var toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<TickingBlockEntity>(); // Paper - Fix MC-117075; use removeAll
-+        toRemove.add(null); // Paper - Fix MC-117075
 +        for (tileTickPosition = 0; tileTickPosition < this.blockEntityTickers.size(); tileTickPosition++) { // Paper - Disable tick limiters
 +            this.tileTickPosition = (this.tileTickPosition < this.blockEntityTickers.size()) ? this.tileTickPosition : 0;
 +            TickingBlockEntity tickingblockentity = (TickingBlockEntity) this.blockEntityTickers.get(this.tileTickPosition);
@@ -910,8 +934,6 @@
 +                // Paper end - rewrite chunk system
              }
          }
-+        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075
-+
 +        ((net.sparklypower.sparklypaper.BlockEntityTickersList) this.blockEntityTickers).removeMarkedEntries(); // SparklyPaper - optimize block entity removals
  
          this.tickingBlockEntities = false;
@@ -973,6 +995,15 @@
          explosion.explode();
          explosion.finalizeExplosion(p_312145_);
          return explosion;
+@@ -708,7 +_,7 @@
+         if (this.isOutsideBuildHeight(p_46716_)) {
+             return null;
+         } else {
+-            return !this.isClientSide && Thread.currentThread() != this.thread
++            return !this.isClientSide && !ca.spottedleaf.moonrise.common.util.TickThread.isTickThread() // Paper - rewrite chunk system
+                 ? null
+                 : this.getChunkAt(p_46716_).getBlockEntity(p_46716_, LevelChunk.EntityCreationType.IMMEDIATE);
+         }
 @@ -725,6 +_,7 @@
          if (!this.isOutsideBuildHeight(p_46748_)) {
              this.getChunkAt(p_46748_).removeBlockEntity(p_46748_);
