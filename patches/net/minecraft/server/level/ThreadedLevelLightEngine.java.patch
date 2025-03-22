@@ -337,7 +337,7 @@
 +    }
 +
 +    public CompletableFuture<ChunkAccess> lightChunk(ChunkAccess chunk, boolean excludeBlocks) {
-+        throw new UnsupportedOperationException(); // Paper - rewrite chunk system
++        return CompletableFuture.completedFuture(chunk);  // Goldenforge: industrialforegoing use this method
      }
  
      public void tryScheduleUpdate() {
