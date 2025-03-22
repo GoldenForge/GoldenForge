@@ -1,5 +1,13 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
+@@ -42,6 +_,7 @@
+ import java.util.concurrent.Executor;
+ import java.util.concurrent.RejectedExecutionException;
+ import java.util.concurrent.atomic.AtomicReference;
++import java.util.concurrent.locks.LockSupport;
+ import java.util.function.BooleanSupplier;
+ import java.util.function.Consumer;
+ import java.util.function.Function;
 @@ -167,8 +_,9 @@
  import net.minecraft.world.phys.Vec3;
  import org.slf4j.Logger;
@@ -24,7 +32,7 @@
      @Nullable
      private KeyPair keyPair;
      @Nullable
-@@ -236,7 +_,7 @@
+@@ -236,11 +_,13 @@
      private long lastOverloadWarningNanos;
      protected final Services services;
      private long lastServerStatus;
@@ -33,7 +41,13 @@
      private long lastTickNanos = Util.getNanos();
      private long taskExecutionStartNanos = Util.getNanos();
      private long idleTimeNanos;
-@@ -262,10 +_,36 @@
+     protected long nextTickTimeNanos = Util.getNanos();
++    private boolean waitingForNextTick = false;
++
+     private long delayedTasksMaxNextTickTimeNanos;
+     private boolean mayHaveDelayedTasks;
+     private final PackRepository packRepository;
+@@ -262,10 +_,37 @@
      private volatile boolean isSaving;
      private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
  
@@ -58,6 +72,7 @@
 +    public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
 +
 +    public gg.pufferfish.pufferfish.util.AsyncExecutor mobSpawnExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("MobSpawning"); // Pufferfish - optimize mob spawning
++    public gg.pufferfish.pufferfish.util.AsyncExecutor chunkSendingExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("AsyncChunkSend"); // Goldenforge: use async executor for chunk sending
 +
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
          AtomicReference<S> atomicreference = new AtomicReference<>();
@@ -492,26 +507,14 @@
                  this.onServerExit();
              }
          }
-@@ -789,7 +_,26 @@
+@@ -789,7 +_,14 @@
      }
  
      private boolean haveTime() {
 -        return this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
 +        // CraftBukkit start
-+        if (isOversleep) return canOversleep(); // Paper - because of our changes, this logic is broken
 +        return this.forceTicks || this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
 +    }
-+
-+    // Paper start
-+    boolean isOversleep = false;
-+    private boolean canOversleep() {
-+        return this.mayHaveDelayedTasks && Util.getNanos() < this.delayedTasksMaxNextTickTimeNanos;
-+    }
-+
-+    private boolean canSleepForTickNoOversleep() {
-+        return this.forceTicks || this.runningTask() || Util.getNanos() < this.nextTickTimeNanos;
-+    }
-+    // Paper end
 +
 +    private void executeModerately() {
 +        this.runAllTasks();
@@ -520,20 +523,34 @@
      }
  
      public static boolean throwIfFatalException() {
-@@ -811,8 +_,10 @@
-     }
+@@ -812,20 +_,38 @@
  
      protected void waitUntilNextTick() {
--        this.runAllTasks();
+         this.runAllTasks();
 -        this.managedBlock(() -> !this.haveTime());
-+        //this.executeAll(); // Paper - move this into the tick method for timings
-+        this.managedBlock(() -> {
-+            return !this.canSleepForTickNoOversleep(); // Paper - move oversleep into full server tick
-+        });
++        this.waitingForNextTick = true;
++
++        try {
++            this.managedBlock(() -> !this.haveTime());
++        } finally {
++            this.waitingForNextTick = false;
++        }
      }
  
      @Override
-@@ -826,6 +_,17 @@
+     public void waitForTasks() {
+-        boolean flag = this.isTickTimeLoggingEnabled();
+-        long i = flag ? Util.getNanos() : 0L;
+-        super.waitForTasks();
+-        if (flag) {
+-            this.idleTimeNanos = this.idleTimeNanos + (Util.getNanos() - i);
++        boolean isTickTimeLoggingEnabled = this.isTickTimeLoggingEnabled();
++        long l = isTickTimeLoggingEnabled ? Util.getNanos() : 0L;
++        long l1 = this.waitingForNextTick ? this.nextTickTimeNanos - Util.getNanos() : 100000L;
++        LockSupport.parkNanos("waiting for tasks", l1);
++        if (isTickTimeLoggingEnabled) {
++            this.idleTimeNanos = this.idleTimeNanos + (Util.getNanos() - l);
+         }
      }
  
      protected TickTask wrapRunnable(Runnable p_129852_) {
@@ -573,24 +590,12 @@
          }
      }
  
-@@ -900,15 +_,57 @@
+@@ -899,16 +_,45 @@
+     }
  
      public void tickServer(BooleanSupplier p_129871_) {
++        org.spigotmc.WatchdogThread.tick(); // Spigot
          long i = Util.getNanos();
-+
-+        // Paper start - move oversleep into full server tick
-+        isOversleep = true;
-+        this.managedBlock(new BooleanSupplier() {
-+            @Override
-+            public boolean getAsBoolean() {
-+                return !MinecraftServer.this.canOversleep();
-+            }
-+        });
-+//        this.managedBlock(() -> {
-+//            return !this.canOversleep();
-+//        });
-+//        isOversleep = false;
-+        // Paper end
 +
          this.tickCount++;
 +        net.neoforged.neoforge.event.EventHooks.fireServerTickPre(p_129871_, this);
@@ -631,7 +636,7 @@
          if (this.ticksUntilAutosave <= 0) {
              this.ticksUntilAutosave = this.computeNextAutosaveInterval();
              LOGGER.debug("Autosave started");
-@@ -925,8 +_,15 @@
+@@ -925,8 +_,14 @@
          this.aggregatedTickTimesNanos += j;
          this.tickTimesNanos[k] = j;
          this.smoothedTickTimeMillis = this.smoothedTickTimeMillis * 0.8F + (float)j / (float)TimeUtil.NANOSECONDS_PER_MILLISECOND * 0.19999999F;
@@ -642,7 +647,6 @@
 +        // Paper end - Add tick times API and /mspt command
          this.logTickMethodTime(i);
          this.profiler.pop();
-+        org.spigotmc.WatchdogThread.tick(); // Spigot
 +        net.neoforged.neoforge.event.EventHooks.fireServerTickPost(p_129871_, this);
      }
  

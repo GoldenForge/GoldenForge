@@ -38,6 +38,8 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
+import org.goldenforge.GoldenForge;
+
 import java.lang.invoke.VarHandle;
 import java.util.ArrayDeque;
 import java.util.concurrent.TimeUnit;
@@ -452,28 +454,23 @@ public final class RegionizedPlayerChunkLoader {
             // Check if async chunk sending is enabled
             if (GlobalConfiguration.get().asyncChunkSend.enabled) {
                 // Async implementation
-                net.minecraft.Util.backgroundExecutor().execute(() -> {
+                this.world.getServer().chunkSendingExecutor.submit(() -> {
                     try {
                         final net.minecraft.server.network.ServerGamePacketListenerImpl connection = this.player.connection;
                         final ServerLevel serverLevel = this.world;
 
-                        // Create the packet with anti-xray control flag
                         final net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket packet = new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
                                 chunk, serverLevel.getLightEngine(), null, null
                         );
 
-                        // Let the main thread handle the anti-xray processing
                         serverLevel.getServer().execute(() -> {
                             if (this.removed || !this.sentChunks.contains(chunkKey)) {
                                 return;
                             }
 
-                            // This will trigger anti-xray processing and mark the packet as ready when done
-                            // The packet automatically handles readiness
-                            // Send the packet (which will be held until ready by the network layer)
                             connection.send(packet);
-
                             net.minecraft.network.protocol.game.DebugPackets.sendPoiPacketsForChunk(serverLevel, chunk.getPos());
+                            net.neoforged.neoforge.event.EventHooks.fireChunkSent(this.player, chunk, this.world);
                         });
                     } catch (Exception e) {
                         org.dreeam.leaf.async.AsyncChunkSending.LOGGER.error("Failed to send chunk asynchronously!", e);
