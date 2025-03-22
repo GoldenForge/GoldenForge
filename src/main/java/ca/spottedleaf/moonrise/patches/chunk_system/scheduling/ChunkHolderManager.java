@@ -717,24 +717,20 @@ public final class ChunkHolderManager {
 
         final int sectionShift = ((ChunkSystemServerLevel)this.world).moonrise$getRegionChunkShift();
 
-        final Predicate<Ticket<?>> expireNow = (final Ticket<?> ticket) -> {
-            long removeDelay = ((ChunkSystemTicket<?>)(Object)ticket).moonrise$getRemoveDelay();
-            if (removeDelay == NO_TIMEOUT_MARKER) {
-                return false;
-            }
-            --removeDelay;
-            ((ChunkSystemTicket<?>)(Object)ticket).moonrise$setRemoveDelay(removeDelay);
-            return removeDelay <= 0L;
-        };
-
+        // Leaf start - Rework ChunkHolderManager
+        // Collect sections to process first to avoid concurrent modification issues
+        List<Long> sectionKeys = new ArrayList<>();
         for (final PrimitiveIterator.OfLong iterator = this.sectionToChunkToExpireCount.keyIterator(); iterator.hasNext();) {
-            final long sectionKey = iterator.nextLong();
+            sectionKeys.add(iterator.nextLong());
+        }
 
+        for (final Long sectionKey : sectionKeys) {
+            // Skip if section was removed concurrently
             if (!this.sectionToChunkToExpireCount.containsKey(sectionKey)) {
-                // removed concurrently
                 continue;
             }
 
+            // Acquire lock for this section only
             final ReentrantAreaLock.Node ticketLock = this.ticketLockArea.lock(
                     CoordinateUtils.getChunkX(sectionKey) << sectionShift,
                     CoordinateUtils.getChunkZ(sectionKey) << sectionShift
@@ -742,11 +738,15 @@ public final class ChunkHolderManager {
 
             try {
                 final Long2IntOpenHashMap chunkToExpireCount = this.sectionToChunkToExpireCount.get(sectionKey);
-                if (chunkToExpireCount == null) {
-                    // lost to some race
+                if (chunkToExpireCount == null || chunkToExpireCount.isEmpty()) {
+                    // Section was removed or is empty, clean up
+                    if (chunkToExpireCount != null && chunkToExpireCount.isEmpty()) {
+                        this.sectionToChunkToExpireCount.remove(sectionKey);
+                    }
                     continue;
                 }
 
+                // Process each chunk in this section
                 for (final Iterator<Long2IntMap.Entry> iterator1 = chunkToExpireCount.long2IntEntrySet().fastIterator(); iterator1.hasNext();) {
                     final Long2IntMap.Entry entry = iterator1.next();
 
@@ -754,33 +754,51 @@ public final class ChunkHolderManager {
                     final int expireCount = entry.getIntValue();
 
                     final SortedArraySet<Ticket<?>> tickets = this.tickets.get(chunkKey);
-                    final int levelBefore = getTicketLevelAt(tickets);
+                    if (tickets == null || tickets.isEmpty()) {
+                        iterator1.remove();
+                        continue;
+                    }
 
-                    final int sizeBefore = tickets.size();
-                    tickets.removeIf(expireNow);
-                    final int sizeAfter = tickets.size();
-                    final int levelAfter = getTicketLevelAt(tickets);
+                    final int levelBefore = getTicketLevelAt(tickets);
+                    int expiredCount = 0;
+
+                    // More efficient ticket processing - avoids creating a new predicate each time
+                    for (Iterator<Ticket<?>> ticketIterator = tickets.iterator(); ticketIterator.hasNext();) {
+                        Ticket<?> ticket = ticketIterator.next();
+                        long removeDelay = ((ChunkSystemTicket<?>)(Object)ticket).moonrise$getRemoveDelay();
+
+                        if (removeDelay == NO_TIMEOUT_MARKER) {
+                            continue;
+                        }
+
+                        --removeDelay;
+                        if (removeDelay <= 0) {
+                            ticketIterator.remove();
+                            expiredCount++;
+                        } else {
+                            ((ChunkSystemTicket<?>)(Object)ticket).moonrise$setRemoveDelay(removeDelay);
+                        }
+                    }
 
                     if (tickets.isEmpty()) {
                         this.tickets.remove(chunkKey);
                     }
+
+                    final int levelAfter = getTicketLevelAt(tickets);
                     if (levelBefore != levelAfter) {
                         this.updateTicketLevel(chunkKey, levelAfter);
                     }
 
-                    final int newExpireCount = expireCount - (sizeBefore - sizeAfter);
-
-                    if (newExpireCount == expireCount) {
-                        continue;
-                    }
-
-                    if (newExpireCount != 0) {
-                        entry.setValue(newExpireCount);
-                    } else {
+                    // Update expire count
+                    final int newExpireCount = expireCount - expiredCount;
+                    if (newExpireCount <= 0) {
                         iterator1.remove();
+                    } else if (newExpireCount != expireCount) {
+                        entry.setValue(newExpireCount);
                     }
                 }
 
+                // Remove empty sections
                 if (chunkToExpireCount.isEmpty()) {
                     this.sectionToChunkToExpireCount.remove(sectionKey);
                 }
@@ -788,6 +806,7 @@ public final class ChunkHolderManager {
                 this.ticketLockArea.unlock(ticketLock);
             }
         }
+        // Leaf end - Rework ChunkHolderManager
 
         this.processTicketUpdates();
     }
