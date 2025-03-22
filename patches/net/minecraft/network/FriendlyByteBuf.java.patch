@@ -9,6 +9,43 @@
      public static final int DEFAULT_NBT_QUOTA = 2097152;
      private final ByteBuf source;
      public static final short MAX_STRING_LENGTH = 32767;
+@@ -320,9 +_,33 @@
+     public FriendlyByteBuf writeLongArray(long[] p_130092_) {
+         this.writeVarInt(p_130092_.length);
+ 
+-        for (long i : p_130092_) {
+-            this.writeLong(i);
+-        }
++        // Leaf start - Bulk writes to writeLongArray during chunk loading
++        if (p_130092_.length == 0) {
++            return this;
++        }
++
++        this.source.ensureWritable(p_130092_.length * Long.BYTES);
++        int writerIndex = this.source.writerIndex();
++
++        if (this.source.hasArray()) {
++            byte[] dest = this.source.array();
++            int offset = this.source.arrayOffset() + writerIndex;
++
++            ByteBuffer buf = ByteBuffer.wrap(dest, offset, p_130092_.length * Long.BYTES).order(this.source.order());
++            buf.asLongBuffer().put(p_130092_);
++
++            this.source.writerIndex(writerIndex + p_130092_.length * Long.BYTES);
++        } else if (this.source.nioBufferCount() > 0) {
++            ByteBuffer nioBuf = this.source.nioBuffer(writerIndex, p_130092_.length * Long.BYTES);
++            nioBuf.asLongBuffer().put(p_130092_);
++            this.source.writerIndex(writerIndex + p_130092_.length * Long.BYTES);
++        } else {
++            ByteBuffer temp = ByteBuffer.allocate(p_130092_.length * Long.BYTES).order(this.source.order());
++            temp.asLongBuffer().put(p_130092_);
++            temp.rewind();
++            this.source.writeBytes(temp);
++        }
++        // Leaf end - Bulk writes to writeLongArray during chunk loading
+ 
+         return this;
+     }
 @@ -1588,5 +_,10 @@
      @Override
      public boolean release(int p_130347_) {
