@@ -1,0 +1,25 @@
+--- a/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
++++ b/net/minecraft/world/entity/ai/behavior/TradeWithVillager.java
+@@ -66,9 +_,19 @@
+     }
+ 
+     private static Set<Item> figureOutWhatIAmWillingToTrade(Villager p_24423_, Villager p_24424_) {
+-        ImmutableSet<Item> immutableset = p_24424_.getVillagerData().getProfession().requestedItems();
+-        ImmutableSet<Item> immutableset1 = p_24423_.getVillagerData().getProfession().requestedItems();
+-        return immutableset.stream().filter(p_24431_ -> !immutableset1.contains(p_24431_)).collect(Collectors.toSet());
++        // Leaf start - Remove stream in villagers
++        ImmutableSet<Item> otherItems = p_24424_.getVillagerData().getProfession().requestedItems();
++        ImmutableSet<Item> villagerItems = p_24423_.getVillagerData().getProfession().requestedItems();
++        Set<Item> result = new java.util.HashSet<>();
++
++        for (Item item : otherItems) {
++            if (!villagerItems.contains(item)) {
++                result.add(item);
++            }
++        }
++
++        return result;
++        // Leaf end - Remove stream in villagers
+     }
+ 
+     private static void throwHalfStack(Villager p_24426_, Set<Item> p_24427_, LivingEntity p_24428_) {
