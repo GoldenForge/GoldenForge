@@ -846,6 +846,31 @@
              return false;
          } else {
              this.addFreshEntityWithPassengers(p_8861_);
+@@ -935,13 +_,22 @@
+ 
+     @Override
+     public void destroyBlockProgress(int p_8612_, BlockPos p_8613_, int p_8614_) {
+-        for (ServerPlayer serverplayer : this.server.getPlayerList().getPlayers()) {
++        // Gale start - SportPaper - reduce block destruction packet allocations
++        var players = this.server.getPlayerList().getPlayers();
++
++        if (players.isEmpty()) {
++            return;
++        }
++
++        ClientboundBlockDestructionPacket packet = new ClientboundBlockDestructionPacket(p_8612_, p_8613_, p_8614_);
++        // Gale end - SportPaper - reduce block destruction packet allocations
++        for (ServerPlayer serverplayer : players) { // Gale - SportPaper - reduce block destruction packet allocations
+             if (serverplayer != null && serverplayer.level() == this && serverplayer.getId() != p_8612_) {
+                 double d0 = (double)p_8613_.getX() - serverplayer.getX();
+                 double d1 = (double)p_8613_.getY() - serverplayer.getY();
+                 double d2 = (double)p_8613_.getZ() - serverplayer.getZ();
+                 if (d0 * d0 + d1 * d1 + d2 * d2 < 1024.0) {
+-                    serverplayer.connection.send(new ClientboundBlockDestructionPacket(p_8612_, p_8613_, p_8614_));
++                    serverplayer.connection.send(packet); // Gale - SportPaper - reduce block destruction packet allocations
+                 }
+             }
+         }
 @@ -959,6 +_,12 @@
          float p_263390_,
          long p_263403_
