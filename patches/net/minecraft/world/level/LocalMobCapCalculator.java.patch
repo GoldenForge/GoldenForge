@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/level/LocalMobCapCalculator.java
++++ b/net/minecraft/world/level/LocalMobCapCalculator.java
+@@ -42,14 +_,14 @@
+     }
+ 
+     static class MobCounts {
+-        private final Object2IntMap<MobCategory> counts = new Object2IntOpenHashMap<>(MobCategory.values().length);
++        private final int[] counts = new int[MobCategory.values().length]; // Gale - VMP - store mob counts in an array
+ 
+         public void add(MobCategory p_186518_) {
+-            this.counts.computeInt(p_186518_, (p_186520_, p_186521_) -> p_186521_ == null ? 1 : p_186521_ + 1);
++            this.counts[p_186518_.ordinal()]++; // Gale - VMP - store mob counts in an array
+         }
+ 
+         public boolean canSpawn(MobCategory p_186523_) {
+-            return this.counts.getOrDefault(p_186523_, 0) < p_186523_.getMaxInstancesPerChunk();
++            return this.counts[p_186523_.ordinal()] < p_186523_.getMaxInstancesPerChunk(); // Gale - VMP - store mob counts in an array
+         }
+     }
+ }
