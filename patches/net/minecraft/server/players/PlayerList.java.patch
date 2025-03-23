@@ -1,5 +1,27 @@
 --- a/net/minecraft/server/players/PlayerList.java
 +++ b/net/minecraft/server/players/PlayerList.java
+@@ -21,7 +_,6 @@
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
+ import net.minecraft.ChatFormatting;
+-import net.minecraft.FileUtil;
+ import net.minecraft.commands.CommandSourceStack;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.LayeredRegistryAccess;
+@@ -108,11 +_,12 @@
+     public static final Component CHAT_FILTERED_FULL = Component.translatable("chat.filtered_full");
+     public static final Component DUPLICATE_LOGIN_DISCONNECT_MESSAGE = Component.translatable("multiplayer.disconnect.duplicate_login");
+     private static final Logger LOGGER = LogUtils.getLogger();
+-    private static final int SEND_PLAYER_INFO_INTERVAL = 600;
++    public static final int SEND_PLAYER_INFO_INTERVAL = 600;
+     private static final SimpleDateFormat BAN_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd 'at' HH:mm:ss z");
+     private final MinecraftServer server;
+     private final List<ServerPlayer> players = Lists.newArrayList();
+     private final Map<UUID, ServerPlayer> playersByUUID = Maps.newHashMap();
++    private final ServerPlayer[][] sendAllPlayerInfoBuckets = new ServerPlayer[SEND_PLAYER_INFO_INTERVAL][]; // Gale - Purpur - spread out sending all player info
+     private final UserBanList bans = new UserBanList(USERBANLIST_FILE);
+     private final IpBanList ipBans = new IpBanList(IPBANLIST_FILE);
+     private final ServerOpList ops = new ServerOpList(OPLIST_FILE);
 @@ -128,6 +_,7 @@
      private boolean allowCommandsForAllPlayers;
      private static final boolean ALLOW_LOGOUTIVATOR = false;
@@ -33,6 +55,14 @@
          servergamepacketlistenerimpl.send(new ClientboundUpdateRecipesPacket(this.server.getRecipeManager().getOrderedRecipes()));
          this.sendPlayerPermissionLevel(p_11263_);
          p_11263_.getStats().markAllDirty();
+@@ -224,6 +_,7 @@
+         p_11263_.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(this.players));
+         this.players.add(p_11263_);
+         this.playersByUUID.put(p_11263_.getUUID(), p_11263_);
++        this.addToSendAllPlayerInfoBuckets(p_11263_); // Gale - Purpur - spread out sending all player info
+         this.broadcastAll(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(p_11263_)));
+         this.sendLevelInfo(p_11263_, serverlevel1);
+         serverlevel1.addNewPlayer(p_11263_);
 @@ -265,6 +_,17 @@
          }
  
@@ -85,7 +115,15 @@
          this.save(p_11287_);
          if (p_11287_.isPassenger()) {
              Entity entity = p_11287_.getRootVehicle();
-@@ -379,35 +_,78 @@
+@@ -367,6 +_,7 @@
+         serverlevel.removePlayerImmediately(p_11287_, Entity.RemovalReason.UNLOADED_WITH_PLAYER);
+         p_11287_.getAdvancements().stopListening();
+         this.players.remove(p_11287_);
++        this.removeFromSendAllPlayerInfoBuckets(p_11287_); // Gale - Purpur - spread out sending all player info
+         this.server.getCustomBossEvents().onPlayerDisconnect(p_11287_);
+         UUID uuid = p_11287_.getUUID();
+         ServerPlayer serverplayer = this.playersByUUID.get(uuid);
+@@ -379,39 +_,85 @@
          this.broadcastAll(new ClientboundPlayerInfoRemovePacket(List.of(p_11287_.getUUID())));
      }
  
@@ -191,9 +229,21 @@
 +        return entity;
      }
  
-     public ServerPlayer getPlayerForLogin(GameProfile p_215625_, ClientInformation p_302018_) {
-@@ -440,13 +_,23 @@
+-    public ServerPlayer getPlayerForLogin(GameProfile p_215625_, ClientInformation p_302018_) {
+-        return new ServerPlayer(this.server, this.server.overworld(), p_215625_, p_302018_);
++    // CraftBukkit start - added EntityPlayer
++    public ServerPlayer getPlayerForLogin(GameProfile p_215625_, ClientInformation p_302018_, ServerPlayer player) {
++        player.updateOptions(p_302018_);
++        return player;
++        // CraftBukkit end
+     }
+ 
+     public boolean disconnectAllPlayersWithProfile(GameProfile p_295670_) {
+@@ -438,15 +_,26 @@
+ 
+     public ServerPlayer respawn(ServerPlayer p_11237_, boolean p_11238_, Entity.RemovalReason p_348558_) {
          this.players.remove(p_11237_);
++        this.removeFromSendAllPlayerInfoBuckets(p_11237_); // Gale - Purpur - spread out sending all player info
          p_11237_.serverLevel().removePlayerImmediately(p_11237_, p_348558_);
          DimensionTransition dimensiontransition = p_11237_.findRespawnPositionAndUseSpawnBlock(p_11238_, DimensionTransition.DO_NOTHING);
 +
@@ -228,7 +278,7 @@
          if (dimensiontransition.missingRespawnBlock()) {
              serverplayer.connection.send(new ClientboundGameEventPacket(ClientboundGameEventPacket.NO_RESPAWN_BLOCK_AVAILABLE, 0.0F));
          }
-@@ -472,11 +_,20 @@
+@@ -472,11 +_,21 @@
          this.sendActivePlayerEffects(serverplayer);
          this.sendLevelInfo(serverplayer, serverlevel);
          this.sendPlayerPermissionLevel(serverplayer);
@@ -236,6 +286,7 @@
          serverlevel.addRespawnedPlayer(serverplayer);
          this.players.add(serverplayer);
          this.playersByUUID.put(serverplayer.getUUID(), serverplayer);
++        this.addToSendAllPlayerInfoBuckets(serverplayer); // Gale - Purpur - spread out sending all player info
          serverplayer.initInventoryMenu();
 +        this.sendAllPlayerInfo(serverplayer); // Update health, etc...
 +        serverplayer.onUpdateAbilities();
@@ -260,6 +311,66 @@
          return serverplayer;
      }
  
+@@ -517,12 +_,57 @@
+     }
+ 
+     public void tick() {
+-        if (++this.sendAllPlayerInfoIn > 600) {
+-            this.broadcastAll(new ClientboundPlayerInfoUpdatePacket(EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_LATENCY), this.players));
++        // Gale start - Purpur - spread out sending all player info
++        ServerPlayer[] sendAllPlayerInfoBucket = this.sendAllPlayerInfoBuckets[this.sendAllPlayerInfoIn];
++
++        if (sendAllPlayerInfoBucket != null) {
++            for (ServerPlayer targetPlayer : sendAllPlayerInfoBucket) { // Gale - Purpur - optimize player list for sending player info
++                // Gale end - Purpur - spread out sending all player info
++                targetPlayer.connection.send(new ClientboundPlayerInfoUpdatePacket(EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_LATENCY), this.players));
++            }
++            // Gale start - Purpur - spread out sending all player info
++        }
++
++        if (++this.sendAllPlayerInfoIn >= SEND_PLAYER_INFO_INTERVAL) {
++            // Gale end - Purpur - spread out sending all player info
+             this.sendAllPlayerInfoIn = 0;
+         }
+     }
+ 
++    // Gale start - Purpur - spread out sending all player info
++    private void addToSendAllPlayerInfoBuckets(ServerPlayer player) {
++        ServerPlayer[] sendAllPlayerInfoBucket = this.sendAllPlayerInfoBuckets[player.sendAllPlayerInfoBucketIndex];
++
++        if (sendAllPlayerInfoBucket == null) {
++            this.sendAllPlayerInfoBuckets[player.sendAllPlayerInfoBucketIndex] = new ServerPlayer[]{player};
++        } else {
++            this.sendAllPlayerInfoBuckets[player.sendAllPlayerInfoBucketIndex] = sendAllPlayerInfoBucket = java.util.Arrays.copyOf(sendAllPlayerInfoBucket, sendAllPlayerInfoBucket.length + 1);
++            sendAllPlayerInfoBucket[sendAllPlayerInfoBucket.length - 1] = player;
++        }
++    }
++
++    private void removeFromSendAllPlayerInfoBuckets(ServerPlayer player) {
++        ServerPlayer[] sendAllPlayerInfoBucket = this.sendAllPlayerInfoBuckets[player.sendAllPlayerInfoBucketIndex];
++
++        if (sendAllPlayerInfoBucket != null) {
++            if (sendAllPlayerInfoBucket.length == 1) {
++                if (sendAllPlayerInfoBucket[0] == player) {
++                    this.sendAllPlayerInfoBuckets[player.sendAllPlayerInfoBucketIndex] = null;
++                }
++
++                return;
++            }
++
++            for (int i = 0; i < sendAllPlayerInfoBucket.length; i++) {
++                if (sendAllPlayerInfoBucket[i] == player) {
++                    sendAllPlayerInfoBucket[i] = sendAllPlayerInfoBucket[sendAllPlayerInfoBucket.length - 1];
++                    this.sendAllPlayerInfoBuckets[player.sendAllPlayerInfoBucketIndex] = java.util.Arrays.copyOf(sendAllPlayerInfoBucket, sendAllPlayerInfoBucket.length - 1);
++                }
++            }
++        }
++    }
++    // Gale end - Purpur - spread out sending all player info
++
+     public void broadcastAll(Packet<?> p_11269_) {
+         for (ServerPlayer serverplayer : this.players) {
+             serverplayer.connection.send(p_11269_);
 @@ -582,6 +_,7 @@
      }
  
