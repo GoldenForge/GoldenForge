@@ -69,7 +69,8 @@
 +    public final AtomicInteger tickingGenerated = new AtomicInteger();
      private final String storageName;
      private final PlayerMap playerMap = new PlayerMap();
-     private final Int2ObjectMap<ChunkMap.TrackedEntity> entityMap = new Int2ObjectOpenHashMap<>();
+-    private final Int2ObjectMap<ChunkMap.TrackedEntity> entityMap = new Int2ObjectOpenHashMap<>();
++    public final Int2ObjectMap<ChunkMap.TrackedEntity> entityMap = new it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap<>(); // Gale - VMP - use linked map for entity trackers - provides faster iteration
      private final Long2ByteMap chunkTypeCache = new Long2ByteOpenHashMap();
      private final Long2LongMap chunkSaveCooldowns = new Long2LongOpenHashMap();
 -    private final Queue<Runnable> unloadQueue = Queues.newConcurrentLinkedQueue();
@@ -836,7 +837,7 @@
                  this.distanceManager.getTicketDebugString(i),
                  this.anyPlayerCloseEnoughForSpawning(chunkpos),
                  optional1.<Integer>map(p_214953_ -> p_214953_.getBlockEntities().size()).orElse(0),
-@@ -910,10 +_,11 @@
+@@ -910,39 +_,91 @@
          return this.read(p_214964_).thenApplyAsync(p_214907_ -> p_214907_.map(this::upgradeChunkTag), Util.backgroundExecutor());
      }
  
@@ -847,9 +848,65 @@
  
 +
      boolean anyPlayerCloseEnoughForSpawning(ChunkPos p_183880_) {
-         if (!this.distanceManager.hasPlayersNearby(p_183880_.toLong())) {
-             return false;
-@@ -929,20 +_,34 @@
+-        if (!this.distanceManager.hasPlayersNearby(p_183880_.toLong())) {
+-            return false;
+-        } else {
+-            for (ServerPlayer serverplayer : this.playerMap.getAllPlayers()) {
+-                if (this.playerIsCloseEnoughForSpawning(serverplayer, p_183880_)) {
+-                    return true;
+-                }
+-            }
+-
+-            return false;
+-        }
++        return this.anyPlayerCloseEnoughForSpawningInternal(p_183880_, false);
++    }
++
++    private boolean anyPlayerCloseEnoughForSpawningInternal(ChunkPos chunkPos, boolean reducedRange) {
++        //double blockRange; // Paper - use from event // Leaf - Optimize checking nearby players for spawning - move down
++        // Spigot end
++        // Paper start - chunk tick iteration optimisation
++        final ca.spottedleaf.moonrise.common.list.ReferenceList<ServerPlayer> players = ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.level).moonrise$getNearbyPlayers().getPlayers(
++                chunkPos, ca.spottedleaf.moonrise.common.misc.NearbyPlayers.NearbyMapType.SPAWN_RANGE
++        );
++        if (players == null) {
++            return false;
++        }
++
++        final ServerPlayer[] raw = players.getRawDataUnchecked();
++        final int len = players.size();
++        // Leaf start - Optimize checking nearby players for spawning
++        // Precompute chunk center once
++        // inline, copy from SectionPos#sectionToBlockCoord
++        final double centerX = (chunkPos.x << 4) + 8;
++        final double centerZ = (chunkPos.z << 4) + 8;
++
++        for (int i = 0; i < len; ++i) {
++            final ServerPlayer serverPlayer = raw[i];
++
++            if (serverPlayer.isSpectator()) continue; // Skip spectators early
++
++            final double blockRangeSquared;
++
++            if (reducedRange) {
++                int spawnRadius = Math.min(8, ca.spottedleaf.moonrise.common.PlatformHooks.get().getViewDistance(serverPlayer));
++                blockRangeSquared = (double) (spawnRadius * spawnRadius) * 256.0; // (radius << 4)^2
++                // Paper end - PlayerNaturallySpawnCreaturesEvent
++            } else {
++                blockRangeSquared = 16384.0D; // Default 128^2
++            }
++
++            // Calculate squared distance using precomputed center
++            final double dx = serverPlayer.getX() - centerX;
++            final double dz = serverPlayer.getZ() - centerZ;
++            if (dx * dx + dz * dz < blockRangeSquared) {
++                return true;
++            }
++        }
++        // Leaf end - Optimize checking nearby players for spawning
++
++        return false;
++        // Paper end - chunk tick iteration optimisation
      }
  
      public List<ServerPlayer> getPlayersCloseForSpawning(ChunkPos p_183889_) {
