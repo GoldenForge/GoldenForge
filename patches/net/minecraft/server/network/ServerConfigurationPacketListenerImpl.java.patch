@@ -96,8 +96,9 @@
                  return;
              }
  
-             ServerPlayer serverplayer = playerlist.getPlayerForLogin(this.gameProfile, this.clientInformation);
+-            ServerPlayer serverplayer = playerlist.getPlayerForLogin(this.gameProfile, this.clientInformation);
 -            playerlist.placeNewPlayer(this.connection, serverplayer, this.createCookie(this.clientInformation));
++            ServerPlayer serverplayer = playerlist.getPlayerForLogin(this.gameProfile, this.clientInformation, this.player);
 +            playerlist.placeNewPlayer(this.connection, serverplayer, this.createCookie(this.clientInformation, this.connectionType));
          } catch (Exception exception) {
              LOGGER.error("Couldn't place player in world", (Throwable)exception);
