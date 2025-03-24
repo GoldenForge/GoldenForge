@@ -35,7 +35,7 @@
      public final ChunkMap chunkMap;
      private final DimensionDataStorage dataStorage;
      private long lastInhabitedUpdate;
-@@ -64,7 +_,86 @@
+@@ -64,7 +_,87 @@
      @Nullable
      @VisibleForDebug
      private NaturalSpawner.SpawnState lastSpawnState;
@@ -78,6 +78,7 @@
 +
 +        if (ca.spottedleaf.moonrise.common.util.TickThread.isTickThreadFor(this.level, chunkX, chunkZ)) {
 +            ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.pushChunkWait(this.level, chunkX, chunkZ);
++            com.destroystokyo.paper.io.SyncLoadFinder.logSyncLoad(this.level, chunkX, chunkZ);
 +            this.mainThreadProcessor.managedBlock(completable::isDone);
 +            ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.popChunkWait();
 +        }
