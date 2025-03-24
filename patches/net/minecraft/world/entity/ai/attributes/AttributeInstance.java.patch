@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/entity/ai/attributes/AttributeInstance.java
++++ b/net/minecraft/world/entity/ai/attributes/AttributeInstance.java
+@@ -3,6 +_,7 @@
+ import com.google.common.annotations.VisibleForTesting;
+ import com.google.common.collect.ImmutableSet;
+ import com.google.common.collect.Maps;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
+ import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+ import java.util.Collection;
+@@ -24,8 +_,10 @@
+     private final Map<AttributeModifier.Operation, Map<ResourceLocation, AttributeModifier>> modifiersByOperation = Maps.newEnumMap(
+         AttributeModifier.Operation.class
+     );
+-    private final Map<ResourceLocation, AttributeModifier> modifierById = new Object2ObjectArrayMap<>();
+-    private final Map<ResourceLocation, AttributeModifier> permanentModifiers = new Object2ObjectArrayMap<>();
++    // Leaf start - Multithreaded tracker
++    private final Map<ResourceLocation, AttributeModifier> modifierById = new java.util.concurrent.ConcurrentHashMap<>();
++    private final Map<ResourceLocation, AttributeModifier> permanentModifiers =new java.util.concurrent.ConcurrentHashMap<>();
++    // Leaf end - Multithreaded tracker
+     private double baseValue;
+     private boolean dirty = true;
+     private double cachedValue;
