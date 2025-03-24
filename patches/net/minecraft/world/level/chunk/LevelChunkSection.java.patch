@@ -91,7 +91,7 @@
      public BlockState setBlockState(int p_62992_, int p_62993_, int p_62994_, BlockState p_62995_, boolean p_62996_) {
          BlockState blockstate;
          if (p_62996_) {
-@@ -65,7 +_,7 @@
+@@ -65,28 +_,30 @@
  
          FluidState fluidstate = blockstate.getFluidState();
          FluidState fluidstate1 = p_62995_.getFluidState();
@@ -100,7 +100,11 @@
              this.nonEmptyBlockCount--;
              if (blockstate.isRandomlyTicking()) {
                  this.tickingBlockCount--;
-@@ -76,7 +_,7 @@
+             }
+         }
+ 
+-        if (!fluidstate.isEmpty()) {
++        if (!!fluidstate.isRandomlyTicking()) {
              this.tickingFluidCount--;
          }
  
@@ -109,7 +113,11 @@
              this.nonEmptyBlockCount++;
              if (p_62995_.isRandomlyTicking()) {
                  this.tickingBlockCount++;
-@@ -87,6 +_,8 @@
+             }
+         }
+ 
+-        if (!fluidstate1.isEmpty()) {
++        if (!!fluidstate1.isRandomlyTicking()) {
              this.tickingFluidCount++;
          }
  
@@ -243,11 +251,15 @@
  
      public PalettedContainer<BlockState> getStates() {
          return this.states;
-@@ -151,6 +_,7 @@
+@@ -151,6 +_,11 @@
          PalettedContainer<Holder<Biome>> palettedcontainer = this.biomes.recreate();
          palettedcontainer.read(p_63005_);
          this.biomes = palettedcontainer;
-+        this.recalcBlockCounts(); // Paper - block counting
++        // Paper start - block counting
++        this.isClient = true;
++        // force has special colliding blocks to be true
++        this.specialCollidingBlocks = this.nonEmptyBlockCount != (short)0 && this.maybeHas(ca.spottedleaf.moonrise.patches.collisions.CollisionUtil::isSpecialCollidingBlock) ? CLIENT_FORCED_SPECIAL_COLLIDING_BLOCKS : (short)0;
++        // Paper end - block counting
      }
  
      public void readBiomes(FriendlyByteBuf p_275669_) {

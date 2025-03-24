@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
+@@ -5,6 +_,8 @@
+ import com.mojang.logging.LogUtils;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
++
++import java.util.Collections;
+ import java.util.Map;
+ import java.util.Map.Entry;
+ import java.util.function.Consumer;
 @@ -50,7 +_,7 @@
  import net.minecraft.world.ticks.TickContainerAccess;
  import org.slf4j.Logger;
@@ -60,6 +69,17 @@
  
      public LevelChunk(ServerLevel p_196850_, ProtoChunk p_196851_, @Nullable LevelChunk.PostLoadProcessor p_196852_) {
          this(
+@@ -126,6 +_,10 @@
+             p_196851_.getBlendingData()
+         );
+ 
++        if (!Collections.disjoint(p_196851_.pendingBlockEntities.keySet(), p_196851_.blockEntities.keySet())) {
++            LOGGER.error("Chunk at {} contains duplicated block entities", p_196851_.getPos());
++        }
++
+         for (BlockEntity blockentity : p_196851_.getBlockEntities().values()) {
+             this.setBlockEntity(blockentity);
+         }
 @@ -139,15 +_,23 @@
          this.setAllStarts(p_196851_.getAllStarts());
          this.setAllReferences(p_196851_.getAllReferences());
@@ -256,7 +276,18 @@
          } else {
              CompoundTag compoundtag = this.pendingBlockEntities.get(p_62932_);
              if (compoundtag != null) {
-@@ -436,6 +_,7 @@
+@@ -430,12 +_,18 @@
+     public void removeBlockEntity(BlockPos p_62919_) {
+         if (this.isInLevel()) {
+             BlockEntity blockentity = this.blockEntities.remove(p_62919_);
++            // CraftBukkit start - SPIGOT-5561: Also remove from pending map
++            if (!this.pendingBlockEntities.isEmpty()) {
++                this.pendingBlockEntities.remove(p_62919_);
++            }
++            // CraftBukkit end
+             if (blockentity != null) {
+                 if (this.level instanceof ServerLevel serverlevel) {
+                     this.removeGameEventListener(blockentity, serverlevel);
                  }
  
                  blockentity.setRemoved();
@@ -328,7 +359,7 @@
          this.blockEntities.values().forEach(p_187988_ -> {
              if (this.level instanceof ServerLevel serverlevel) {
                  this.addGameEventListener(p_187988_, serverlevel);
-@@ -662,6 +_,14 @@
+@@ -662,14 +_,24 @@
          return new LevelChunk.BoundTickingBlockEntity<>(p_156376_, p_156377_);
      }
  
@@ -343,7 +374,17 @@
      class BoundTickingBlockEntity<T extends BlockEntity> implements TickingBlockEntity {
          private final T blockEntity;
          private final BlockEntityTicker<T> ticker;
-@@ -679,6 +_,7 @@
+         private boolean loggedInvalidBlockState;
++        private final BlockPos cachedPos; // Leaf - Cache tile entity position
+ 
+         BoundTickingBlockEntity(T p_156433_, BlockEntityTicker<T> p_156434_) {
+             this.blockEntity = p_156433_;
+             this.ticker = p_156434_;
++            this.cachedPos = this.blockEntity.getBlockPos(); // Leaf - Cache tile entity position
+         }
+ 
+         @Override
+@@ -679,20 +_,20 @@
                  if (LevelChunk.this.isTicking(blockpos)) {
                      try {
                          ProfilerFiller profilerfiller = LevelChunk.this.level.getProfiler();
@@ -351,6 +392,28 @@
                          profilerfiller.push(this::getType);
                          BlockState blockstate = LevelChunk.this.getBlockState(blockpos);
                          if (this.blockEntity.getType().isValid(blockstate)) {
+                             this.ticker.tick(LevelChunk.this.level, this.blockEntity.getBlockPos(), blockstate, this.blockEntity);
+                             this.loggedInvalidBlockState = false;
+-                        } else if (!this.loggedInvalidBlockState) {
+-                            this.loggedInvalidBlockState = true;
+-                            LevelChunk.LOGGER
+-                                .warn(
+-                                    "Block entity {} @ {} state {} invalid for ticking:",
+-                                    LogUtils.defer(this::getType),
+-                                    LogUtils.defer(this::getPos),
+-                                    blockstate
+-                                );
++                            // Paper start - Remove the Block Entity if it's invalid
++                        } else {
++                            LevelChunk.this.removeBlockEntity(this.getPos());
++                            if (!this.loggedInvalidBlockState) {
++                                this.loggedInvalidBlockState = true;
++                                LevelChunk.LOGGER.warn("Block entity {} @ {} state {} invalid for ticking:", LogUtils.defer(this::getType), LogUtils.defer(this::getPos), blockstate);
++                            }
++                            // Paper end - Remove the Block Entity if it's invalid
+                         }
+ 
+                         profilerfiller.pop();
 @@ -700,7 +_,15 @@
                          CrashReport crashreport = CrashReport.forThrowable(throwable, "Ticking block entity");
                          CrashReportCategory crashreportcategory = crashreport.addCategory("Block entity being ticked");
@@ -367,3 +430,63 @@
                      }
                  }
              }
+@@ -713,8 +_,9 @@
+ 
+         @Override
+         public BlockPos getPos() {
+-            return this.blockEntity.getBlockPos();
++            return this.cachedPos; // Leaf - Cache tile entity position
+         }
++
+ 
+         @Override
+         public String getType() {
+@@ -740,13 +_,29 @@
+ 
+     class RebindableTickingBlockEntityWrapper implements TickingBlockEntity {
+         private TickingBlockEntity ticker;
++        private BlockPos cachedPos; // Leaf - Cache tile entity position
++        private @Nullable BlockEntity blockEntityReference = null; // Leaf - Improve BlockEntity ticking isRemoved check
+ 
+         RebindableTickingBlockEntityWrapper(TickingBlockEntity p_156447_) {
+             this.ticker = p_156447_;
++            this.cachedPos = this.ticker.getPos(); // Leaf - Cache tile entity position
++            // Leaf start - Improve BlockEntity ticking isRemoved check
++            if (p_156447_ instanceof BoundTickingBlockEntity<?> boundTicker) {
++                blockEntityReference = boundTicker.blockEntity;
++            }
++            // Leaf end - Improve BlockEntity ticking isRemoved check
+         }
+ 
+         void rebind(TickingBlockEntity p_156450_) {
+             this.ticker = p_156450_;
++            this.cachedPos = this.ticker.getPos(); // Leaf - Cache tile entity position
++            // Leaf start - Improve BlockEntity ticking isRemoved check
++            if (p_156450_ instanceof BoundTickingBlockEntity<?> boundTicker) {
++                blockEntityReference = boundTicker.blockEntity;
++            } else {
++                blockEntityReference = null;
++            }
++            // Leaf end - Improve BlockEntity ticking isRemoved check
+         }
+ 
+         @Override
+@@ -756,12 +_,17 @@
+ 
+         @Override
+         public boolean isRemoved() {
++            // Leaf start - Improve BlockEntity ticking isRemoved check
++            if (blockEntityReference != null) {
++                return blockEntityReference.isRemoved();
++            }
++            // Leaf end - Improve BlockEntity ticking isRemoved check
+             return this.ticker.isRemoved();
+         }
+ 
+         @Override
+         public BlockPos getPos() {
+-            return this.ticker.getPos();
++            return this.cachedPos; // Leaf - Cache tile entity position
+         }
+ 
+         @Override

@@ -112,6 +112,18 @@
          if (p_187626_ != null) {
              if (this.sections.length == p_187626_.length) {
                  System.arraycopy(p_187626_, 0, this.sections, 0, this.sections.length);
+@@ -302,7 +_,10 @@
+     }
+ 
+     public void setBlockEntityNbt(CompoundTag p_62091_) {
+-        this.pendingBlockEntities.put(BlockEntity.getPosFromTag(p_62091_), p_62091_);
++        BlockPos posFromTag = BlockEntity.getPosFromTag(p_62091_);
++        if (!this.blockEntities.containsKey(posFromTag)) {
++            this.pendingBlockEntities.put(posFromTag, p_62091_);
++        }
+     }
+ 
+     @Nullable
 @@ -315,10 +_,19 @@
  
      @Override

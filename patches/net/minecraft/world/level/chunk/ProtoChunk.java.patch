@@ -28,3 +28,11 @@
                          this.lightEngine.checkBlock(p_63217_);
                      }
                  }
+@@ -169,6 +_,7 @@
+ 
+     @Override
+     public void setBlockEntity(BlockEntity p_156488_) {
++        this.pendingBlockEntities.remove(p_156488_.getBlockPos());
+         this.blockEntities.put(p_156488_.getBlockPos(), p_156488_);
+     }
+ 
