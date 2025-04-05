@@ -1,16 +1,17 @@
 --- a/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
 +++ b/net/minecraft/server/network/ServerConfigurationPacketListenerImpl.java
-@@ -49,8 +_,8 @@
-     @Nullable
-     private SynchronizeRegistriesTask synchronizeRegistriesTask;
- 
--    public ServerConfigurationPacketListenerImpl(MinecraftServer p_294645_, Connection p_295787_, CommonListenerCookie p_302003_) {
--        super(p_294645_, p_295787_, p_302003_);
-+    public ServerConfigurationPacketListenerImpl(MinecraftServer p_294645_, Connection p_295787_, CommonListenerCookie p_302003_, ServerPlayer serverPlayer) {
-+        super(p_294645_, p_295787_, p_302003_, serverPlayer);
-         this.gameProfile = p_302003_.gameProfile();
+@@ -55,6 +_,11 @@
          this.clientInformation = p_302003_.clientInformation();
      }
+ 
++    public ServerConfigurationPacketListenerImpl setPlayer(ServerPlayer serverPlayer) {
++        super.player = serverPlayer;  // Goldenforge: mixin friendly injection
++        return this;
++    }
++
+     @Override
+     protected GameProfile playerProfile() {
+         return this.gameProfile;
 @@ -72,6 +_,15 @@
      }
  

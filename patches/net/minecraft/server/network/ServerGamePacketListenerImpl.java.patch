@@ -24,7 +24,7 @@
  import org.slf4j.Logger;
  
  public class ServerGamePacketListenerImpl
-@@ -236,14 +_,21 @@
+@@ -236,14 +_,22 @@
      private final FutureChain chatMessageChain;
      private boolean waitingForSwitchToConfig;
  
@@ -36,8 +36,8 @@
 +    private float lastYaw = Float.MAX_VALUE;
 +
      public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_, CommonListenerCookie p_301978_) {
--        super(p_9770_, p_9771_, p_301978_);
-+        super(p_9770_, p_9771_, p_301978_, p_9772_);
+         super(p_9770_, p_9771_, p_301978_);
++        super.player = p_9772_; // Goldenforge: mixin friendly
          this.chunkSender = new PlayerChunkSender(p_9771_.isMemoryConnection());
          this.player = p_9772_;
          p_9772_.connection = this;
@@ -734,7 +734,7 @@
                  .setupInboundProtocol(
                      ConfigurationProtocols.SERVERBOUND,
 -                    new ServerConfigurationPacketListenerImpl(this.server, this.connection, this.createCookie(this.player.clientInformation()))
-+                    new ServerConfigurationPacketListenerImpl(this.server, this.connection, this.createCookie(this.player.clientInformation(), this.connectionType), this.player)
++                    new ServerConfigurationPacketListenerImpl(this.server, this.connection, this.createCookie(this.player.clientInformation(), this.connectionType)).setPlayer(this.player) // Goldenforge: mixin friendly injection
                  );
          }
      }

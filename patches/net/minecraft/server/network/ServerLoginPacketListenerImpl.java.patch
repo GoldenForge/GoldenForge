@@ -130,15 +130,14 @@
      }
  
      @Override
-@@ -236,7 +_,7 @@
-         this.connection.setupOutboundProtocol(ConfigurationProtocols.CLIENTBOUND);
-         CommonListenerCookie commonlistenercookie = CommonListenerCookie.createInitial(Objects.requireNonNull(this.authenticatedProfile), this.transferred);
+@@ -238,6 +_,7 @@
          ServerConfigurationPacketListenerImpl serverconfigurationpacketlistenerimpl = new ServerConfigurationPacketListenerImpl(
--            this.server, this.connection, commonlistenercookie
-+            this.server, this.connection, commonlistenercookie, this.player
+             this.server, this.connection, commonlistenercookie
          );
++        serverconfigurationpacketlistenerimpl.setPlayer(this.player); // Goldenforge: mixin friendly injection
          this.connection.setupInboundProtocol(ConfigurationProtocols.SERVERBOUND, serverconfigurationpacketlistenerimpl);
          serverconfigurationpacketlistenerimpl.startConfiguration();
+         this.state = ServerLoginPacketListenerImpl.State.ACCEPTED;
 @@ -253,7 +_,7 @@
          this.disconnect(ServerCommonPacketListenerImpl.DISCONNECT_UNEXPECTED_QUERY);
      }
