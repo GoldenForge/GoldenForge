@@ -6,7 +6,7 @@
 
 ### What is GoldenForge ?
 
-²Goldenforge is an unofficial fork of [NeoForge](https://github.com/neoforged/NeoForge) designed to improve performance of large-scale modded servers by implementing [Paper](https://github.com/PaperMC/Paper) performance patches.
+Goldenforge is an unofficial fork of [NeoForge](https://github.com/neoforged/NeoForge) designed to improve performance of large-scale modded servers by implementing [Paper](https://github.com/PaperMC/Paper) performance patches.
 
 | Version           | Support  | Download                                                                                   |
 |-------------------|----------|--------------------------------------------------------------------------------------------|
