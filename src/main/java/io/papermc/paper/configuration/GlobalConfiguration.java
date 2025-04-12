@@ -280,6 +280,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         public boolean disableTripwireUpdates = false;
         public boolean disableChorusPlantUpdates = false;
         public boolean disableMushroomBlockUpdates = false;
+        public boolean throttleWaterUpdates = false;
     }
 
     public AsyncPathFinding asyncPathFinding;

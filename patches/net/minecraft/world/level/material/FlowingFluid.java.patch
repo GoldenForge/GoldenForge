@@ -1,5 +1,21 @@
 --- a/net/minecraft/world/level/material/FlowingFluid.java
 +++ b/net/minecraft/world/level/material/FlowingFluid.java
+@@ -2,6 +_,7 @@
+ 
+ import com.google.common.collect.Maps;
+ import com.mojang.datafixers.util.Pair;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.objects.Object2ByteLinkedOpenHashMap;
+ import it.unimi.dsi.fastutil.shorts.Short2BooleanMap;
+ import it.unimi.dsi.fastutil.shorts.Short2BooleanOpenHashMap;
+@@ -29,6 +_,7 @@
+ import net.minecraft.world.phys.Vec3;
+ import net.minecraft.world.phys.shapes.Shapes;
+ import net.minecraft.world.phys.shapes.VoxelShape;
++import net.neoforged.neoforge.server.ServerLifecycleHooks;
+ 
+ public abstract class FlowingFluid extends Fluid {
+     public static final BooleanProperty FALLING = BlockStateProperties.FALLING;
 @@ -45,6 +_,48 @@
      });
      private final Map<FluidState, VoxelShape> shapes = Maps.newIdentityHashMap();
@@ -243,3 +259,13 @@
              BlockState blockstate = pair.getFirst();
              FluidState fluidstate = pair.getSecond();
              FluidState fluidstate1 = this.getNewLiquid(p_256191_, blockpos, blockstate);
+@@ -449,7 +_,8 @@
+             }
+         }
+ 
+-        this.spread(p_75995_, p_75996_, p_75997_);
++        if (!GlobalConfiguration.get().blockUpdates.throttleWaterUpdates || ServerLifecycleHooks.getCurrentServer().haveTime())
++            this.spread(p_75995_, p_75996_, p_75997_);
+     }
+ 
+     protected static int getLegacyLevel(FluidState p_76093_) {

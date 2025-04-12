@@ -507,11 +507,13 @@
                  this.onServerExit();
              }
          }
-@@ -789,7 +_,14 @@
+@@ -788,8 +_,15 @@
+         return crashreport;
      }
  
-     private boolean haveTime() {
+-    private boolean haveTime() {
 -        return this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
++    public boolean haveTime() {
 +        // CraftBukkit start
 +        return this.forceTicks || this.runningTask() || Util.getNanos() < (this.mayHaveDelayedTasks ? this.delayedTasksMaxNextTickTimeNanos : this.nextTickTimeNanos);
 +    }
