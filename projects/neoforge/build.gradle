@@ -154,6 +154,7 @@ dependencies {
     implementation "curse.maven:TheOvergrowth-714353:5616081"
     implementation "curse.maven:chunky-485681:5437053"
     implementation "curse.maven:industrialforegoing-266515:6283758"
+    implementation "curse.maven:dh-508933:6387706"
 }
 
 tasks.register('genPatches') {
