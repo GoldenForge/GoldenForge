@@ -72,14 +72,6 @@
                      } catch (RejectedExecutionException rejectedexecutionexception) {
                          this.disconnect(Component.translatable("multiplayer.disconnect.server_shutdown"));
                      } catch (ClassCastException classcastexception) {
-@@ -211,6 +_,7 @@
- 
-     private static void syncAfterConfigurationChange(ChannelFuture p_341671_) {
-         try {
-+            if (ca.spottedleaf.moonrise.common.util.TickThread.isTickThread()) net.minecraft.server.MinecraftServer.getServer().managedBlock(p_341671_::isDone); // ShreddedPaper - Don't block main thread in Connection#syncAfterConfigurationChange
-             p_341671_.syncUninterruptibly();
-         } catch (Exception exception) {
-             if (exception instanceof ClosedChannelException) {
 @@ -226,6 +_,7 @@
          if (p_320903_.flow() != this.getReceiving()) {
              throw new IllegalStateException("Invalid inbound protocol: " + p_320903_.id());
