@@ -1791,8 +1791,67 @@ public final class NewChunkHolder {
         }
     }
 
+    // Goldenforge: hacky... mods inject in ChunkSerializer#write
+    public CompoundTag goldenforge_SaveChunkAsync(final ChunkAccess chunk, final AsyncChunkSaveData asyncSaveData) {
+        try {
+            chunk.asyncsavedata = asyncSaveData;
+            return net.minecraft.world.level.chunk.storage.ChunkSerializer.write(world, chunk);
+        } finally {
+            chunk.asyncsavedata = null;
+        }
+    }
 
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
+        if (!chunk.isUnsaved()) {
+            if (unloading) {
+                this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, null);
+            }
+            return false;
+        }
+        try {
+            final AsyncChunkSaveData asyncSaveData = ChunkSystemFeatures.getAsyncSaveData(this.world, chunk);
+            chunk.setUnsaved(false);
+
+            final CallbackCompletable<CompoundTag> completable = new CallbackCompletable<>();
+            final PrioritisedExecutor.PrioritisedTask task;
+
+            // Goldenforge: event should always be called on the main thread
+            completable.addWaiter((final CompoundTag data, final Throwable error) -> {
+                if (data != null) {
+                    this.world.getServer().execute(() -> {
+                        PlatformHooks.get().chunkSyncSave(this.world, chunk, data);
+                    });
+                }
+            });
+
+            if (unloading) {
+                this.chunkDataUnload.toRun().setRunnable(() -> {
+                    final CompoundTag data = this.goldenforge_SaveChunkAsync(chunk, asyncSaveData);
+                    completable.complete(data);
+                    NewChunkHolder.this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, data);
+                });
+                task = this.chunkDataUnload.task();
+            } else {
+                task = this.scheduler.saveExecutor.createTask(() -> {
+                    final CompoundTag data = this.goldenforge_SaveChunkAsync(chunk, asyncSaveData);
+                    completable.complete(data);
+                });
+            }
+
+            task.queue();
+
+            MoonriseRegionFileIO.scheduleSave(
+                    this.world, this.chunkX, this.chunkZ, completable, task, MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, Priority.NORMAL
+            );
+        } catch (final Throwable thr) {
+            LOGGER.error("Failed to save chunk data (" + this.chunkX + "," + this.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'", thr);
+        }
+
+        return true;
+    }
+
+
+    private boolean saveChunk_old(final ChunkAccess chunk, final boolean unloading) {
         if (!chunk.isUnsaved()) {
             if (unloading) {
                 this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, null);
@@ -1806,7 +1865,7 @@ public final class NewChunkHolder {
                 try {
                     final AsyncChunkSaveData asyncSaveData = ChunkSystemFeatures.getAsyncSaveData(this.world, chunk);
 
-                    this.chunkDataUnload.toRun().setRunnable(new AsyncChunkSerializeTask(this.world, chunk, asyncSaveData, this));
+                    //this.chunkDataUnload.toRun().setRunnable(new AsyncChunkSerializeTask(this.world, chunk, asyncSaveData, this));
 
                     chunk.setUnsaved(false);
 

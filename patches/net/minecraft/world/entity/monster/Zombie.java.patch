@@ -9,6 +9,15 @@
      private final BreakDoorGoal breakDoorGoal = new BreakDoorGoal(this, DOOR_BREAKING_PREDICATE);
      private boolean canBreakDoors;
      private int inWaterTime;
+@@ -100,7 +_,7 @@
+ 
+     @Override
+     protected void registerGoals() {
+-        this.goalSelector.addGoal(4, new Zombie.ZombieAttackTurtleEggGoal(this, 1.0, 3));
++        if (this.level().paperConfig().entities.behavior.zombiesTargetTurtleEggs) this.goalSelector.addGoal(4, new Zombie.ZombieAttackTurtleEggGoal(this, 1.0, 3)); // Paper - Add zombie targets turtle egg config
+         this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8.0F));
+         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
+         this.addBehaviourGoals();
 @@ -259,6 +_,7 @@
      }
  

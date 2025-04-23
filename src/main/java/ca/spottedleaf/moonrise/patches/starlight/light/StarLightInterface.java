@@ -27,6 +27,8 @@ import net.minecraft.world.level.chunk.LightChunkGetter;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.lighting.LayerLightEventListener;
 import net.minecraft.world.level.lighting.LevelLightEngine;
+import org.dreeam.leaf.util.map.spottedleaf.LeafConcurrentLong2ReferenceChainedHashTable;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -740,7 +742,7 @@ public final class StarLightInterface {
 
     public static final class ServerLightQueue extends LightQueue {
 
-        private final ConcurrentLong2ReferenceChainedHashTable<ServerChunkTasks> chunkTasks = new ConcurrentLong2ReferenceChainedHashTable<>();
+        private final LeafConcurrentLong2ReferenceChainedHashTable<ServerChunkTasks> chunkTasks = new LeafConcurrentLong2ReferenceChainedHashTable<>();
 
         public ServerLightQueue(final StarLightInterface lightInterface) {
             super(lightInterface);
@@ -818,7 +820,7 @@ public final class StarLightInterface {
         }
 
         public ServerChunkTasks queueChunkLightTask(final ChunkPos pos, final BooleanSupplier lightTask, final Priority priority) {
-            final ServerChunkTasks ret = this.chunkTasks.compute(CoordinateUtils.getChunkKey(pos), (final long keyInMap, ServerChunkTasks valueInMap) -> {
+            final ServerChunkTasks ret = this.chunkTasks.compute(pos.longKey, (final long keyInMap, ServerChunkTasks valueInMap) -> { // Leaf - Cache chunk key
                 if (valueInMap == null) {
                     valueInMap = new ServerChunkTasks(
                             keyInMap, ServerLightQueue.this.lightInterface, ServerLightQueue.this, priority

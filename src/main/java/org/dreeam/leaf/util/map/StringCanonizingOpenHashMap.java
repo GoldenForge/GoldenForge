@@ -10,7 +10,7 @@ import java.util.function.Function;
 
 public class StringCanonizingOpenHashMap<T> extends Object2ObjectOpenHashMap<String, T> {
 
-    private static final Interner<String> KEY_INTERNER = Interners.newWeakInterner();
+    private static final Interner<String> KEY_INTERNER = Interners.newBuilder().weak().concurrencyLevel(16).<String>build();
 
     private static String intern(String key) {
         return key != null ? KEY_INTERNER.intern(key) : null;
@@ -36,9 +36,10 @@ public class StringCanonizingOpenHashMap<T> extends Object2ObjectOpenHashMap<Str
     @Override
     public void putAll(Map<? extends String, ? extends T> m) {
         if (m.isEmpty()) return;
-        Map<String, T> tmp = new Object2ObjectOpenHashMap<>(m.size());
-        m.forEach((k, v) -> tmp.put(intern(k), v));
-        super.putAll(tmp);
+        ensureCapacity(size() + m.size());
+        for (Map.Entry<? extends String, ? extends T> entry : m.entrySet()) {
+            super.put(intern(entry.getKey()), entry.getValue());
+        }
     }
 
     private void putWithoutInterning(String key, T value) {
@@ -46,7 +47,7 @@ public class StringCanonizingOpenHashMap<T> extends Object2ObjectOpenHashMap<Str
     }
 
     public static <T> StringCanonizingOpenHashMap<T> deepCopy(StringCanonizingOpenHashMap<T> incomingMap, Function<T, T> deepCopier) {
-        StringCanonizingOpenHashMap<T> newMap = new StringCanonizingOpenHashMap<>(incomingMap.size(), 0.8f);
+        StringCanonizingOpenHashMap<T> newMap = new StringCanonizingOpenHashMap<>(incomingMap.size(), incomingMap.f);
         ObjectIterator<Entry<String, T>> iterator = incomingMap.object2ObjectEntrySet().fastIterator();
 
         while (iterator.hasNext()) {

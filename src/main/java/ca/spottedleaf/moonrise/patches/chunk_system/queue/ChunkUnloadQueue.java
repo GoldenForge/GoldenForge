@@ -7,6 +7,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
+import org.dreeam.leaf.util.map.spottedleaf.LeafConcurrentLong2ReferenceChainedHashTable;
+
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -16,7 +18,7 @@ public final class ChunkUnloadQueue {
 
     public final int coordinateShift;
     private final AtomicLong orderGenerator = new AtomicLong();
-    private final ConcurrentLong2ReferenceChainedHashTable<UnloadSection> unloadSections = new ConcurrentLong2ReferenceChainedHashTable<>();
+    private final LeafConcurrentLong2ReferenceChainedHashTable<UnloadSection> unloadSections = new LeafConcurrentLong2ReferenceChainedHashTable<>();
 
     /*
      * Note: write operations do not occur in parallel for any given section.
@@ -32,8 +34,8 @@ public final class ChunkUnloadQueue {
     public List<SectionToUnload> retrieveForAllRegions() {
         final List<SectionToUnload> ret = new ArrayList<>();
 
-        for (final Iterator<ConcurrentLong2ReferenceChainedHashTable.TableEntry<UnloadSection>> iterator = this.unloadSections.entryIterator(); iterator.hasNext();) {
-            final ConcurrentLong2ReferenceChainedHashTable.TableEntry<UnloadSection> entry = iterator.next();
+        for (final Iterator<LeafConcurrentLong2ReferenceChainedHashTable.TableEntry<UnloadSection>> iterator = this.unloadSections.entryIterator(); iterator.hasNext();) {
+            final LeafConcurrentLong2ReferenceChainedHashTable.TableEntry<UnloadSection> entry = iterator.next();
             final long key = entry.getKey();
             final UnloadSection section = entry.getValue();
             final int sectionX = CoordinateUtils.getChunkX(key);
