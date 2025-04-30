@@ -40,7 +40,7 @@
 -    }
 +            p_347492_.addWorldGenChunkEntities(EntityType.loadEntitiesRecursive(p_347609_, p_347492_).filter((entity) -> {
 +                checkDupeUUID(p_347492_, entity); // Paper - duplicate uuid resolving
-+                return false;
++                return true;
 +            }), pos);
 +        }
 +    }
