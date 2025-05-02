@@ -1,0 +1,29 @@
+--- a/net/minecraft/world/level/levelgen/Aquifer.java
++++ b/net/minecraft/world/level/levelgen/Aquifer.java
+@@ -399,10 +_,10 @@
+                 int j = 64;
+                 double d2 = p_223915_ ? Mth.clampedMap((double)i, 0.0, 64.0, 1.0, 0.0) : 0.0;
+                 double d3 = Mth.clamp(this.fluidLevelFloodednessNoise.compute(densityfunction$singlepointcontext), -1.0, 1.0);
+-                double d4 = Mth.map(d2, 1.0, 0.0, -0.3, 0.8);
+-                double d5 = Mth.map(d2, 1.0, 0.0, -0.8, 0.4);
+-                d0 = d3 - d5;
+-                d1 = d3 - d4;
++                //double d4 = Mth.map(d2, 1.0, 0.0, -0.3, 0.8);
++                //double d5 = Mth.map(d2, 1.0, 0.0, -0.8, 0.4);
++                d0 = d3 + 0.4 + (d2 - 1.0) * 1.1; // inlined calculation
++                d1 = d3 + 0.8 + (d2 - 1.0) * 1.2; // inlined calculation
+             }
+ 
+             int k;
+@@ -436,9 +_,9 @@
+             if (p_223908_ <= -10 && p_223908_ != DimensionType.WAY_BELOW_MIN_Y && p_223907_.fluidType != Blocks.LAVA.defaultBlockState()) {
+                 int i = 64;
+                 int j = 40;
+-                int k = Math.floorDiv(p_223904_, 64);
++                int k = p_223904_ >> 6; // Math.floorDiv(p_223904_, 64); // Goldenforge: leaf opts
+                 int l = Math.floorDiv(p_223905_, 40);
+-                int i1 = Math.floorDiv(p_223906_, 64);
++                int i1 = p_223906_ >> 6; // Math.floorDiv(p_223906_, 64); // Goldenforge: leaf opts
+                 double d0 = this.lavaNoise.compute(new DensityFunction.SinglePointContext(k, l, i1));
+                 if (Math.abs(d0) > 0.3) {
+                     blockstate = Blocks.LAVA.defaultBlockState();

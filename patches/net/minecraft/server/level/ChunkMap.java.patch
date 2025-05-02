@@ -1335,7 +1335,7 @@
                  this.serverEntity.removePairing(serverplayerconnection.getPlayer());
              }
          }
-@@ -1273,14 +_,29 @@
+@@ -1273,17 +_,33 @@
  
          public void updatePlayer(ServerPlayer p_140498_) {
              if (p_140498_ != this.entity) {
@@ -1367,6 +1367,10 @@
                  if (flag) {
                      if (this.seenBy.add(p_140498_.connection)) {
                          this.serverEntity.addPairing(p_140498_);
++                        this.serverEntity.onPlayerAdd(); // Paper - fix desync when a player is added to the tracker
+                     }
+                 } else if (this.seenBy.remove(p_140498_.connection)) {
+                     this.serverEntity.removePairing(p_140498_);
 @@ -1296,16 +_,24 @@
          }
  

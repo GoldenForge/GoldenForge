@@ -1,0 +1,46 @@
+--- a/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
++++ b/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
+@@ -46,6 +_,43 @@
+         }
+     }
+ 
++    // Leaf start - Async chunk sending
++    public ClientboundLevelChunkPacketData(
++            LevelChunk levelChunk,
++            CompoundTag heightmaps,
++            BlockEntity[] blockEntities
++    ) {
++        this.heightmaps = heightmaps;
++        var buffer = new FriendlyByteBuf(Unpooled.buffer(calculateChunkSize(levelChunk) + 128));
++        var sections = levelChunk.getSections();
++        var sectionLength = sections.length;
++        for (LevelChunkSection section : sections) {
++            synchronized (section.getStates()) {
++                buffer.writeShort(section.nonEmptyBlockCount());
++                section.getStates().write(buffer);
++            }
++            section.getBiomes().write(buffer);
++        }
++        this.buffer = buffer.array();
++
++        this.blockEntitiesData = Lists.newArrayList();
++        int totalTileEntities = 0; // Paper - Handle oversized block entities in chunks
++
++        for (BlockEntity blockEntity : blockEntities) {
++//            // Paper start - Handle oversized block entities in chunks
++//            if (++totalTileEntities > BLOCK_ENTITY_LIMIT) {
++//                net.minecraft.network.protocol.Packet<ClientGamePacketListener> packet = blockEntity.getUpdatePacket();
++//                if (packet != null) {
++//                    this.extraPackets.add(packet);
++//                    continue;
++//                }
++//            }
++//            // Paper end - Handle oversized block entities in chunks
++            this.blockEntitiesData.add(ClientboundLevelChunkPacketData.BlockEntityInfo.create(blockEntity));
++        }
++    }
++    // Leaf end - Async chunk sending
++
+     public ClientboundLevelChunkPacketData(RegistryFriendlyByteBuf p_320343_, int p_195654_, int p_195655_) {
+         this.heightmaps = p_320343_.readNbt();
+         if (this.heightmaps == null) {

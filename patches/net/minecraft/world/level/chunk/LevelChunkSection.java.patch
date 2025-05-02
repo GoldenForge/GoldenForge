@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/LevelChunkSection.java
 +++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
-@@ -13,17 +_,41 @@
+@@ -13,17 +_,43 @@
  import net.minecraft.world.level.block.state.BlockState;
  import net.minecraft.world.level.material.FluidState;
  
@@ -41,6 +41,8 @@
 +        return this.tickingBlocks;
 +    }
 +    // Paper end - block counting
++
++    public final int nonEmptyBlockCount() { return this.nonEmptyBlockCount; } // Leaf
 +
      public LevelChunkSection(PalettedContainer<BlockState> p_282846_, PalettedContainerRO<Holder<Biome>> p_281695_) {
          this.states = p_282846_;

@@ -427,7 +427,6 @@ public final class RegionizedPlayerChunkLoader {
                 // Already in our sent list - silently return instead of throwing an exception
                 return;
             }
-
             // Get the chunk now, as we need it for both sync and async paths
             final LevelChunk chunk = ((ChunkSystemLevel) this.world).moonrise$getFullChunkIfLoaded(chunkX, chunkZ);
             if (chunk == null) {
@@ -441,7 +440,6 @@ public final class RegionizedPlayerChunkLoader {
                 // This part needs to remain on the main thread as it affects shared state
                 ((ChunkSystemServerLevel) this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
                         .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder.moonrise$addReceivedChunk(this.player);
-
                 // Call onChunkWatch on the main thread as it might affect server state
                 PlatformHooks.get().onChunkWatch(this.world, chunk, this.player);
             } catch (IllegalStateException e) {
@@ -454,13 +452,23 @@ public final class RegionizedPlayerChunkLoader {
             // Check if async chunk sending is enabled
             if (GlobalConfiguration.get().asyncChunkSend.enabled) {
                 // Async implementation
+                var heightmaps = new net.minecraft.nbt.CompoundTag();
+                for (var entry : chunk.getHeightmaps()) {
+                    if (entry.getKey().sendToClient()) {
+                        heightmaps.put(entry.getKey().getSerializationKey(), new net.minecraft.nbt.LongArrayTag(entry.getValue().getRawData()));
+                    }
+                }
+
+                var blockEntities = chunk.blockEntities.values().toArray(new net.minecraft.world.level.block.entity.BlockEntity[0]);
                 this.world.getServer().chunkSendingExecutor.submit(() -> {
                     try {
                         final net.minecraft.server.network.ServerGamePacketListenerImpl connection = this.player.connection;
                         final ServerLevel serverLevel = this.world;
 
                         final net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket packet = new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
-                                chunk, serverLevel.getLightEngine(), null, null
+                                chunk, serverLevel.getLightEngine(), null, null,
+                                heightmaps,
+                                blockEntities
                         );
 
                         serverLevel.getServer().execute(() -> {
@@ -468,9 +476,11 @@ public final class RegionizedPlayerChunkLoader {
                                 return;
                             }
 
+                            // This will trigger anti-xray processing and mark the packet as ready when done
+                            // The packet automatically handles readiness
+                            // Send the packet (which will be held until ready by the network layer)
                             connection.send(packet);
                             net.minecraft.network.protocol.game.DebugPackets.sendPoiPacketsForChunk(serverLevel, chunk.getPos());
-                            net.neoforged.neoforge.event.EventHooks.fireChunkSent(this.player, chunk, this.world);
                         });
                     } catch (Exception e) {
                         org.dreeam.leaf.async.AsyncChunkSending.LOGGER.error("Failed to send chunk asynchronously!", e);
