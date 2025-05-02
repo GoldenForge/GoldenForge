@@ -1,0 +1,99 @@
+--- a/net/minecraft/world/entity/ai/goal/OfferFlowerGoal.java
++++ b/net/minecraft/world/entity/ai/goal/OfferFlowerGoal.java
+@@ -1,6 +_,8 @@
+ package net.minecraft.world.entity.ai.goal;
+ 
+ import java.util.EnumSet;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.world.entity.ai.targeting.TargetingConditions;
+ import net.minecraft.world.entity.animal.IronGolem;
+ import net.minecraft.world.entity.npc.Villager;
+@@ -19,10 +_,20 @@
+ 
+     @Override
+     public boolean canUse() {
++        // Leaf start - Async offer flower finding
+         if (!this.golem.level().isDay()) {
+             return false;
+-        } else if (this.golem.getRandom().nextInt(8000) != 0) {
+-            return false;
++        }
++        if (poll()) {
++            return true;
++        }
++        if (this.golem.getRandom().nextInt(8000) != 0) {
++            return false;
++        }
++        if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++            getVillagerAsync();
++            return false;
++            // Leaf end - Async offer flower finding
+         } else {
+             this.villager = this.golem
+                 .level()
+@@ -38,6 +_,64 @@
+             return this.villager != null;
+         }
+     }
++
++    // Leaf start - Async look finding
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<Villager> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    protected boolean poll() {
++        Villager t = pendingTarget.getAndSet(null);
++        if (t == null) {
++            return false;
++        }
++        var serverLevel = getServerLevel(this.golem);
++        if (!t.isAlive() || !OFFER_TARGER_CONTEXT.test(this.golem, t)) {
++            return false;
++        }
++        this.villager = t;
++        return true;
++    }
++
++    protected void getVillagerAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final var golem = this.golem;
++
++        if (golem == null || golem.isRemoved() || !golem.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final double x = golem.getX();
++        final double y = golem.getEyeY();
++        final double z = golem.getZ();
++        final var serverLevel = getServerLevel(golem);
++        final var bound = golem.getBoundingBox().inflate(6.0, 2.0, 6.0);
++        final var pendingTarget = this.pendingTarget;
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (golem == null || !golem.isAlive() || golem.level() != serverLevel) {
++                    return;
++                }
++                var result = serverLevel.getNearestEntity(
++                        serverLevel.getEntitiesOfClass(Villager.class, bound, livingEntity -> true),
++                        OFFER_TARGER_CONTEXT,
++                        golem,
++                        x,
++                        y,
++                        z
++                );
++                pendingTarget.setRelease(result);
++            } catch (Exception e) {
++                LOGGER.error("Exception getting entities", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++    // Leaf end - Async look finding
+ 
+     @Override
+     public boolean canContinueToUse() {

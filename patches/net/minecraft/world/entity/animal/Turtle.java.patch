@@ -1,0 +1,30 @@
+--- a/net/minecraft/world/entity/animal/Turtle.java
++++ b/net/minecraft/world/entity/animal/Turtle.java
+@@ -480,6 +_,13 @@
+         protected boolean isValidTarget(LevelReader p_30270_, BlockPos p_30271_) {
+             return p_30270_.getBlockState(p_30271_).is(Blocks.WATER);
+         }
++
++        // Leaf start - Async search block
++        @Override
++        protected TypeToCheck typeToCheck() {
++            return TypeToCheck.TurtleToWater;
++        }
++        // Leaf end - Async search block
+     }
+ 
+     static class TurtleLayEggGoal extends MoveToBlockGoal {
+@@ -531,6 +_,13 @@
+         protected boolean isValidTarget(LevelReader p_30280_, BlockPos p_30281_) {
+             return !p_30280_.isEmptyBlock(p_30281_.above()) ? false : TurtleEggBlock.isSand(p_30280_, p_30281_);
+         }
++
++        // Leaf start - Async search block
++        @Override
++        protected TypeToCheck typeToCheck() {
++            return TypeToCheck.TurtleLay;
++        }
++        // Leaf end - Async search block
+     }
+ 
+     static class TurtleMoveControl extends MoveControl {

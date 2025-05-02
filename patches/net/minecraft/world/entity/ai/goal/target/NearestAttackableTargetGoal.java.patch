@@ -1,10 +1,111 @@
 --- a/net/minecraft/world/entity/ai/goal/target/NearestAttackableTargetGoal.java
 +++ b/net/minecraft/world/entity/ai/goal/target/NearestAttackableTargetGoal.java
-@@ -39,6 +_,7 @@
+@@ -3,6 +_,9 @@
+ import java.util.EnumSet;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.server.level.ServerPlayer;
+ import net.minecraft.world.entity.LivingEntity;
+ import net.minecraft.world.entity.Mob;
+@@ -39,10 +_,76 @@
          this.randomInterval = reducedTickDelay(p_26055_);
          this.setFlags(EnumSet.of(Goal.Flag.TARGET));
          this.targetConditions = TargetingConditions.forCombat().range(this.getFollowDistance()).selector(p_26058_);
+-    }
 +        if (mob.level().paperConfig().entities.entitiesTargetWithFollowRange) this.targetConditions.useFollowRange(); // Paper - Fix MC-145656
-     }
++    }
++
++    // Leaf start - Async Target Finding
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<LivingEntity> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
++    protected boolean poll() {
++        LivingEntity t = pendingTarget.getAndSet(null);
++        if (t == null) {
++            return false;
++        }
++        ServerLevel serverLevel = getServerLevel(this.mob);
++        if (serverLevel == null || !t.isAlive() || !this.targetConditions.test(this.mob, t)) {
++            return false;
++        }
++        this.target = t;
++        return true;
++    }
++
++    private void findTargetAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final Mob mob = this.mob;
++        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final double x = mob.getX();
++        final double y = mob.getEyeY();
++        final double z = mob.getZ();
++        final TargetingConditions targetConditions = this.targetConditions.copy();
++        final Class<T> targetType = this.targetType;
++        final AABB targetSearch = getTargetSearchArea(this.getFollowDistance());
++        final ServerLevel serverLevel = getServerLevel(mob);
++        final var pendingTarget = this.pendingTarget;
++
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (mob.level() != serverLevel || mob.isRemoved() || !mob.isAlive()) {
++                    return;
++                }
++
++                if (targetType != Player.class && targetType != ServerPlayer.class) {
++                    final java.util.List<T> entities = mob.level().getEntitiesOfClass(targetType, targetSearch, entity -> entity != null && entity != mob && entity.isAlive());
++                    var result = serverLevel.getNearestEntity(entities, targetConditions, mob, x,y,z);
++                    pendingTarget.setRelease(result);
++                } else {
++                    var result = serverLevel.getNearestPlayer(targetConditions, mob, x, y, z);
++                    pendingTarget.setRelease(result);
++                }
++            } catch (Exception e) {
++                LOGGER.error("Exception getting entities", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++    // Leaf end - Async Target Finding
  
      @Override
+     public boolean canUse() {
++        // Leaf start - Async target finding
++        if (poll()) {
++            return true;
++        }
++        // Leaf end - Async target finding
+         if (this.randomInterval > 0 && this.mob.getRandom().nextInt(this.randomInterval) != 0) {
+             return false;
+         } else {
+@@ -56,6 +_,20 @@
+     }
+ 
+     protected void findTarget() {
++        // Leaf start - Async Target Finding
++        if (targetType == Player.class) {
++            if (GlobalConfiguration.get().asyncTargetFinding.searchPlayer) {
++                this.findTargetAsync();
++                this.target = null;
++                return;
++            }
++        } else if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++            this.findTargetAsync();
++            this.target = null;
++            return;
++        }
++        // Leaf end - Async Target Finding
++
+         if (this.targetType != Player.class && this.targetType != ServerPlayer.class) {
+             this.target = this.mob
+                 .level()

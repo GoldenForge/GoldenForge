@@ -1,17 +1,22 @@
 package io.papermc.paper.configuration;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.mojang.logging.LogUtils;
 import io.papermc.paper.configuration.constraint.Constraints;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
 import net.minecraft.server.MinecraftServer;
-import org.checkerframework.checker.units.qual.C;
+import org.dreeam.leaf.async.ai.AsyncGoalExecutor;
 import org.dreeam.leaf.async.path.PathfindTaskRejectPolicy;
 import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
 import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.PostProcess;
 import org.spongepowered.configurate.objectmapping.meta.Setting;
+
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 @SuppressWarnings({"CanBeFinal", "FieldCanBeLocal", "FieldMayBeFinal", "NotNullFieldNotInitialized", "InnerClassMayBeStatic"})
 public class GlobalConfiguration extends ConfigurationPart {
@@ -343,5 +348,42 @@ public class GlobalConfiguration extends ConfigurationPart {
 
     public class AsyncChunkSend extends ConfigurationPart {
         public boolean enabled = false;
+    }
+
+    public AsyncTargetFinding asyncTargetFinding;
+
+    public class AsyncTargetFinding extends ConfigurationPart {
+        public boolean enabled = false;
+        public boolean alertOther = true;
+        public boolean searchBlock = false;
+        public boolean searchEntity = true;
+        public boolean searchPlayer = false;
+        public boolean searchPlayerTempt = false;
+
+        @PostProcess
+        public void onLoaded() {
+            if (!enabled) {
+                alertOther = false;
+                searchEntity = false;
+                searchBlock = false;
+                searchPlayer = false;
+                searchPlayerTempt = false;
+                return;
+            }
+            AsyncGoalExecutor.EXECUTOR = new ThreadPoolExecutor(
+                    1,
+                    1,
+                    0L,
+                    TimeUnit.MILLISECONDS,
+                    new ArrayBlockingQueue<>(128),
+                    new ThreadFactoryBuilder()
+                            .setNameFormat("Leaf Async Target Finding Thread")
+                            .setDaemon(true)
+                            .setPriority(Thread.NORM_PRIORITY - 2)
+                            .build(),
+                    new ThreadPoolExecutor.CallerRunsPolicy());
+
+        }
+
     }
 }

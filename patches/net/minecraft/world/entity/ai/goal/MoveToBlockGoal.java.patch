@@ -16,14 +16,221 @@
      public MoveToBlockGoal(PathfinderMob p_25613_, double p_25614_, int p_25615_, int p_25616_) {
          this.mob = p_25613_;
          this.speedModifier = p_25614_;
-@@ -113,8 +_,10 @@
+@@ -33,8 +_,90 @@
+         this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
+     }
+ 
++    // Leaf start - Async search block
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<BlockPos> pendingBlock = new java.util.concurrent.atomic.AtomicReference<>(null);
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    protected boolean poll() {
++        BlockPos blockPos1 = pendingBlock.getAndSet(null);
++        if (blockPos1 == null) {
++            return false;
++        }
++        if (!this.mob.level().hasChunkAt(blockPos1)
++                || !this.mob.isWithinRestriction(blockPos1)
++                || !this.isValidTarget(this.mob.level(), blockPos1)) {
++            return false;
++        }
++        this.blockPos = blockPos1;
++        this.mob.movingTarget = blockPos1 == BlockPos.ZERO ? null : blockPos1;
++        return true;
++    }
++
++    protected void getBlockAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final var mob = this.mob;
++
++        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final double x = mob.getX();
++        final double y = mob.getEyeY();
++        final double z = mob.getZ();
++        final var serverLevel = getServerLevel(mob);
++
++        final java.util.concurrent.atomic.AtomicReference<BlockPos> pendingBlock = this.pendingBlock;
++        final TypeToCheck ty = this.typeToCheck();
++        final net.minecraft.world.level.block.Block toRemove;
++        if (this instanceof RemoveBlockGoal removeBlockGoal) {
++            toRemove = removeBlockGoal.blockToRemove;
++        } else {
++            toRemove = null;
++        }
++        final int verticalSearchStart = this.verticalSearchStart;
++        final int searchRange = this.searchRange;
++        final int verticalSearchRange = this.verticalSearchRange;
++        final BlockPos blockPos = mob.blockPosition();
++        final float restrictRadius = mob.getRestrictRadius();
++        final BlockPos restrictCenter = mob.getRestrictCenter();
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (mob == null || !mob.isAlive() || mob.level() != serverLevel) {
++                    return;
++                }
++                findNearestBlockAsync(pendingBlock, ty, toRemove, mob, serverLevel, verticalSearchStart, searchRange, verticalSearchRange, blockPos, restrictRadius, restrictCenter);
++            } catch (Exception e) {
++                LOGGER.error("Exception getting block", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++
++    protected enum TypeToCheck {
++        CatLie,
++        CatSit,
++        Drowned,
++        FoxEat,
++        RaidGarden,
++        RemoveBlock,
++        Strider,
++        TurtleToWater,
++        TurtleLay,
++    }
++    // Leaf end - Async search block
++
+     @Override
+     public boolean canUse() {
++        // Leaf start - Async search block
++        if (poll()) {
++            return true;
++        }
++        // Leaf end - Async search block
+         if (this.nextStartTick > 0) {
+             this.nextStartTick--;
+             return false;
+@@ -113,17 +_,118 @@
                  for (int i1 = 0; i1 <= l; i1 = i1 > 0 ? -i1 : 1 - i1) {
                      for (int j1 = i1 < l && i1 > -l ? l : 0; j1 <= l; j1 = j1 > 0 ? -j1 : 1 - j1) {
                          blockpos$mutableblockpos.setWithOffset(blockpos, i1, k - 1, j1);
 +                        if (!this.mob.level().hasChunkAt(blockpos$mutableblockpos)) continue; // Gale - Airplane - block goal does not load chunks - if this block isn't loaded, continue
                          if (this.mob.isWithinRestriction(blockpos$mutableblockpos) && this.isValidTarget(this.mob.level(), blockpos$mutableblockpos)) {
                              this.blockPos = blockpos$mutableblockpos;
+-                            return true;
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-
+-        return false;
 +                            this.mob.movingTarget = blockpos$mutableblockpos == BlockPos.ZERO ? null : blockpos$mutableblockpos.immutable(); // Paper
-                             return true;
-                         }
-                     }
++                            return true;
++                        }
++                    }
++                }
++            }
++        }
++
++        return false;
++    }
++
++    protected static boolean findNearestBlockAsync(
++            final java.util.concurrent.atomic.AtomicReference<BlockPos> pendingBlock,
++            final TypeToCheck ty,
++            @org.jetbrains.annotations.Nullable final net.minecraft.world.level.block.Block toRemove,
++            final PathfinderMob mob,
++            final net.minecraft.server.level.ServerLevel serverLevel,
++            final int verticalSearchStart,
++            final int searchRange,
++            final int verticalSearchRange,
++            final BlockPos blockPos,
++            final float restrictRadius,
++            final BlockPos restrictCenter
++    ) {
++        BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
++        for (int i2 = verticalSearchStart; i2 <= verticalSearchRange; i2 = i2 > 0 ? -i2 : 1 - i2) {
++            for (int i3 = 0; i3 < searchRange; i3++) {
++                for (int i4 = 0; i4 <= i3; i4 = i4 > 0 ? -i4 : 1 - i4) {
++                    for (int i5 = i4 < i3 && i4 > -i3 ? i3 : 0; i5 <= i3; i5 = i5 > 0 ? -i5 : 1 - i5) {
++                        mutableBlockPos.setWithOffset(blockPos, i4, i2 - 1, i5);
++                        if (!serverLevel.hasChunkAt(mutableBlockPos)) continue;
++                        if (isWithinRestriction(restrictRadius, restrictCenter, mutableBlockPos)
++                                && isValidTargetAsync(ty, toRemove, mob, serverLevel, mutableBlockPos)) {
++                            pendingBlock.setRelease(mutableBlockPos.immutable());
++                            return true;
++                        }
++                    }
++                }
++            }
++        }
++
++        return false;
++    }
++
++    private static boolean isWithinRestriction(float restrictRadius, BlockPos restrictCenter, BlockPos pos) {
++        return restrictRadius == -1.0F || restrictCenter.distSqr(pos) < restrictRadius * restrictRadius;
+     }
+ 
+     protected abstract boolean isValidTarget(LevelReader p_25619_, BlockPos p_25620_);
++
++    protected abstract TypeToCheck typeToCheck();
++
++    private static boolean isValidTargetAsync(
++            TypeToCheck ty,
++            @org.jetbrains.annotations.Nullable net.minecraft.world.level.block.Block blockToRemoveTy,
++            PathfinderMob mob,
++            LevelReader level,
++            BlockPos pos
++    ) {
++        switch (ty) {
++            case CatLie -> {
++                return level.isEmptyBlock(pos.above()) && level.getBlockState(pos).is(net.minecraft.tags.BlockTags.BEDS);
++            }
++            case CatSit -> {
++                if (!level.isEmptyBlock(pos.above())) {
++                    return false;
++                } else {
++                    var blockState = level.getBlockState(pos);
++                    return blockState.is(net.minecraft.world.level.block.Blocks.CHEST)
++                            ? net.minecraft.world.level.block.entity.ChestBlockEntity.getOpenCount(level, pos) < 1
++                            : blockState.is(net.minecraft.world.level.block.Blocks.FURNACE) && blockState.getValue(net.minecraft.world.level.block.FurnaceBlock.LIT)
++                            || blockState.is(net.minecraft.tags.BlockTags.BEDS, state -> state.getOptionalValue(net.minecraft.world.level.block.BedBlock.PART).map(bedPart -> bedPart != net.minecraft.world.level.block.state.properties.BedPart.HEAD).orElse(true));
++                }
++            }
++            case Drowned -> {
++                BlockPos blockPos = pos.above();
++                return level.isEmptyBlock(blockPos) && level.isEmptyBlock(blockPos.above()) && level.getBlockState(pos).entityCanStandOn(level, pos, mob);
++            }
++            case FoxEat -> {
++                var blockState = level.getBlockState(pos);
++                return blockState.is(net.minecraft.world.level.block.Blocks.SWEET_BERRY_BUSH) && blockState.getValue(net.minecraft.world.level.block.SweetBerryBushBlock.AGE) >= 2 || net.minecraft.world.level.block.CaveVines.hasGlowBerries(blockState);
++            }
++            case RaidGarden -> {
++                var blockState = level.getBlockState(pos);
++                if (blockState.is(net.minecraft.world.level.block.Blocks.FARMLAND)) {
++                    blockState = level.getBlockState(pos.above());
++                    return blockState.getBlock() instanceof net.minecraft.world.level.block.CarrotBlock carrot && carrot.isMaxAge(blockState);
++                } else {
++                    return false;
++                }
++
++            }
++            case RemoveBlock -> {
++                var chunk = level.getChunkIfLoadedImmediately(pos.getX() >> 4, pos.getZ() >> 4); // Paper - Prevent AI rules from loading chunks
++                return chunk != null
++                        && chunk.getBlockState(pos).is(blockToRemoveTy)
++                        && chunk.getBlockState(pos.above()).isAir()
++                        && chunk.getBlockState(pos.above(2)).isAir();
++            }
++            case Strider -> {
++                return level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.LAVA) && level.getBlockState(pos.above()).isPathfindable(net.minecraft.world.level.pathfinder.PathComputationType.LAND);
++            }
++            case TurtleToWater -> {
++                return level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.WATER);
++            }
++            case TurtleLay -> {
++                return level.isEmptyBlock(pos.above()) && net.minecraft.world.level.block.TurtleEggBlock.isSand(level, pos);
++            }
++            case null -> throw new IllegalStateException();
++        }
++    }
+ }

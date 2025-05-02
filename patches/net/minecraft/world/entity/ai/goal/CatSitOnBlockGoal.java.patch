@@ -1,0 +1,14 @@
+--- a/net/minecraft/world/entity/ai/goal/CatSitOnBlockGoal.java
++++ b/net/minecraft/world/entity/ai/goal/CatSitOnBlockGoal.java
+@@ -60,4 +_,11 @@
+             }
+         }
+     }
++
++    // Leaf start - Async search block
++    @Override
++    protected TypeToCheck typeToCheck() {
++        return TypeToCheck.CatSit;
++    }
++    // Leaf end - Async search block
+ }

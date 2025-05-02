@@ -9,3 +9,17 @@
              BlockPos blockpos = path.getTarget();
              if (blockpos != null) {
                  double d0 = this.distanceToSqr((double)blockpos.getX(), (double)blockpos.getY(), (double)blockpos.getZ());
+@@ -326,6 +_,13 @@
+         public void stop() {
+             super.stop();
+         }
++
++        // Leaf start - Async search block
++        @Override
++        protected TypeToCheck typeToCheck() {
++            return TypeToCheck.Drowned;
++        }
++        // Leaf end - Async search block
+     }
+ 
+     static class DrownedGoToWaterGoal extends Goal {

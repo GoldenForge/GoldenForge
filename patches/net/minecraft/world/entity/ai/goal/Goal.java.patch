@@ -1,0 +1,67 @@
+--- a/net/minecraft/world/entity/ai/goal/Goal.java
++++ b/net/minecraft/world/entity/ai/goal/Goal.java
+@@ -1,10 +_,21 @@
+ package net.minecraft.world.entity.ai.goal;
+ 
+ import java.util.EnumSet;
++
++import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.util.Mth;
++import net.minecraft.world.entity.Entity;
+ 
+ public abstract class Goal {
+-    private final EnumSet<Goal.Flag> flags = EnumSet.noneOf(Goal.Flag.class);
++    private final ca.spottedleaf.moonrise.common.set.OptimizedSmallEnumSet<net.minecraft.world.entity.ai.goal.Goal.Flag> goalTypes = new ca.spottedleaf.moonrise.common.set.OptimizedSmallEnumSet<>(Goal.Flag.class); // Paper - remove streams from GoalSelector
++
++    // Paper start - remove streams from GoalSelector; make sure types are not empty
++    protected Goal() {
++        if (this.goalTypes.size() == 0) {
++            this.goalTypes.addUnchecked(Flag.UNKNOWN_BEHAVIOR);
++        }
++    }
++    // Paper end - remove streams from GoalSelector
+ 
+     public abstract boolean canUse();
+ 
+@@ -30,8 +_,13 @@
+     }
+ 
+     public void setFlags(EnumSet<Goal.Flag> p_25328_) {
+-        this.flags.clear();
+-        this.flags.addAll(p_25328_);
++        // Paper start - remove streams from GoalSelector
++        this.goalTypes.clear();
++        this.goalTypes.addAllUnchecked(p_25328_);
++        if (this.goalTypes.size() == 0) {
++            this.goalTypes.addUnchecked(Flag.UNKNOWN_BEHAVIOR);
++        }
++        // Paper end - remove streams from GoalSelector
+     }
+ 
+     @Override
+@@ -39,8 +_,10 @@
+         return this.getClass().getSimpleName();
+     }
+ 
+-    public EnumSet<Goal.Flag> getFlags() {
+-        return this.flags;
++    // Paper start - remove streams from GoalSelector
++    public ca.spottedleaf.moonrise.common.set.OptimizedSmallEnumSet<Goal.Flag> getFlags() {
++        return this.goalTypes;
++        // Paper end - remove streams from GoalSelector
+     }
+ 
+     protected int adjustedTickDelay(int p_186072_) {
+@@ -51,7 +_,12 @@
+         return Mth.positiveCeilDiv(p_186074_, 2);
+     }
+ 
++    protected static ServerLevel getServerLevel(Entity entity) {
++        return (ServerLevel)entity.level();
++    }
++
+     public static enum Flag {
++        UNKNOWN_BEHAVIOR, // Paper - add UNKNOWN_BEHAVIOR
+         MOVE,
+         LOOK,
+         JUMP,

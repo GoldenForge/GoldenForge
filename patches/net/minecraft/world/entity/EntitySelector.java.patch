@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/entity/EntitySelector.java
++++ b/net/minecraft/world/entity/EntitySelector.java
+@@ -3,6 +_,8 @@
+ import com.google.common.base.Predicates;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import net.minecraft.server.level.ServerPlayer;
+ import net.minecraft.world.Container;
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.item.ItemStack;
+@@ -27,6 +_,8 @@
+     }
+ 
+     public static Predicate<Entity> pushableBy(Entity p_20422_) {
++        if (p_20422_.level().paperConfig().collisions.onlyPlayersCollide && p_20422_ instanceof ServerPlayer)
++            return Predicates.alwaysFalse();
+         Team team = p_20422_.getTeam();
+         Team.CollisionRule team$collisionrule = team == null ? Team.CollisionRule.ALWAYS : team.getCollisionRule();
+         return (Predicate<Entity>)(team$collisionrule == Team.CollisionRule.NEVER

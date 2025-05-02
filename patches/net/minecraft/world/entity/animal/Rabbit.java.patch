@@ -9,6 +9,21 @@
                      return false;
                  }
  
+@@ -538,7 +_,13 @@
+                 this.wantsToRaid = this.rabbit.wantsMoreFood();
+             }
+ 
+-            return super.canUse();
++            // Leaf start
++            if (this.wantsToRaid && !this.canRaid) {
++                return super.canUse();
++            } else {
++                return false;
++            }
++            // Leaf end
+         }
+ 
+         @Override
 @@ -585,7 +_,7 @@
          @Override
          protected boolean isValidTarget(LevelReader p_29785_, BlockPos p_29786_) {
@@ -18,3 +33,17 @@
                  blockstate = p_29785_.getBlockState(p_29786_.above());
                  if (blockstate.getBlock() instanceof CarrotBlock && ((CarrotBlock)blockstate.getBlock()).isMaxAge(blockstate)) {
                      this.canRaid = true;
+@@ -595,6 +_,13 @@
+ 
+             return false;
+         }
++
++        // Leaf start - Async search block
++        @Override
++        protected TypeToCheck typeToCheck() {
++            return TypeToCheck.RaidGarden;
++        }
++        // Leaf end - Async search block
+     }
+ 
+     public static enum Variant implements StringRepresentable {

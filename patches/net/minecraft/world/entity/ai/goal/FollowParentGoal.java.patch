@@ -1,0 +1,96 @@
+--- a/net/minecraft/world/entity/ai/goal/FollowParentGoal.java
++++ b/net/minecraft/world/entity/ai/goal/FollowParentGoal.java
+@@ -2,6 +_,8 @@
+ 
+ import java.util.List;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.world.entity.animal.Animal;
+ 
+ public class FollowParentGoal extends Goal {
+@@ -19,11 +_,84 @@
+         this.speedModifier = p_25320_;
+     }
+ 
++    // Leaf start - Async Target Finding
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<Animal> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
++    protected boolean poll() {
++        var t = pendingTarget.getAndSet(null);
++        if (t == null) {
++            return false;
++        }
++        var serverLevel = getServerLevel(animal);
++        if (serverLevel == null || !t.isAlive() || animal.distanceToSqr(t) < 9.0) {
++            return false;
++        }
++        this.parent = animal;
++        return true;
++    }
++
++    private void findTargetAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final Animal animal = this.animal;
++        if (animal == null || animal.isRemoved() || !animal.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final var targetType = animal.getClass();
++        final var bound = animal.getBoundingBox().inflate(8.0, 4.0, 8.0);
++        final var serverLevel = getServerLevel(animal);
++        final var pos = animal.position();
++        final var pendingTarget = this.pendingTarget;
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (animal.level() != serverLevel || animal.isRemoved() || !animal.isAlive()) {
++                    return;
++                }
++
++                List<? extends Animal> entitiesOfClass = serverLevel.getEntitiesOfClass(targetType, bound);
++                Animal target = null;
++                double d = Double.MAX_VALUE;
++
++                for (Animal animal1 : entitiesOfClass) {
++                    if (animal1.getAge() >= 0) {
++                        double d1 = animal1.distanceToSqr(pos);
++                        if (!(d1 > d)) {
++                            d = d1;
++                            target = animal1;
++                        }
++                    }
++                }
++                if (target != null) {
++                    pendingTarget.setRelease(target);
++                }
++            } catch (Exception e) {
++                LOGGER.error("Exception getting entities", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++    // Leaf end - Async Target Finding
++
+     @Override
+     public boolean canUse() {
+         if (this.animal.getAge() >= 0) {
+             return false;
+         } else {
++            // Leaf start - Async Target Finding
++            if (poll()) {
++                return true;
++            }
++            if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++                findTargetAsync();
++                return false;
++            }
++            // Leaf end - Async Target Finding
+             List<? extends Animal> list = this.animal
+                 .level()
+                 .getEntitiesOfClass((Class<? extends Animal>)this.animal.getClass(), this.animal.getBoundingBox().inflate(8.0, 4.0, 8.0));

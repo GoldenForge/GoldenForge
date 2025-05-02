@@ -1,0 +1,72 @@
+--- a/net/minecraft/world/entity/ai/goal/target/HurtByTargetGoal.java
++++ b/net/minecraft/world/entity/ai/goal/target/HurtByTargetGoal.java
+@@ -4,6 +_,8 @@
+ import java.util.Iterator;
+ import java.util.List;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.world.entity.EntitySelector;
+ import net.minecraft.world.entity.EntityType;
+ import net.minecraft.world.entity.LivingEntity;
+@@ -73,6 +_,60 @@
+     protected void alertOthers() {
+         double d0 = this.getFollowDistance();
+         AABB aabb = AABB.unitCubeFromLowerCorner(this.mob.position()).inflate(d0, 10.0, d0);
++
++        // Leaf start - async alert other
++        if (GlobalConfiguration.get().asyncTargetFinding.alertOther) {
++            final var self = this.mob;
++            final var serverLevel = getServerLevel(self);
++            final var alertTarget = this.mob.getLastHurtByMob();
++            final var toIgnoreAlert = this.toIgnoreAlert;
++            serverLevel.asyncAITasks.add(() -> {
++                try {
++                    if (alertTarget == null || self == null || self.level() != serverLevel) {
++                        return;
++                    }
++                    var toAlert = new java.util.ArrayList<Mob>();
++                    List<? extends Mob> entitiesOfClass = serverLevel
++                            .getEntitiesOfClass(self.getClass(), aabb, EntitySelector.NO_SPECTATORS);
++                    for (Mob mob : entitiesOfClass) {
++                        if (self != mob
++                                && mob.getTarget() == null
++                                && (!(self instanceof TamableAnimal) || ((TamableAnimal) self).getOwner() == ((TamableAnimal) mob).getOwner())
++                                && !mob.isAlliedTo(self.getLastHurtByMob())) {
++                            if (toIgnoreAlert == null) {
++                                continue;
++                            }
++
++                            boolean flag = false;
++
++                            for (Class<?> clazz : toIgnoreAlert) {
++                                if (mob.getClass() == clazz) {
++                                    flag = true;
++                                    break;
++                                }
++                            }
++
++                            if (!flag) {
++                                continue;
++                            }
++
++                            toAlert.add(mob);
++                        }
++                    }
++                    serverLevel.getServer().execute(() -> {
++                        for (var livingEntity : toAlert) {
++                            alertOther(livingEntity, alertTarget);
++                        }
++                    });
++                } catch (Exception e) {
++                    org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER.error("Exception alertOthers", e);
++                }
++            });
++            return;
++        }
++        // Leaf end - async alert other
++
++
+         List<? extends Mob> list = this.mob.level().getEntitiesOfClass((Class<? extends Mob>)this.mob.getClass(), aabb, EntitySelector.NO_SPECTATORS);
+         Iterator iterator = list.iterator();
+ 

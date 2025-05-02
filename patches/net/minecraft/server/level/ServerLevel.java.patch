@@ -1,5 +1,21 @@
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
+@@ -5,6 +_,7 @@
+ import com.mojang.datafixers.DataFixer;
+ import com.mojang.datafixers.util.Pair;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+@@ -101,6 +_,7 @@
+ import net.minecraft.world.entity.boss.EnderDragonPart;
+ import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+ import net.minecraft.world.entity.npc.Npc;
++import net.minecraft.world.entity.npc.Villager;
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.entity.raid.Raid;
+ import net.minecraft.world.entity.raid.Raids;
 @@ -166,7 +_,7 @@
  import net.minecraft.world.ticks.LevelTicks;
  import org.slf4j.Logger;
@@ -9,11 +25,13 @@
      public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
      public static final IntProvider RAIN_DELAY = UniformInt.of(12000, 180000);
      public static final IntProvider RAIN_DURATION = UniformInt.of(12000, 24000);
-@@ -176,11 +_,12 @@
+@@ -175,12 +_,13 @@
+     private static final Logger LOGGER = LogUtils.getLogger();
      private static final int EMPTY_TIME_NO_TICK = 300;
      private static final int MAX_SCHEDULED_TICKS_PER_TICK = 65536;
-     final List<ServerPlayer> players = Lists.newArrayList();
+-    final List<ServerPlayer> players = Lists.newArrayList();
 -    private final ServerChunkCache chunkSource;
++    final List<ServerPlayer> players;
 +    public final ServerChunkCache chunkSource;
      private final MinecraftServer server;
 -    private final ServerLevelData serverLevelData;
@@ -24,7 +42,7 @@
      private final PersistentEntitySectionManager<Entity> entityManager;
      private final GameEventDispatcher gameEventDispatcher;
      public boolean noSave;
-@@ -199,12 +_,350 @@
+@@ -199,11 +_,350 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
      private EndDragonFight dragonFight;
@@ -34,7 +52,8 @@
      private final StructureCheck structureCheck;
      private final boolean tickTime;
      private final RandomSequences randomSequences;
- 
++    public List<Runnable> asyncAITasks = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(); // Leaf
++
 +    public final LevelStorageSource.LevelStorageAccess convertable;
 +
 +    public LevelChunk getChunkIfLoaded(int x, int z) {
@@ -372,15 +391,21 @@
 +        );
 +    }
 +    // Paper end - chunk tick iteration
-+
+ 
      public ServerLevel(
          MinecraftServer p_214999_,
-         Executor p_215000_,
-@@ -230,9 +_,10 @@
+@@ -230,9 +_,17 @@
              p_215007_,
              p_214999_.getMaxChainedNeighborUpdates()
          );
 +        this.setPaperConfig(p_214999_.paperConfigurations.createWorldConfig(io.papermc.paper.configuration.PaperConfigurations.createWorldContextMap(p_215001_.getDimensionPath(p_215003_), p_215002_.getLevelName(), p_215003_.location(), p_214999_.registryAccess(), p_215002_.getGameRules())));
++        // Leaf start - Async target finding
++        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
++            this.players = Lists.newCopyOnWriteArrayList();
++        } else {
++            this.players = Lists.newArrayList();
++        }
++        // Leaf end - Async target finding
 +        this.convertable = p_215001_;
          this.tickTime = p_215009_;
          this.server = p_214999_;
@@ -499,7 +524,18 @@
                              profilerfiller.pop();
                          }
                      }
-@@ -423,13 +_,16 @@
+@@ -420,16 +_,27 @@
+             });
+             profilerfiller.pop();
+             this.tickBlockEntities();
++            // Leaf start - Async target finding
++            if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
++                final var tasks = this.asyncAITasks;
++                this.asyncAITasks = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>();
++                org.dreeam.leaf.async.ai.AsyncGoalExecutor.EXECUTOR.execute(
++                        () -> org.dreeam.leaf.async.ai.AsyncGoalExecutor.runTasks(tasks));
++            }
++            // Leaf end - Async target finding
          }
  
          profilerfiller.push("entityManagement");

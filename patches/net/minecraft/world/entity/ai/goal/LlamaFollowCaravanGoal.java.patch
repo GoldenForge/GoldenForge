@@ -1,0 +1,160 @@
+--- a/net/minecraft/world/entity/ai/goal/LlamaFollowCaravanGoal.java
++++ b/net/minecraft/world/entity/ai/goal/LlamaFollowCaravanGoal.java
+@@ -2,6 +_,8 @@
+ 
+ import java.util.EnumSet;
+ import java.util.List;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.EntityType;
+ import net.minecraft.world.entity.animal.horse.Llama;
+@@ -20,35 +_,127 @@
+         this.setFlags(EnumSet.of(Goal.Flag.MOVE));
+     }
+ 
++    // Leaf start - Async Target Finding
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<Llama> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
++    private @javax.annotation.Nullable Llama poll() {
++        var t = pendingTarget.getAndSet(null);
++        if (t == null) {
++            return null;
++        }
++        var serverLevel = getServerLevel(this.llama);
++        if (serverLevel == null || !t.isAlive()) {
++            return null;
++        }
++        return t;
++    }
++
++    private void findTargetAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final Llama llama = this.llama;
++        if (llama == null || llama.isRemoved() || !llama.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final var bound = llama.getBoundingBox().inflate(9.0, 4.0, 9.0);
++        final var serverLevel = getServerLevel(llama);
++        final var pos = llama.position();
++        final var pendingTarget = this.pendingTarget;
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (llama.level() != serverLevel || llama.isRemoved() || !llama.isAlive()) {
++                    return;
++                }
++
++                List<Entity> entities = serverLevel.getEntities(llama, bound, entity1 -> {
++                    EntityType<?> type = entity1.getType();
++                    return type == EntityType.LLAMA || type == EntityType.TRADER_LLAMA;
++                });
++                Llama target = null;
++                double d = Double.MAX_VALUE;
++
++                for (Entity entity : entities) {
++                    Llama llama1 = (Llama)entity;
++                    if (llama1.inCaravan() && !llama1.hasCaravanTail()) {
++                        double d1 = llama1.distanceToSqr(pos);
++                        if (!(d1 > d)) {
++                            d = d1;
++                            target = llama1;
++                        }
++                    }
++                }
++
++                if (target == null) {
++                    for (Entity entityx : entities) {
++                        Llama llama1 = (Llama)entityx;
++                        if (llama1.isLeashed() && !llama1.hasCaravanTail()) {
++                            double d1 = llama1.distanceToSqr(pos);
++                            if (!(d1 > d)) {
++                                d = d1;
++                                target = llama1;
++                            }
++                        }
++                    }
++                }
++                if (target != null) {
++                    pendingTarget.setRelease(target);
++                }
++            } catch (Exception e) {
++                LOGGER.error("Exception getting entities", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++    // Leaf end - Async Target Finding
++
+     @Override
+     public boolean canUse() {
+         if (!this.llama.isLeashed() && !this.llama.inCaravan()) {
+-            List<Entity> list = this.llama.level().getEntities(this.llama, this.llama.getBoundingBox().inflate(9.0, 4.0, 9.0), p_25505_ -> {
+-                EntityType<?> entitytype = p_25505_.getType();
+-                return entitytype == EntityType.LLAMA || entitytype == EntityType.TRADER_LLAMA;
+-            });
+-            Llama llama = null;
++            // Leaf start - Async Target Finding
++            Llama llama = poll();
+             double d0 = Double.MAX_VALUE;
++            if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
++                if (llama == null) {
++                    findTargetAsync();
++                    return false;
++                } else {
++                    d0 = this.llama.distanceToSqr(llama);
++                }
++            } else {
++                // Leaf end - Async Target Finding
++                List<Entity> list = this.llama.level().getEntities(this.llama, this.llama.getBoundingBox().inflate(9.0, 4.0, 9.0), p_25505_ -> {
++                    EntityType<?> entitytype = p_25505_.getType();
++                    return entitytype == EntityType.LLAMA || entitytype == EntityType.TRADER_LLAMA;
++                });
++                //Llama llama = null;
++                //double d0 = Double.MAX_VALUE;
+ 
+-            for (Entity entity : list) {
+-                Llama llama1 = (Llama)entity;
+-                if (llama1.inCaravan() && !llama1.hasCaravanTail()) {
+-                    double d1 = this.llama.distanceToSqr(llama1);
+-                    if (!(d1 > d0)) {
+-                        d0 = d1;
+-                        llama = llama1;
++                for (Entity entity : list) {
++                    Llama llama1 = (Llama) entity;
++                    if (llama1.inCaravan() && !llama1.hasCaravanTail()) {
++                        double d1 = this.llama.distanceToSqr(llama1);
++                        if (!(d1 > d0)) {
++                            d0 = d1;
++                            llama = llama1;
++                        }
+                     }
+                 }
+-            }
+ 
+-            if (llama == null) {
+-                for (Entity entity1 : list) {
+-                    Llama llama2 = (Llama)entity1;
+-                    if (llama2.isLeashed() && !llama2.hasCaravanTail()) {
+-                        double d2 = this.llama.distanceToSqr(llama2);
+-                        if (!(d2 > d0)) {
+-                            d0 = d2;
+-                            llama = llama2;
++                if (llama == null) {
++                    for (Entity entity1 : list) {
++                        Llama llama2 = (Llama) entity1;
++                        if (llama2.isLeashed() && !llama2.hasCaravanTail()) {
++                            double d2 = this.llama.distanceToSqr(llama2);
++                            if (!(d2 > d0)) {
++                                d0 = d2;
++                                llama = llama2;
++                            }
+                         }
+                     }
+                 }

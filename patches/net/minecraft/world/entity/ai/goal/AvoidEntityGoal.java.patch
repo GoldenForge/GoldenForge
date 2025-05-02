@@ -1,0 +1,107 @@
+--- a/net/minecraft/world/entity/ai/goal/AvoidEntityGoal.java
++++ b/net/minecraft/world/entity/ai/goal/AvoidEntityGoal.java
+@@ -3,6 +_,8 @@
+ import java.util.EnumSet;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.world.entity.EntitySelector;
+ import net.minecraft.world.entity.LivingEntity;
+ import net.minecraft.world.entity.PathfinderMob;
+@@ -56,8 +_,32 @@
+         this(p_25033_, p_25034_, p_25049_ -> true, p_25035_, p_25036_, p_25037_, p_25038_);
+     }
+ 
++    // Leaf start - Async Avoid Entity Finding
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<T> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    // Leaf end - Async Avoid Entity Finding
++
+     @Override
+     public boolean canUse() {
++        // Leaf start - Async Avoid Entity Finding
++        if (poll()) {
++            return true;
++        }
++        if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++            getNearestEntityAsync();
++        } else {
++            this.toAvoid = getServerLevel(this.mob)
++                    .getNearestEntity(
++                            this.mob.level().getEntitiesOfClass(this.avoidClass, this.mob.getBoundingBox().inflate(this.maxDist, 3.0, this.maxDist), livingEntity -> true),
++                            this.avoidEntityTargeting,
++                            this.mob,
++                            this.mob.getX(),
++                            this.mob.getEyeY(),
++                            this.mob.getZ()
++                    );
++        }
++        // Leaf end - Async Avoid Entity Finding
+         this.toAvoid = this.mob
+             .level()
+             .getNearestEntity(
+@@ -84,6 +_,62 @@
+             }
+         }
+     }
++
++    // Leaf start - Async Avoid Entity Finding
++    private boolean poll() {
++        LivingEntity t = pendingTarget.getAndSet(null);
++        if (t == null) {
++            return false;
++        }
++        var serverLevel = getServerLevel(this.mob);
++        if (serverLevel == null || !t.isAlive() || !this.avoidEntityTargeting.test(this.mob, t)) {
++            return false;
++        }
++        this.toAvoid = (T) t;
++        return true;
++    }
++
++    private void getNearestEntityAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final var mob = this.mob;
++
++        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final double x = mob.getX();
++        final double y = mob.getEyeY();
++        final double z = mob.getZ();
++        final var serverLevel = getServerLevel(mob);
++        final var avoidClass = this.avoidClass;
++        final var bound = mob.getBoundingBox().inflate(this.maxDist, 3.0, this.maxDist);
++        final var pendingTarget = this.pendingTarget;
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (mob == null || mob.isRemoved() || !mob.isAlive() || mob.level() != serverLevel) {
++                    return;
++                }
++                var avoid = serverLevel.getNearestEntity(
++                        serverLevel.getEntitiesOfClass(avoidClass, bound, LivingEntity::isAlive),
++                        avoidEntityTargeting,
++                        mob,
++                        x,
++                        y,
++                        z
++                );
++                pendingTarget.setRelease(avoid);
++            } catch (Exception e) {
++                LOGGER.error("Exception getting entities", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++    // Leaf end - Async Avoid Entity Finding
+ 
+     @Override
+     public boolean canContinueToUse() {

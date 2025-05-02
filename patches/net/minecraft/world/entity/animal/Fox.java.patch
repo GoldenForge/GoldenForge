@@ -18,6 +18,18 @@
      }
  
      public static boolean isPathClear(Fox p_28472_, LivingEntity p_28473_) {
+@@ -729,6 +_,11 @@
+             if (this.randomInterval > 0 && this.mob.getRandom().nextInt(this.randomInterval) != 0) {
+                 return false;
+             } else {
++                // Leaf start
++                if (Fox.this.level() == null) {
++                    return false;
++                }
++                // Leaf end
+                 for (UUID uuid : Fox.this.getTrustedUUIDs()) {
+                     if (uuid != null
+                         && Fox.this.level() instanceof ServerLevel
 @@ -842,6 +_,17 @@
          protected void breed() {
              ServerLevel serverlevel = (ServerLevel)this.level;
@@ -45,6 +57,20 @@
                  BlockState blockstate = Fox.this.level().getBlockState(this.blockPos);
                  if (blockstate.is(Blocks.SWEET_BERRY_BUSH)) {
                      this.pickSweetBerries(blockstate);
+@@ -963,6 +_,13 @@
+             Fox.this.setSitting(false);
+             super.start();
+         }
++
++        // Leaf start - Async search block
++        @Override
++        protected TypeToCheck typeToCheck() {
++            return TypeToCheck.FoxEat;
++        }
++        // Leaf end - Async search block
+     }
+ 
+     class FoxFloatGoal extends FloatGoal {
 @@ -978,7 +_,7 @@
  
          @Override

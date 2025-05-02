@@ -1,14 +1,32 @@
 --- a/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
 +++ b/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
-@@ -35,7 +_,7 @@
+@@ -22,7 +_,7 @@
+ import net.minecraft.world.phys.Vec3;
+ 
+ public class RemoveBlockGoal extends MoveToBlockGoal {
+-    private final Block blockToRemove;
++    public final Block blockToRemove;
+     private final Mob removerMob;
+     private int ticksSinceReachedGoal;
+     private static final int WAIT_AFTER_BLOCK_FOUND = 20;
+@@ -35,9 +_,15 @@
  
      @Override
      public boolean canUse() {
 -        if (!this.removerMob.level().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
-+        if (!net.neoforged.neoforge.event.EventHooks.canEntityGrief(this.removerMob.level(), this.removerMob)) {
++        if (!net.neoforged.neoforge.event.EventHooks.canEntityGrief(this.removerMob.level(), this.removerMob))
              return false;
-         } else if (this.nextStartTick > 0) {
+-        } else if (this.nextStartTick > 0) {
++        // Leaf start - async search block
++        if (poll()) {
++            this.nextStartTick = reducedTickDelay(20);
++            return true;
++        }
++        // Leaf end - async search block
++        if (this.nextStartTick > 0) {
              this.nextStartTick--;
+             return false;
+         } else if (this.findNearestBlock()) {
 @@ -134,7 +_,9 @@
  
      @Nullable
@@ -31,7 +49,7 @@
                      return blockpos;
                  }
              }
-@@ -153,12 +_,11 @@
+@@ -153,13 +_,19 @@
  
      @Override
      protected boolean isValidTarget(LevelReader p_25850_, BlockPos p_25851_) {
@@ -47,3 +65,11 @@
                  && chunkaccess.getBlockState(p_25851_.above()).isAir()
                  && chunkaccess.getBlockState(p_25851_.above(2)).isAir();
      }
++
++    // Leaf start - Async search block
++    @Override
++    protected TypeToCheck typeToCheck() {
++        return TypeToCheck.RemoveBlock;
++    }
++    // Leaf end - Async search block
+ }

@@ -9,6 +9,20 @@
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.Direction;
  import net.minecraft.nbt.CompoundTag;
+@@ -522,6 +_,13 @@
+         protected boolean isValidTarget(LevelReader p_33963_, BlockPos p_33964_) {
+             return p_33963_.getBlockState(p_33964_).is(Blocks.LAVA) && p_33963_.getBlockState(p_33964_.above()).isPathfindable(PathComputationType.LAND);
+         }
++
++        // Leaf start - Async search block
++        @Override
++        protected TypeToCheck typeToCheck() {
++            return TypeToCheck.Strider;
++        }
++        // Leaf end - Async search block
+     }
+ 
+     static class StriderPathNavigation extends GroundPathNavigation {
 @@ -529,10 +_,26 @@
              super(p_33969_, p_33970_);
          }

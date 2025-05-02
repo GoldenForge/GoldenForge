@@ -1,0 +1,98 @@
+--- a/net/minecraft/world/entity/ai/goal/FollowMobGoal.java
++++ b/net/minecraft/world/entity/ai/goal/FollowMobGoal.java
+@@ -4,6 +_,8 @@
+ import java.util.List;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.world.entity.Mob;
+ import net.minecraft.world.entity.ai.control.LookControl;
+ import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
+@@ -36,8 +_,23 @@
+         }
+     }
+ 
++    // Leaf start - Async Follow Mob Finding
++    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
++    private final java.util.concurrent.atomic.AtomicReference<Mob> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
++    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
++    // Leaf end - Async Follow Mob Finding
++
+     @Override
+     public boolean canUse() {
++        // Leaf start - Async Follow Mob Finding
++        if (poll()) {
++            return true;
++        }
++        if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++            getFollowingMobAsync();
++            return false;
++        }
++        // Leaf end - Async Follow Mob Finding
+         List<Mob> list = this.mob.level().getEntitiesOfClass(Mob.class, this.mob.getBoundingBox().inflate((double)this.areaSize), this.followPredicate);
+         if (!list.isEmpty()) {
+             for (Mob mob : list) {
+@@ -50,6 +_,62 @@
+ 
+         return false;
+     }
++
++    // Leaf start - Async Follow Mob Finding
++    private boolean poll() {
++        var t = pendingTarget.getAndSet(null);
++        if (t == null) {
++            return false;
++        }
++        var serverLevel = getServerLevel(this.mob);
++        if (serverLevel == null || !t.isAlive() || t.isInvisible()) {
++            return false;
++        }
++        this.followingMob = t;
++        return true;
++    }
++
++    private void getFollowingMobAsync() {
++        if (!isSearching.compareAndSet(false, true)) {
++            return;
++        }
++
++        final var mob = this.mob;
++
++        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
++            isSearching.setRelease(false);
++            return;
++        }
++
++        final double x = mob.getX();
++        final double y = mob.getEyeY();
++        final double z = mob.getZ();
++        final var serverLevel = getServerLevel(mob);
++        final var bound = this.mob.getBoundingBox().inflate(this.areaSize);
++        final var followPredicate = this.followPredicate;
++        final var pendingTarget = this.pendingTarget;
++        serverLevel.asyncAITasks.add(() -> {
++            try {
++                if (mob == null || mob.isRemoved() || !mob.isAlive() || mob.level() != serverLevel) {
++                    return;
++                }
++                List<Mob> entitiesOfClass = serverLevel.getEntitiesOfClass(Mob.class, bound, followPredicate);
++                if (!entitiesOfClass.isEmpty()) {
++                    for (final Mob follow : entitiesOfClass) {
++                        if (!follow.isInvisible()) {
++                            pendingTarget.setRelease(follow);
++                            return;
++                        }
++                    }
++                }
++            } catch (Exception e) {
++                LOGGER.error("Exception getting entities", e);
++            } finally {
++                isSearching.setRelease(false);
++            }
++        });
++    }
++    // Leaf end - Async Follow Mob Finding
+ 
+     @Override
+     public boolean canContinueToUse() {
