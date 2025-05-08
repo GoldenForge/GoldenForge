@@ -16,8 +16,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-
-import io.papermc.paper.util.MCUtil;
 import net.minecraft.DetectedVersion;
 import net.minecraft.SharedConstants;
 import net.minecraft.advancements.critereon.EntitySubPredicate;
@@ -129,6 +127,7 @@ import net.neoforged.neoforge.common.loot.AddTableLootModifier;
 import net.neoforged.neoforge.common.loot.CanItemPerformAbility;
 import net.neoforged.neoforge.common.loot.IGlobalLootModifier;
 import net.neoforged.neoforge.common.loot.LootTableIdCondition;
+import net.neoforged.neoforge.common.util.SelfTest;
 import net.neoforged.neoforge.common.world.BiomeModifier;
 import net.neoforged.neoforge.common.world.BiomeModifiers;
 import net.neoforged.neoforge.common.world.BiomeModifiers.AddFeaturesBiomeModifier;
@@ -536,6 +535,8 @@ public class NeoForgeMod {
         if (SharedConstants.IS_RUNNING_IN_IDE) // for some ready the modloader do not load goldenforge in userdev
             new org.goldenforge.GoldenForge();
 
+        SelfTest.initCommon();
+
         CrashReportCallables.registerCrashCallable("Crash Report UUID", () -> {
             final UUID uuid = UUID.randomUUID();
             LOGGER.fatal("Preparing crash report with UUID {}", uuid);
@@ -564,6 +565,7 @@ public class NeoForgeMod {
         ENTITY_PREDICATE_CODECS.register(modEventBus);
         ITEM_SUB_PREDICATES.register(modEventBus);
         INGREDIENT_TYPES.register(modEventBus);
+        FLUID_INGREDIENT_TYPES.register(modEventBus);
         CONDITION_CODECS.register(modEventBus);
         GLOBAL_LOOT_MODIFIER_SERIALIZERS.register(modEventBus);
         NeoForge.EVENT_BUS.addListener(this::serverStopping);
@@ -582,6 +584,7 @@ public class NeoForgeMod {
         DualStackUtils.initialise();
         TagConventionLogWarning.init();
 
+        modEventBus.addListener(EventPriority.HIGH, CapabilityHooks::markProxyableCapabilities);
         modEventBus.addListener(CapabilityHooks::registerVanillaProviders);
         modEventBus.addListener(EventPriority.LOW, CapabilityHooks::registerFallbackVanillaProviders);
         modEventBus.addListener(CauldronFluidContent::registerCapabilities);
