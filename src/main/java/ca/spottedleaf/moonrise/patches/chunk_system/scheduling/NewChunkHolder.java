@@ -1801,6 +1801,7 @@ public final class NewChunkHolder {
         }
     }
 
+
     private boolean saveChunk(final ChunkAccess chunk, final boolean unloading) {
         if (!chunk.isUnsaved()) {
             if (unloading) {
@@ -1810,32 +1811,27 @@ public final class NewChunkHolder {
         }
         try {
             final AsyncChunkSaveData asyncSaveData = ChunkSystemFeatures.getAsyncSaveData(this.world, chunk);
+
             chunk.setUnsaved(false);
 
             final CallbackCompletable<CompoundTag> completable = new CallbackCompletable<>();
-            final PrioritisedExecutor.PrioritisedTask task;
 
-            // Goldenforge: event should always be called on the main thread
-            completable.addWaiter((final CompoundTag data, final Throwable error) -> {
-                if (data != null) {
-                    this.world.getServer().execute(() -> {
-                        PlatformHooks.get().chunkSyncSave(this.world, chunk, data);
-                    });
-                }
-            });
+            final Runnable run = () -> {
+                final CompoundTag data = this.goldenforge_SaveChunkAsync(chunk, asyncSaveData);
+                PlatformHooks.get().chunkSyncSave(this.world, chunk, data);
+                completable.complete(data);
 
-            if (unloading) {
-                this.chunkDataUnload.toRun().setRunnable(() -> {
-                    final CompoundTag data = this.goldenforge_SaveChunkAsync(chunk, asyncSaveData);
-                    completable.complete(data);
+                if (unloading) {
                     NewChunkHolder.this.completeAsyncUnloadDataSave(MoonriseRegionFileIO.RegionFileType.CHUNK_DATA, data);
-                });
+                }
+            };
+
+            final PrioritisedExecutor.PrioritisedTask task;
+            if (unloading) {
+                this.chunkDataUnload.toRun().setRunnable(run);
                 task = this.chunkDataUnload.task();
             } else {
-                task = this.scheduler.saveExecutor.createTask(() -> {
-                    final CompoundTag data = this.goldenforge_SaveChunkAsync(chunk, asyncSaveData);
-                    completable.complete(data);
-                });
+                task = this.scheduler.saveExecutor.createTask(run);
             }
 
             task.queue();

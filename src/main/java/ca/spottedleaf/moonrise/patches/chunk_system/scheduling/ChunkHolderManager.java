@@ -287,6 +287,7 @@ public final class ChunkHolderManager {
             for (int i = 0, len = holders.size(); i < len; ++i) {
                 final NewChunkHolder holder = holders.get(i);
                 if (holder.getCurrentChunk() instanceof LevelChunk levelChunk) {
+                    LOGGER.info("Firing ChunkEvent.Unload for chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'");
                     PlatformHooks.get().chunkUnloadFromWorld(levelChunk);
                 }
             }
@@ -329,9 +330,13 @@ public final class ChunkHolderManager {
             }
         }
         if (flush) {
+            LOGGER.info("Flushing all chunks in world '" + WorldUtil.getWorldName(this.world) + "'");
             MoonriseRegionFileIO.flush(this.world);
+            LOGGER.info("Flushed all chunks in world '" + WorldUtil.getWorldName(this.world) + "'");
             try {
+                LOGGER.info("Waiting for " + flushInterval + "ms for chunk I/O to finish");
                 MoonriseRegionFileIO.flushRegionStorages(this.world);
+                LOGGER.info("Chunk I/O finished for world '" + WorldUtil.getWorldName(this.world) + "'");
             } catch (final IOException ex) {
                 LOGGER.error("Exception when flushing regions in world '" + WorldUtil.getWorldName(this.world) + "'", ex);
             }

@@ -322,7 +322,7 @@
              }
          }
  
-@@ -635,6 +_,33 @@
+@@ -635,6 +_,35 @@
          } catch (IOException ioexception) {
              LOGGER.error("Failed to unlock level {}", this.storageSource.getLevelId(), ioexception);
          }
@@ -332,9 +332,9 @@
 +        } catch (java.lang.InterruptedException ignored) {} // Paper
 +
 +        // Paper start - rewrite chunk system
-+        LOGGER.info("Waiting for I/O tasks to complete...");
++        LOGGER.info("Waiting for all RegionFile I/O tasks to complete...");
 +        ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.flush((MinecraftServer)(Object)this);
-+        LOGGER.info("All I/O tasks to complete");
++        LOGGER.info("All RegionFile I/O tasks to complete");
 +        if ((Object)this instanceof net.minecraft.server.dedicated.DedicatedServer) {
 +            ca.spottedleaf.moonrise.common.util.MoonriseCommon.haltExecutors();
 +        }
@@ -353,6 +353,8 @@
 +            org.dreeam.leaf.async.ai.AsyncGoalExecutor.EXECUTOR.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS);
 +        } catch (java.lang.InterruptedException ignored) {}
 +        // Leaf end - Async target finding
++        this.chunkSendingExecutor.kill();
++        this.mobSpawnExecutor.kill();
      }
  
      public String getLocalIp() {
@@ -505,14 +507,16 @@
              this.onServerCrash(crashreport);
          } finally {
              try {
-@@ -737,6 +_,7 @@
+@@ -737,7 +_,8 @@
                      this.services.profileCache().clearExecutor();
                  }
  
+-                this.onServerExit();
 +                net.neoforged.neoforge.server.ServerLifecycleHooks.handleServerStopped(this);
-                 this.onServerExit();
++                //this.onServerExit();
              }
          }
+     }
 @@ -788,8 +_,15 @@
          return crashreport;
      }

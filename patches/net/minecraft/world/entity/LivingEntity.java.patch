@@ -12,7 +12,7 @@
  import org.slf4j.Logger;
  
 -public abstract class LivingEntity extends Entity implements Attackable {
-+public abstract class LivingEntity extends Entity implements Attackable, net.neoforged.neoforge.common.extensions.ILivingEntityExtension {
++public abstract class LivingEntity extends Entity implements Attackable, net.neoforged.neoforge.common.extensions.ILivingEntityExtension,  net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.CountChangeSubscriber<ItemStack>, net.caffeinemc.mods.lithium.common.entity.EquipmentEntity, net.caffeinemc.mods.lithium.common.entity.EquipmentEntity.TickableEnchantmentTrackingEntity, net.caffeinemc.mods.lithium.common.entity.EquipmentEntity.EquipmentTrackingEntity { // Leaf - Lithium - equipment tracking
      private static final Logger LOGGER = LogUtils.getLogger();
      private static final String TAG_ACTIVE_EFFECTS = "active_effects";
      private static final ResourceLocation SPEED_MODIFIER_POWDER_SNOW_ID = ResourceLocation.withDefaultNamespace("powder_snow");
@@ -48,7 +48,7 @@
      private int lastHurtByMobTimestamp;
      @Nullable
      private LivingEntity lastHurtMob;
-@@ -254,6 +_,22 @@
+@@ -254,6 +_,100 @@
      private boolean skipDropExperience;
      private final Reference2ObjectMap<Enchantment, Set<EnchantmentLocationBasedEffect>> activeLocationDependentEnchantments = new Reference2ObjectArrayMap<>();
      protected float appliedScale = 1.0F;
@@ -68,6 +68,84 @@
 +        ++this.noActionTime; // Above all the floats
 +    }
 +    // Spigot end
++
++    // Leaf start - Lithium - equipment tracking
++    private boolean maybeHasTickableEnchantments = this instanceof net.minecraft.world.entity.player.Player;
++    private boolean equipmentChanged = true;
++
++    @Override
++    public void updateHasTickableEnchantments(ItemStack oldStack, ItemStack newStack) {
++        if (!this.maybeHasTickableEnchantments) {
++            this.maybeHasTickableEnchantments = stackHasTickableEnchantment(newStack);
++        }
++    }
++
++    @Override
++    public void notifyAfterEnchantmentChange(ItemStack publisher, int subscriberData) {
++        if (!this.maybeHasTickableEnchantments) {
++            this.maybeHasTickableEnchantments = stackHasTickableEnchantment(publisher);
++        }
++    }
++
++    @Override
++    public void onEquipmentChanged() {
++        this.equipmentChanged = true;
++    }
++
++    private static boolean stackHasTickableEnchantment(ItemStack stack) {
++        if (!stack.isEmpty()) {
++            net.minecraft.world.item.enchantment.ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
++            if (enchantments != null && !enchantments.isEmpty()) {
++                for (Holder<Enchantment> enchantmentEntry : enchantments.keySet()) {
++                    if (!enchantmentEntry.value().getEffects(net.minecraft.world.item.enchantment.EnchantmentEffectComponents.TICK).isEmpty()) {
++                        return true;
++                    }
++                }
++                return false;
++            }
++        }
++        return false;
++    }
++
++    @Override
++    public void notify(@Nullable ItemStack publisher, int zero) {
++        if (this instanceof EquipmentTrackingEntity equipmentTrackingEntity) {
++            equipmentTrackingEntity.onEquipmentChanged();
++        }
++    }
++
++    @Override
++    public void notifyCount(ItemStack publisher, int zero, int newCount) {
++        if (newCount == 0) {
++            publisher.unsubscribeWithData(this, zero);
++        }
++
++        this.onEquipmentReplaced(publisher, ItemStack.EMPTY);
++    }
++
++    @Override
++    public void forceUnsubscribe(ItemStack publisher, int zero) {
++        throw new UnsupportedOperationException();
++    }
++
++    @Override
++    public void onEquipmentReplaced(ItemStack oldStack, ItemStack newStack) {
++        if (this instanceof TickableEnchantmentTrackingEntity enchantmentTrackingEntity) {
++            enchantmentTrackingEntity.updateHasTickableEnchantments(oldStack, newStack);
++        }
++
++        if (this instanceof EquipmentTrackingEntity equipmentTrackingEntity) {
++            equipmentTrackingEntity.onEquipmentChanged();
++        }
++
++        if (!oldStack.isEmpty()) {
++            oldStack.unsubscribeWithData(this, 0);
++        }
++        if (!newStack.isEmpty()) {
++            newStack.subscribe(this, 0);
++        }
++    }
++    // Leaf end - Lithium - equipment tracking
  
      protected LivingEntity(EntityType<? extends LivingEntity> p_20966_, Level p_20967_) {
          super(p_20966_, p_20967_);
@@ -100,6 +178,15 @@
      public final boolean canBreatheUnderwater() {
          return this.getType().is(EntityTypeTags.CAN_BREATHE_UNDER_WATER);
      }
+@@ -377,7 +_,7 @@
+             this.getSleepingPos().ifPresent(this::setPosToBed);
+         }
+ 
+-        if (this.level() instanceof ServerLevel serverlevel) {
++        if (this.maybeHasTickableEnchantments && this.level() instanceof ServerLevel serverlevel) { // Leaf - Lithium - equipment tracking
+             EnchantmentHelper.tickEffects(serverlevel, this);
+         }
+ 
 @@ -403,6 +_,9 @@
                  }
              }
@@ -119,6 +206,14 @@
              this.extinguishFire();
          }
  
+@@ -650,6 +_,7 @@
+         if (!flag && !ItemStack.isSameItemSameComponents(p_238394_, p_238395_) && !this.firstTick) {
+             Equipable equipable = Equipable.get(p_238395_);
+             if (!this.level().isClientSide() && !this.isSpectator()) {
++                this.onEquipmentReplaced(p_238394_, p_238395_); // Leaf - Lithium - equipment tracking
+                 if (!this.isSilent() && equipable != null && equipable.getEquipmentSlot() == p_238393_) {
+                     this.level()
+                         .playSeededSound(
 @@ -772,7 +_,7 @@
                  Holder<MobEffect> holder = iterator.next();
                  MobEffectInstance mobeffectinstance = this.activeEffects.get(holder);
@@ -599,7 +694,7 @@
                  d2 = 0.0;
              }
  
-@@ -2444,7 +_,7 @@
+@@ -2444,9 +_,10 @@
          }
      }
  
@@ -607,9 +702,18 @@
 +    public void detectEquipmentUpdates() {
          Map<EquipmentSlot, ItemStack> map = this.collectEquipmentChanges();
          if (map != null) {
++            if (!(this instanceof net.minecraft.world.entity.player.Player)) this.equipmentChanged = false; // Leaf - Lithium - equipment tracking
              this.handleHandSwap(map);
-@@ -2458,7 +_,7 @@
+             if (!map.isEmpty()) {
+                 this.handleEquipmentChanges(map);
+@@ -2456,9 +_,13 @@
+ 
+     @Nullable
      private Map<EquipmentSlot, ItemStack> collectEquipmentChanges() {
++        // Leaf start - Lithium - equipment tracking
++        final boolean isArmorStandUpdateNoTick = this instanceof net.minecraft.world.entity.decoration.ArmorStand stand && !stand.canTick && stand.noTickEquipmentDirty;
++        if (!isArmorStandUpdateNoTick && !this.equipmentChanged) return null;
++        // Leaf end - Lithium - equipment tracking
          Map<EquipmentSlot, ItemStack> map = null;
  
 -        for (EquipmentSlot equipmentslot : EquipmentSlot.values()) {

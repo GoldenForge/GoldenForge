@@ -1,12 +1,27 @@
 --- a/net/minecraft/world/entity/Mob.java
 +++ b/net/minecraft/world/entity/Mob.java
-@@ -131,6 +_,9 @@
+@@ -86,7 +_,7 @@
+ import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+ import net.minecraft.world.phys.AABB;
+ 
+-public abstract class Mob extends LivingEntity implements EquipmentUser, Leashable, Targeting {
++public abstract class Mob extends LivingEntity implements EquipmentUser, Leashable, Targeting, net.caffeinemc.mods.lithium.common.entity.EquipmentEntity { // Leaf - Lithium - equipment tracking
+     private static final EntityDataAccessor<Byte> DATA_MOB_FLAGS_ID = SynchedEntityData.defineId(Mob.class, EntityDataSerializers.BYTE);
+     private static final int MOB_FLAG_NO_AI = 1;
+     private static final int MOB_FLAG_LEFTHANDED = 2;
+@@ -131,6 +_,15 @@
      private Leashable.LeashData leashData;
      private BlockPos restrictCenter = BlockPos.ZERO;
      private float restrictRadius = -1.0F;
 +    @Nullable
 +    private MobSpawnType spawnType;
 +    private boolean spawnCancelled = false;
++
++    // Leaf start - Lithium - equipment tracking
++    private void trackEquipChange(ItemStack prevStack, ItemStack currStack) {
++        this.onEquipmentReplaced(prevStack, currStack);
++    }
++    // Leaf end - Lithium - equipment tracking
  
      protected Mob(EntityType<? extends Mob> p_21368_, Level p_21369_) {
          super(p_21368_, p_21369_);
@@ -58,7 +73,7 @@
      }
  
      protected void updateControlFlags() {
-@@ -425,6 +_,9 @@
+@@ -425,10 +_,14 @@
          if (this.isNoAi()) {
              p_21484_.putBoolean("NoAI", this.isNoAi());
          }
@@ -68,7 +83,38 @@
      }
  
      @Override
-@@ -484,6 +_,14 @@
+     public void readAdditionalSaveData(CompoundTag p_21450_) {
++        ItemStack prevBodyArmor = this.bodyArmorItem; // Leaf - Lithium - equipment tracking
+         super.readAdditionalSaveData(p_21450_);
+         if (p_21450_.contains("CanPickUpLoot", 1)) {
+             this.setCanPickUpLoot(p_21450_.getBoolean("CanPickUpLoot"));
+@@ -440,7 +_,11 @@
+ 
+             for (int i = 0; i < this.armorItems.size(); i++) {
+                 CompoundTag compoundtag = listtag.getCompound(i);
+-                this.armorItems.set(i, ItemStack.parseOptional(this.registryAccess(), compoundtag));
++                // Leaf start - Lithium - equipment tracking
++                ItemStack currStack = ItemStack.parseOptional(this.registryAccess(), compoundtag);
++                ItemStack prevStack = this.armorItems.set(i, currStack);
++                this.trackEquipChange(prevStack, currStack);
++                // Leaf end - Lithium - equipment tracking
+             }
+         }
+ 
+@@ -457,7 +_,11 @@
+ 
+             for (int k = 0; k < this.handItems.size(); k++) {
+                 CompoundTag compoundtag1 = listtag2.getCompound(k);
+-                this.handItems.set(k, ItemStack.parseOptional(this.registryAccess(), compoundtag1));
++                // Leaf start - Lithium - equipment tracking
++                ItemStack currStack = ItemStack.parseOptional(this.registryAccess(), compoundtag1);
++                ItemStack prevStack = this.handItems.set(k, currStack);
++                this.trackEquipChange(prevStack, currStack);
++                // Leaf end - Lithium - equipment tracking
+             }
+         }
+ 
+@@ -484,6 +_,19 @@
          }
  
          this.setNoAi(p_21450_.getBoolean("NoAI"));
@@ -80,6 +126,11 @@
 +                p_21450_.remove("neoforge:spawn_type");
 +            }
 +        }
++        // Leaf start - Lithium - equipment tracking
++        if (prevBodyArmor != this.bodyArmorItem) {
++            this.trackEquipChange(prevBodyArmor, this.bodyArmorItem);
++        }
++        // Leaf end - Lithium - equipment tracking
      }
  
      @Override

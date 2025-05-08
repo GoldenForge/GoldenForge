@@ -9,15 +9,21 @@
      private final NonNullList<ItemStack> handItems = NonNullList.withSize(2, ItemStack.EMPTY);
      private final NonNullList<ItemStack> armorItems = NonNullList.withSize(4, ItemStack.EMPTY);
      private boolean invisible;
-@@ -85,9 +_,16 @@
+@@ -85,9 +_,22 @@
      private Rotations rightArmPose = DEFAULT_RIGHT_ARM_POSE;
      private Rotations leftLegPose = DEFAULT_LEFT_LEG_POSE;
      private Rotations rightLegPose = DEFAULT_RIGHT_LEG_POSE;
 +    // Paper start - Allow ArmorStands not to tick
 +    public boolean canTick = true;
 +    private boolean noTickPoseDirty = false;
-+    private boolean noTickEquipmentDirty = false;
++    public boolean noTickEquipmentDirty = false;
 +    // Paper end - Allow ArmorStands not to tick
++
++    // Leaf start - Lithium - equipment tracking
++    private void trackEquipChange(ItemStack prevStack, ItemStack currStack) {
++        this.onEquipmentReplaced(prevStack, currStack);
++    }
++    // Leaf end - Lithium - equipment tracking
 +
  
      public ArmorStand(EntityType<? extends ArmorStand> p_31553_, Level p_31554_) {
@@ -34,6 +40,32 @@
      }
  
      @Override
+@@ -211,7 +_,11 @@
+ 
+             for (int i = 0; i < this.armorItems.size(); i++) {
+                 CompoundTag compoundtag = listtag.getCompound(i);
+-                this.armorItems.set(i, ItemStack.parseOptional(this.registryAccess(), compoundtag));
++                // Leaf start - Lithium - equipment tracking
++                ItemStack currElement = ItemStack.parseOptional(this.registryAccess(), compoundtag);
++                ItemStack prevElement = this.armorItems.set(i, currElement);
++                this.trackEquipChange(prevElement, currElement);
++                // Leaf end - Lithium - equipment tracking
+             }
+         }
+ 
+@@ -220,7 +_,11 @@
+ 
+             for (int j = 0; j < this.handItems.size(); j++) {
+                 CompoundTag compoundtag2 = listtag1.getCompound(j);
+-                this.handItems.set(j, ItemStack.parseOptional(this.registryAccess(), compoundtag2));
++                // Leaf start - Lithium - equipment tracking
++                ItemStack currStack = ItemStack.parseOptional(this.registryAccess(), compoundtag2);
++                ItemStack prevStack = this.handItems.set(j, currStack);
++                this.trackEquipChange(prevStack, currStack);
++                // Leaf end - Lithium - equipment tracking
+             }
+         }
+ 
 @@ -290,7 +_,8 @@
  
      @Override
@@ -44,7 +76,33 @@
              if (this.distanceToSqr(entity) <= 0.2) {
                  entity.push(this);
              }
-@@ -550,7 +_,29 @@
+@@ -505,7 +_,11 @@
+             ItemStack itemstack = this.handItems.get(i);
+             if (!itemstack.isEmpty()) {
+                 Block.popResource(this.level(), this.blockPosition().above(), itemstack);
+-                this.handItems.set(i, ItemStack.EMPTY);
++                // Leaf start - Lithium - equipment tracking
++                ItemStack emptyStack = ItemStack.EMPTY;
++                ItemStack prevStack = this.handItems.set(i, emptyStack);
++                this.trackEquipChange(prevStack, emptyStack);
++                // Leaf end - Lithium - equipment tracking
+             }
+         }
+ 
+@@ -513,7 +_,11 @@
+             ItemStack itemstack1 = this.armorItems.get(j);
+             if (!itemstack1.isEmpty()) {
+                 Block.popResource(this.level(), this.blockPosition().above(), itemstack1);
+-                this.armorItems.set(j, ItemStack.EMPTY);
++                // Leaf start - Lithium - equipment tracking
++                ItemStack emptyStack = ItemStack.EMPTY;
++                ItemStack prevStack = this.armorItems.set(j, ItemStack.EMPTY);
++                this.trackEquipChange(prevStack, emptyStack);
++                // Leaf end - Lithium - equipment tracking
+             }
+         }
+     }
+@@ -550,7 +_,31 @@
  
      @Override
      public void tick() {
@@ -55,10 +113,12 @@
 +                this.updatePose();
 +            }
 +
++            // Leaf start - Lithium - equipment tracking
 +            if (this.noTickEquipmentDirty) {
-+                this.noTickEquipmentDirty = false;
 +                this.detectEquipmentUpdates();
++                this.noTickEquipmentDirty = false; // Remove dirty mark after handling equipment update for armor stand
 +            }
++            // Leaf end - Lithium - equipment tracking
 +
 +            return;
 +        }

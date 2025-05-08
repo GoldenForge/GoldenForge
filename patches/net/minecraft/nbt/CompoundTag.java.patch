@@ -1,5 +1,14 @@
 --- a/net/minecraft/nbt/CompoundTag.java
 +++ b/net/minecraft/nbt/CompoundTag.java
+@@ -15,6 +_,8 @@
+ import java.util.UUID;
+ import java.util.Map.Entry;
+ import javax.annotation.Nullable;
++
++import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+ import net.minecraft.CrashReport;
+ import net.minecraft.CrashReportCategory;
+ import net.minecraft.ReportedException;
 @@ -46,13 +_,19 @@
              return compoundtag;
          }
@@ -12,7 +21,7 @@
          private static CompoundTag loadCompound(DataInput p_302338_, NbtAccounter p_302362_) throws IOException {
              p_302362_.accountBytes(48L);
 -            Map<String, Tag> map = Maps.newHashMap();
-+            it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<String, Tag> map = new org.dreeam.leaf.util.map.StringCanonizingOpenHashMap<>(8, 0.8f); // Paper - Reduce memory footprint of CompoundTag // Leaf - Further reduce memory footprint of CompoundTag
++            it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<String, Tag> map = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(8, 0.8f); // Paper - Reduce memory footprint of CompoundTag
  
              byte b0;
 -            while ((b0 = p_302338_.readByte()) != 0) {
@@ -28,7 +37,7 @@
  
      public CompoundTag() {
 -        this(Maps.newHashMap());
-+        this(new org.dreeam.leaf.util.map.StringCanonizingOpenHashMap<>(8, 0.8f)); // Paper - Reduce memory footprint of CompoundTag // Leaf - Further reduce memory footprint of CompoundTag
++        this(new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(8, 0.8f)); // Paper - Reduce memory footprint of CompoundTag
      }
  
      @Override
@@ -67,27 +76,12 @@
      }
  
      public CompoundTag getCompound(String p_128470_) {
-@@ -479,8 +_,21 @@
+@@ -479,7 +_,7 @@
      }
  
      public CompoundTag copy() {
 -        Map<String, Tag> map = Maps.newHashMap(Maps.transformValues(this.tags, Tag::copy));
--        return new CompoundTag(map);
-+        // Leaf start - Further reduce memory footprint of CompoundTag
-+        if (this.tags instanceof org.dreeam.leaf.util.map.StringCanonizingOpenHashMap<Tag> stringCanonizingTags) {
-+            return new CompoundTag(org.dreeam.leaf.util.map.StringCanonizingOpenHashMap.deepCopy(stringCanonizingTags, Tag::copy));
-+        }
-+        // Leaf end - Further reduce memory footprint of CompoundTag
-+        // Paper start - Reduce memory footprint of CompoundTag
-+        it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<String, Tag> ret = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>(this.tags.size(), 0.8f);
-+        java.util.Iterator<java.util.Map.Entry<String, Tag>> iterator = (this.tags instanceof it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap) ? ((it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap)this.tags).object2ObjectEntrySet().fastIterator() : this.tags.entrySet().iterator();
-+        while (iterator.hasNext()) {
-+            Map.Entry<String, Tag> entry = iterator.next();
-+            ret.put(entry.getKey(), entry.getValue().copy());
-+        }
-+
-+        return new CompoundTag(ret);
-+        // Paper end - Reduce memory footprint of CompoundTag
++        Map<String, Tag> map = new Object2ObjectOpenHashMap<>(Maps.transformValues(this.tags, Tag::copy));
+         return new CompoundTag(map);
      }
  
-     @Override
