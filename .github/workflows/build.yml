@@ -21,9 +21,9 @@ jobs:
       - name: Clean and setup
         run: ./gradlew clean setup
       - name: Build jar
-        run: ./gradlew legacyinstallerjar
+        run: ./gradlew installerjar
       - name: Upload Artifact
         uses: actions/upload-artifact@v4.5.0
         with:
           name: goldenforge-1.21.1
-          path: projects/neoforge/build/distributions/neoforge-*-installer-unsigned.jar
+          path: projects/neoforge/build/libs/neoforge-*-installer.jar
