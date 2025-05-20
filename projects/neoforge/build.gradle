@@ -63,11 +63,6 @@ minecraft {
     }
 }
 
-repositories {
-   // maven { url = 'https://repo.papermc.io/repository/maven-public/'}
-    maven { url = 'https://maven.modcraftmc.fr/releases/'}
-}
-
 dependencies {
     // For an overview of what the nonstandard configurations do,
     // have a look at NeoDevConfigurations.java in the buildSrc folder.
@@ -134,21 +129,21 @@ dependencies {
 
     userdevTestFixtures("net.neoforged.fancymodloader:junit-fml:${project.fancy_mod_loader_version}") {
         endorseStrictVersions()
+    }
 
     //goldenforge
     //installer "ca.spottedleaf:concurrentutil:0.0.3"
-    installer "org.spongepowered:configurate-yaml:4.2.0-SNAPSHOT"
-    installer "org.spongepowered:configurate-core:4.2.0-SNAPSHOT"
-    installer "io.leangen.geantyref:geantyref:1.3.16"
-    installer "net.neoforged:srgutils:1.0.9"
-    installer "io.sentry:sentry:5.4.0"
-    implementation "curse.maven:snowudertrees-353942:5875647"
-    implementation "curse.maven:immersiveportal-355440:6013197"
-    implementation "curse.maven:TheOvergrowth-714353:5616081"
-    implementation "curse.maven:chunky-485681:5437053"
-    implementation "curse.maven:industrialforegoing-266515:6283758"
-    implementation "curse.maven:dh-508933:6387706"
-}
+    libraries "org.spongepowered:configurate-yaml:4.2.0-SNAPSHOT"
+    libraries "org.spongepowered:configurate-core:4.2.0-SNAPSHOT"
+    libraries "io.leangen.geantyref:geantyref:1.3.16"
+    libraries "net.neoforged:srgutils:1.0.9"
+    libraries "io.sentry:sentry:5.4.0"
+    compileOnly "curse.maven:snowudertrees-353942:5875647"
+    compileOnly "curse.maven:immersiveportal-355440:6013197"
+    compileOnly "curse.maven:TheOvergrowth-714353:5616081"
+    compileOnly "curse.maven:chunky-485681:5437053"
+    compileOnly "curse.maven:industrialforegoing-266515:6283758"
+    compileOnly "curse.maven:dh-508933:6387706"
 
     // Must be implementation instead of compileOnly so that running dependent projects such as tests will trigger (re)compilation of coremods.
     // (Only needed when compiling through IntelliJ non-delegated builds - otherwise `compileOnly` would work).

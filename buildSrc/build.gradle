@@ -14,6 +14,7 @@ repositories {
             includeGroup "net.neoforged"
         }
     }
+    maven { url = 'https://maven.modcraftmc.fr/releases' }
     maven {
         name = "MojangMeta"
         url = "https://maven.neoforged.net/mojang-meta"

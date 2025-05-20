@@ -1,12 +1,18 @@
 --- a/net/minecraft/world/level/block/piston/PistonStructureResolver.java
 +++ b/net/minecraft/world/level/block/piston/PistonStructureResolver.java
-@@ -1,5 +_,6 @@
+@@ -1,11 +_,11 @@
  package net.minecraft.world.level.block.piston;
  
-+import com.abdelaziz.canary.common.util.constants.DirectionConstants;
++import comm.abdelaziz.canary.common.util.constants.DirectionConstants;
  import com.google.common.collect.Lists;
  import java.util.List;
  import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.world.level.Level;
+-import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.material.PushReaction;
+ 
 @@ -50,7 +_,7 @@
          } else {
              for (int i = 0; i < this.toPush.size(); i++) {

@@ -3,7 +3,7 @@
 @@ -1,7 +_,10 @@
  package net.minecraft.util.random;
  
-+import com.abdelaziz.canary.common.util.collections.HashedReferenceList;
++import comm.abdelaziz.canary.common.util.collections.HashedReferenceList;
  import com.google.common.collect.ImmutableList;
  import com.mojang.serialization.Codec;
 +

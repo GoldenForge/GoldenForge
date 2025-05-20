@@ -1,4 +1,4 @@
-package com.destroystokyo.paper.io;
+package comm.destroystokyo.paper.io;
 
 import ca.spottedleaf.moonrise.common.util.WorldUtil;
 import com.google.gson.JsonArray;

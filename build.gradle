@@ -14,7 +14,7 @@ ext.isPreReleaseVersion = project.minecraft_version.contains('w') || project.min
 if (isPreReleaseVersion) {
     project.version = "${project.neoforge_snapshot_next_stable}.0-alpha.${project.minecraft_version}.${(new Date()).format('yyyyMMdd.HHmmss', TimeZone.getTimeZone('UTC'))}"
 } else {
-    project.version = "21.1.146" // Goldenforge: hardcode version
+    project.version = "21.1.172" // Goldenforge: hardcode version
 }
 
 // Print version, generally useful to know - also appears on CI
@@ -25,13 +25,6 @@ allprojects {
     group = 'net.neoforged'
     version rootProject.version
     group 'net.neoforged'
-    repositories {
-        mavenLocal()
-        //maven { url = "https://repo.papermc.io/repository/maven-public/"}
-        maven {
-            url "https://cursemaven.com"
-        }
-    }
 }
 
 subprojects {

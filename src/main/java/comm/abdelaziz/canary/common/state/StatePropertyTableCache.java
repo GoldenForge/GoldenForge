@@ -1,4 +1,4 @@
-package com.abdelaziz.canary.common.state;
+package comm.abdelaziz.canary.common.state;
 
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;

@@ -1,4 +1,4 @@
-package com.abdelaziz.canary.common.state;
+package comm.abdelaziz.canary.common.state;
 
 import com.google.common.collect.Table;
 import it.unimi.dsi.fastutil.Hash;

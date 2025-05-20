@@ -3,10 +3,26 @@
 @@ -1,5 +_,6 @@
  package net.minecraft.world.entity;
  
-+import com.abdelaziz.canary.common.util.constants.EquipmentSlotConstants;
++import comm.abdelaziz.canary.common.util.constants.EquipmentSlotConstants;
  import com.google.common.annotations.VisibleForTesting;
  import com.google.common.base.Objects;
  import com.google.common.collect.ImmutableList;
+@@ -88,7 +_,6 @@
+ import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
+ import net.minecraft.world.entity.ai.targeting.TargetingConditions;
+ import net.minecraft.world.entity.animal.FlyingAnimal;
+-import net.minecraft.world.entity.animal.Wolf;
+ import net.minecraft.world.entity.boss.wither.WitherBoss;
+ import net.minecraft.world.entity.item.ItemEntity;
+ import net.minecraft.world.entity.player.Player;
+@@ -96,7 +_,6 @@
+ import net.minecraft.world.entity.projectile.Projectile;
+ import net.minecraft.world.food.FoodProperties;
+ import net.minecraft.world.item.ArmorItem;
+-import net.minecraft.world.item.AxeItem;
+ import net.minecraft.world.item.ElytraItem;
+ import net.minecraft.world.item.Equipable;
+ import net.minecraft.world.item.Item;
 @@ -132,7 +_,7 @@
  import net.minecraft.world.scores.Scoreboard;
  import org.slf4j.Logger;

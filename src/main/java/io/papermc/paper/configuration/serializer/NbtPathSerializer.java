@@ -1,6 +1,6 @@
 package io.papermc.paper.configuration.serializer;
 
-import com.destroystokyo.paper.util.SneakyThrow;
+import comm.destroystokyo.paper.util.SneakyThrow;
 import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.commands.arguments.NbtPathArgument;

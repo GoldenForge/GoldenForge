@@ -287,7 +287,6 @@ public final class ChunkHolderManager {
             for (int i = 0, len = holders.size(); i < len; ++i) {
                 final NewChunkHolder holder = holders.get(i);
                 if (holder.getCurrentChunk() instanceof LevelChunk levelChunk) {
-                    LOGGER.info("Firing ChunkEvent.Unload for chunk (" + holder.chunkX + "," + holder.chunkZ + ") in world '" + WorldUtil.getWorldName(this.world) + "'");
                     PlatformHooks.get().chunkUnloadFromWorld(levelChunk);
                 }
             }

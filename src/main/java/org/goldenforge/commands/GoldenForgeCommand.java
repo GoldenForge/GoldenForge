@@ -1,6 +1,6 @@
 package org.goldenforge.commands;
 
-import com.destroystokyo.paper.io.SyncLoadFinder;
+import comm.destroystokyo.paper.io.SyncLoadFinder;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.JsonObject;
 import com.google.gson.internal.Streams;
@@ -15,8 +15,6 @@ import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ChunkHolder;
-import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MobCategory;

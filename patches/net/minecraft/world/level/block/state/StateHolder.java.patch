@@ -3,8 +3,8 @@
 @@ -1,5 +_,7 @@
  package net.minecraft.world.level.block.state;
  
-+import com.abdelaziz.canary.common.state.FastImmutableTable;
-+import com.abdelaziz.canary.common.state.StatePropertyTableCache;
++import comm.abdelaziz.canary.common.state.FastImmutableTable;
++import comm.abdelaziz.canary.common.state.StatePropertyTableCache;
  import com.google.common.collect.ArrayTable;
  import com.google.common.collect.HashBasedTable;
  import com.google.common.collect.Table;

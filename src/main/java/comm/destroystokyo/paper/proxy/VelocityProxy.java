@@ -1,4 +1,4 @@
-package com.destroystokyo.paper.proxy;
+package comm.destroystokyo.paper.proxy;
 
 import com.google.common.net.InetAddresses;
 import com.mojang.authlib.GameProfile;

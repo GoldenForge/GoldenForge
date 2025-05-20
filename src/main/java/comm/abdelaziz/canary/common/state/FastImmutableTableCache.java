@@ -1,4 +1,4 @@
-package com.abdelaziz.canary.common.state;
+package comm.abdelaziz.canary.common.state;
 
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.ints.IntArrays;

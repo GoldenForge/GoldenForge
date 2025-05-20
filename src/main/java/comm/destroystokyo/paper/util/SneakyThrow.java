@@ -1,4 +1,4 @@
-package com.destroystokyo.paper.util;
+package comm.destroystokyo.paper.util;
 
 import org.jetbrains.annotations.NotNull;
 
