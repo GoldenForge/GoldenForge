@@ -11,7 +11,7 @@
      public static final int SECTION_SIZE = 4096;
      public static final int BIOME_CONTAINER_BITS = 2;
 -    private short nonEmptyBlockCount;
-+    public short nonEmptyBlockCount;
++    public volatile short nonEmptyBlockCount; // Leaf - Async chunk send - volatile
      private short tickingBlockCount;
      private short tickingFluidCount;
 -    private final PalettedContainer<BlockState> states;

@@ -12,59 +12,27 @@
  import net.minecraft.world.entity.ai.targeting.TargetingConditions;
  import net.minecraft.world.entity.player.Player;
  import net.minecraft.world.item.ItemStack;
-@@ -35,13 +_,77 @@
+@@ -35,12 +_,44 @@
          this.targetingConditions = TEMP_TARGETING.copy().selector(this::shouldFollow);
      }
  
 +    // Leaf start - Async Tempt Finding
-+    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
-+    private final java.util.concurrent.atomic.AtomicReference<Player> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
-+    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
-+
 +    private boolean poll() {
-+        Player t = pendingTarget.getAndSet(null);
-+        if (t == null) {
-+            t = this.player;
-+        }
-+        if (t == null) {
-+            return false;
-+        }
++        if (!(this.mob.getGoalCtx().result() instanceof Player target)) return false;
 +        var serverLevel = getServerLevel(this.mob);
-+        if (serverLevel == null || !t.isAlive() || !this.targetingConditions.test(this.mob, t)) {
-+            return false;
-+        }
-+        this.player = t;
++        if (!target.isAlive() || !this.targetingConditions.test(this.mob, target)) return false;
++        this.player = target;
 +        return true;
 +    }
 +
 +    private void getNearestPlayerAsync() {
-+        if (!isSearching.compareAndSet(false, true)) {
-+            return;
-+        }
-+
 +        final var mob = this.mob;
-+
-+        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
-+            isSearching.setRelease(false);
-+            return;
-+        }
-+
++        final var ctx = mob.getGoalCtx();
++        if (!ctx.state) return;
 +        final var serverLevel = getServerLevel(mob);
-+        final var pendingTarget = this.pendingTarget;
 +        final var conditions = this.targetingConditions
 +                .copy();
-+        serverLevel.asyncAITasks.add(() -> {
-+            try {
-+                if (mob == null || mob.isRemoved() || !mob.isAlive() || mob.level() != serverLevel) {
-+                    return;
-+                }
-+                pendingTarget.setRelease(serverLevel.getNearestPlayer(conditions, mob));
-+            } catch (Exception e) {
-+                LOGGER.error("Exception getting player", e);
-+            } finally {
-+                isSearching.setRelease(false);
-+            }
-+        });
++        ctx.wake = () -> serverLevel.getNearestPlayer(conditions, mob);
 +    }
 +    // Leaf end - Async Tempt Finding
 +
@@ -74,20 +42,18 @@
              this.calmDown--;
              return false;
          } else {
--            this.player = this.mob.level().getNearestPlayer(this.targetingConditions, this.mob);
 +            // Leaf start - Async Tempt Finding
-+            if (GlobalConfiguration.get().asyncTargetFinding.searchPlayerTempt) {
++            if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
 +                if (poll()) {
-+                    return this.player != null;
++                    if (this.player != null) {
++                        return true;
++                    }
 +                } else {
 +                    getNearestPlayerAsync();
 +                    return false;
 +                }
-+            } else {
-+                this.player = getServerLevel(this.mob)
-+                        .getNearestPlayer(this.targetingConditions, this.mob);
 +            }
 +            // Leaf end - Async Tempt Finding
+             this.player = this.mob.level().getNearestPlayer(this.targetingConditions, this.mob);
              return this.player != null;
          }
-     }

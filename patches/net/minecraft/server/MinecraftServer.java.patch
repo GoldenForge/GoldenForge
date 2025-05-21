@@ -71,8 +71,8 @@
 +    public volatile boolean abnormalExit = false; // Paper
 +    public static final long SERVER_INIT = System.nanoTime(); // Paper - Lag compensation
 +
++    @Nullable public org.dreeam.leaf.async.ai.AsyncGoalThread asyncGoalThread; // Leaf - Async target finding
 +    public gg.pufferfish.pufferfish.util.AsyncExecutor mobSpawnExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("MobSpawning"); // Pufferfish - optimize mob spawning
-+    public gg.pufferfish.pufferfish.util.AsyncExecutor chunkSendingExecutor = new gg.pufferfish.pufferfish.util.AsyncExecutor("AsyncChunkSend"); // Goldenforge: use async executor for chunk sending
 +
      public static <S extends MinecraftServer> S spin(Function<Thread, S> p_129873_) {
          AtomicReference<S> atomicreference = new AtomicReference<>();
@@ -347,14 +347,14 @@
 +        }
 +        this.onServerExit();
 +        // Paper end - Improved watchdog support
-+//        // Leaf start - Async target finding
-+//        org.dreeam.leaf.async.ai.AsyncGoalExecutor.EXECUTOR.shutdown();
-+//        try {
-+//            org.dreeam.leaf.async.ai.AsyncGoalExecutor.EXECUTOR.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS);
-+//        } catch (java.lang.InterruptedException ignored) {}
-+//        // Leaf end - Async target finding
-+        this.chunkSendingExecutor.kill();
-+        this.mobSpawnExecutor.kill();
++        // Leaf start - Async target finding
++        if (this.asyncGoalThread != null) {
++            try {
++                this.asyncGoalThread.join();
++            } catch (java.lang.InterruptedException ignored) {
++            }
++        }
++        // Leaf end - Async target finding
      }
  
      public String getLocalIp() {

@@ -5,6 +5,7 @@ import ca.spottedleaf.moonrise.common.list.EntityList;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
 import ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity;
 import com.google.common.collect.ImmutableList;
+import io.papermc.paper.configuration.GlobalConfiguration;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.nbt.CompoundTag;
@@ -39,8 +40,10 @@ public final class ChunkEntitySlices {
 
     private final EntityCollectionBySection allEntities;
     private final EntityCollectionBySection hardCollidingEntities;
-    private final Reference2ObjectOpenHashMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
-    private final Reference2ObjectOpenHashMap<EntityType<?>, EntityCollectionBySection> entitiesByType;
+    // Leaf start - Async target finding
+    private final Reference2ObjectMap<Class<? extends Entity>, EntityCollectionBySection> entitiesByClass;
+    private final Reference2ObjectMap<EntityType<?>, EntityCollectionBySection> entitiesByType;
+    // Leaf end - Async target finding
     private final EntityList entities = new EntityList();
 
     public FullChunkStatus status;
@@ -66,8 +69,15 @@ public final class ChunkEntitySlices {
 
         this.allEntities = new EntityCollectionBySection(this);
         this.hardCollidingEntities = new EntityCollectionBySection(this);
-        this.entitiesByClass = new Reference2ObjectOpenHashMap<>();
-        this.entitiesByType = new Reference2ObjectOpenHashMap<>();
+        // Leaf start - Async target finding
+        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
+            this.entitiesByClass = it.unimi.dsi.fastutil.objects.Reference2ObjectMaps.synchronize(new Reference2ObjectOpenHashMap<>());
+            this.entitiesByType = it.unimi.dsi.fastutil.objects.Reference2ObjectMaps.synchronize(new Reference2ObjectOpenHashMap<>());
+        } else {
+            this.entitiesByClass = new Reference2ObjectOpenHashMap<>();
+            this.entitiesByType = new Reference2ObjectOpenHashMap<>();
+        }
+        // Leaf end - Async target finding
 
         this.status = status;
         this.chunkData = chunkData;
@@ -247,14 +257,26 @@ public final class ChunkEntitySlices {
             this.hardCollidingEntities.addEntity(entity, sectionIndex);
         }
 
-        for (final Iterator<Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection>> iterator =
-             this.entitiesByClass.reference2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
-            final Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection> entry = iterator.next();
+        // Leaf start - Async target finding
+        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
+            synchronized (this.entitiesByClass) {
+                for (final var entry : this.entitiesByClass.reference2ObjectEntrySet()) {
+                    if (entry.getKey().isInstance(entity)) {
+                        entry.getValue().addEntity(entity, sectionIndex);
+                    }
+                }
+            }
+        } else {
+            for (final Iterator<Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection>> iterator =
+                 this.entitiesByClass.reference2ObjectEntrySet().iterator(); iterator.hasNext(); ) {
+                final Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection> entry = iterator.next();
 
-            if (entry.getKey().isInstance(entity)) {
-                entry.getValue().addEntity(entity, sectionIndex);
+                if (entry.getKey().isInstance(entity)) {
+                    entry.getValue().addEntity(entity, sectionIndex);
+                }
             }
         }
+        // Leaf end - Async target finding
 
         EntityCollectionBySection byType = this.entitiesByType.get(entity.getType());
         if (byType != null) {
@@ -281,14 +303,26 @@ public final class ChunkEntitySlices {
             this.hardCollidingEntities.removeEntity(entity, sectionIndex);
         }
 
-        for (final Iterator<Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection>> iterator =
-             this.entitiesByClass.reference2ObjectEntrySet().fastIterator(); iterator.hasNext();) {
-            final Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection> entry = iterator.next();
+        // Leaf start - Async target finding
+        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
+            synchronized (this.entitiesByClass) {
+                for (final var entry : this.entitiesByClass.reference2ObjectEntrySet()) {
+                    if (entry.getKey().isInstance(entity)) {
+                        entry.getValue().removeEntity(entity, sectionIndex);
+                    }
+                }
+            }
+        } else {
+            for (final Iterator<Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection>> iterator =
+                 this.entitiesByClass.reference2ObjectEntrySet().iterator(); iterator.hasNext();) {
+                final Reference2ObjectMap.Entry<Class<? extends Entity>, EntityCollectionBySection> entry = iterator.next();
 
-            if (entry.getKey().isInstance(entity)) {
-                entry.getValue().removeEntity(entity, sectionIndex);
+                if (entry.getKey().isInstance(entity)) {
+                    entry.getValue().removeEntity(entity, sectionIndex);
+                }
             }
         }
+        // Leaf end - Async target finding
 
         final EntityCollectionBySection byType = this.entitiesByType.get(entity.getType());
         byType.removeEntity(entity, sectionIndex);

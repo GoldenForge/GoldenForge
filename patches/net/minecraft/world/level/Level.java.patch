@@ -875,7 +875,7 @@
              return levelchunk.getBlockState(p_46732_);
          }
      }
-@@ -489,41 +_,93 @@
+@@ -489,41 +_,95 @@
          (this.tickingBlockEntities ? this.pendingBlockEntityTickers : this.blockEntityTickers).add(p_151526_);
      }
  
@@ -932,6 +932,7 @@
 +                    ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)(Level)(Object)this).moonrise$midTickTasks();
 +                }
 +                // Paper end - rewrite chunk system
++                ((ServerLevel) this).leafMidTickTasks(); // Leaf - Async target finding
              }
          }
 +        ((net.sparklypower.sparklypaper.BlockEntityTickersList) this.blockEntityTickers).removeMarkedEntries(); // SparklyPaper - optimize block entity removals
@@ -959,6 +960,7 @@
 +        } finally {
 +            net.neoforged.neoforge.server.timings.TimeTracker.ENTITY_UPDATE.trackEnd(p_46655_);
 +        }
++        this.moonrise$midTickTasks(); // Paper - rewrite chunk system
 +    }
 +
 +    // Paper start - Option to prevent armor stands from doing entity lookups

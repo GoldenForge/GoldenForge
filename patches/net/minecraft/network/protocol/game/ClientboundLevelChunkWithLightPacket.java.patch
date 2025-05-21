@@ -1,25 +1,18 @@
 --- a/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
 +++ b/net/minecraft/network/protocol/game/ClientboundLevelChunkWithLightPacket.java
-@@ -27,6 +_,23 @@
+@@ -27,6 +_,16 @@
          this.lightData = new ClientboundLightUpdatePacketData(chunkpos, p_285254_, p_285350_, p_285304_);
      }
  
-+    // Leaf start - Async chunk sending
-+    public ClientboundLevelChunkWithLightPacket(LevelChunk chunk,
-+                                                LevelLightEngine lightEngine,
-+                                                @Nullable BitSet skyLight,
-+                                                @Nullable BitSet blockLight,
-+                                                net.minecraft.nbt.CompoundTag heightmaps,
-+                                                net.minecraft.world.level.block.entity.BlockEntity[] blockEntities
-+    ) {
-+        // Paper end - Anti-Xray
++    // Leaf start - Async chunk send
++    public ClientboundLevelChunkWithLightPacket(LevelChunk chunk, LevelLightEngine lightEngine, @Nullable BitSet skyLight, @Nullable BitSet blockLight, net.minecraft.world.level.block.entity.BlockEntity[] blockEntities, net.minecraft.nbt.CompoundTag heightmaps) {
 +        ChunkPos pos = chunk.getPos();
 +        this.x = pos.x;
 +        this.z = pos.z;
-+        this.chunkData = new ClientboundLevelChunkPacketData(chunk, heightmaps, blockEntities); // Paper - Anti-Xray
++        this.chunkData = new ClientboundLevelChunkPacketData(chunk, blockEntities, heightmaps); // Paper - Anti-Xray
 +        this.lightData = new ClientboundLightUpdatePacketData(pos, lightEngine, skyLight, blockLight);
 +    }
-+    // Leaf end - Async chunk sending
++    // Leaf end - Async chunk send
 +
      private ClientboundLevelChunkWithLightPacket(RegistryFriendlyByteBuf p_319989_) {
          this.x = p_319989_.readInt();

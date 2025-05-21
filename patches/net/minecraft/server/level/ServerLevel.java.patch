@@ -42,7 +42,7 @@
      private final PersistentEntitySectionManager<Entity> entityManager;
      private final GameEventDispatcher gameEventDispatcher;
      public boolean noSave;
-@@ -199,11 +_,350 @@
+@@ -199,11 +_,356 @@
      private final List<CustomSpawner> customSpawners;
      @Nullable
      private EndDragonFight dragonFight;
@@ -55,7 +55,7 @@
 +    public List<Runnable> asyncAITasks = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>(); // Leaf
 +
 +    public final LevelStorageSource.LevelStorageAccess convertable;
-+
++    public final @Nullable org.dreeam.leaf.async.ai.AsyncGoalExecutor asyncGoalExecutor; // Leaf - Async target finding
 +    public LevelChunk getChunkIfLoaded(int x, int z) {
 +        return this.chunkSource.getChunkAtIfLoadedImmediately(x, z); // Paper - Use getChunkIfLoadedImmediately
 +    }
@@ -142,6 +142,12 @@
 +    public final void moonrise$midTickTasks() {
 +        ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
 +    }
++
++    // Leaf start - Async target finding
++    public final void leafMidTickTasks() {
++        if (this.asyncGoalExecutor != null) this.asyncGoalExecutor.midTick();
++    }
++    // Leaf end - Async target finding
 +
 +    @Override
 +    public final ChunkAccess moonrise$syncLoadNonFull(final int chunkX, final int chunkZ, final net.minecraft.world.level.chunk.status.ChunkStatus status) {
@@ -430,7 +436,7 @@
              () -> p_214999_.overworld().getDataStorage()
          );
          this.chunkSource.getGeneratorState().ensureStructuresGenerated();
-@@ -298,7 +_,34 @@
+@@ -298,7 +_,41 @@
          this.randomSequences = Objects.requireNonNullElseGet(
              p_288977_, () -> this.getDataStorage().computeIfAbsent(RandomSequences.factory(i), "random_sequences")
          );
@@ -450,6 +456,13 @@
 +        this.poiDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.PoiDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
 +        this.chunkDataController = new ca.spottedleaf.moonrise.patches.chunk_system.io.datacontroller.ChunkDataController((ServerLevel)(Object)this, this.chunkTaskScheduler);
 +        // Paper end - rewrite chunk system
++        // Leaf start - Async target finding
++        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
++            this.asyncGoalExecutor = new org.dreeam.leaf.async.ai.AsyncGoalExecutor(server.asyncGoalThread, this);
++        } else {
++            this.asyncGoalExecutor = null;
++        }
++        // Leaf end - Async target finding
 +
 +        net.neoforged.neoforge.attachment.LevelAttachmentsSavedData.init(this);
 +        // Neo: Move the initialization of customSpawners to the end of costructor
@@ -513,7 +526,7 @@
                              Entity entity = p_308566_.getVehicle();
                              if (entity != null) {
                                  if (!entity.isRemoved() && entity.hasPassenger(p_308566_)) {
-@@ -412,7 +_,9 @@
+@@ -412,24 +_,32 @@
                              }
  
                              profilerfiller.push("tick");
@@ -522,20 +535,15 @@
 +                                this.guardEntityTick(this::tickNonPassenger, p_308566_);
 +                            }
                              profilerfiller.pop();
++                            // Gale end - Airplane - remove lambda from ticking guard - copied from guardEntityTick
++                            this.leafMidTickTasks(); // Leaf - Async target finding
                          }
                      }
-@@ -420,16 +_,27 @@
+                 }
              });
              profilerfiller.pop();
              this.tickBlockEntities();
-+            // Leaf start - Async target finding
-+            if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
-+                final var tasks = this.asyncAITasks;
-+                this.asyncAITasks = new it.unimi.dsi.fastutil.objects.ObjectArrayList<>();
-+                org.dreeam.leaf.async.ai.AsyncGoalExecutor.EXECUTOR.execute(
-+                        () -> org.dreeam.leaf.async.ai.AsyncGoalExecutor.runTasks(tasks));
-+            }
-+            // Leaf end - Async target finding
++            if (this.asyncGoalExecutor != null) this.asyncGoalExecutor.tick(); // Leaf - Async target finding
          }
  
          profilerfiller.push("entityManagement");
@@ -695,7 +703,7 @@
          }
      }
  
-@@ -743,6 +_,12 @@
+@@ -743,6 +_,13 @@
          if (fluidstate.is(p_184078_)) {
              fluidstate.tick(this, p_184077_);
          }
@@ -705,10 +713,11 @@
 +            ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
 +        }
 +        // Paper end - rewrite chunk system
++        this.leafMidTickTasks(); // Leaf - Async target finding
      }
  
      private void tickBlock(BlockPos p_184113_, Block p_184114_) {
-@@ -750,15 +_,44 @@
+@@ -750,15 +_,45 @@
          if (blockstate.is(p_184114_)) {
              blockstate.tick(this, p_184113_, this.random);
          }
@@ -719,6 +728,7 @@
 +            ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
 +        }
 +        // Paper end - rewrite chunk system
++        this.leafMidTickTasks(); // Leaf - Async target finding
 +    }
 +
 +    // Paper start - log detailed entity tick information

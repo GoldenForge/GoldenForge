@@ -10,26 +10,34 @@
  import net.minecraft.world.entity.Entity;
  import net.minecraft.world.entity.EntitySelector;
  import net.minecraft.world.entity.LivingEntity;
-@@ -47,37 +_,123 @@
+@@ -45,39 +_,82 @@
+         }
+     }
  
++
      @Override
      public boolean canUse() {
 +        // Leaf start - Async look finding
 +        if (poll()) {
 +            return true;
 +        }
-+
          if (this.mob.getRandom().nextFloat() >= this.probability) {
              return false;
--        } else {
++        }
++        if (this.mob.getTarget() != null) {
++            this.lookAt = this.mob.getTarget();
++        }
++        if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++            getLookAsync();
++            return false;
++        }
++        ServerLevel serverLevel = getServerLevel(this.mob);
++        if (this.lookAtType == Player.class) {
++            this.lookAt = serverLevel.getNearestPlayer(this.lookAtContext, this.mob, this.mob.getX(), this.mob.getEyeY(), this.mob.getZ());
+         } else {
 -            if (this.mob.getTarget() != null) {
 -                this.lookAt = this.mob.getTarget();
-+        }
-+        if (this.lookAtType == Player.class) {
-+            if (GlobalConfiguration.get().asyncTargetFinding.searchPlayer) {
-+                getLookAsync();
-+                return false;
-             }
+-            }
 -
 -            if (this.lookAtType == Player.class) {
 -                this.lookAt = this.mob.level().getNearestPlayer(this.lookAtContext, this.mob, this.mob.getX(), this.mob.getEyeY(), this.mob.getZ());
@@ -38,19 +46,6 @@
 -                    .level()
 -                    .getNearestEntity(
 -                        this.mob
-+        } else if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
-+            getLookAsync();
-+            return false;
-+        }
-+
-+        if (this.mob.getTarget() != null) {
-+            this.lookAt = this.mob.getTarget();
-+        }
-+
-+        ServerLevel serverLevel = getServerLevel(this.mob);
-+        if (this.lookAtType == Player.class) {
-+            this.lookAt = serverLevel.getNearestPlayer(this.lookAtContext, this.mob, this.mob.getX(), this.mob.getEyeY(), this.mob.getZ());
-+        } else {
 +            this.lookAt = serverLevel.getNearestEntity(
 +                    this.mob
                              .level()
@@ -64,6 +59,7 @@
 -                        this.mob.getX(),
 -                        this.mob.getEyeY(),
 -                        this.mob.getZ()
+-                    );
 +                            .getEntitiesOfClass(this.lookAtType, this.mob.getBoundingBox().inflate(this.lookDistance, 3.0, this.lookDistance), livingEntity -> true),
 +                    this.lookAtContext,
 +                    this.mob,
@@ -74,85 +70,49 @@
 +        }
 +
 +        return this.lookAt != null;
-+        // Leaf end - Async look finding
 +    }
 +
-+    // Leaf start - Async look finding
-+    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
-+    private final java.util.concurrent.atomic.AtomicReference<LivingEntity> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
-+    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
 +    protected boolean poll() {
-+        LivingEntity t = pendingTarget.getAndSet(null);
-+        if (t == null) {
-+            return false;
-+        }
++        if (!(this.mob.getGoalCtx().result() instanceof LivingEntity target)) return false;
 +        if (this.mob.getTarget() != null) {
 +            this.lookAt = this.mob.getTarget();
 +            return true;
 +        }
 +        ServerLevel serverLevel = getServerLevel(this.mob);
-+        if (!t.isAlive() || !this.lookAtContext.test(this.mob, t)) {
-+            return false;
-+        }
-+        this.lookAt = t;
++        if (!target.isAlive() || !this.lookAtContext.test(this.mob, target)) return false;
++        this.lookAt = target;
 +        return true;
 +    }
 +
 +    protected void getLookAsync() {
-+        if (!isSearching.compareAndSet(false, true)) {
-+            return;
-+        }
-+
 +        final var mob = this.mob;
-+
-+        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
-+            isSearching.setRelease(false);
-+            return;
-+        }
-+
++        final var ctx = mob.getGoalCtx();
++        if (!ctx.state) return;
 +        final double x = mob.getX();
 +        final double y = mob.getEyeY();
 +        final double z = mob.getZ();
 +        final var serverLevel = getServerLevel(mob);
 +        final var bound = mob.getBoundingBox().inflate(this.lookDistance, 3.0, this.lookDistance);
-+        final var target = mob.getTarget();
 +        final var lookAtContext = this.lookAtContext;
 +        final var lookAtType = this.lookAtType;
-+        final var pendingTarget = this.pendingTarget;
-+        serverLevel.asyncAITasks.add(() -> {
-+            try {
-+                if (mob == null || !mob.isAlive() || mob.level() != serverLevel) {
-+                    return;
-+                }
-+                if (target != null) {
-+                    pendingTarget.setRelease(target);
-+                    return;
-+                }
-+
-+                if (lookAtType == Player.class) {
-+                    var result = serverLevel.getNearestPlayer(lookAtContext, mob, x, y, z);
-+                    pendingTarget.setRelease(result);
-+                } else {
-+                    var result = serverLevel.getNearestEntity(
-+                            serverLevel
-+                                    .getEntitiesOfClass(lookAtType, bound, livingEntity -> true),
-+                            lookAtContext,
-+                            mob,
-+                            x,
-+                            y,
-+                            z
-                     );
-+                    pendingTarget.setRelease(result);
-+                }
-+            } catch (Exception e) {
-+                LOGGER.error("Exception getting entities", e);
-+            } finally {
-+                isSearching.setRelease(false);
++        ctx.wake = () -> {
++            if (lookAtType == Player.class) {
++                return serverLevel.getNearestPlayer(lookAtContext, mob, x, y, z);
++            } else {
++                return serverLevel.getNearestEntity(
++                        serverLevel
++                                .getEntitiesOfClass(lookAtType, bound, livingEntity -> true),
++                        lookAtContext,
++                        mob,
++                        x,
++                        y,
++                        z
++                );
              }
 -
 -            return this.lookAt != null;
 -        }
-+        });
++        };
      }
 +    // Leaf end - Async look finding
  

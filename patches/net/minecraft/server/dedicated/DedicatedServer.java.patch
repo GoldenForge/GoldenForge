@@ -35,7 +35,7 @@
                  BufferedReader bufferedreader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
  
                  String s1;
-@@ -178,6 +_,13 @@
+@@ -178,6 +_,19 @@
              return false;
          } else {
              this.setPlayerList(new DedicatedPlayerList(this, this.registries(), this.playerDataStorage));
@@ -45,6 +45,12 @@
 +            this.paperConfigurations.initializeWorldDefaultsConfiguration(this.registryAccess());
 +            // Paper end - initialize global and world-defaults configuration
 +            org.spigotmc.WatchdogThread.doStart(GlobalConfiguration.get().watchdog.timeoutTime); // Paper - start watchdog thread
++
++            // Leaf start - Async target finding
++            if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
++                asyncGoalThread = new org.dreeam.leaf.async.ai.AsyncGoalThread(this);
++            }
++            // Leaf end - Async target finding
 +
              this.debugSampleSubscriptionTracker = new DebugSampleSubscriptionTracker(this.getPlayerList());
              this.tickTimeLogger = new RemoteSampleLogger(
@@ -72,7 +78,7 @@
                  Thread thread1 = new Thread(new ServerWatchdog(this));
                  thread1.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandlerWithName(LOGGER));
                  thread1.setName("Server Watchdog");
-@@ -217,6 +_,12 @@
+@@ -217,6 +_,13 @@
                  LOGGER.info("JMX monitoring enabled");
              }
  
@@ -81,11 +87,12 @@
 +                this.dediLanPinger.start();
 +            }
 +
++            if (GlobalConfiguration.get().pufferfishConfig.enableAsyncMobSpawning) mobSpawnExecutor.start(); // Pufferfish
 +            net.neoforged.neoforge.server.ServerLifecycleHooks.handleServerStarting(this);
              return true;
          }
      }
-@@ -295,6 +_,10 @@
+@@ -295,6 +_,13 @@
          if (this.queryThreadGs4 != null) {
              this.queryThreadGs4.stop();
          }
@@ -93,6 +100,9 @@
 +            this.dediLanPinger.interrupt();
 +            this.dediLanPinger = null;
 +        }
++
++        this.hasFullyShutdown = true; // Paper - Improved watchdog support
++        System.exit(this.abnormalExit ? 70 : 0); // CraftBukkit // Paper - Improved watchdog support
      }
  
      @Override

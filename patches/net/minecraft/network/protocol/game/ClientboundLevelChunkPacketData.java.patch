@@ -1,27 +1,23 @@
 --- a/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
 +++ b/net/minecraft/network/protocol/game/ClientboundLevelChunkPacketData.java
-@@ -46,6 +_,43 @@
+@@ -46,6 +_,39 @@
          }
      }
  
-+    // Leaf start - Async chunk sending
-+    public ClientboundLevelChunkPacketData(
-+            LevelChunk levelChunk,
-+            CompoundTag heightmaps,
-+            BlockEntity[] blockEntities
-+    ) {
++    // Leaf start - Async chunk send
++    public ClientboundLevelChunkPacketData(LevelChunk levelChunk, BlockEntity[] blockEntities, CompoundTag heightmaps) {
 +        this.heightmaps = heightmaps;
-+        var buffer = new FriendlyByteBuf(Unpooled.buffer(calculateChunkSize(levelChunk) + 128));
-+        var sections = levelChunk.getSections();
-+        var sectionLength = sections.length;
-+        for (LevelChunkSection section : sections) {
-+            synchronized (section.getStates()) {
-+                buffer.writeShort(section.nonEmptyBlockCount());
-+                section.getStates().write(buffer);
-+            }
-+            section.getBiomes().write(buffer);
++
++        if (Thread.currentThread() instanceof org.dreeam.leaf.async.chunk.AsyncChunkSendThread) {
++            var buffer = new io.netty.buffer.UnpooledByteBufAllocator(false).buffer(calculateChunkSize(levelChunk));
++            extractChunkData(new FriendlyByteBuf(buffer), levelChunk);
++            var array = it.unimi.dsi.fastutil.bytes.ByteArrays.trim(buffer.array(), buffer.writerIndex());
++
++            this.buffer = array;
++        } else {
++            this.buffer = new byte[calculateChunkSize(levelChunk)];
++            extractChunkData(new FriendlyByteBuf(this.getWriteBuffer()), levelChunk);
 +        }
-+        this.buffer = buffer.array();
 +
 +        this.blockEntitiesData = Lists.newArrayList();
 +        int totalTileEntities = 0; // Paper - Handle oversized block entities in chunks
@@ -39,7 +35,7 @@
 +            this.blockEntitiesData.add(ClientboundLevelChunkPacketData.BlockEntityInfo.create(blockEntity));
 +        }
 +    }
-+    // Leaf end - Async chunk sending
++    // Leaf end - Async chunk send
 +
      public ClientboundLevelChunkPacketData(RegistryFriendlyByteBuf p_320343_, int p_195654_, int p_195655_) {
          this.heightmaps = p_320343_.readNbt();

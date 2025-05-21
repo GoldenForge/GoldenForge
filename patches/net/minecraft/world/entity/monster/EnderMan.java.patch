@@ -1,5 +1,14 @@
 --- a/net/minecraft/world/entity/monster/EnderMan.java
 +++ b/net/minecraft/world/entity/monster/EnderMan.java
+@@ -5,6 +_,8 @@
+ import java.util.UUID;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.component.DataComponents;
 @@ -118,7 +_,6 @@
  
      @Override
@@ -88,6 +97,41 @@
                  && p_32563_.isCollisionShapeFullBlock(p_32559_, p_32564_)
                  && p_32561_.canSurvive(p_32559_, p_32560_)
                  && p_32559_.getEntities(this.enderman, AABB.unitCubeFromLowerCorner(Vec3.atLowerCornerOf(p_32560_))).isEmpty();
+@@ -517,10 +_,34 @@
+ 
+         @Override
+         public boolean canUse() {
++            // Leaf start - Async Target Finding
++            if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++                if (poll()) {
++                    return true;
++                }
++                final EnderMan enderman = this.enderman;
++                final var ctx = enderman.getGoalCtx();
++                if (!ctx.state) return false;
++                final var level = getServerLevel(this.enderman);
++                final var cond = this.startAggroTargetConditions.range(this.getFollowDistance()).copy();
++                ctx.wake = () -> level.getNearestPlayer(cond, enderman);
++                return false;
++            }
++            // Leaf end - Async Target Finding
+             this.pendingTarget = this.enderman.level().getNearestPlayer(this.startAggroTargetConditions, this.enderman);
+             return this.pendingTarget != null;
+         }
+ 
++        // Leaf start - Async Target Finding
++        protected boolean poll() {
++            if (!(this.mob.getGoalCtx().result() instanceof Player player)) return false;
++            var serverLevel = getServerLevel(this.enderman);
++            if (!this.startAggroTargetConditions.range(this.getFollowDistance()).test(enderman, player)) return false;
++            this.pendingTarget = player;
++            return true;
++        }
++        // Leaf end - Async Target Finding
++
+         @Override
+         public void start() {
+             this.aggroTime = this.adjustedTickDelay(5);
 @@ -602,7 +_,7 @@
              if (this.enderman.getCarriedBlock() != null) {
                  return false;

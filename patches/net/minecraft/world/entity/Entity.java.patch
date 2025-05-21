@@ -50,14 +50,6 @@
      public boolean horizontalCollision;
      public boolean verticalCollision;
      public boolean verticalCollisionBelow;
-@@ -178,6 +_,7 @@
-     protected Vec3 stuckSpeedMultiplier = Vec3.ZERO;
-     @Nullable
-     private Entity.RemovalReason removalReason;
-+    private final java.util.concurrent.atomic.AtomicBoolean isRemoved = new java.util.concurrent.atomic.AtomicBoolean(false); // Leaf - atomic removal check
-     public static final float DEFAULT_BB_WIDTH = 0.6F;
-     public static final float DEFAULT_BB_HEIGHT = 1.8F;
-     public float walkDistO;
 @@ -190,13 +_,43 @@
      public double yOld;
      public double zOld;
@@ -1185,22 +1177,7 @@
              int i = Mth.floor(p_20344_);
              int j = Mth.floor(p_20345_);
              int k = Mth.floor(p_20346_);
-@@ -3402,7 +_,13 @@
-     }
- 
-     public final boolean isRemoved() {
--        return this.removalReason != null;
-+        // Leaf start - atomic removal check
-+        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
-+            return this.isRemoved.getAcquire();
-+        } else {
-+            return this.removalReason != null;
-+        }
-+        // Leaf end - atomic removal check
-     }
- 
-     @Nullable
-@@ -3412,20 +_,36 @@
+@@ -3412,6 +_,12 @@
  
      @Override
      public final void setRemoved(Entity.RemovalReason p_146876_) {
@@ -1212,14 +1189,8 @@
 +        // Paper end - rewrite chunk system
          if (this.removalReason == null) {
              this.removalReason = p_146876_;
-+            // Leaf start - atomic removal check
-+            if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
-+                this.isRemoved.setRelease(true);
-+            }
-+            // Leaf end - atomic removal check
          }
- 
-         if (this.removalReason.shouldDestroy()) {
+@@ -3420,7 +_,7 @@
              this.stopRiding();
          }
  
@@ -1228,16 +1199,6 @@
          this.levelCallback.onRemove(p_146876_);
      }
  
-     protected void unsetRemoved() {
-         this.removalReason = null;
-+        // Leaf start - atomic removal check
-+        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
-+            this.isRemoved.setRelease(false);
-+        }
-+        // Leaf end - atomic removal check
-     }
- 
-     @Override
 @@ -3435,11 +_,9 @@
  
      @Override

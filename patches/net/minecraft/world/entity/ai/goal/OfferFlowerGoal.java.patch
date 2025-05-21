@@ -32,66 +32,37 @@
          } else {
              this.villager = this.golem
                  .level()
-@@ -38,6 +_,64 @@
+@@ -38,6 +_,35 @@
              return this.villager != null;
          }
      }
 +
 +    // Leaf start - Async look finding
-+    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
-+    private final java.util.concurrent.atomic.AtomicReference<Villager> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
-+    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
 +    protected boolean poll() {
-+        Villager t = pendingTarget.getAndSet(null);
-+        if (t == null) {
-+            return false;
-+        }
++        if (!(this.golem.getGoalCtx().result() instanceof Villager target)) return false;
 +        var serverLevel = getServerLevel(this.golem);
-+        if (!t.isAlive() || !OFFER_TARGER_CONTEXT.test(this.golem, t)) {
-+            return false;
-+        }
-+        this.villager = t;
++        if (!target.isAlive() || !OFFER_TARGER_CONTEXT.test(this.golem, target)) return false;
++        this.villager = target;
 +        return true;
 +    }
 +
 +    protected void getVillagerAsync() {
-+        if (!isSearching.compareAndSet(false, true)) {
-+            return;
-+        }
-+
 +        final var golem = this.golem;
-+
-+        if (golem == null || golem.isRemoved() || !golem.isAlive()) {
-+            isSearching.setRelease(false);
-+            return;
-+        }
-+
++        final var ctx = golem.getGoalCtx();
++        if (!ctx.state) return;
 +        final double x = golem.getX();
 +        final double y = golem.getEyeY();
 +        final double z = golem.getZ();
 +        final var serverLevel = getServerLevel(golem);
 +        final var bound = golem.getBoundingBox().inflate(6.0, 2.0, 6.0);
-+        final var pendingTarget = this.pendingTarget;
-+        serverLevel.asyncAITasks.add(() -> {
-+            try {
-+                if (golem == null || !golem.isAlive() || golem.level() != serverLevel) {
-+                    return;
-+                }
-+                var result = serverLevel.getNearestEntity(
-+                        serverLevel.getEntitiesOfClass(Villager.class, bound, livingEntity -> true),
-+                        OFFER_TARGER_CONTEXT,
-+                        golem,
-+                        x,
-+                        y,
-+                        z
-+                );
-+                pendingTarget.setRelease(result);
-+            } catch (Exception e) {
-+                LOGGER.error("Exception getting entities", e);
-+            } finally {
-+                isSearching.setRelease(false);
-+            }
-+        });
++        ctx.wake = () -> serverLevel.getNearestEntity(
++                serverLevel.getEntitiesOfClass(Villager.class, bound, livingEntity -> true),
++                OFFER_TARGER_CONTEXT,
++                golem,
++                x,
++                y,
++                z
++        );
 +    }
 +    // Leaf end - Async look finding
  

@@ -9,59 +9,35 @@
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.Direction;
  import net.minecraft.util.Mth;
-@@ -23,8 +_,72 @@
+@@ -23,8 +_,48 @@
          this.mob = p_25238_;
      }
  
 +    // Leaf start - Async Target Finding
-+    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
-+    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
-+    private final java.util.concurrent.atomic.AtomicReference<Player> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
-+
 +    private boolean poll() {
-+        Player t = pendingTarget.getAndSet(null);
-+        if (t == null) {
-+            return false;
-+        }
++        if (!(this.mob.getGoalCtx().result() instanceof Player target)) return false;
 +        var serverLevel = getServerLevel(this.mob);
-+        return serverLevel != null && t.isAlive() && !t.isSpectator() && (Mth.abs(t.xxa) > 0.0F || Mth.abs(t.zza) > 0.0F);
++        return serverLevel != null && target.isAlive() && !target.isSpectator() && (Mth.abs(target.xxa) > 0.0F || Mth.abs(target.zza) > 0.0F);
 +    }
 +
 +    private void findTargetAsync() {
-+        if (!isSearching.compareAndSet(false, true)) {
-+            return;
-+        }
-+
 +        final PathfinderMob mob = this.mob;
-+        if (mob == null || mob.isRemoved() || !mob.isAlive()) {
-+            isSearching.setRelease(false);
-+            return;
-+        }
-+
++        final var ctx = mob.getGoalCtx();
++        if (!ctx.state) return;
 +        final var bound = mob.getBoundingBox().inflate(5.0);
 +        final var serverLevel = getServerLevel(mob);
-+        final var pendingTarget = this.pendingTarget;
-+        serverLevel.asyncAITasks.add(() -> {
-+            try {
-+                if (mob.level() != serverLevel || mob.isRemoved() || !mob.isAlive()) {
-+                    return;
-+                }
++        ctx.wake = () -> {
++            List<Boat> entitiesOfClass = serverLevel.getEntitiesOfClass(Boat.class, bound);
++            for (Boat abstractBoat : entitiesOfClass) {
++                Entity controllingPassenger = abstractBoat.getControllingPassenger();
++                if (controllingPassenger instanceof Player player
++                        && (Mth.abs(player.xxa) > 0.0F || Mth.abs(player.zza) > 0.0F)) {
++                    return player;
 +
-+                List<Boat> entitiesOfClass = serverLevel.getEntitiesOfClass(Boat.class, bound);
-+                for (Boat abstractBoat : entitiesOfClass) {
-+                    Entity controllingPassenger = abstractBoat.getControllingPassenger();
-+                    if (controllingPassenger instanceof Player player
-+                            && (Mth.abs(player.xxa) > 0.0F || Mth.abs(player.zza) > 0.0F)) {
-+                        pendingTarget.setRelease(player);
-+                        break;
-+                    }
 +                }
-+            } catch (Exception e) {
-+                LOGGER.error("Exception getting entities", e);
-+            } finally {
-+                isSearching.setRelease(false);
 +            }
-+        });
++            return null;
++        };
 +    }
 +    // Leaf end - Async Target Finding
 +

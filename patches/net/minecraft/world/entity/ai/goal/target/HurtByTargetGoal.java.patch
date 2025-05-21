@@ -9,64 +9,87 @@
  import net.minecraft.world.entity.EntitySelector;
  import net.minecraft.world.entity.EntityType;
  import net.minecraft.world.entity.LivingEntity;
-@@ -73,6 +_,60 @@
+@@ -73,6 +_,46 @@
      protected void alertOthers() {
          double d0 = this.getFollowDistance();
          AABB aabb = AABB.unitCubeFromLowerCorner(this.mob.position()).inflate(d0, 10.0, d0);
 +
-+        // Leaf start - async alert other
++        // Leaf start - Async alert other
 +        if (GlobalConfiguration.get().asyncTargetFinding.alertOther) {
 +            final var self = this.mob;
++            final var ctx = self.getGoalCtx();
++            if (!ctx.state) return;
 +            final var serverLevel = getServerLevel(self);
-+            final var alertTarget = this.mob.getLastHurtByMob();
 +            final var toIgnoreAlert = this.toIgnoreAlert;
-+            serverLevel.asyncAITasks.add(() -> {
-+                try {
-+                    if (alertTarget == null || self == null || self.level() != serverLevel) {
-+                        return;
++            ctx.wake = () -> {
++                var toAlert = new java.util.ArrayList<Mob>();
++                List<? extends Mob> entitiesOfClass = serverLevel
++                        .getEntitiesOfClass(self.getClass(), aabb, EntitySelector.NO_SPECTATORS);
++                for (Mob mob : entitiesOfClass) {
++                    if (self == mob
++                            || mob.getTarget() != null
++                            || (self instanceof TamableAnimal && ((TamableAnimal) self).getOwner() != ((TamableAnimal) mob).getOwner())
++                            || mob.isAlliedTo(self.getLastHurtByMob())) {
++                        continue;
 +                    }
-+                    var toAlert = new java.util.ArrayList<Mob>();
-+                    List<? extends Mob> entitiesOfClass = serverLevel
-+                            .getEntitiesOfClass(self.getClass(), aabb, EntitySelector.NO_SPECTATORS);
-+                    for (Mob mob : entitiesOfClass) {
-+                        if (self != mob
-+                                && mob.getTarget() == null
-+                                && (!(self instanceof TamableAnimal) || ((TamableAnimal) self).getOwner() == ((TamableAnimal) mob).getOwner())
-+                                && !mob.isAlliedTo(self.getLastHurtByMob())) {
-+                            if (toIgnoreAlert == null) {
-+                                continue;
-+                            }
-+
-+                            boolean flag = false;
-+
-+                            for (Class<?> clazz : toIgnoreAlert) {
-+                                if (mob.getClass() == clazz) {
-+                                    flag = true;
-+                                    break;
-+                                }
-+                            }
-+
-+                            if (!flag) {
-+                                continue;
-+                            }
-+
-+                            toAlert.add(mob);
++                    if (toIgnoreAlert == null) {
++                        toAlert.add(mob);
++                        continue;
++                    }
++                    boolean flag = false;
++                    for (Class<?> clazz : toIgnoreAlert) {
++                        if (mob.getClass() == clazz) {
++                            flag = true;
++                            break;
 +                        }
 +                    }
-+                    serverLevel.getServer().execute(() -> {
-+                        for (var livingEntity : toAlert) {
-+                            alertOther(livingEntity, alertTarget);
-+                        }
-+                    });
-+                } catch (Exception e) {
-+                    org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER.error("Exception alertOthers", e);
++                    if (!flag) {
++                        toAlert.add(mob);
++                    }
 +                }
-+            });
++                return toAlert;
++            };
 +            return;
 +        }
-+        // Leaf end - async alert other
-+
++        // Leaf end - Async alert other
 +
          List<? extends Mob> list = this.mob.level().getEntitiesOfClass((Class<? extends Mob>)this.mob.getClass(), aabb, EntitySelector.NO_SPECTATORS);
          Iterator iterator = list.iterator();
  
+@@ -110,6 +_,36 @@
+             this.alertOther(mob, this.mob.getLastHurtByMob());
+         }
+     }
++
++    // Leaf start - Async alert other
++    public void poll() {
++        if (!(this.mob.getGoalCtx().result() instanceof List toAlert)) return;
++        LivingEntity lastHurtByMob = this.mob.getLastHurtByMob();
++        if (lastHurtByMob.getType() == EntityType.PLAYER && getServerLevel(this.mob).getGameRules().getBoolean(GameRules.RULE_UNIVERSAL_ANGER)) {
++            return;
++        }
++        for (Class<?> clazz : this.toIgnoreDamage) {
++            if (clazz.isAssignableFrom(lastHurtByMob.getClass())) {
++                return;
++            }
++        }
++        if (this.mob.getTarget() == null) {
++            return;
++        }
++        if (!canContinueToUse()) {
++            return;
++        }
++        if (!this.canAttack(lastHurtByMob, HURT_BY_TARGETING)) {
++            return;
++        }
++        for (var obj : toAlert) {
++            Mob mob = (Mob) obj;
++            if (mob.getTarget() == null) {
++                alertOther(mob, lastHurtByMob);
++            }
++        }
++    }
++    // Leaf end - Async alert other
+ 
+     protected void alertOther(Mob p_26042_, LivingEntity p_26043_) {
+         p_26042_.setTarget(p_26043_);

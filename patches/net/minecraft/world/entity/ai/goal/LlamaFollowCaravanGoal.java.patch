@@ -9,57 +9,48 @@
  import net.minecraft.world.entity.Entity;
  import net.minecraft.world.entity.EntityType;
  import net.minecraft.world.entity.animal.horse.Llama;
-@@ -20,35 +_,127 @@
+@@ -20,35 +_,99 @@
          this.setFlags(EnumSet.of(Goal.Flag.MOVE));
      }
  
 +    // Leaf start - Async Target Finding
-+    private static final org.apache.logging.log4j.Logger LOGGER = org.dreeam.leaf.async.ai.AsyncGoalExecutor.LOGGER;
-+    private final java.util.concurrent.atomic.AtomicBoolean isSearching = new java.util.concurrent.atomic.AtomicBoolean(false);
-+    private final java.util.concurrent.atomic.AtomicReference<Llama> pendingTarget = new java.util.concurrent.atomic.AtomicReference<>(null);
 +    private @javax.annotation.Nullable Llama poll() {
-+        var t = pendingTarget.getAndSet(null);
-+        if (t == null) {
-+            return null;
-+        }
++        if (!(this.llama.getGoalCtx().result() instanceof Llama target)) return null;
 +        var serverLevel = getServerLevel(this.llama);
-+        if (serverLevel == null || !t.isAlive()) {
-+            return null;
-+        }
-+        return t;
++        if (serverLevel == null || !target.isAlive()) return null;
++        return target;
 +    }
 +
 +    private void findTargetAsync() {
-+        if (!isSearching.compareAndSet(false, true)) {
-+            return;
-+        }
-+
 +        final Llama llama = this.llama;
-+        if (llama == null || llama.isRemoved() || !llama.isAlive()) {
-+            isSearching.setRelease(false);
-+            return;
-+        }
-+
++        final var ctx = llama.getGoalCtx();
++        if (!ctx.state) return;
 +        final var bound = llama.getBoundingBox().inflate(9.0, 4.0, 9.0);
 +        final var serverLevel = getServerLevel(llama);
 +        final var pos = llama.position();
-+        final var pendingTarget = this.pendingTarget;
-+        serverLevel.asyncAITasks.add(() -> {
-+            try {
-+                if (llama.level() != serverLevel || llama.isRemoved() || !llama.isAlive()) {
-+                    return;
++        ctx.wake = () -> {
++            List<Entity> entities = serverLevel.getEntities(llama, bound, entity1 -> {
++                EntityType<?> type = entity1.getType();
++                return type == EntityType.LLAMA || type == EntityType.TRADER_LLAMA;
++            });
++            Llama target = null;
++            double d = Double.MAX_VALUE;
++
++            for (Entity entity : entities) {
++                Llama llama1 = (Llama) entity;
++                if (llama1.inCaravan() && !llama1.hasCaravanTail()) {
++                    double d1 = llama1.distanceToSqr(pos);
++                    if (!(d1 > d)) {
++                        d = d1;
++                        target = llama1;
++                    }
 +                }
++            }
 +
-+                List<Entity> entities = serverLevel.getEntities(llama, bound, entity1 -> {
-+                    EntityType<?> type = entity1.getType();
-+                    return type == EntityType.LLAMA || type == EntityType.TRADER_LLAMA;
-+                });
-+                Llama target = null;
-+                double d = Double.MAX_VALUE;
-+
-+                for (Entity entity : entities) {
-+                    Llama llama1 = (Llama)entity;
-+                    if (llama1.inCaravan() && !llama1.hasCaravanTail()) {
++            if (target == null) {
++                for (Entity entityx : entities) {
++                    Llama llama1 = (Llama) entityx;
++                    if (llama1.isLeashed() && !llama1.hasCaravanTail()) {
 +                        double d1 = llama1.distanceToSqr(pos);
 +                        if (!(d1 > d)) {
 +                            d = d1;
@@ -67,28 +58,9 @@
 +                        }
 +                    }
 +                }
-+
-+                if (target == null) {
-+                    for (Entity entityx : entities) {
-+                        Llama llama1 = (Llama)entityx;
-+                        if (llama1.isLeashed() && !llama1.hasCaravanTail()) {
-+                            double d1 = llama1.distanceToSqr(pos);
-+                            if (!(d1 > d)) {
-+                                d = d1;
-+                                target = llama1;
-+                            }
-+                        }
-+                    }
-+                }
-+                if (target != null) {
-+                    pendingTarget.setRelease(target);
-+                }
-+            } catch (Exception e) {
-+                LOGGER.error("Exception getting entities", e);
-+            } finally {
-+                isSearching.setRelease(false);
 +            }
-+        });
++            return target;
++        };
 +    }
 +    // Leaf end - Async Target Finding
 +

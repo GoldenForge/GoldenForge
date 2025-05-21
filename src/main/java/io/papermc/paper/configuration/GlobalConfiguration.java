@@ -355,34 +355,24 @@ public class GlobalConfiguration extends ConfigurationPart {
     public class AsyncTargetFinding extends ConfigurationPart {
         public boolean enabled = false;
         public boolean alertOther = true;
-        public boolean searchBlock = false;
+        public boolean searchBlock = true;
         public boolean searchEntity = true;
-        public boolean searchPlayer = false;
-        public boolean searchPlayerTempt = false;
+        public int queueSize = 4096;
+        public long threshold = 10L;
 
         @PostProcess
         public void onLoaded() {
+            if (queueSize <= 0) {
+                queueSize = 4096;
+            }
+            if (threshold == 0L) {
+                threshold = 10L;
+            }
             if (!enabled) {
                 alertOther = false;
                 searchEntity = false;
                 searchBlock = false;
-                searchPlayer = false;
-                searchPlayerTempt = false;
-                return;
             }
-            AsyncGoalExecutor.EXECUTOR = new ThreadPoolExecutor(
-                    1,
-                    1,
-                    0L,
-                    TimeUnit.MILLISECONDS,
-                    new ArrayBlockingQueue<>(128),
-                    new ThreadFactoryBuilder()
-                            .setNameFormat("Leaf Async Target Finding Thread")
-                            .setDaemon(true)
-                            .setPriority(Thread.NORM_PRIORITY - 2)
-                            .build(),
-                    new ThreadPoolExecutor.CallerRunsPolicy());
-
         }
 
     }

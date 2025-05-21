@@ -55,14 +55,23 @@
          servergamepacketlistenerimpl.send(new ClientboundUpdateRecipesPacket(this.server.getRecipeManager().getOrderedRecipes()));
          this.sendPlayerPermissionLevel(p_11263_);
          p_11263_.getStats().markAllDirty();
-@@ -224,6 +_,7 @@
+@@ -224,8 +_,16 @@
          p_11263_.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(this.players));
          this.players.add(p_11263_);
          this.playersByUUID.put(p_11263_.getUUID(), p_11263_);
 +        this.addToSendAllPlayerInfoBuckets(p_11263_); // Gale - Purpur - spread out sending all player info
          this.broadcastAll(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(p_11263_)));
          this.sendLevelInfo(p_11263_, serverlevel1);
++        // Paper start - Add ticket on player join to avoid chunk load-unload-load cycle
++        serverlevel1.moonrise$getChunkTaskScheduler().chunkHolderManager.addTicketAtLevel(
++                ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.PLAYER_JOIN,
++                p_11263_.chunkPosition(),
++                ca.spottedleaf.moonrise.patches.chunk_system.player.RegionizedPlayerChunkLoader.TICK_TICKET_LEVEL,
++                net.minecraft.util.Unit.INSTANCE);
++        // Paper end - Add ticket on player join to avoid chunk load-unload-load cycle
          serverlevel1.addNewPlayer(p_11263_);
+         this.server.getCustomBossEvents().onPlayerConnect(p_11263_);
+         this.sendActivePlayerEffects(p_11263_);
 @@ -265,6 +_,17 @@
          }
  
