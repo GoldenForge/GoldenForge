@@ -20,6 +20,15 @@
      public static final String VANILLA_BRAND = "vanilla";
      private static final float AVERAGE_TICK_TIME_SMOOTHING = 0.8F;
      private static final int TICK_STATS_SPAN = 100;
+@@ -211,7 +_,7 @@
+     private String localIp;
+     private int port = -1;
+     private final LayeredRegistryAccess<RegistryLayer> registries;
+-    private final Map<ResourceKey<Level>, ServerLevel> levels = Maps.newLinkedHashMap();
++    private final Map<ResourceKey<Level>, ServerLevel> levels = Maps.newConcurrentMap();
+     private PlayerList playerList;
+     private volatile boolean running = true;
+     private boolean stopped;
 @@ -227,6 +_,11 @@
      private int playerIdleTimeout;
      private final long[] tickTimesNanos = new long[100];

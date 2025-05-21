@@ -25,7 +25,7 @@
      public MoveToBlockGoal(PathfinderMob p_25613_, double p_25614_, int p_25615_, int p_25616_) {
          this.mob = p_25613_;
          this.speedModifier = p_25614_;
-@@ -33,8 +_,60 @@
+@@ -33,8 +_,61 @@
          this.setFlags(EnumSet.of(Goal.Flag.MOVE, Goal.Flag.JUMP));
      }
  
@@ -73,6 +73,7 @@
 +        Strider,
 +        TurtleToWater,
 +        TurtleLay,
++        doNotRunAsync
 +    }
 +    // Leaf end - Async search block
 +
@@ -91,7 +92,7 @@
  
      protected boolean findNearestBlock() {
 +        // Leaf start - Async search block
-+        if (GlobalConfiguration.get().asyncTargetFinding.searchBlock) {
++        if (GlobalConfiguration.get().asyncTargetFinding.searchBlock && this.typeToCheck() != TypeToCheck.doNotRunAsync) { // Goldenforge: do not run mods goals async
 +            getBlockAsync();
 +            return false;
 +        }
@@ -110,7 +111,7 @@
                              return true;
                          }
                      }
-@@ -125,5 +_,103 @@
+@@ -125,5 +_,108 @@
          return false;
      }
  
@@ -152,7 +153,9 @@
 +
      protected abstract boolean isValidTarget(LevelReader p_25619_, BlockPos p_25620_);
 +
-+    protected abstract TypeToCheck typeToCheck();
++    protected TypeToCheck typeToCheck() {
++        return TypeToCheck.doNotRunAsync; // Goldenforge: do not run mods goals async
++    }
 +
 +    private static boolean isValidTargetAsync(
 +            TypeToCheck ty,
@@ -209,6 +212,9 @@
 +            }
 +            case TurtleLay -> {
 +                return level.isEmptyBlock(pos.above()) && net.minecraft.world.level.block.TurtleEggBlock.isSand(level, pos);
++            }
++            case modGoal -> {
++                throw new IllegalStateException("Modded goal should not run async!!");
 +            }
 +            case null -> throw new IllegalStateException();
 +        }
