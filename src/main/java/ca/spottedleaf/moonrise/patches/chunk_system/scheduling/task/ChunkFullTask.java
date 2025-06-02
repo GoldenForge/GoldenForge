@@ -10,14 +10,21 @@ import ca.spottedleaf.moonrise.patches.chunk_system.level.poi.ChunkSystemPoiMana
 import ca.spottedleaf.moonrise.patches.chunk_system.level.poi.PoiChunk;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder;
+import comm.ishland.c2me.rewrites.chunksystem.common.quirks.FlowableFluidUtils;
+import io.papermc.paper.configuration.GlobalConfiguration;
+import it.unimi.dsi.fastutil.shorts.ShortList;
+import it.unimi.dsi.fastutil.shorts.ShortListIterator;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ImposterProtoChunk;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.ProtoChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
-import net.minecraft.world.level.chunk.status.ChunkStatusTasks;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.FluidState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.lang.invoke.VarHandle;
@@ -99,6 +106,9 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
                 this.chunkHolder.replaceProtoChunk(new ImposterProtoChunk(chunk, false));
             }
 
+           if (GlobalConfiguration.get().chunkSystem.filterFluidPostProcessing)
+               this.filterFluidTicks(chunk, this.world);
+
             ((ChunkSystemLevelChunk)chunk).moonrise$setChunkAndHolder(new ServerChunkCache.ChunkAndHolder(chunk, this.chunkHolder.vanillaChunkHolder));
 
             final NewChunkHolder chunkHolder = this.chunkHolder;
@@ -124,6 +134,26 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
             return;
         }
         this.complete(chunk, null);
+    }
+
+    public void filterFluidTicks(ChunkAccess chunk, ServerLevel world) {
+        ShortList[] postProcessingLists = chunk.getPostProcessing();
+        for (int i = 0; i < postProcessingLists.length; i++) {
+            if (postProcessingLists[i] != null) {
+                for (ShortListIterator iterator = postProcessingLists[i].iterator(); iterator.hasNext(); ) {
+                    Short short_ = iterator.next();
+                    BlockPos blockpos = ProtoChunk.unpackOffsetCoordinates(short_, chunk.getSectionYFromSectionIndex(i), chunk.getPos());
+                    BlockState blockstate = chunk.getBlockState(blockpos);
+                    FluidState fluidstate = blockstate.getFluidState();
+                    if (!fluidstate.isEmpty() && fluidstate.getType() instanceof FlowingFluid) {
+                        if (!FlowableFluidUtils.needsPostProcessing(world, blockpos, blockstate, fluidstate)) {
+                            iterator.remove();
+                        }
+                    }
+
+                }
+            }
+        }
     }
 
     protected volatile boolean scheduled;
