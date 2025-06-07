@@ -1,35 +1,9 @@
 --- a/net/minecraft/world/entity/ai/attributes/Attribute.java
 +++ b/net/minecraft/world/entity/ai/attributes/Attribute.java
-@@ -9,17 +_,22 @@
- import net.minecraft.network.codec.ByteBufCodecs;
- import net.minecraft.network.codec.StreamCodec;
- 
--public class Attribute {
-+public class Attribute implements net.neoforged.neoforge.common.extensions.IAttributeExtension {
-     public static final Codec<Holder<Attribute>> CODEC = BuiltInRegistries.ATTRIBUTE.holderByNameCodec();
-     public static final StreamCodec<RegistryFriendlyByteBuf, Holder<Attribute>> STREAM_CODEC = ByteBufCodecs.holderRegistry(Registries.ATTRIBUTE);
-     private final double defaultValue;
-     private boolean syncable;
-     private final String descriptionId;
-     private Attribute.Sentiment sentiment = Attribute.Sentiment.POSITIVE;
-+    // Leaf start - Optimize AttributeMap
-+    public final int uid;
-+    private static final java.util.concurrent.atomic.AtomicInteger SIZE = new java.util.concurrent.atomic.AtomicInteger();
-+    // Leaf end - Optimize AttributeMap
- 
-     protected Attribute(String p_22080_, double p_22081_) {
-         this.defaultValue = p_22081_;
-         this.descriptionId = p_22080_;
-+        this.uid = SIZE.getAndAdd(1); // Leaf - Optimize AttributeMap
+@@ -52,6 +_,21 @@
+         return this.sentiment.getStyle(p_347715_);
      }
  
-     public double getDefaultValue() {
-@@ -50,6 +_,21 @@
- 
-     public ChatFormatting getStyle(boolean p_347715_) {
-         return this.sentiment.getStyle(p_347715_);
-+    }
-+
 +    // Neo: Patch in the default implementation of IAttributeExtension#getMergedStyle since we need access to Attribute#sentiment
 +
 +    protected static final net.minecraft.network.chat.TextColor MERGED_RED = net.minecraft.network.chat.TextColor.fromRgb(0xF93131);
@@ -43,6 +17,8 @@
 +            case NEGATIVE -> isPositive ? MERGED_RED : MERGED_BLUE;
 +            case NEUTRAL -> MERGED_GRAY;
 +        };
-     }
- 
++    }
++
      public static enum Sentiment {
+         POSITIVE,
+         NEUTRAL,

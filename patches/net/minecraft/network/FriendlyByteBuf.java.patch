@@ -1,74 +1,12 @@
 --- a/net/minecraft/network/FriendlyByteBuf.java
 +++ b/net/minecraft/network/FriendlyByteBuf.java
-@@ -67,7 +_,7 @@
- import org.joml.Quaternionf;
- import org.joml.Vector3f;
- 
--public class FriendlyByteBuf extends ByteBuf {
-+public class FriendlyByteBuf extends ByteBuf implements net.neoforged.neoforge.common.extensions.IFriendlyByteBufExtension {
-     public static final int DEFAULT_NBT_QUOTA = 2097152;
-     private final ByteBuf source;
-     public static final short MAX_STRING_LENGTH = 32767;
-@@ -317,12 +_,45 @@
-         }
-     }
- 
--    public FriendlyByteBuf writeLongArray(long[] p_130092_) {
--        this.writeVarInt(p_130092_.length);
--
--        for (long i : p_130092_) {
--            this.writeLong(i);
--        }
-+    public FriendlyByteBuf writeLongArray(long[] array) {
-+        this.writeVarInt(array.length);
-+        // Leaf start - Bulk writes to writeLongArray during chunk loading
-+        if (array.length == 0) {
-+            return this;
-+        }
-+        int neededBytes = array.length * Long.BYTES;
-+        int maxWritableBytes = this.source.maxWritableBytes();
-+
-+        if (maxWritableBytes >= neededBytes) {
-+            this.source.ensureWritable(neededBytes);
-+            int writerIndex = this.source.writerIndex();
-+
-+            if (this.source.hasArray()) {
-+                byte[] dest = this.source.array();
-+                int offset = this.source.arrayOffset() + writerIndex;
-+
-+                ByteBuffer buf = ByteBuffer.wrap(dest, offset, neededBytes).order(this.source.order());
-+                buf.asLongBuffer().put(array);
-+
-+                this.source.writerIndex(writerIndex + neededBytes);
-+            } else if (this.source.nioBufferCount() > 0) {
-+                ByteBuffer nioBuf = this.source.nioBuffer(writerIndex, neededBytes);
-+                nioBuf.asLongBuffer().put(array);
-+                this.source.writerIndex(writerIndex + neededBytes);
-+            } else {
-+                ByteBuffer temp = ByteBuffer.allocate(neededBytes).order(this.source.order());
-+                temp.asLongBuffer().put(array);
-+                temp.rewind();
-+                this.source.writeBytes(temp);
-+            }
-+        } else {
-+            // Not enough space even at max capacity, use traditional approach
-+            // which will write each element individually (and handle growing the buffer as needed)
-+            for (long l : array) {
-+                this.writeLong(l);
-+            }
-+        }
-+        // Leaf end - Bulk writes to writeLongArray during chunk loading
- 
-         return this;
-     }
-@@ -1588,5 +_,10 @@
-     @Override
+@@ -1589,4 +_,9 @@
      public boolean release(int p_130347_) {
          return this.source.release(p_130347_);
-+    }
+     }
 +
 +    @org.jetbrains.annotations.ApiStatus.Internal
 +    public ByteBuf getSource() {
 +        return this.source;
-     }
++    }
  }
