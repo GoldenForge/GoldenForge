@@ -134,7 +134,7 @@
 -
 -        return flag;
 +    // Paper start - fluid method optimisations
-+    private static boolean canPassThroughWall(final Direction direction, final BlockGetter level,
++    public static boolean canPassThroughWall(final Direction direction, final BlockGetter level,
 +                                              final BlockPos fromPos, final BlockState fromState,
 +                                              final BlockPos toPos, final BlockState toState) {
 +        if (((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)fromState).moonrise$emptyCollisionShape() & ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)toState).moonrise$emptyCollisionShape()) {
@@ -238,6 +238,15 @@
                  BlockState blockstate = pair.getFirst();
                  FluidState fluidstate = pair.getSecond();
                  if (this.canPassThrough(p_76027_, this.getFlowing(), p_76028_, p_76031_, direction, blockpos, blockstate, fluidstate)) {
+@@ -328,7 +_,7 @@
+             && this.canHoldFluid(p_75964_, p_75969_, p_75970_, p_75965_);
+     }
+ 
+-    private boolean isSourceBlockOfThisType(FluidState p_76097_) {
++    public boolean isSourceBlockOfThisType(FluidState p_76097_) {
+         return p_76097_.getType().isSame(this) && p_76097_.isSource();
+     }
+ 
 @@ -357,10 +_,16 @@
          for (Direction direction : Direction.Plane.HORIZONTAL) {
              BlockPos blockpos = p_76081_.relative(direction);
@@ -259,6 +268,15 @@
              BlockState blockstate = pair.getFirst();
              FluidState fluidstate = pair.getSecond();
              FluidState fluidstate1 = this.getNewLiquid(p_256191_, blockpos, blockstate);
+@@ -426,7 +_,7 @@
+             && this.canHoldFluid(p_75978_, p_75982_, p_75983_, p_75985_);
+     }
+ 
+-    protected abstract int getDropOff(LevelReader p_76087_);
++    public abstract int getDropOff(LevelReader p_76087_);
+ 
+     protected int getSpreadDelay(Level p_75998_, BlockPos p_75999_, FluidState p_76000_, FluidState p_76001_) {
+         return this.getTickDelay(p_75998_);
 @@ -449,7 +_,8 @@
              }
          }

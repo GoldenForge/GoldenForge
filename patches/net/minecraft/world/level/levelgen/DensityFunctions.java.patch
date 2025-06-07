@@ -17,23 +17,37 @@
  
          public EndIslandDensityFunction(long p_208630_) {
              RandomSource randomsource = new LegacyRandomSource(p_208630_);
-@@ -521,15 +_,31 @@
-             int j = p_224065_ / 2;
-             int k = p_224064_ % 2;
-             int l = p_224065_ % 2;
+@@ -516,22 +_,38 @@
+             this.islandNoise = new SimplexNoise(randomsource);
+         }
+ 
+-        private static float getHeightValue(SimplexNoise p_224063_, int p_224064_, int p_224065_) {
+-            int i = p_224064_ / 2;
+-            int j = p_224065_ / 2;
+-            int k = p_224064_ % 2;
+-            int l = p_224065_ % 2;
 -            float f = 100.0F - Mth.sqrt((float)(p_224064_ * p_224064_ + p_224065_ * p_224065_)) * 8.0F;
-+            float f = 100.0F - Mth.sqrt((long)p_224064_ * (long)p_224064_ + (long)p_224065_ * (long)p_224065_) * 8.0F; // Paper - cast ints to long to avoid integer overflow
++        private static float getHeightValue(SimplexNoise noise, int x, int z) {
++            int i = x / 2;
++            int i1 = z / 2;
++            int i2 = x % 2;
++            int i3 = z % 2;
++            float f = 100.0F - Mth.sqrt((long)x * (long)x + (long)z * (long)z) * 8.0F; // Paper - cast ints to long to avoid integer overflow
              f = Mth.clamp(f, -100.0F, 80.0F);
  
-+            NoiseCache cache = noiseCache.get().computeIfAbsent(p_224063_, noiseKey -> new NoiseCache()); // Paper - Perf: Optimize end generation
-             for (int i1 = -12; i1 <= 12; i1++) {
-                 for (int j1 = -12; j1 <= 12; j1++) {
+-            for (int i1 = -12; i1 <= 12; i1++) {
+-                for (int j1 = -12; j1 <= 12; j1++) {
 -                    long k1 = (long)(i + i1);
 -                    long l1 = (long)(j + j1);
 -                    if (k1 * k1 + l1 * l1 > 4096L && p_224063_.getValue((double)k1, (double)l1) < -0.9F) {
 -                        float f1 = (Mth.abs((float)k1) * 3439.0F + Mth.abs((float)l1) * 147.0F) % 13.0F + 9.0F;
-+                    long k1 = (long)(i + i1); final int chunkX = (int) l; // Paper - OBFHELPER
-+                    long l1 = (long)(j + j1); final int chunkZ = (int) l1; // Paper - OBFHELPER
+-                        float f2 = (float)(k - i1 * 2);
+-                        float f3 = (float)(l - j1 * 2);
++            NoiseCache cache = noiseCache.get().computeIfAbsent(noise, noiseKey -> new NoiseCache()); // Paper - Perf: Optimize end generation
++            for (int i4 = -12; i4 <= 12; i4++) {
++                for (int i5 = -12; i5 <= 12; i5++) {
++                    long l = i + i4; final int chunkX = (int) l; // Paper - OBFHELPER
++                    long l1 = i1 + i5; final int chunkZ = (int) l1; // Paper - OBFHELPER
 +                    // Paper start - Perf: Optimize end generation by using a noise cache
 +                    final long chunkKey = net.minecraft.world.level.ChunkPos.asLong(chunkX, chunkZ);
 +                    final int cacheIndex = (int) it.unimi.dsi.fastutil.HashCommon.mix(chunkKey) & 8191;
@@ -43,7 +57,7 @@
 +                        f1 = cache.values[cacheIndex];
 +                    } else {
 +                        // Vanilla function
-+                        if (l * l + l1 * l1 > 4096L && p_224063_.getValue(l, l1) < -0.9F) {
++                        if (l * l + l1 * l1 > 4096L && noise.getValue(l, l1) < -0.9F) {
 +                            f1 = (Mth.abs((float)l) * 3439.0F + Mth.abs((float)l1) * 147.0F) % 13.0F + 9.0F;
 +                        }
 +                        cache.keys[cacheIndex] = chunkKey;
@@ -51,6 +65,8 @@
 +                    }
 +                    if (f1 != Float.MIN_VALUE) {
 +                        // Paper end - Perf: Optimize end generation
-                         float f2 = (float)(k - i1 * 2);
-                         float f3 = (float)(l - j1 * 2);
++                        float f2 = i2 - i4 * 2;
++                        float f3 = i3 - i5 * 2;
                          float f4 = 100.0F - Mth.sqrt(f2 * f2 + f3 * f3) * f1;
+                         f4 = Mth.clamp(f4, -100.0F, 80.0F);
+                         f = Math.max(f, f4);

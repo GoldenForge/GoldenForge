@@ -1,0 +1,26 @@
+--- a/net/minecraft/world/level/levelgen/material/MaterialRuleList.java
++++ b/net/minecraft/world/level/levelgen/material/MaterialRuleList.java
+@@ -10,13 +_,17 @@
+     @Nullable
+     @Override
+     public BlockState calculate(DensityFunction.FunctionContext p_209815_) {
+-        for (NoiseChunk.BlockStateFiller noisechunk$blockstatefiller : this.materialRuleList) {
+-            BlockState blockstate = noisechunk$blockstatefiller.calculate(p_209815_);
+-            if (blockstate != null) {
+-                return blockstate;
+-            }
++        // Leaf start - Reduce worldgen allocations
++        // Avoid iterator allocation
++        BlockState blockState = null;
++        int length = this.materialRuleList.size();
++
++        for (int i = 0; blockState == null && i < length; i++) {
++            NoiseChunk.BlockStateFiller blockStateFiller = this.materialRuleList.get(i);
++            blockState = blockStateFiller.calculate(p_209815_);
+         }
+ 
+-        return null;
++        return blockState;
++        // Leaf end - Reduce worldgen allocations
+     }
+ }

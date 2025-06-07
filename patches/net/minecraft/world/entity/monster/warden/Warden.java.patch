@@ -9,6 +9,21 @@
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.Holder;
  import net.minecraft.core.particles.BlockParticleOption;
+@@ -278,11 +_,13 @@
+         }
+     }
+ 
++    private int behaviorTick = 0; // Pufferfish
+     @Override
+     protected void customServerAiStep() {
+         ServerLevel serverlevel = (ServerLevel)this.level();
+         serverlevel.getProfiler().push("wardenBrain");
+-        this.getBrain().tick(serverlevel, this);
++        if (this.behaviorTick++ % this.activatedPriority == 0) // Pufferfish // Leaf - Plazma - Add missing purpur configuration options
++            this.getBrain().tick(serverlevel, this);
+         this.level().getProfiler().pop();
+         super.customServerAiStep();
+         if ((this.tickCount + this.getId()) % 120 == 0) {
 @@ -567,6 +_,16 @@
              protected PathFinder createPathFinder(int p_219479_) {
                  this.nodeEvaluator = new WalkNodeEvaluator();

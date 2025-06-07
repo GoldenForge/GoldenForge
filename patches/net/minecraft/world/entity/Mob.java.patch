@@ -51,15 +51,15 @@
 +    public void inactiveTick() {
 +        super.inactiveTick();
 +
-+        boolean isThrottled = this.level().paperConfig().experimental.throttleInactiveGoalSelectorTick && _pufferfish_inactiveTickDisableCounter++ % 20 != 0; // Pufferfish - throttle inactive goal selector ticking
++        boolean isThrottled = GlobalConfiguration.get().leafConfigs.throttleInactiveGoalSelectorTick && _pufferfish_inactiveTickDisableCounter++ % 20 != 0; // Pufferfish - throttle inactive goal selector ticking
 +        // Leaf start - Async target finding
 +        boolean running = this.targetSelector.ctxState != -1 || this.goalSelector.ctxState != -1;
 +        this.tickingTarget = false;
-+        if (this.goalSelector.inactiveTick() && !isThrottled) { // Pufferfish - pass activated priroity // Pufferfish - throttle inactive goal selector ticking
++        if (this.goalSelector.inactiveTick(this.activatedPriority, true) && !isThrottled) { // Pufferfish - pass activated priroity // Pufferfish - throttle inactive goal selector ticking
 +            this.goalSelector.tick();
 +        }
 +        this.tickingTarget = true;
-+        if (this.targetSelector.inactiveTick()) { // Pufferfish - pass activated priority
++        if (this.targetSelector.inactiveTick(this.activatedPriority, true)) { // Pufferfish - pass activated priority
 +            this.targetSelector.tick();
 +        }
 +        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {
@@ -236,10 +236,10 @@
 -            this.goalSelector.tickRunningGoals(false);
 -            profilerfiller.pop();
 +            this.tickingTarget = true;
-+            if (this.targetSelector.inactiveTick()) // Pufferfish - use this to alternate ticking
++            if (this.targetSelector.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
 +                this.targetSelector.tickRunningGoals(false);
 +            this.tickingTarget = false;
-+            if (this.goalSelector.inactiveTick()) // Pufferfish - use this to alternate ticking
++            if (this.goalSelector.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
 +                this.goalSelector.tickRunningGoals(false);
          } else {
 -            profilerfiller.push("targetSelector");
@@ -252,10 +252,10 @@
 -
 -        profilerfiller.push("navigation");
 +            this.tickingTarget = true;
-+            if (this.targetSelector.inactiveTick()) // Pufferfish - use this to alternate ticking
++            if (this.targetSelector.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
 +                this.targetSelector.tick();
 +            this.tickingTarget = false;
-+            if (this.goalSelector.inactiveTick()) // Pufferfish - use this to alternate ticking
++            if (this.goalSelector.inactiveTick(this.activatedPriority, false)) // Pufferfish - use this to alternate ticking
 +                this.goalSelector.tick();
 +        }
 +        if (GlobalConfiguration.get().asyncTargetFinding.enabled) {

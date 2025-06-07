@@ -1,12 +1,13 @@
 package io.papermc.paper.configuration;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.mojang.logging.LogUtils;
 import io.papermc.paper.configuration.constraint.Constraints;
 import io.papermc.paper.configuration.type.number.DoubleOr;
 import io.papermc.paper.configuration.type.number.IntOr;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import org.dreeam.leaf.async.ai.AsyncGoalExecutor;
+import net.minecraft.world.entity.EntityType;
 import org.dreeam.leaf.async.path.PathfindTaskRejectPolicy;
 import org.goldenforge.GoldenForge;
 import org.slf4j.Logger;
@@ -14,9 +15,9 @@ import org.spongepowered.configurate.objectmapping.meta.Comment;
 import org.spongepowered.configurate.objectmapping.meta.PostProcess;
 import org.spongepowered.configurate.objectmapping.meta.Setting;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 @SuppressWarnings({"CanBeFinal", "FieldCanBeLocal", "FieldMayBeFinal", "NotNullFieldNotInitialized", "InnerClassMayBeStatic"})
 public class GlobalConfiguration extends ConfigurationPart {
@@ -95,7 +96,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         public class Velocity extends ConfigurationPart {
             public boolean enabled = false;
             public boolean onlineMode = true;
-            public boolean enableCrossStitch = true;
+            public boolean enableCrossStitch = false;
             public String secret = "";
 
             @PostProcess
@@ -114,7 +115,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         }
 
         public boolean shouldEnableCrossStitch() {
-            return this.velocity.enabled && this.velocity.enableCrossStitch;
+            return this.velocity.enableCrossStitch;
         }
     }
 
@@ -276,7 +277,8 @@ public class GlobalConfiguration extends ConfigurationPart {
         public IntOr.Default compressionLevel = IntOr.Default.USE_DEFAULT;
         @Comment("Defines the leniency distance added on the server to the interaction range of a player when validating interact packets.")
         public DoubleOr.Default clientInteractionLeniencyDistance = DoubleOr.Default.USE_DEFAULT;
-        public static double movedTooQuicklyMultiplier = 10.0D;
+        public double movedTooQuicklyMultiplier = 10.0D;
+        public double movedWronglyThreshold;
     }
 
     public BlockUpdates blockUpdates;
@@ -375,6 +377,69 @@ public class GlobalConfiguration extends ConfigurationPart {
                 searchBlock = false;
             }
         }
+    }
 
+    public DynamicActivationofBrain dynamicActivationofBrain;
+
+    public class DynamicActivationofBrain extends ConfigurationPart {
+        public boolean enabled = true;
+        public int startDistance = 12;
+        public int startDistanceSquared;
+        public int maximumActivationPrio = 20;
+        public int activationDistanceMod = 8;
+        public boolean dontEnableIfInWater = false;
+        public List<String> blackedEntities = new ArrayList<>();
+
+
+        @PostProcess
+        public void onLoaded() {
+            startDistanceSquared = startDistance * startDistance;
+
+            for (EntityType<?> entityType : BuiltInRegistries.ENTITY_TYPE) {
+                entityType.dabEnabled = true; // reset all, before setting the ones to true
+            }
+
+            final String DEFAULT_PREFIX = ResourceLocation.DEFAULT_NAMESPACE + ResourceLocation.NAMESPACE_SEPARATOR;
+
+            for (String name : blackedEntities) {
+                // Be compatible with both `minecraft:example` and `example` syntax
+                // If unknown, show user config value in the logger instead of parsed result
+                String lowerName = name.toLowerCase(Locale.ROOT);
+                String typeId = lowerName.startsWith(DEFAULT_PREFIX) ? lowerName : DEFAULT_PREFIX + lowerName;
+
+                EntityType.byString(typeId).ifPresentOrElse(entityType ->
+                                entityType.dabEnabled = false,
+                        () -> GoldenForge.LOGGER.warn("Skip unknown entity {}, in {}", name +  ".blacklisted-entities")
+                );
+            }
+        }
+    }
+
+    public LeafConfigs leafConfigs;
+
+    public class LeafConfigs extends ConfigurationPart {
+        public boolean reduceChunkSourceUpdates = true;
+        public boolean reduceUselessEntityMovePackets = false;
+        public boolean optimizePlayerMovementProcessing = true;
+        public boolean throttleInactiveGoalSelectorTick = true;
+
+        public OptimizeBiome optimizeBiome;
+
+        public class OptimizeBiome extends ConfigurationPart {
+            public boolean enabled = true;
+            public boolean mobSpawn = true;
+            public boolean advancement = true;
+        }
+
+        public BrainRunningBehaviorCacheUpdate brainRunningBehaviorCacheUpdate;
+
+        public class BrainRunningBehaviorCacheUpdate extends ConfigurationPart {
+            public int interval = 5;
+        }
+
+        @PostProcess
+        public void onLoaded() {
+
+        }
     }
 }

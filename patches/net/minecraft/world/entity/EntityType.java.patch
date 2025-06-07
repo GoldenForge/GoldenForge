@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/entity/EntityType.java
 +++ b/net/minecraft/world/entity/EntityType.java
+@@ -823,6 +_,7 @@
+     private final boolean fireImmune;
+     private final boolean canSpawnFarFromPlayer;
+     private final int clientTrackingRange;
++    public boolean dabEnabled = false; // Pufferfish
+     private final int updateInterval;
+     @Nullable
+     private String descriptionId;
 @@ -834,6 +_,10 @@
      private final float spawnDimensionsScale;
      private final FeatureFlagSet requiredFeatures;

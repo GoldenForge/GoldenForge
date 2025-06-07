@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/ai/attributes/Attribute.java
 +++ b/net/minecraft/world/entity/ai/attributes/Attribute.java
-@@ -9,7 +_,7 @@
+@@ -9,17 +_,22 @@
  import net.minecraft.network.codec.ByteBufCodecs;
  import net.minecraft.network.codec.StreamCodec;
  
@@ -9,6 +9,21 @@
      public static final Codec<Holder<Attribute>> CODEC = BuiltInRegistries.ATTRIBUTE.holderByNameCodec();
      public static final StreamCodec<RegistryFriendlyByteBuf, Holder<Attribute>> STREAM_CODEC = ByteBufCodecs.holderRegistry(Registries.ATTRIBUTE);
      private final double defaultValue;
+     private boolean syncable;
+     private final String descriptionId;
+     private Attribute.Sentiment sentiment = Attribute.Sentiment.POSITIVE;
++    // Leaf start - Optimize AttributeMap
++    public final int uid;
++    private static final java.util.concurrent.atomic.AtomicInteger SIZE = new java.util.concurrent.atomic.AtomicInteger();
++    // Leaf end - Optimize AttributeMap
+ 
+     protected Attribute(String p_22080_, double p_22081_) {
+         this.defaultValue = p_22081_;
+         this.descriptionId = p_22080_;
++        this.uid = SIZE.getAndAdd(1); // Leaf - Optimize AttributeMap
+     }
+ 
+     public double getDefaultValue() {
 @@ -50,6 +_,21 @@
  
      public ChatFormatting getStyle(boolean p_347715_) {

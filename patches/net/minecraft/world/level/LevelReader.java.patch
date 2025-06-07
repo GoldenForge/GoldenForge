@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/LevelReader.java
 +++ b/net/minecraft/world/level/LevelReader.java
-@@ -22,9 +_,25 @@
+@@ -22,10 +_,26 @@
  import net.minecraft.world.level.levelgen.Heightmap;
  import net.minecraft.world.phys.AABB;
  
@@ -19,11 +19,25 @@
 +
      @Nullable
      ChunkAccess getChunk(int p_46823_, int p_46824_, ChunkStatus p_330944_, boolean p_46826_);
-+
+ 
 +    @Nullable default ChunkAccess getChunkIfLoadedImmediately(int x, int z) { // Paper - ifLoaded api (we need this since current impl blocks if the chunk is loading)
 +        return this.getChunk(x, z, ChunkStatus.FULL);
 +    }
 +    @Nullable default ChunkAccess getChunkIfLoadedImmediately(BlockPos pos) { return this.getChunkIfLoadedImmediately(pos.getX() >> 4, pos.getZ() >> 4);}
- 
++
      @Deprecated
      boolean hasChunk(int p_46838_, int p_46839_);
+ 
+@@ -38,6 +_,12 @@
+     default Holder<Biome> getBiome(BlockPos p_204167_) {
+         return this.getBiomeManager().getBiome(p_204167_);
+     }
++
++    // Leaf start - cache getBiome
++    default Holder<Biome> getBiomeCached(BlockPos pos) {
++        return this.getBiomeManager().getBiomeCached(pos);
++    }
++    // Leaf end - cache getBiome
+ 
+     default Stream<BlockState> getBlockStatesIfLoaded(AABB p_46848_) {
+         int i = Mth.floor(p_46848_.minX);

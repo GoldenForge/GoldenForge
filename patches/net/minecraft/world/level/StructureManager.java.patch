@@ -1,0 +1,31 @@
+--- a/net/minecraft/world/level/StructureManager.java
++++ b/net/minecraft/world/level/StructureManager.java
+@@ -29,7 +_,7 @@
+ import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
+ 
+ public class StructureManager {
+-    private final LevelAccessor level;
++    public final LevelAccessor level;
+     private final WorldOptions worldOptions;
+     private final StructureCheck structureCheck;
+ 
+@@ -70,7 +_,7 @@
+ 
+     public void fillStartsForStructure(Structure p_220481_, LongSet p_220482_, Consumer<StructureStart> p_220483_) {
+         for (long i : p_220482_) {
+-            SectionPos sectionpos = SectionPos.of(new ChunkPos(i), this.level.getMinSection());
++            SectionPos sectionpos = SectionPos.of(ChunkPos.getX(i), this.level.getMinSection(), ChunkPos.getZ(i)); // Leaf
+             StructureStart structurestart = this.getStartForStructure(
+                 sectionpos, p_220481_, this.level.getChunk(sectionpos.x(), sectionpos.z(), ChunkStatus.STRUCTURE_STARTS)
+             );
+@@ -155,8 +_,8 @@
+     }
+ 
+     public Map<Structure, LongSet> getAllStructuresAt(BlockPos p_220523_) {
+-        SectionPos sectionpos = SectionPos.of(p_220523_);
+-        return this.level.getChunk(sectionpos.x(), sectionpos.z(), ChunkStatus.STRUCTURE_REFERENCES).getAllReferences();
++        // SectionPos sectionpos = SectionPos.of(p_220523_); Leaf
++        return this.level.getChunk(p_220523_.getX() >> 4, p_220523_.getZ() >> 4, ChunkStatus.STRUCTURE_REFERENCES).getAllReferences(); // Leaf
+     }
+ 
+     public StructureCheckResult checkStructurePresence(ChunkPos p_220474_, Structure p_220475_, StructurePlacement p_321768_, boolean p_220476_) {

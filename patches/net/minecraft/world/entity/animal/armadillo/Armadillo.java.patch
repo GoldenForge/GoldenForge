@@ -1,5 +1,19 @@
 --- a/net/minecraft/world/entity/animal/armadillo/Armadillo.java
 +++ b/net/minecraft/world/entity/animal/armadillo/Armadillo.java
+@@ -129,10 +_,12 @@
+         return ArmadilloAi.makeBrain(this.brainProvider().makeBrain(p_316388_));
+     }
+ 
++    private int behaviorTick; // Leaf - Plazma - Add missing Pufferfish configurations
+     @Override
+     protected void customServerAiStep() {
+         this.level().getProfiler().push("armadilloBrain");
+-        ((Brain<Armadillo>)this.brain).tick((ServerLevel)this.level(), this);
++        if (this.behaviorTick++ % this.activatedPriority == 0) // Leaf - Plazma - Add missing Pufferfish configurations // Leaf - Plazma - Add missing purpur configuration options
++            ((Brain<Armadillo>)this.brain).tick((ServerLevel)this.level(), this);
+         this.level().getProfiler().pop();
+         this.level().getProfiler().push("armadilloActivityUpdate");
+         ArmadilloAi.updateActivity(this);
 @@ -300,7 +_,7 @@
      @Override
      public InteractionResult mobInteract(Player p_316559_, InteractionHand p_316119_) {

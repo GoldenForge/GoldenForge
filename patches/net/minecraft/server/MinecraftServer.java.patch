@@ -25,7 +25,7 @@
      private int port = -1;
      private final LayeredRegistryAccess<RegistryLayer> registries;
 -    private final Map<ResourceKey<Level>, ServerLevel> levels = Maps.newLinkedHashMap();
-+    private final Map<ResourceKey<Level>, ServerLevel> levels = Maps.newConcurrentMap();
++    public final Map<ResourceKey<Level>, ServerLevel> levels = Maps.newLinkedHashMap();
      private PlayerList playerList;
      private volatile boolean running = true;
      private boolean stopped;

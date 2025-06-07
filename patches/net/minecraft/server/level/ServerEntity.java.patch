@@ -17,7 +17,7 @@
  import net.minecraft.util.Mth;
  import net.minecraft.world.entity.Entity;
  import net.minecraft.world.entity.EquipmentSlot;
-@@ -62,13 +_,17 @@
+@@ -62,13 +_,18 @@
      private Vec3 lastSentMovement;
      private int tickCount;
      private int teleportDelay;
@@ -29,6 +29,7 @@
      private List<SynchedEntityData.DataValue<?>> trackedDataValues;
 +    // Goldenforge start
 +    private final Set<ServerPlayerConnection> trackedPlayers;
++    public boolean wantSendDirtyEntityData = false; // Leaf - Multithreaded tracker
  
 -    public ServerEntity(ServerLevel p_8528_, Entity p_8529_, int p_8530_, boolean p_8531_, Consumer<Packet<?>> p_8532_) {
 +    public ServerEntity(ServerLevel p_8528_, Entity p_8529_, int p_8530_, boolean p_8531_, Consumer<Packet<?>> p_8532_, Set<ServerPlayerConnection> trackedPlayers) {
@@ -98,7 +99,7 @@
 +                    MapId mapid = entityitemframe.cachedMapId; // Paper - Perf: Cache map ids on item frames
 +                    MapItemSavedData mapitemsaveddata = MapItem.getSavedData(itemstack, this.level);
 +                    if (mapitemsaveddata != null) {
-+                        for (ServerPlayerConnection connection : this.trackedPlayers) { // Paper
++                        for (final ServerPlayerConnection connection : this.trackedPlayers.toArray(ChunkMap.TrackedEntity.EMPTY_OBJECT_ARRAY)) { // Paper // Leaf - Multithreaded tracker
 +                            final ServerPlayer serverplayer = connection.getPlayer(); // Paper
 +                            mapitemsaveddata.tickCarriedBy(serverplayer, itemstack);
 +                            Packet<?> packet = mapitemsaveddata.getUpdatePacket(mapid, serverplayer);
@@ -120,16 +121,36 @@
              if (this.entity.isPassenger()) {
                  int i1 = Mth.floor(this.entity.getYRot() * 256.0F / 360.0F);
                  int l1 = Mth.floor(this.entity.getXRot() * 256.0F / 360.0F);
+@@ -137,7 +_,13 @@
+                 int l = Mth.floor(this.entity.getYRot() * 256.0F / 360.0F);
+                 int k1 = Mth.floor(this.entity.getXRot() * 256.0F / 360.0F);
+                 Vec3 vec31 = this.entity.trackingPosition();
+-                boolean flag4 = this.positionCodec.delta(vec31).lengthSqr() >= 7.6293945E-6F;
++                // Paper start - reduce allocation of Vec3D here
++                Vec3 base = this.positionCodec.base;
++                double vec3_dx = vec31.x - base.x;
++                double vec3_dy = vec31.y - base.y;
++                double vec3_dz = vec31.z - base.z;
++                boolean flag4 = (vec3_dx * vec3_dx + vec3_dy * vec3_dy + vec3_dz * vec3_dz) >= 7.62939453125E-6D;
++                // Paper end - reduce allocation of Vec3D here
+                 Packet<?> packet1 = null;
+                 boolean flag5 = flag4 || this.tickCount % 60 == 0;
+                 boolean flag6 = Math.abs(l - this.lastSentYRot) >= 1 || Math.abs(k1 - this.lastSentXRot) >= 1;
 @@ -147,7 +_,7 @@
                  long j = this.positionCodec.encodeY(vec31);
                  long k = this.positionCodec.encodeZ(vec31);
                  boolean flag2 = i < -32768L || i > 32767L || j < -32768L || j > 32767L || k < -32768L || k > 32767L;
 -                if (flag2 || this.teleportDelay > 400 || this.wasRiding || this.wasOnGround != this.entity.onGround()) {
-+                if (!this.forceStateResync && flag2 || this.teleportDelay > 400 || this.wasRiding || this.wasOnGround != this.entity.onGround()) { // Paper - fix desync when a player is added to the tracker
++                if (this.forceStateResync && flag2 || this.teleportDelay > 400 || this.wasRiding || this.wasOnGround != this.entity.onGround()) { // Paper - fix desync when a player is added to the tracker
                      this.wasOnGround = this.entity.onGround();
                      this.teleportDelay = 0;
                      packet1 = new ClientboundTeleportEntityPacket(this.entity);
-@@ -174,7 +_,8 @@
+@@ -171,10 +_,13 @@
+                     flag1 = true;
+                 }
+ 
++                if (GlobalConfiguration.get().leafConfigs.reduceUselessEntityMovePackets && isUselessMoveEntityPacket(packet1)) packet1 = null; // Purpur
++
                  if ((this.trackDelta || this.entity.hasImpulse || this.entity instanceof LivingEntity && ((LivingEntity)this.entity).isFallFlying())
                      && this.tickCount > 0) {
                      Vec3 vec3 = this.entity.getDeltaMovement();
@@ -155,6 +176,28 @@
          }
  
          this.tickCount++;
+@@ -226,6 +_,21 @@
+         }
+     }
+ 
++    // Purpur start
++    private boolean isUselessMoveEntityPacket(@Nullable Packet<?> packet) {
++        if (!(packet instanceof ClientboundMoveEntityPacket moveEntityPacket)) return false;
++        return switch (packet) {
++            case ClientboundMoveEntityPacket.Pos ignored ->
++                    moveEntityPacket.getXa() == 0 && moveEntityPacket.getYa() == 0 && moveEntityPacket.getZa() == 0;
++            case ClientboundMoveEntityPacket.PosRot ignored ->
++                    moveEntityPacket.getXa() == 0 && moveEntityPacket.getYa() == 0 && moveEntityPacket.getZa() == 0 && moveEntityPacket.getyRot() == 0 && moveEntityPacket.getxRot() == 0;
++            case ClientboundMoveEntityPacket.Rot ignored ->
++                    moveEntityPacket.getyRot() == 0 && moveEntityPacket.getxRot() == 0;
++            default -> false;
++        };
++    }
++    // Purpur end
++
+     private static Stream<Entity> removedPassengers(List<Entity> p_277592_, List<Entity> p_277658_) {
+         return p_277658_.stream().filter(p_275361_ -> !p_277592_.contains(p_275361_));
+     }
 @@ -233,22 +_,25 @@
      public void removePairing(ServerPlayer p_8535_) {
          this.entity.stopSeenByPlayer(p_8535_);
@@ -183,6 +226,21 @@
          if (this.trackedDataValues != null) {
              p_289563_.accept(new ClientboundSetEntityDataPacket(this.entity.getId(), this.trackedDataValues));
          }
+@@ -317,7 +_,13 @@
+         return (float)(this.lastSentYHeadRot * 360) / 256.0F;
+     }
+ 
+-    private void sendDirtyEntityData() {
++    public void sendDirtyEntityData() {
++        // Leaf start - Multithreaded tracker
++        if (Thread.currentThread() instanceof org.dreeam.leaf.async.tracker.MultithreadedTracker.MultithreadedTrackerThread) {
++            wantSendDirtyEntityData = true;
++            return;
++        }
++        // Leaf end - Multithreaded tracker
+         SynchedEntityData synchedentitydata = this.entity.getEntityData();
+         List<SynchedEntityData.DataValue<?>> list = synchedentitydata.packDirty();
+         if (list != null) {
 @@ -328,7 +_,10 @@
          if (this.entity instanceof LivingEntity) {
              Set<AttributeInstance> set = ((LivingEntity)this.entity).getAttributes().getAttributesToSync();

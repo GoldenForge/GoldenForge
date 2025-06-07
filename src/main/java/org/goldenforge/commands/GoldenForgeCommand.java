@@ -1,5 +1,6 @@
 package org.goldenforge.commands;
 
+import ca.spottedleaf.moonrise.common.util.WorldUtil;
 import comm.destroystokyo.paper.io.SyncLoadFinder;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.JsonObject;
@@ -12,11 +13,14 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.DimensionArgument;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.level.NaturalSpawner;
 import net.neoforged.neoforge.internal.versions.neoforge.NeoForgeVersion;
@@ -24,6 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.goldenforge.GoldenForge;
 import org.goldenforge.tpsmonitor.TpsMonitorManager;
 
+import java.awt.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
@@ -31,7 +36,10 @@ import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 
 public class GoldenForgeCommand {
 
@@ -58,8 +66,8 @@ public class GoldenForgeCommand {
         dispatcher.register(Commands.literal("tpsmonitor")
                 .executes(GoldenForgeCommand::toggleTPSMonitor));
 
-//        dispatcher.register(Commands.literal("mobcaps").then(Commands.argument("world", DimensionArgument.dimension()))
-//                .executes(GoldenForgeCommand::printMobcaps));
+        dispatcher.register(Commands.literal("mobcaps").then(Commands.argument("world", DimensionArgument.dimension()))
+                .executes(GoldenForgeCommand::printMobcaps));
     }
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH.mm.ss");
@@ -107,8 +115,10 @@ public class GoldenForgeCommand {
     }
 
     private static int printMobcaps(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-        final ServerLevel level =  DimensionArgument.getDimension(ctx, "world");
-        final NaturalSpawner.@Nullable SpawnState state = level.getChunkSource().getLastSpawnState();
+        ServerLevel world = DimensionArgument.getDimension(ctx, "world");
+        CommandSourceStack sender = ctx.getSource();
+
+        final NaturalSpawner.@Nullable SpawnState state = world.getChunkSource().getLastSpawnState();
 
         final int chunks;
         if (state == null) {
@@ -116,13 +126,13 @@ public class GoldenForgeCommand {
         } else {
             chunks = state.getSpawnableChunkCount();
         }
-//        ctx.getSource().sendSystemMessage(Component.empty().(JoinConfiguration.noSeparators(),
-//                Component.literal("Mobcaps for world: "),
-//                Component.literal(world.getName(), NamedTextColor.AQUA),
-//                Component.literal(" (" + chunks + " spawnable chunks)")
-//        ));
-//
-//        ctx.getSource().sendSystemMessage(createMobcapsComponent(
+
+        Component component = Component.literal("Mobcaps for world: " + WorldUtil.getWorldName(world) + " (" + chunks + " spawnable chunks)")
+                .withStyle(ChatFormatting.AQUA);
+
+        sender.sendSuccess(() -> component, true);
+
+//        sender.sendMessage(createMobcapsComponent(
 //                category -> {
 //                    if (state == null) {
 //                        return 0;
@@ -130,10 +140,63 @@ public class GoldenForgeCommand {
 //                        return state.getMobCategoryCounts().getOrDefault(category, 0);
 //                    }
 //                },
-//                /*category -> NaturalSpawner.globalLimitForCategory(level, category, chunks)*/-1
+//                category -> NaturalSpawner.globalLimitForCategory(level, category, chunks)
 //        ));
 
         return 0;
+    }
+
+    private static Component createMobcapsComponent(final ToIntFunction<MobCategory> countGetter, final ToIntFunction<MobCategory> limitGetter) {
+//        Component newline = Component.literal("\n");
+//
+//        MutableComponent categoryHover = Component.empty()
+//                .append(Component.literal("Entity types in category ").withStyle(style -> style.withColor(0xE0E0E0)))
+//                .append(Component.literal(category.getName()).withStyle(style -> style.withColor(color)))
+//                .append(Component.literal(":").withStyle(ChatFormatting.GRAY))
+//                .append(newline)
+//                .append(newline);
+//
+//        boolean first = true;
+//        for (var entityTypeEntry: BuiltInRegistries.ENTITY_TYPE.entrySet()) {
+//            EntityType<?> entityType = entityTypeEntry.getValue();
+//            if (entityType.getCategory() == category) {
+//                if (!first) {
+//                    categoryHover = categoryHover.append(Component.literal(", ").withStyle(ChatFormatting.GRAY));
+//                }
+//                categoryHover = categoryHover.append(Component.translatable(entityType.getDescriptionId()));
+//                first = false;
+//            }
+//        }
+//
+//        MutableComponent finalCategoryHover = categoryHover;
+//        Component categoryComponent = Component.literal("  " + category.getName())
+//                .withStyle(style -> style.withColor(color))
+//                .withStyle(style -> style.withHoverEvent(
+//                        new net.minecraft.network.chat.HoverEvent(
+//                                net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+//                                finalCategoryHover
+//                        )
+//                ));
+//
+//        MutableComponent builder = Component.empty();
+//        builder.append(categoryComponent);
+//        builder.append(Component.literal(": ").withStyle(ChatFormatting.GRAY));
+//
+//        int limit = limitGetter.applyAsInt(category);
+//        if (limit != -1) {
+//            builder.append(Component.literal(String.valueOf(countGetter.applyAsInt(category))));
+//            builder.append(Component.literal("/").withStyle(ChatFormatting.GRAY));
+//            builder.append(Component.literal(String.valueOf(limit)));
+//        } else {
+//            builder.append(Component.literal("n").append(Component.literal("/").withStyle(ChatFormatting.GRAY)).append(Component.literal("a"))
+//                    .withStyle(style -> style.withHoverEvent(
+//                            new net.minecraft.network.chat.HoverEvent(
+//                                    net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+//                                    Component.literal("This category does not naturally spawn.")
+//                            )
+//                    )));
+//        }
+        return null;
     }
 
 //    private static Component createMobcapsComponent(final ToIntFunction<MobCategory> countGetter, final ToIntFunction<MobCategory> limitGetter) {

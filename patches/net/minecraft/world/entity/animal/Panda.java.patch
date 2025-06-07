@@ -1,0 +1,30 @@
+--- a/net/minecraft/world/entity/animal/Panda.java
++++ b/net/minecraft/world/entity/animal/Panda.java
+@@ -5,6 +_,8 @@
+ import java.util.function.IntFunction;
+ import java.util.function.Predicate;
+ import javax.annotation.Nullable;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.particles.ItemParticleOption;
+ import net.minecraft.core.particles.ParticleTypes;
+@@ -943,9 +_,18 @@
+ 
+         @Override
+         public boolean canUse() {
++            // Leaf start - Async look finding
++            if (poll()) {
++                return true;
++            }
+             if (this.mob.getRandom().nextFloat() >= this.probability) {
+                 return false;
+             } else {
++                if (GlobalConfiguration.get().asyncTargetFinding.searchEntity) {
++                    getLookAsync();
++                    return false;
++                }
++                // Leaf end - Async look finding
+                 if (this.lookAt == null) {
+                     if (this.lookAtType == Player.class) {
+                         this.lookAt = this.mob.level().getNearestPlayer(this.lookAtContext, this.mob, this.mob.getX(), this.mob.getEyeY(), this.mob.getZ());

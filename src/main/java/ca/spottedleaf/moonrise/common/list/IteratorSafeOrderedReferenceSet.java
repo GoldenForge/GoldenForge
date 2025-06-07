@@ -10,7 +10,7 @@ public final class IteratorSafeOrderedReferenceSet<E> {
     public static final int ITERATOR_FLAG_SEE_ADDITIONS = 1 << 0;
 
     private final Reference2IntLinkedOpenHashMap<E> indexMap;
-    private int firstInvalidIndex = -1;
+    private final java.util.concurrent.atomic.AtomicInteger firstInvalidIndex = new java.util.concurrent.atomic.AtomicInteger(-1); // Leaf - Pufferfish - Async mob spawning - atomic
 
     /* list impl */
     private E[] listElements;
@@ -83,7 +83,7 @@ public final class IteratorSafeOrderedReferenceSet<E> {
         if (this.indexMap.isEmpty()) {
             return -1;
         } else {
-            return this.firstInvalidIndex == 0 ? this.indexMap.getInt(this.indexMap.firstKey()) : 0;
+            return this.firstInvalidIndex.get() == 0 ? this.indexMap.getInt(this.indexMap.firstKey()) : 0; // Leaf - Pufferfish - Async mob spawning
         }
     }
 
@@ -110,9 +110,12 @@ public final class IteratorSafeOrderedReferenceSet<E> {
     public boolean remove(final E element) {
         final int index = this.indexMap.removeInt(element);
         if (index >= 0) {
-            if (this.firstInvalidIndex < 0 || index < this.firstInvalidIndex) {
-                this.firstInvalidIndex = index;
+            // Leaf start - Pufferfish - Async mob spawning
+            int firstInvalidIndex = this.firstInvalidIndex.get();
+            if (firstInvalidIndex < 0 || index < firstInvalidIndex) {
+                this.firstInvalidIndex.set(index);
             }
+            // Leaf end - Pufferfish - Async mob spawning
             if (this.listElements[index] != element) {
                 throw new IllegalStateException();
             }
@@ -149,14 +152,17 @@ public final class IteratorSafeOrderedReferenceSet<E> {
     }
 
     private void defrag() {
-        if (this.firstInvalidIndex < 0) {
+        // Leaf start - Pufferfish - Async mob spawning
+        int firstInvalidIndex = this.firstInvalidIndex.get();
+        if (firstInvalidIndex < 0) {
             return; // nothing to do
         }
+        // Leaf end - Pufferfish - Async mob spawning
 
         if (this.indexMap.isEmpty()) {
             Arrays.fill(this.listElements, 0, this.listSize, null);
             this.listSize = 0;
-            this.firstInvalidIndex = -1;
+            this.firstInvalidIndex.set(-1); // Leaf - Pufferfish - Async mob spawning
             //this.check();
             return;
         }
@@ -166,11 +172,11 @@ public final class IteratorSafeOrderedReferenceSet<E> {
         int lastValidIndex;
         java.util.Iterator<Reference2IntMap.Entry<E>> iterator;
 
-        if (this.firstInvalidIndex == 0) {
+        if (firstInvalidIndex == 0) { // Leaf - Pufferfish - Async mob spawning
             iterator = this.indexMap.reference2IntEntrySet().fastIterator();
             lastValidIndex = 0;
         } else {
-            lastValidIndex = this.firstInvalidIndex;
+            lastValidIndex = firstInvalidIndex; // Leaf - Pufferfish - Async mob spawning
             final E key = backingArray[lastValidIndex - 1];
             iterator = this.indexMap.reference2IntEntrySet().fastIterator(new Reference2IntMap.Entry<E>() {
                 @Override
@@ -201,7 +207,7 @@ public final class IteratorSafeOrderedReferenceSet<E> {
         // cleanup end
         Arrays.fill(backingArray, lastValidIndex, this.listSize, null);
         this.listSize = lastValidIndex;
-        this.firstInvalidIndex = -1;
+        this.firstInvalidIndex.set(-1); // Leaf - Pufferfish - Async mob spawning
         //this.check();
     }
 
@@ -306,7 +312,7 @@ public final class IteratorSafeOrderedReferenceSet<E> {
             }
             this.lastReturned = null;
             this.finished = true;
-            this.set.finishRawIterator();
+            this.set.finishRawIterator(); // Pufferfish - async mob spawning - diff on change
         }
     }
 }

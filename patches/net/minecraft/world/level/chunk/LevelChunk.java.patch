@@ -18,6 +18,15 @@
      static final Logger LOGGER = LogUtils.getLogger();
      private static final TickingBlockEntity NULL_TICKER = new TickingBlockEntity() {
          @Override
+@@ -74,7 +_,7 @@
+     };
+     private final Map<BlockPos, LevelChunk.RebindableTickingBlockEntityWrapper> tickersInLevel = Maps.newHashMap();
+     private boolean loaded;
+-    final Level level;
++    public final Level level;
+     @Nullable
+     private Supplier<FullChunkStatus> fullStatus;
+     @Nullable
 @@ -111,7 +_,49 @@
          this.postLoad = p_196861_;
          this.blockTicks = p_196857_;
@@ -335,6 +344,16 @@
              }
          });
      }
+@@ -529,7 +_,8 @@
+                     BlockState blockstate = this.getBlockState(blockpos);
+                     FluidState fluidstate = blockstate.getFluidState();
+                     if (!fluidstate.isEmpty()) {
+-                        fluidstate.tick(this.level, blockpos);
++                        this.level.scheduleTick(blockpos, fluidstate.getType(), 1);
++                        //fluidstate.tick(this.level, blockpos);
+                     }
+ 
+                     if (!(blockstate.getBlock() instanceof LiquidBlock)) {
 @@ -548,6 +_,7 @@
  
          this.pendingBlockEntities.clear();

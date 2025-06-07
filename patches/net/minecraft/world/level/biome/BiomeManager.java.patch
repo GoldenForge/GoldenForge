@@ -1,16 +1,76 @@
 --- a/net/minecraft/world/level/biome/BiomeManager.java
 +++ b/net/minecraft/world/level/biome/BiomeManager.java
-@@ -14,6 +_,7 @@
+@@ -1,6 +_,7 @@
+ package net.minecraft.world.level.biome;
+ 
+ import com.google.common.hash.Hashing;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.QuartPos;
+@@ -14,10 +_,24 @@
      private static final int ZOOM_MASK = 3;
      private final BiomeManager.NoiseBiomeSource noiseBiomeSource;
      private final long biomeZoomSeed;
 +    private static final double maxOffset = 0.4500000001D; // Leaf - Carpet-Fixes - Optimized getBiome method
++    // Leaf start - cache getBiome
++    private final Holder<Biome>[] biomeCache;
++    private final long[] biomeCachePos;
++    // Leaf end - cache getBiome
  
      public BiomeManager(BiomeManager.NoiseBiomeSource p_186677_, long p_186678_) {
          this.noiseBiomeSource = p_186677_;
-@@ -29,39 +_,67 @@
+         this.biomeZoomSeed = p_186678_;
++        // Leaf start - cache getBiome
++        if (GlobalConfiguration.get().leafConfigs.optimizeBiome.enabled) {
++            biomeCache = new Holder[65536];
++            biomeCachePos = new long[65536];
++        } else {
++            biomeCache = null;
++            biomeCachePos = null;
++        }
++        // Leaf end - cache getBiome
      }
  
+     public static long obfuscateSeed(long p_47878_) {
+@@ -28,40 +_,102 @@
+         return new BiomeManager(p_186688_, this.biomeZoomSeed);
+     }
+ 
++    // Leaf start - cache getBiome
++    public Holder<Biome> getBiomeCached(BlockPos pos) {
++        if (biomeCache == null) {
++            return getBiome(pos);
++        }
++        int xMinus2 = pos.getX() - 2;
++        int yMinus2 = pos.getY() - 2;
++        int zMinus2 = pos.getZ() - 2;
++        int x = xMinus2 >> 2;
++        int y = yMinus2 >> 2;
++        int z = zMinus2 >> 2;
++        long packedPos = BlockPos.asLong(x, y, z);
++        long hash = packedPos;
++        hash = (hash ^ (hash >>> 32)) * 0xff51afd7ed558ccdL;
++        hash = (hash ^ (hash >>> 32)) * 0xc4ceb9fe1a85ec53L;
++        hash = (hash ^ (hash >>> 32)) & 65535L;
++
++        long pos1 = biomeCachePos[(int) hash];
++        if (pos1 == packedPos) {
++            Holder<Biome> biome = biomeCache[(int) hash];
++            if (biome != null) {
++                return biome;
++            }
++        }
++
++        Holder<Biome> biome = getBiome(pos);
++
++        biomeCache[(int) hash] = biome;
++        biomeCachePos[(int) hash] = packedPos;
++
++        return biome;
++    }
++    // Leaf end - cache getBiome
++
      public Holder<Biome> getBiome(BlockPos p_204215_) {
 -        int i = p_204215_.getX() - 2;
 -        int j = p_204215_.getY() - 2;

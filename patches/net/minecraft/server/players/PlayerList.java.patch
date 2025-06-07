@@ -277,10 +277,11 @@
              serverplayer.copyRespawnPosition(p_11237_);
          }
  
-@@ -455,7 +_,9 @@
+@@ -455,7 +_,10 @@
          }
  
          Vec3 vec3 = dimensiontransition.pos();
++        serverplayer.setServerLevel(serverlevel); // Goldenforge: Set the server level before moving the player fix crash when the player is moved to a different dimensiono when respawning
 +        serverplayer.setShiftKeyDown(false);
          serverplayer.moveTo(vec3.x, vec3.y, vec3.z, dimensiontransition.yRot(), dimensiontransition.xRot());
 +        serverlevel.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.POST_TELEPORT, new net.minecraft.world.level.ChunkPos(net.minecraft.util.Mth.floor(vec3.x()) >> 4, net.minecraft.util.Mth.floor(vec3.z()) >> 4), 1, serverplayer.getId()); // Paper - post teleport ticket type

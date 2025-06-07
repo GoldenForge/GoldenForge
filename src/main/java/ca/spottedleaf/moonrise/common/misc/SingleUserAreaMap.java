@@ -1,6 +1,7 @@
 package ca.spottedleaf.moonrise.common.misc;
 
 import ca.spottedleaf.concurrentutil.util.IntegerUtil;
+import io.papermc.paper.configuration.GlobalConfiguration;
 
 public abstract class SingleUserAreaMap<T> {
 
@@ -88,6 +89,12 @@ public abstract class SingleUserAreaMap<T> {
         if (fromX == NOT_SET) {
             return false;
         }
+
+        // Leaf start - Optimise player movement checks
+        if (GlobalConfiguration.get().leafConfigs.optimizePlayerMovementProcessing && fromX == toX && fromZ == toZ && oldViewDistance == newViewDistance) {
+            return true;
+        }
+        // Leaf end - Optimise player movement checks
 
         this.lastChunkX = toX;
         this.lastChunkZ = toZ;

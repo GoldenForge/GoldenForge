@@ -8,6 +8,7 @@ import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
 import ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickConstants;
 import ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel;
+import io.papermc.paper.configuration.GlobalConfiguration;
 import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
 import net.minecraft.core.BlockPos;
@@ -60,7 +61,16 @@ public final class NearbyPlayers {
 
     private final ServerLevel world;
     private final Reference2ReferenceOpenHashMap<ServerPlayer, TrackedPlayer[]> players = new Reference2ReferenceOpenHashMap<>();
-    private final Long2ReferenceOpenHashMap<TrackedChunk> byChunk = new Long2ReferenceOpenHashMap<>();
+    // Leaf start - Multithreaded tracker
+    private final it.unimi.dsi.fastutil.longs.Long2ReferenceMap<TrackedChunk> byChunk;
+    {
+        if (GlobalConfiguration.get().multithreadedTracker.enabled) {
+            byChunk = it.unimi.dsi.fastutil.longs.Long2ReferenceMaps.synchronize(new Long2ReferenceOpenHashMap<>());
+        } else {
+            byChunk = new Long2ReferenceOpenHashMap<>();
+        }
+    }
+    // Leaf end - Multithreaded tracker
     private final Long2ReferenceOpenHashMap<ReferenceList<ServerPlayer>>[] directByChunk = new Long2ReferenceOpenHashMap[TOTAL_MAP_TYPES];
     {
         for (int i = 0; i < this.directByChunk.length; ++i) {
@@ -127,7 +137,7 @@ public final class NearbyPlayers {
     }
 
     public TrackedChunk getChunk(final ChunkPos pos) {
-        return this.byChunk.get(CoordinateUtils.getChunkKey(pos));
+        return this.byChunk.get(pos.longKey); // Leaf - Cache chunk key
     }
 
     public TrackedChunk getChunk(final BlockPos pos) {
@@ -143,7 +153,7 @@ public final class NearbyPlayers {
     }
 
     public ReferenceList<ServerPlayer> getPlayers(final ChunkPos pos, final NearbyMapType type) {
-        return this.directByChunk[type.ordinal()].get(CoordinateUtils.getChunkKey(pos));
+        return this.directByChunk[type.ordinal()].get(pos.longKey); // Leaf - Cache chunk key
     }
 
     public ReferenceList<ServerPlayer> getPlayersByChunk(final int chunkX, final int chunkZ, final NearbyMapType type) {

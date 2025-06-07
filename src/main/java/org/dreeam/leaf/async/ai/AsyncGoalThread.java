@@ -1,5 +1,6 @@
 package org.dreeam.leaf.async.ai;
 
+import com.google.common.collect.Maps;
 import net.minecraft.Util;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -20,7 +21,14 @@ public class AsyncGoalThread extends Thread {
     private static void run(MinecraftServer server) {
         while (server.isRunning()) {
             boolean retry = false;
-            for (ServerLevel level : server.getAllLevels()) {
+
+            // Goldenforge: some mods add/remove levels from tickloop
+            Iterable<ServerLevel> levels;
+            synchronized (server.getAllLevels()) {
+                levels = Maps.newLinkedHashMap(server.levels).values();
+            }
+
+            for (ServerLevel level : levels) {
                 var exec = level.asyncGoalExecutor;
                 while (true) {
                     OptionalInt result = exec.queue.recv();

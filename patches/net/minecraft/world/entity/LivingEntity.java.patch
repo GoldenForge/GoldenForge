@@ -7,6 +7,22 @@
  import com.google.common.annotations.VisibleForTesting;
  import com.google.common.base.Objects;
  import com.google.common.collect.ImmutableList;
+@@ -14,13 +_,8 @@
+ import it.unimi.dsi.fastutil.doubles.DoubleDoubleImmutablePair;
+ import it.unimi.dsi.fastutil.objects.Reference2ObjectArrayMap;
+ import it.unimi.dsi.fastutil.objects.Reference2ObjectMap;
+-import java.util.Collection;
+-import java.util.ConcurrentModificationException;
+-import java.util.Iterator;
+-import java.util.List;
+-import java.util.Map;
+-import java.util.Optional;
+-import java.util.Set;
++
++import java.util.*;
+ import java.util.Map.Entry;
+ import java.util.function.Predicate;
+ import javax.annotation.Nonnull;
 @@ -88,7 +_,6 @@
  import net.minecraft.world.entity.ai.attributes.DefaultAttributes;
  import net.minecraft.world.entity.ai.targeting.TargetingConditions;
@@ -23,8 +39,12 @@
  import net.minecraft.world.item.ElytraItem;
  import net.minecraft.world.item.Equipable;
  import net.minecraft.world.item.Item;
-@@ -132,7 +_,7 @@
+@@ -130,9 +_,11 @@
+ import net.minecraft.world.phys.Vec3;
+ import net.minecraft.world.scores.PlayerTeam;
  import net.minecraft.world.scores.Scoreboard;
++import net.neoforged.neoforge.common.NeoForge;
++import net.neoforged.neoforge.event.entity.living.EffectParticleModificationEvent;
  import org.slf4j.Logger;
  
 -public abstract class LivingEntity extends Entity implements Attackable {
@@ -239,18 +259,31 @@
                          iterator.remove();
                          this.onEffectRemoved(mobeffectinstance);
                      }
-@@ -817,8 +_,9 @@
-         List<ParticleOptions> list = this.activeEffects
-             .values()
-             .stream()
+@@ -814,14 +_,17 @@
+     }
+ 
+     private void updateSynchronizedMobEffectParticles() {
+-        List<ParticleOptions> list = this.activeEffects
+-            .values()
+-            .stream()
 -            .filter(MobEffectInstance::isVisible)
 -            .map(MobEffectInstance::getParticleOptions)
-+            .map(effect -> net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.entity.living.EffectParticleModificationEvent(this, effect)))
-+            .filter(net.neoforged.neoforge.event.entity.living.EffectParticleModificationEvent::isVisible)
-+            .map(net.neoforged.neoforge.event.entity.living.EffectParticleModificationEvent::getParticleOptions)
-             .toList();
+-            .toList();
++        List<ParticleOptions> list = new ArrayList<>();
++        final Collection<MobEffectInstance> effectsValues = this.activeEffects.values(); // Leaf - Replace Entity active effects map with optimized collection
++        for (MobEffectInstance effect : effectsValues) {
++            EffectParticleModificationEvent post = NeoForge.EVENT_BUS.post(new EffectParticleModificationEvent(this, effect));
++            if (post.isVisible()) {
++                ParticleOptions particleOptions = post.getParticleOptions();
++                list.add(particleOptions);
++            }
++        }
          this.entityData.set(DATA_EFFECT_PARTICLES, list);
-         this.entityData.set(DATA_EFFECT_AMBIENCE_ID, areAllEffectsAmbient(this.activeEffects.values()));
+-        this.entityData.set(DATA_EFFECT_AMBIENCE_ID, areAllEffectsAmbient(this.activeEffects.values()));
++        this.entityData.set(DATA_EFFECT_AMBIENCE_ID, areAllEffectsAmbient(effectsValues)); // Leaf - Replace Entity active effects map with optimized collection
+     }
+ 
+     private void updateGlowingStatus() {
 @@ -858,6 +_,7 @@
              }
          }

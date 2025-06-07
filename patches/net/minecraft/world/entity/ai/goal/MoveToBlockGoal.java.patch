@@ -213,7 +213,7 @@
 +            case TurtleLay -> {
 +                return level.isEmptyBlock(pos.above()) && net.minecraft.world.level.block.TurtleEggBlock.isSand(level, pos);
 +            }
-+            case modGoal -> {
++            case doNotRunAsync -> {
 +                throw new IllegalStateException("Modded goal should not run async!!");
 +            }
 +            case null -> throw new IllegalStateException();

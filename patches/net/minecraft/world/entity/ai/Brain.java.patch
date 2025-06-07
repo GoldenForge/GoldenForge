@@ -1,5 +1,13 @@
 --- a/net/minecraft/world/entity/ai/Brain.java
 +++ b/net/minecraft/world/entity/ai/Brain.java
+@@ -15,6 +_,7 @@
+ import com.mojang.serialization.MapCodec;
+ import com.mojang.serialization.MapLike;
+ import com.mojang.serialization.RecordBuilder;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+ import java.util.Collection;
+ import java.util.List;
 @@ -25,6 +_,9 @@
  import java.util.function.Supplier;
  import java.util.stream.Stream;
@@ -10,14 +18,185 @@
  import net.minecraft.core.registries.BuiltInRegistries;
  import net.minecraft.resources.ResourceLocation;
  import net.minecraft.server.level.ServerLevel;
-@@ -46,8 +_,8 @@
+@@ -46,14 +_,18 @@
      static final Logger LOGGER = LogUtils.getLogger();
      private final Supplier<Codec<Brain<E>>> codec;
      private static final int SCHEDULE_UPDATE_DELAY = 20;
 -    private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> memories = Maps.newHashMap();
 -    private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> sensors = Maps.newLinkedHashMap();
-+    private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> memories = new Reference2ReferenceOpenHashMap<>(); // Goldenforge: lithium
-+    private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> sensors = new Reference2ReferenceLinkedOpenHashMap<>(); // Goldenforge: lithium
++    // Leaf start - Replace brain maps with optimized collection
++    private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> memories = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>();
++    private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> sensors = new it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap<>();
++    // Leaf end - Replace brain maps with optimized collection
      private final Map<Integer, Map<Activity, Set<BehaviorControl<? super E>>>> availableBehaviorsByPriority = Maps.newTreeMap();
      private Schedule schedule = Schedule.EMPTY;
-     private final Map<Activity, Set<Pair<MemoryModuleType<?>, MemoryStatus>>> activityRequirements = Maps.newHashMap();
+-    private final Map<Activity, Set<Pair<MemoryModuleType<?>, MemoryStatus>>> activityRequirements = Maps.newHashMap();
+-    private final Map<Activity, Set<MemoryModuleType<?>>> activityMemoriesToEraseWhenStopped = Maps.newHashMap();
+-    private Set<Activity> coreActivities = Sets.newHashSet();
+-    private final Set<Activity> activeActivities = Sets.newHashSet();
++    // Leaf start - Replace brain maps with optimized collection
++    private final Map<Activity, Set<Pair<MemoryModuleType<?>, MemoryStatus>>> activityRequirements = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>();
++    private final Map<Activity, Set<MemoryModuleType<?>>> activityMemoriesToEraseWhenStopped = new it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap<>();
++    private Set<Activity> coreActivities = new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>();
++    private final Set<Activity> activeActivities = new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>();
++    // Leaf end - Replace brain maps with optimized collection
+     private Activity defaultActivity = Activity.IDLE;
+     private long lastScheduleUpdate = -9999L;
+ 
+@@ -71,13 +_,22 @@
+             (new MapCodec<Brain<E>>() {
+                     @Override
+                     public <T> Stream<T> keys(DynamicOps<T> p_22029_) {
+-                        return p_21947_.stream()
+-                            .flatMap(
+-                                p_22020_ -> p_22020_.getCodec()
+-                                        .map(p_258254_ -> BuiltInRegistries.MEMORY_MODULE_TYPE.getKey((MemoryModuleType<?>)p_22020_))
+-                                        .stream()
+-                            )
+-                            .map(p_22018_ -> p_22029_.createString(p_22018_.toString()));
++                        // Leaf start - Remove stream in Brain
++                        List<T> results = new java.util.ArrayList<>();
++
++                        for (MemoryModuleType<?> memoryModuleType : p_21947_) {
++                            final Optional<?> codec = memoryModuleType.getCodec();
++
++                            if (codec.isPresent()) {
++                                final net.minecraft.resources.ResourceLocation resourceLocation = BuiltInRegistries.MEMORY_MODULE_TYPE.getKey(memoryModuleType);
++                                final T opsResult = p_22029_.createString(resourceLocation.toString());
++
++                                results.add(opsResult);
++                            }
++                        }
++
++                        return results.stream();
++                        // Leaf end - Remove stream in Brain
+                     }
+ 
+                     @Override
+@@ -113,7 +_,13 @@
+                     }
+ 
+                     public <T> RecordBuilder<T> encode(Brain<E> p_21985_, DynamicOps<T> p_21986_, RecordBuilder<T> p_21987_) {
+-                        p_21985_.memories().forEach(p_22007_ -> p_22007_.serialize(p_21986_, p_21987_));
++                        // Leaf start - Remove stream in Brain
++                        for (Entry<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> memory : p_21985_.memories.entrySet()) {
++                            final Brain.MemoryValue<?> result = Brain.MemoryValue.createUnchecked(memory.getKey(), memory.getValue());
++
++                            result.serialize(p_21986_, p_21987_);
++                        }
++                        // Leaf end - Remove stream in Brain
+                         return p_21987_;
+                     }
+                 })
+@@ -249,23 +_,52 @@
+         return this.activeActivities;
+     }
+ 
++    // Leaf start - Alternative Brain Behaviour
++    private ObjectArrayList<BehaviorControl<? super E>> runningBehaviorsCache;
++    private long lastRunningBehaviorCheck = -1;
++    // Leaf end - Alternative Brain Behaviour
++
+     @Deprecated
+     @VisibleForDebug
+     public List<BehaviorControl<? super E>> getRunningBehaviors() {
+-        List<BehaviorControl<? super E>> list = new ObjectArrayList<>();
+-
+-        for (Map<Activity, Set<BehaviorControl<? super E>>> map : this.availableBehaviorsByPriority.values()) {
+-            for (Set<BehaviorControl<? super E>> set : map.values()) {
+-                for (BehaviorControl<? super E> behaviorcontrol : set) {
+-                    if (behaviorcontrol.getStatus() == Behavior.Status.RUNNING) {
+-                        list.add(behaviorcontrol);
++        // Leaf start - Alternative Brain Behaviour
++        long currentTick = getCurrentTick();
++
++        // Use cached result if within update interval
++        if (runningBehaviorsCache != null && (currentTick - lastRunningBehaviorCheck) < GlobalConfiguration.get().leafConfigs.brainRunningBehaviorCacheUpdate.interval) {
++            return runningBehaviorsCache;
++        }
++
++        // Initialize or reuse cache list
++        if (runningBehaviorsCache == null) {
++            runningBehaviorsCache = new ObjectArrayList<>(32);
++        } else {
++            runningBehaviorsCache.clear();
++        }
++
++        for (Map<Activity, Set<BehaviorControl<? super E>>> activityMap : availableBehaviorsByPriority.values()) {
++            for (Set<BehaviorControl<? super E>> behaviors : activityMap.values()) {
++                if (behaviors.isEmpty()) continue;
++
++                for (BehaviorControl<? super E> behavior : behaviors) {
++                    if (behavior.getStatus() == Behavior.Status.RUNNING) {
++                        runningBehaviorsCache.add(behavior);
+                     }
+                 }
+             }
+         }
+ 
+-        return list;
+-    }
++        lastRunningBehaviorCheck = currentTick;
++
++        return runningBehaviorsCache;
++    }
++
++    // Helper method to get current tick
++    private long getCurrentTick() {
++        // This should be implemented to return the current game tick
++        return System.nanoTime() / 50_000_000; // Approximate tick time of 50ms
++    }
++    // Leaf end - Alternative Brain Behaviour
+ 
+     public void useDefaultActivity() {
+         this.setActiveActivity(this.defaultActivity);
+@@ -371,8 +_,8 @@
+ 
+         for (Pair<Integer, ? extends BehaviorControl<? super E>> pair : p_21909_) {
+             this.availableBehaviorsByPriority
+-                .computeIfAbsent(pair.getFirst(), p_21917_ -> Maps.newHashMap())
+-                .computeIfAbsent(p_21908_, p_21972_ -> Sets.newLinkedHashSet())
++                    .computeIfAbsent(pair.getFirst(), integer -> new it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap<>()) // Leaf - Replace brain activity maps with optimized collection
++                    .computeIfAbsent(p_21908_, activity1 -> new it.unimi.dsi.fastutil.objects.ObjectLinkedOpenHashSet<>()) // Leaf - Replace brain activity maps with optimized collection
+                 .add((BehaviorControl<? super E>)pair.getSecond());
+         }
+     }
+@@ -434,20 +_,29 @@
+     }
+ 
+     private void startEachNonRunningBehavior(ServerLevel p_21958_, E p_21959_) {
+-        long i = p_21958_.getGameTime();
+-
+-        for (Map<Activity, Set<BehaviorControl<? super E>>> map : this.availableBehaviorsByPriority.values()) {
+-            for (Entry<Activity, Set<BehaviorControl<? super E>>> entry : map.entrySet()) {
+-                Activity activity = entry.getKey();
+-                if (this.activeActivities.contains(activity)) {
+-                    for (BehaviorControl<? super E> behaviorcontrol : entry.getValue()) {
+-                        if (behaviorcontrol.getStatus() == Behavior.Status.STOPPED) {
+-                            behaviorcontrol.tryStart(p_21958_, p_21959_, i);
++        // Leaf start - Collect then startEachNonRunningBehavior in Brain
++        final long gameTime = p_21958_.getGameTime();
++        List<BehaviorControl<? super E>> behaviorsToStart = new ObjectArrayList<>();
++
++        for (Activity activeActivity : this.activeActivities) {
++            for (Map<Activity, Set<BehaviorControl<? super E>>> priorityMap : this.availableBehaviorsByPriority.values()) {
++                Set<BehaviorControl<? super E>> behaviors = priorityMap.get(activeActivity);
++
++                if (behaviors != null && !behaviors.isEmpty()) {
++                    for (BehaviorControl<? super E> behaviorControl : behaviors) {
++                        if (behaviorControl.getStatus() == Behavior.Status.STOPPED) {
++                            behaviorsToStart.add(behaviorControl);
+                         }
+                     }
+                 }
+             }
+         }
++        if (!behaviorsToStart.isEmpty()) {
++            for (BehaviorControl<? super E> behaviorControl : behaviorsToStart) {
++                behaviorControl.tryStart(p_21958_, p_21959_, gameTime);
++            }
++        }
++        // Leaf end - Collect then startEachNonRunningBehavior in Brain
+     }
+ 
+     private void tickEachRunningBehavior(ServerLevel p_21964_, E p_21965_) {

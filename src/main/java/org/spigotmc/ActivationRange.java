@@ -1,5 +1,6 @@
 package org.spigotmc;
 
+import io.papermc.paper.configuration.GlobalConfiguration;
 import io.papermc.paper.configuration.WorldConfiguration;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -212,6 +213,22 @@ public class ActivationRange
                 }
                 // Paper end - Configurable marker ticking
                 ActivationRange.activateEntity(entity);
+
+                // Pufferfish start
+                if (GlobalConfiguration.get().dynamicActivationofBrain.enabled && entity.getType().dabEnabled &&
+                        (!GlobalConfiguration.get().dynamicActivationofBrain.dontEnableIfInWater || entity.getType().is(net.minecraft.tags.EntityTypeTags.CAN_BREATHE_UNDER_WATER) || !entity.isInWaterOrBubble())) { // Leaf - Option for dontEnableIfInWater
+                    if (!entity.activatedPriorityReset) {
+                        entity.activatedPriorityReset = true;
+                        entity.activatedPriority = GlobalConfiguration.get().dynamicActivationofBrain.maximumActivationPrio;
+                    }
+                    int squaredDistance = (int) player.distanceToSqr(entity);
+                    entity.activatedPriority = squaredDistance >GlobalConfiguration.get().dynamicActivationofBrain.startDistanceSquared ?
+                            Math.max(1, Math.min(squaredDistance >> GlobalConfiguration.get().dynamicActivationofBrain.activationDistanceMod, entity.activatedPriority)) :
+                            1;
+                } else {
+                    entity.activatedPriority = 1;
+                }
+                // Pufferfish end
             }
             // Paper end
         }

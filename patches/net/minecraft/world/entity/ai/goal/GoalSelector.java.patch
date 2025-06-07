@@ -29,7 +29,7 @@
  
      public GoalSelector(Supplier<ProfilerFiller> p_25351_) {
          this.profiler = p_25351_;
-@@ -34,12 +_,30 @@
+@@ -34,12 +_,34 @@
  
      public void addGoal(int p_25353_, Goal p_25354_) {
          this.availableGoals.add(new WrappedGoal(p_25353_, p_25354_));
@@ -45,9 +45,13 @@
 +    }
 +
 +    // Paper start - EAR 2
-+    public boolean inactiveTick() {
++    public boolean inactiveTick(int tickRate, boolean inactive) { // Pufferfish start
++        if (inactive && !GlobalConfiguration.get().dynamicActivationofBrain.enabled) tickRate = 4; // reset to Paper's
++        tickRate = Math.min(tickRate, 3); // Dreeam TODO - Waiting Paper
 +        this.curRate++;
-+        return this.curRate % 3 == 0; // TODO newGoalRate was already unused in 1.20.4, check if this is correct
++        //return this.curRate % 3 == 0; // TODO newGoalRate was already unused in 1.20.4, check if this is correct
++        return this.curRate % tickRate == 0;
++        // Pufferfish end
 +    }
 +
 +    public boolean hasTasks() {

@@ -1,0 +1,40 @@
+--- a/net/minecraft/world/entity/ai/behavior/BehaviorUtils.java
++++ b/net/minecraft/world/entity/ai/behavior/BehaviorUtils.java
+@@ -96,10 +_,33 @@
+ 
+     public static SectionPos findSectionClosestToVillage(ServerLevel p_22582_, SectionPos p_22583_, int p_22584_) {
+         int i = p_22582_.sectionsToVillage(p_22583_);
+-        return SectionPos.cube(p_22583_, p_22584_)
+-            .filter(p_186017_ -> p_22582_.sectionsToVillage(p_186017_) < i)
+-            .min(Comparator.comparingInt(p_22582_::sectionsToVillage))
+-            .orElse(p_22583_);
++        // Leaf start - Remove stream in BehaviorUtils
++        SectionPos closestSection = p_22583_;
++        int closestDistance = i;
++
++        final int lowerX = p_22583_.getX() - p_22584_;
++        final int lowerY = p_22583_.getY() - p_22584_;
++        final int lowerZ = p_22583_.getZ() - p_22584_;
++        final int upperX = p_22583_.getX() + p_22584_;
++        final int upperY = p_22583_.getY() + p_22584_;
++        final int upperZ = p_22583_.getZ() + p_22584_;
++
++        for (int x = lowerX; x <= upperX; x++) {
++            for (int z = lowerZ; z <= upperZ; z++) {
++                for (int y = lowerY; y <= upperY; y++) {
++                    SectionPos pos = SectionPos.of(x, y, z);
++                    int distance = p_22582_.sectionsToVillage(pos);
++
++                    if (distance < closestDistance) {
++                        closestDistance = distance;
++                        closestSection = pos;
++                    }
++                }
++            }
++        }
++
++        return closestSection;
++        // Leaf end - Remove stream in BehaviorUtils
+     }
+ 
+     public static boolean isWithinAttackRange(Mob p_22633_, LivingEntity p_22634_, int p_22635_) {

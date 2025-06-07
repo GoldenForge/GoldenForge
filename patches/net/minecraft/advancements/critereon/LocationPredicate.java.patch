@@ -1,0 +1,20 @@
+--- a/net/minecraft/advancements/critereon/LocationPredicate.java
++++ b/net/minecraft/advancements/critereon/LocationPredicate.java
+@@ -4,6 +_,8 @@
+ import com.mojang.serialization.codecs.RecordCodecBuilder;
+ import com.mojang.serialization.codecs.RecordCodecBuilder.Instance;
+ import java.util.Optional;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.HolderSet;
+@@ -50,7 +_,7 @@
+         } else {
+             BlockPos blockpos = BlockPos.containing(p_52619_, p_52620_, p_52621_);
+             boolean flag = p_52618_.isLoaded(blockpos);
+-            if (!this.biomes.isPresent() || flag && this.biomes.get().contains(p_52618_.getBiome(blockpos))) {
++            if (!this.biomes.isPresent() || flag && this.biomes.get().contains(GlobalConfiguration.get().leafConfigs.optimizeBiome.advancement ? p_52618_.getBiomeCached(blockpos) : p_52618_.getBiome(blockpos))) { // Leaf - cache getBiome
+                 if (!this.structures.isPresent() || flag && p_52618_.structureManager().getStructureWithPieceAt(blockpos, this.structures.get()).isValid()) {
+                     if (!this.smokey.isPresent() || flag && this.smokey.get() == CampfireBlock.isSmokeyPos(p_52618_, blockpos)) {
+                         if (this.light.isPresent() && !this.light.get().matches(p_52618_, blockpos)) {

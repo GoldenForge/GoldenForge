@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/LevelChunkSection.java
 +++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
-@@ -13,17 +_,43 @@
+@@ -13,17 +_,44 @@
  import net.minecraft.world.level.block.state.BlockState;
  import net.minecraft.world.level.material.FluidState;
  
@@ -15,6 +15,7 @@
      private short tickingBlockCount;
      private short tickingFluidCount;
 -    private final PalettedContainer<BlockState> states;
++    private boolean isRandomlyTickingBlocksStatus; // Leaf - Cache random tick block status
 +    public final PalettedContainer<BlockState> states;
      private PalettedContainerRO<Holder<Biome>> biomes;
  
@@ -93,7 +94,7 @@
      public BlockState setBlockState(int p_62992_, int p_62993_, int p_62994_, BlockState p_62995_, boolean p_62996_) {
          BlockState blockstate;
          if (p_62996_) {
-@@ -65,28 +_,30 @@
+@@ -65,28 +_,31 @@
  
          FluidState fluidstate = blockstate.getFluidState();
          FluidState fluidstate1 = p_62995_.getFluidState();
@@ -124,11 +125,21 @@
          }
  
 +        this.updateBlockCallback(p_62992_, p_62993_, p_62994_, p_62995_, blockstate); // Paper - block counting
++        this.isRandomlyTickingBlocksStatus = this.tickingBlockCount > 0; // Leaf - Cache random tick block status
 +
          return blockstate;
      }
  
-@@ -107,35 +_,103 @@
+@@ -99,7 +_,7 @@
+     }
+ 
+     public boolean isRandomlyTickingBlocks() {
+-        return this.tickingBlockCount > 0;
++        return isRandomlyTickingBlocksStatus; // Leaf - Cache random tick block status
+     }
+ 
+     public boolean isRandomlyTickingFluids() {
+@@ -107,35 +_,105 @@
      }
  
      public void recalcBlockCounts() {
@@ -150,6 +161,7 @@
 +        this.tickingFluidCount = (short)0;
 +        this.specialCollidingBlocks = (short)0;
 +        this.tickingBlocks.clear();
++        this.isRandomlyTickingBlocksStatus = false; // Leaf - Cache random tick block status
 +
 +        if (this.maybeHas((final BlockState state) -> !state.isAir())) {
 +            final PalettedContainer.Data<BlockState> data = this.states.data;
@@ -183,6 +195,7 @@
 +                this.nonEmptyBlockCount += (short)paletteCount;
 +                if (state.isRandomlyTicking()) {
 +                    this.tickingBlockCount += (short)paletteCount;
++                    this.isRandomlyTickingBlocksStatus = this.tickingBlockCount > 0; // Leaf - Cache random tick block status
 +                    final short[] raw = coordinates.elements();
 +                    final int rawLen = raw.length;
 +

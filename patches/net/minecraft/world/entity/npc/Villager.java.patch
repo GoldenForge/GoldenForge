@@ -1,6 +1,15 @@
 --- a/net/minecraft/world/entity/npc/Villager.java
 +++ b/net/minecraft/world/entity/npc/Villager.java
-@@ -268,10 +_,36 @@
+@@ -184,6 +_,8 @@
+         (p_219616_, p_219617_) -> p_219617_.is(PoiTypes.MEETING)
+     );
+ 
++    public long nextGolemPanic = -1; // Pufferfish
++
+     public Villager(EntityType<? extends Villager> p_35381_, Level p_35382_) {
+         this(p_35381_, p_35382_, VillagerType.PLAINS);
+     }
+@@ -268,10 +_,38 @@
          return this.assignProfessionWhenSpawned;
      }
  
@@ -26,6 +35,7 @@
 +    }
 +    // Spigot End
 +
++    private int behaviorTick = 0; // Pufferfish
      @Override
      protected void customServerAiStep() {
 +        this.customServerAiStep(false);
@@ -34,7 +44,8 @@
 +    protected void customServerAiStep(final boolean inactive) {
          this.level().getProfiler().push("villagerBrain");
 -        this.getBrain().tick((ServerLevel)this.level(), this);
-+        if (!inactive) this.getBrain().tick((ServerLevel)this.level(), this); // Paper
++        if (!inactive && this.behaviorTick++ % this.activatedPriority == 0)  // Purpur - Ridables
++            this.getBrain().tick((ServerLevel)this.level(), this); // Paper
          this.level().getProfiler().pop();
          if (this.assignProfessionWhenSpawned) {
              this.assignProfessionWhenSpawned = false;

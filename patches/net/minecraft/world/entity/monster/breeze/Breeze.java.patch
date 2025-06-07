@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/entity/monster/breeze/Breeze.java
++++ b/net/minecraft/world/entity/monster/breeze/Breeze.java
+@@ -227,10 +_,12 @@
+         return p_312331_.closerThan(vec3, 4.0, 10.0);
+     }
+ 
++    private int behaviorTick; // Leaf - Plazma - Add missing Pufferfish configurations
+     @Override
+     protected void customServerAiStep() {
+         this.level().getProfiler().push("breezeBrain");
+-        this.getBrain().tick((ServerLevel)this.level(), this);
++        if (this.behaviorTick++ % this.activatedPriority == 0) // Leaf - Plazma - Add missing Pufferfish configurations // Leaf - Plazma - Add missing purpur configuration options
++            this.getBrain().tick((ServerLevel)this.level(), this);
+         this.level().getProfiler().popPush("breezeActivityUpdate");
+         BreezeAi.updateActivity(this);
+         this.level().getProfiler().pop();

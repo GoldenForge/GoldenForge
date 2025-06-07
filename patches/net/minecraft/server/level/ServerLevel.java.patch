@@ -509,14 +509,16 @@
          if (flag1) {
              this.resetEmptyTime();
          }
-@@ -393,6 +_,7 @@
+@@ -393,7 +_,9 @@
                  profilerfiller.pop();
              }
  
 +            org.spigotmc.ActivationRange.activateEntities(this); // Spigot
              this.entityTickList.forEach(p_308566_ -> {
++                p_308566_.activatedPriorityReset = false; // Pufferfish - DAB
                  if (!p_308566_.isRemoved()) {
                      if (this.shouldDiscardEntity(p_308566_)) {
+                         p_308566_.discard();
 @@ -401,7 +_,7 @@
                          profilerfiller.push("checkDespawn");
                          p_308566_.checkDespawn();
@@ -1156,7 +1158,7 @@
 +
 +    public boolean isNaturalSpawningAllowed(ChunkPos pos) {
 +        // Paper start - rewrite chunk system
-+        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder chunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(ca.spottedleaf.moonrise.common.util.CoordinateUtils.getChunkKey(pos));
++        final ca.spottedleaf.moonrise.patches.chunk_system.scheduling.NewChunkHolder chunkHolder = this.moonrise$getChunkTaskScheduler().chunkHolderManager.getChunkHolder(pos.longKey); // Leaf - Cache chunk key
 +        return chunkHolder != null && chunkHolder.isEntityTickingReady();
 +        // Paper end - rewrite chunk system
      }

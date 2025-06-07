@@ -1,5 +1,20 @@
 --- a/net/minecraft/world/entity/animal/camel/Camel.java
 +++ b/net/minecraft/world/entity/animal/camel/Camel.java
+@@ -141,11 +_,13 @@
+         return p_316664_ == Pose.SITTING ? SITTING_DIMENSIONS.scale(this.getAgeScale()) : super.getDefaultDimensions(p_316664_);
+     }
+ 
++    private int behaviorTick = 0; // Leaf - Plazma - Add missing Pufferfish configurations
+     @Override
+     protected void customServerAiStep() {
+         this.level().getProfiler().push("camelBrain");
+         Brain<?> brain = this.getBrain();
+-        ((Brain<Camel>)brain).tick((ServerLevel)this.level(), this);
++        if (this.behaviorTick++ % this.activatedPriority == 0) // Leaf - Plazma - Add missing Pufferfish configurations // Leaf - Plazma - Add missing purpur configuration options
++            ((Brain<Camel>)brain).tick((ServerLevel)this.level(), this);
+         this.level().getProfiler().pop();
+         this.level().getProfiler().push("camelActivityUpdate");
+         CamelAi.updateActivity(this);
 @@ -286,6 +_,7 @@
          this.dashCooldown = 55;
          this.setDashing(true);

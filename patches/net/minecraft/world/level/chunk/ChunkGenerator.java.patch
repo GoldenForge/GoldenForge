@@ -96,3 +96,34 @@
                  StructureStart structurestart = p_223201_.getStartForStructure(SectionPos.bottomOf(chunkaccess), holder.value(), chunkaccess);
                  if (structurestart != null && structurestart.isValid() && (!p_223202_ || tryAddReference(p_223201_, structurestart))) {
                      return Pair.of(p_223203_.getLocatePos(structurestart.getChunkPos()), holder);
+@@ -440,18 +_,20 @@
+             Structure structure = entry.getKey();
+             StructureSpawnOverride structurespawnoverride = structure.spawnOverrides().get(p_223136_);
+             if (structurespawnoverride != null) {
+-                MutableBoolean mutableboolean = new MutableBoolean(false);
+-                Predicate<StructureStart> predicate = structurespawnoverride.boundingBox() == StructureSpawnOverride.BoundingBoxType.PIECE
+-                    ? p_223065_ -> p_223135_.structureHasPieceAt(p_223137_, p_223065_)
+-                    : p_223130_ -> p_223130_.getBoundingBox().isInside(p_223137_);
+-                p_223135_.fillStartsForStructure(structure, entry.getValue(), p_223220_ -> {
+-                    if (mutableboolean.isFalse() && predicate.test(p_223220_)) {
+-                        mutableboolean.setTrue();
++                // Leaf start
++                for (long l : entry.getValue()) {
++                    StructureStart startForStructure = p_223135_.getStartForStructure(
++                            null, structure, p_223135_.level.getChunk(ChunkPos.getX(l), ChunkPos.getZ(l), ChunkStatus.STRUCTURE_STARTS)
++                    );
++                    if (startForStructure != null && startForStructure.isValid()) {
++                        if (structurespawnoverride.boundingBox() == StructureSpawnOverride.BoundingBoxType.PIECE
++                                ? p_223135_.structureHasPieceAt(p_223137_, startForStructure)
++                                : startForStructure.getBoundingBox().isInside(p_223137_)) {
++                            return structurespawnoverride.spawns();
++                        }
+                     }
+-                });
+-                if (mutableboolean.isTrue()) {
+-                    return structurespawnoverride.spawns();
+                 }
++                // Leaf end
+             }
+         }
+ 
