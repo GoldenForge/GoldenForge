@@ -173,6 +173,7 @@ public class GlobalConfiguration extends ConfigurationPart {
         public int ioThreads = -1;
         public int workerThreads = -1;
         public String genParallelism = "default";
+        public boolean filterFluidPostProcessing = true;
 
         @PostProcess
         private void postProcess() {
