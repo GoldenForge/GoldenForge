@@ -223,3 +223,34 @@
                      );
                      return joinIsNotEmpty(indexmerger, indexmerger1, indexmerger2, p_83158_.shape, p_83159_.shape, p_83160_);
                  }
+@@ -245,8 +_,8 @@
+             return DoubleMath.fuzzyEquals(voxelshape.max(direction$axis), 1.0, 1.0E-7)
+                 && DoubleMath.fuzzyEquals(voxelshape1.min(direction$axis), 0.0, 1.0E-7)
+                 && !joinIsNotEmpty(
+-                    new SliceShape(voxelshape, direction$axis, voxelshape.shape.getSize(direction$axis) - 1),
+-                    new SliceShape(voxelshape1, direction$axis, 0),
++                    new SliceShape(voxelshape, direction$axis, voxelshape.shape.getSize(direction$axis) - 1, true), // Goldenforge
++                    new SliceShape(voxelshape1, direction$axis, 0, true), // Goldenforge
+                     booleanop
+                 );
+         }
+@@ -267,7 +_,7 @@
+                 i = 0;
+             }
+ 
+-            return (VoxelShape)(!flag ? empty() : new SliceShape(p_83122_, direction$axis, i));
++            return (VoxelShape)(!flag ? empty() : new SliceShape(p_83122_, direction$axis, i, true)); // Goldenforge
+         }
+     }
+ 
+@@ -288,8 +_,8 @@
+             return !joinIsNotEmpty(
+                 block(),
+                 joinUnoptimized(
+-                    new SliceShape(voxelshape, direction$axis, voxelshape.shape.getSize(direction$axis) - 1),
+-                    new SliceShape(voxelshape1, direction$axis, 0),
++                    new SliceShape(voxelshape, direction$axis, voxelshape.shape.getSize(direction$axis) - 1, true), // Goldenforge
++                    new SliceShape(voxelshape1, direction$axis, 0, true), // Goldenforge
+                     BooleanOp.OR
+                 ),
+                 BooleanOp.ONLY_FIRST

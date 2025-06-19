@@ -165,13 +165,13 @@
 +
 +        if (direction.getAxisDirection() == Direction.AxisDirection.POSITIVE) {
 +            if (DoubleMath.fuzzyEquals(this.max(axis), 1.0, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON)) {
-+                ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, this.shape.getSize(axis) - 1));
++                ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, this.shape.getSize(axis) - 1, true)); // Goldenforge
 +            } else {
 +                ret = Shapes.empty();
 +            }
 +        } else {
 +            if (DoubleMath.fuzzyEquals(this.min(axis), 0.0, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON)) {
-+                ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, 0));
++                ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, 0, true)); // Goldenforge
 +            } else {
 +                ret = Shapes.empty();
 +            }
@@ -956,7 +956,7 @@
 +        } else {
 +            Direction.AxisDirection axisDirection = direction.getAxisDirection();
 +            int i = this.findIndex(axis, axisDirection == Direction.AxisDirection.POSITIVE ? 0.9999999 : 1.0E-7);
-+            return new SliceShape(this, axis, i);
++            return new SliceShape(this, axis, i, true); // Goldenforge
 +        }
 +    }
 +

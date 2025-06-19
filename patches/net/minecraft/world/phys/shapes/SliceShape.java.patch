@@ -1,10 +1,18 @@
 --- a/net/minecraft/world/phys/shapes/SliceShape.java
 +++ b/net/minecraft/world/phys/shapes/SliceShape.java
-@@ -12,6 +_,7 @@
-         super(makeSlice(p_83173_.shape, p_83174_, p_83175_));
-         this.delegate = p_83173_;
+@@ -14,6 +_,15 @@
          this.axis = p_83174_;
-+        ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)this).moonrise$initCache(); // Paper - optimise collisions
      }
  
++    // GoldenForge: some mods (e.g: copycats+, diagonalblocks) set the
++    public SliceShape(VoxelShape p_83173_, Direction.Axis p_83174_, int p_83175_, boolean shouldInitializeCache) {
++        super(makeSlice(p_83173_.shape, p_83174_, p_83175_));
++        this.delegate = p_83173_;
++        this.axis = p_83174_;
++        if (shouldInitializeCache)
++            ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)this).moonrise$initCache(); // Paper - optimise collisions
++    }
++
      private static DiscreteVoxelShape makeSlice(DiscreteVoxelShape p_83177_, Direction.Axis p_83178_, int p_83179_) {
+         return new SubShape(
+             p_83177_,

@@ -184,7 +184,7 @@ public final class CollisionUtil {
 
     private static VoxelShape sliceShapeVanilla(final VoxelShape src, final Direction.Axis axis,
                                                 final int index) {
-        return new SliceShape(src, axis, index);
+        return new SliceShape(src, axis, index, true); // Goldenforge
     }
 
     private static DoubleList offsetList(final double[] src, final double by) {

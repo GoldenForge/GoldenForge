@@ -10,7 +10,8 @@
     "fixes.theovergrowth.UtilsMixin",
     "fixes.theovergrowth.SpawnEntitiesMixin",
     "fixes.industrialforegoing.ProcessExplosionMixin",
-    "fixes.distanthorizons.BatchGenerationEnvironmentMixin"
+    "fixes.distanthorizons.BatchGenerationEnvironmentMixin",
+    "fixes.copycatsplus.OutlinedVoxelShapeMixin"
   ],
   "client": [],
   "injectors": {
