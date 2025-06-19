@@ -1,5 +1,98 @@
 --- a/net/minecraft/world/level/BaseSpawner.java
 +++ b/net/minecraft/world/level/BaseSpawner.java
+@@ -44,16 +_,17 @@
+     private int maxNearbyEntities = 6;
+     private int requiredPlayerRange = 16;
+     private int spawnRange = 4;
++    private int tickDelay = 0; // Paper - Configurable mob spawner tick rate
+ 
+     public void setEntityId(EntityType<?> p_253682_, @Nullable Level p_254041_, RandomSource p_254221_, BlockPos p_254050_) {
+         this.getOrCreateNextSpawnData(p_254041_, p_254221_, p_254050_)
+-            .getEntityToSpawn()
+-            .putString("id", BuiltInRegistries.ENTITY_TYPE.getKey(p_253682_).toString());
++                .getEntityToSpawn()
++                .putString("id", BuiltInRegistries.ENTITY_TYPE.getKey(p_253682_).toString());
+     }
+ 
+     private boolean isNearPlayer(Level p_151344_, BlockPos p_151345_) {
+         return p_151344_.hasNearbyAlivePlayer(
+-            (double)p_151345_.getX() + 0.5, (double)p_151345_.getY() + 0.5, (double)p_151345_.getZ() + 0.5, (double)this.requiredPlayerRange
++                (double)p_151345_.getX() + 0.5, (double)p_151345_.getY() + 0.5, (double)p_151345_.getZ() + 0.5, (double)this.requiredPlayerRange
+         );
+     }
+ 
+@@ -77,13 +_,19 @@
+     }
+ 
+     public void serverTick(ServerLevel p_151312_, BlockPos p_151313_) {
++        if (spawnCount <= 0 || maxNearbyEntities <= 0) return; // Paper - Ignore impossible spawn tick
++        // Paper start - Configurable mob spawner tick rate
++        if (spawnDelay > 0 && --tickDelay > 0) return;
++        tickDelay = p_151312_.paperConfig().tickRates.mobSpawner;
++        if (tickDelay == -1) { return; } // If disabled
++        // Paper end - Configurable mob spawner tick rate
+         if (this.isNearPlayer(p_151312_, p_151313_)) {
+-            if (this.spawnDelay == -1) {
++            if (this.spawnDelay < -tickDelay) { // Paper - Configurable mob spawner tick rate
+                 this.delay(p_151312_, p_151313_);
+             }
+ 
+             if (this.spawnDelay > 0) {
+-                this.spawnDelay--;
++                this.spawnDelay -= tickDelay; // Paper - Configurable mob spawner tick rate
+             } else {
+                 boolean flag = false;
+                 RandomSource randomsource = p_151312_.getRandom();
+@@ -100,12 +_,12 @@
+                     ListTag listtag = compoundtag.getList("Pos", 6);
+                     int j = listtag.size();
+                     double d0 = j >= 1
+-                        ? listtag.getDouble(0)
+-                        : (double)p_151313_.getX() + (randomsource.nextDouble() - randomsource.nextDouble()) * (double)this.spawnRange + 0.5;
++                            ? listtag.getDouble(0)
++                            : (double)p_151313_.getX() + (randomsource.nextDouble() - randomsource.nextDouble()) * (double)this.spawnRange + 0.5;
+                     double d1 = j >= 2 ? listtag.getDouble(1) : (double)(p_151313_.getY() + randomsource.nextInt(3) - 1);
+                     double d2 = j >= 3
+-                        ? listtag.getDouble(2)
+-                        : (double)p_151313_.getZ() + (randomsource.nextDouble() - randomsource.nextDouble()) * (double)this.spawnRange + 0.5;
++                            ? listtag.getDouble(2)
++                            : (double)p_151313_.getZ() + (randomsource.nextDouble() - randomsource.nextDouble()) * (double)this.spawnRange + 0.5;
+                     if (p_151312_.noCollision(optional.get().getSpawnAABB(d0, d1, d2))) {
+                         BlockPos blockpos = BlockPos.containing(d0, d1, d2);
+                         if (spawndata.getCustomSpawnRules().isPresent()) {
+@@ -131,19 +_,19 @@
+                         }
+ 
+                         int k = p_151312_.getEntities(
+-                                EntityTypeTest.forExactClass(entity.getClass()),
+-                                new AABB(
+-                                        (double)p_151313_.getX(),
+-                                        (double)p_151313_.getY(),
+-                                        (double)p_151313_.getZ(),
+-                                        (double)(p_151313_.getX() + 1),
+-                                        (double)(p_151313_.getY() + 1),
+-                                        (double)(p_151313_.getZ() + 1)
+-                                    )
+-                                    .inflate((double)this.spawnRange),
+-                                EntitySelector.NO_SPECTATORS
+-                            )
+-                            .size();
++                                        EntityTypeTest.forExactClass(entity.getClass()),
++                                        new AABB(
++                                                (double)p_151313_.getX(),
++                                                (double)p_151313_.getY(),
++                                                (double)p_151313_.getZ(),
++                                                (double)(p_151313_.getX() + 1),
++                                                (double)(p_151313_.getY() + 1),
++                                                (double)(p_151313_.getZ() + 1)
++                                        )
++                                                .inflate((double)this.spawnRange),
++                                        EntitySelector.NO_SPECTATORS
++                                )
++                                .size();
+                         if (k >= this.maxNearbyEntities) {
+                             this.delay(p_151312_, p_151313_);
+                             return;
 @@ -151,15 +_,14 @@
  
                          entity.moveTo(entity.getX(), entity.getY(), entity.getZ(), randomsource.nextFloat() * 360.0F, 0.0F);
@@ -20,6 +113,47 @@
  
                              spawndata.getEquipment().ifPresent(mob::equip);
                          }
+@@ -203,9 +_,9 @@
+         boolean flag = p_151331_.contains("SpawnData", 10);
+         if (flag) {
+             SpawnData spawndata = SpawnData.CODEC
+-                .parse(NbtOps.INSTANCE, p_151331_.getCompound("SpawnData"))
+-                .resultOrPartial(p_186391_ -> LOGGER.warn("Invalid SpawnData: {}", p_186391_))
+-                .orElseGet(SpawnData::new);
++                    .parse(NbtOps.INSTANCE, p_151331_.getCompound("SpawnData"))
++                    .resultOrPartial(p_186391_ -> LOGGER.warn("Invalid SpawnData: {}", p_186391_))
++                    .orElseGet(SpawnData::new);
+             this.setNextSpawnData(p_151329_, p_151330_, spawndata);
+         }
+ 
+@@ -213,9 +_,9 @@
+         if (flag1) {
+             ListTag listtag = p_151331_.getList("SpawnPotentials", 10);
+             this.spawnPotentials = SpawnData.LIST_CODEC
+-                .parse(NbtOps.INSTANCE, listtag)
+-                .resultOrPartial(p_186388_ -> LOGGER.warn("Invalid SpawnPotentials list: {}", p_186388_))
+-                .orElseGet(SimpleWeightedRandomList::empty);
++                    .parse(NbtOps.INSTANCE, listtag)
++                    .resultOrPartial(p_186388_ -> LOGGER.warn("Invalid SpawnPotentials list: {}", p_186388_))
++                    .orElseGet(SimpleWeightedRandomList::empty);
+         } else {
+             this.spawnPotentials = SimpleWeightedRandomList.single(this.nextSpawnData != null ? this.nextSpawnData : new SpawnData());
+         }
+@@ -248,10 +_,10 @@
+         p_186382_.putShort("SpawnRange", (short)this.spawnRange);
+         if (this.nextSpawnData != null) {
+             p_186382_.put(
+-                "SpawnData",
+-                SpawnData.CODEC
+-                    .encodeStart(NbtOps.INSTANCE, this.nextSpawnData)
+-                    .getOrThrow(p_337966_ -> new IllegalStateException("Invalid SpawnData: " + p_337966_))
++                    "SpawnData",
++                    SpawnData.CODEC
++                            .encodeStart(NbtOps.INSTANCE, this.nextSpawnData)
++                            .getOrThrow(p_337966_ -> new IllegalStateException("Invalid SpawnData: " + p_337966_))
+             );
+         }
+ 
 @@ -308,5 +_,12 @@
  
      public double getoSpin() {

@@ -1,6 +1,136 @@
 --- a/net/minecraft/world/level/chunk/LevelChunk.java
 +++ b/net/minecraft/world/level/chunk/LevelChunk.java
-@@ -139,6 +_,7 @@
+@@ -5,6 +_,8 @@
+ import com.mojang.logging.LogUtils;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
++
++import java.util.Collections;
+ import java.util.Map;
+ import java.util.Map.Entry;
+ import java.util.function.Consumer;
+@@ -50,7 +_,7 @@
+ import net.minecraft.world.ticks.TickContainerAccess;
+ import org.slf4j.Logger;
+ 
+-public class LevelChunk extends ChunkAccess implements net.neoforged.neoforge.attachment.IAttachmentHolder {
++public class LevelChunk extends ChunkAccess implements net.neoforged.neoforge.attachment.IAttachmentHolder, ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkSystemLevelChunk, ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk, ca.spottedleaf.moonrise.patches.chunk_getblock.GetBlockChunk { // Paper - rewrite chunk system // Paper - get block chunk optimisation
+     static final Logger LOGGER = LogUtils.getLogger();
+     private static final TickingBlockEntity NULL_TICKER = new TickingBlockEntity() {
+         @Override
+@@ -74,7 +_,7 @@
+     };
+     private final Map<BlockPos, LevelChunk.RebindableTickingBlockEntityWrapper> tickersInLevel = Maps.newHashMap();
+     private boolean loaded;
+-    final Level level;
++    public final Level level;
+     @Nullable
+     private Supplier<FullChunkStatus> fullStatus;
+     @Nullable
+@@ -88,15 +_,15 @@
+     }
+ 
+     public LevelChunk(
+-        Level p_196854_,
+-        ChunkPos p_196855_,
+-        UpgradeData p_196856_,
+-        LevelChunkTicks<Block> p_196857_,
+-        LevelChunkTicks<Fluid> p_196858_,
+-        long p_196859_,
+-        @Nullable LevelChunkSection[] p_196860_,
+-        @Nullable LevelChunk.PostLoadProcessor p_196861_,
+-        @Nullable BlendingData p_196862_
++            Level p_196854_,
++            ChunkPos p_196855_,
++            UpgradeData p_196856_,
++            LevelChunkTicks<Block> p_196857_,
++            LevelChunkTicks<Fluid> p_196858_,
++            long p_196859_,
++            @Nullable LevelChunkSection[] p_196860_,
++            @Nullable LevelChunk.PostLoadProcessor p_196861_,
++            @Nullable BlendingData p_196862_
+     ) {
+         super(p_196855_, p_196856_, p_196854_, p_196854_.registryAccess().registryOrThrow(Registries.BIOME), p_196859_, p_196860_, p_196862_);
+         this.level = p_196854_;
+@@ -111,21 +_,67 @@
+         this.postLoad = p_196861_;
+         this.blockTicks = p_196857_;
+         this.fluidTicks = p_196858_;
+-    }
++        // Paper start - get block chunk optimisation
++        this.minSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMinSection(level);
++        this.maxSection = ca.spottedleaf.moonrise.common.util.WorldUtil.getMaxSection(level);
++
++        final boolean empty = ((Object)this instanceof EmptyLevelChunk);
++        this.debug = !empty && this.level.isDebug();
++        this.defaultBlockState = empty ? VOID_AIR_BLOCKSTATE : AIR_BLOCKSTATE;
++        // Paper end - get block chunk optimisation
++    }
++
++    // Paper start - rewrite chunk system
++    private boolean postProcessingDone;
++    private net.minecraft.server.level.ServerChunkCache.ChunkAndHolder chunkAndHolder;
++
++    @Override
++    public final boolean moonrise$isPostProcessingDone() {
++        return this.postProcessingDone;
++    }
++
++    @Override
++    public final net.minecraft.server.level.ServerChunkCache.ChunkAndHolder moonrise$getChunkAndHolder() {
++        return this.chunkAndHolder;
++    }
++
++    @Override
++    public final void moonrise$setChunkAndHolder(final net.minecraft.server.level.ServerChunkCache.ChunkAndHolder holder) {
++        this.chunkAndHolder = holder;
++    }
++    // Paper end - rewrite chunk system
++    // Paper start - get block chunk optimisation
++    private static final BlockState AIR_BLOCKSTATE = Blocks.AIR.defaultBlockState();
++    private static final FluidState AIR_FLUIDSTATE = Fluids.EMPTY.defaultFluidState();
++    private static final BlockState VOID_AIR_BLOCKSTATE = Blocks.VOID_AIR.defaultBlockState();
++    private final int minSection;
++    private final int maxSection;
++    private final boolean debug;
++    private final BlockState defaultBlockState;
++
++    @Override
++    public final BlockState moonrise$getBlock(final int x, final int y, final int z) {
++        return this.getBlockStateFinal(x, y, z);
++    }
++    // Paper end - get block chunk optimisation
+ 
+     public LevelChunk(ServerLevel p_196850_, ProtoChunk p_196851_, @Nullable LevelChunk.PostLoadProcessor p_196852_) {
+         this(
+-            p_196850_,
+-            p_196851_.getPos(),
+-            p_196851_.getUpgradeData(),
+-            p_196851_.unpackBlockTicks(),
+-            p_196851_.unpackFluidTicks(),
+-            p_196851_.getInhabitedTime(),
+-            p_196851_.getSections(),
+-            p_196852_,
+-            p_196851_.getBlendingData()
++                p_196850_,
++                p_196851_.getPos(),
++                p_196851_.getUpgradeData(),
++                p_196851_.unpackBlockTicks(),
++                p_196851_.unpackFluidTicks(),
++                p_196851_.getInhabitedTime(),
++                p_196851_.getSections(),
++                p_196852_,
++                p_196851_.getBlendingData()
+         );
+ 
++        if (!Collections.disjoint(p_196851_.pendingBlockEntities.keySet(), p_196851_.blockEntities.keySet())) {
++            LOGGER.error("Chunk at {} contains duplicated block entities", p_196851_.getPos());
++        }
++
+         for (BlockEntity blockentity : p_196851_.getBlockEntities().values()) {
+             this.setBlockEntity(blockentity);
+         }
+@@ -139,15 +_,23 @@
          this.setAllStarts(p_196851_.getAllStarts());
          this.setAllReferences(p_196851_.getAllReferences());
  
@@ -8,6 +138,136 @@
          for (Entry<Heightmap.Types, Heightmap> entry : p_196851_.getHeightmaps()) {
              if (ChunkStatus.FULL.heightmapsAfter().contains(entry.getKey())) {
                  this.setHeightmap(entry.getKey(), entry.getValue().getRawData());
+             }
+         }
+ 
+-        this.skyLightSources = p_196851_.skyLightSources;
++        // Paper - rewrite chunk system
+         this.setLightCorrect(p_196851_.isLightCorrect());
+         this.unsaved = true;
++
++        // Paper start - rewrite chunk system
++        this.starlight$setBlockNibbles(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getBlockNibbles());
++        this.starlight$setSkyNibbles(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getSkyNibbles());
++        this.starlight$setSkyEmptinessMap(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getSkyEmptinessMap());
++        this.starlight$setBlockEmptinessMap(((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)p_196851_).starlight$getBlockEmptinessMap());
++        // Paper end - rewrite chunk system
+     }
+ 
+     @Override
+@@ -165,16 +_,41 @@
+         return new ChunkAccess.TicksToSave(this.blockTicks, this.fluidTicks);
+     }
+ 
++    // Paper start
++    @Override
++    public long getInhabitedTime() {
++        return this.level.paperConfig().chunks.fixedChunkInhabitedTime < 0 ? super.getInhabitedTime() : this.level.paperConfig().chunks.fixedChunkInhabitedTime;
++    }
++    // Paper end
++
+     @Override
+     public GameEventListenerRegistry getListenerRegistry(int p_251193_) {
+         return this.level instanceof ServerLevel serverlevel
+-            ? this.gameEventListenerRegistrySections
++                ? this.gameEventListenerRegistrySections
+                 .computeIfAbsent(p_251193_, p_281221_ -> new EuclideanGameEventListenerRegistry(serverlevel, p_251193_, this::removeGameEventListenerRegistry))
+-            : super.getListenerRegistry(p_251193_);
++                : super.getListenerRegistry(p_251193_);
++    }
++
++    // Paper start - Perf: Reduce instructions and provide final method
++    public BlockState getBlockState(final int x, final int y, final int z) {
++        return this.getBlockStateFinal(x, y, z);
++    }
++    public BlockState getBlockStateFinal(final int x, final int y, final int z) {
++        // Copied and modified from below
++        final int sectionIndex = this.getSectionIndex(y);
++        if (sectionIndex < 0 || sectionIndex >= this.sections.length
++                || this.sections[sectionIndex].nonEmptyBlockCount == 0) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        return this.sections[sectionIndex].states.get((y & 15) << 8 | (z & 15) << 4 | x & 15);
+     }
+ 
+     @Override
+     public BlockState getBlockState(BlockPos p_62923_) {
++        if (true) {
++            return this.getBlockStateFinal(p_62923_.getX(), p_62923_.getY(), p_62923_.getZ());
++        }
++        // Paper end - Perf: Reduce instructions and provide final method
+         int i = p_62923_.getX();
+         int j = p_62923_.getY();
+         int k = p_62923_.getZ();
+@@ -209,28 +_,48 @@
+         }
+     }
+ 
++    // Paper start - If loaded util
++    @Override
++    public final FluidState getFluidIfLoaded(BlockPos blockposition) {
++        return this.getFluidState(blockposition);
++    }
++
++    @Override
++    public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++        return this.getBlockState(blockposition);
++    }
++    // Paper end
++
+     @Override
+     public FluidState getFluidState(BlockPos p_62895_) {
+         return this.getFluidState(p_62895_.getX(), p_62895_.getY(), p_62895_.getZ());
+     }
+ 
+-    public FluidState getFluidState(int p_62815_, int p_62816_, int p_62817_) {
+-        try {
+-            int i = this.getSectionIndex(p_62816_);
+-            if (i >= 0 && i < this.sections.length) {
+-                LevelChunkSection levelchunksection = this.sections[i];
+-                if (!levelchunksection.hasOnlyAir()) {
+-                    return levelchunksection.getFluidState(p_62815_ & 15, p_62816_ & 15, p_62817_ & 15);
+-                }
++    public FluidState getFluidState(int x, int y, int z) {
++        // Paper start - Perf: Optimise Chunk#getFluid
++        // try {  // Remove try catch
++        int index = this.getSectionIndex(y);
++        if (index >= 0 && index < this.sections.length) {
++            LevelChunkSection chunksection = this.sections[index];
++
++            if (!chunksection.hasOnlyAir()) {
++                return chunksection.states.get((y & 15) << 8 | (z & 15) << 4 | x & 15).getFluidState();
++                // Paper end - Perf: Optimise Chunk#getFluid
+             }
++        }
+ 
+-            return Fluids.EMPTY.defaultFluidState();
++        return Fluids.EMPTY.defaultFluidState();
++        /* // Paper - Perf: Optimise Chunk#getFluid
+         } catch (Throwable throwable) {
+             CrashReport crashreport = CrashReport.forThrowable(throwable, "Getting fluid state");
+-            CrashReportCategory crashreportcategory = crashreport.addCategory("Block being got");
+-            crashreportcategory.setDetail("Location", () -> CrashReportCategory.formatLocation(this, p_62815_, p_62816_, p_62817_));
++            CrashReportCategory crashreportsystemdetails = crashreport.addCategory("Block being got");
++
++            crashreportsystemdetails.setDetail("Location", () -> {
++                return CrashReportCategory.formatLocation(this, x, y, z);
++            });
+             throw new ReportedException(crashreport);
+         }
++         */  // Paper - Perf: Optimise Chunk#getFluid
+     }
+ 
+     @Nullable
+@@ -262,7 +_,7 @@
+                 if (LightEngine.hasDifferentLightProperties(this, p_62865_, blockstate, p_62866_)) {
+                     ProfilerFiller profilerfiller = this.level.getProfiler();
+                     profilerfiller.push("updateSkyLightSources");
+-                    this.skyLightSources.update(this, j, i, l);
++                    // Paper - rewrite chunk system
+                     profilerfiller.popPush("queueCheckLight");
+                     this.level.getChunkSource().getLightEngine().checkBlock(p_62865_);
+                     profilerfiller.pop();
 @@ -278,7 +_,7 @@
                  if (!levelchunksection.getBlockState(j, k, l).is(block)) {
                      return null;
@@ -46,6 +306,17 @@
          }
      }
  
+@@ -372,8 +_,8 @@
+             return false;
+         } else {
+             return !(this.level instanceof ServerLevel serverlevel)
+-                ? true
+-                : this.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING) && serverlevel.areEntitiesLoaded(ChunkPos.asLong(p_156411_));
++                    ? true
++                    : this.getFullStatus().isOrAfter(FullChunkStatus.BLOCK_TICKING) && serverlevel.areEntitiesLoaded(ChunkPos.asLong(p_156411_));
+         }
+     }
+ 
 @@ -403,6 +_,7 @@
              BlockEntity blockentity = this.blockEntities.put(blockpos.immutable(), p_156374_);
              if (blockentity != null && blockentity != p_156374_) {
@@ -58,10 +329,13 @@
      public CompoundTag getBlockEntityNbtForSaving(BlockPos p_62932_, HolderLookup.Provider p_323699_) {
          BlockEntity blockentity = this.getBlockEntity(p_62932_);
          if (blockentity != null && !blockentity.isRemoved()) {
+-            CompoundTag compoundtag1 = blockentity.saveWithFullMetadata(this.level.registryAccess());
+-            compoundtag1.putBoolean("keepPacked", false);
+-            return compoundtag1;
 +            try {
-             CompoundTag compoundtag1 = blockentity.saveWithFullMetadata(this.level.registryAccess());
-             compoundtag1.putBoolean("keepPacked", false);
-             return compoundtag1;
++                CompoundTag compoundtag1 = blockentity.saveWithFullMetadata(this.level.registryAccess());
++                compoundtag1.putBoolean("keepPacked", false);
++                return compoundtag1;
 +            } catch (Exception e) {
 +                LOGGER.error("A BlockEntity type {} has thrown an exception trying to write state. It will not persist, Report this to the mod author", blockentity.getClass().getName(), e);
 +                return null;
@@ -69,13 +343,62 @@
          } else {
              CompoundTag compoundtag = this.pendingBlockEntities.get(p_62932_);
              if (compoundtag != null) {
-@@ -436,6 +_,7 @@
+@@ -430,12 +_,18 @@
+     public void removeBlockEntity(BlockPos p_62919_) {
+         if (this.isInLevel()) {
+             BlockEntity blockentity = this.blockEntities.remove(p_62919_);
++            // CraftBukkit start - SPIGOT-5561: Also remove from pending map
++            if (!this.pendingBlockEntities.isEmpty()) {
++                this.pendingBlockEntities.remove(p_62919_);
++            }
++            // CraftBukkit end
+             if (blockentity != null) {
+                 if (this.level instanceof ServerLevel serverlevel) {
+                     this.removeGameEventListener(blockentity, serverlevel);
                  }
  
                  blockentity.setRemoved();
 +                auxLightManager.removeLightAt(p_62919_);
              }
          }
+ 
+@@ -472,12 +_,36 @@
+         }
+     }
+ 
++    @Override
++    public boolean isUnsaved() {
++        // Paper start - rewrite chunk system
++        final long gameTime = this.level.getGameTime();
++        if (((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.blockTicks).moonrise$isDirty(gameTime)
++                || ((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.fluidTicks).moonrise$isDirty(gameTime)) {
++            return true;
++        }
++
++        return super.isUnsaved();
++        // Paper end - rewrite chunk system
++    }
++
++    // Paper start - rewrite chunk system
++    @Override
++    public void setUnsaved(final boolean needsSaving) {
++        if (!needsSaving) {
++            ((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.blockTicks).moonrise$clearDirty();
++            ((ca.spottedleaf.moonrise.patches.chunk_system.ticks.ChunkSystemLevelChunkTicks)this.fluidTicks).moonrise$clearDirty();
++        }
++        super.setUnsaved(needsSaving);
++    }
++    // Paper end - rewrite chunk system
++
+     public boolean isEmpty() {
+         return false;
+     }
+ 
+     public void replaceWithPacketData(
+-        FriendlyByteBuf p_187972_, CompoundTag p_187973_, Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> p_187974_
++            FriendlyByteBuf p_187972_, CompoundTag p_187973_, Consumer<ClientboundLevelChunkPacketData.BlockEntityTagOutput> p_187974_
+     ) {
+         this.clearAllBlockEntities();
  
 @@ -496,7 +_,7 @@
          p_187974_.accept((p_338077_, p_338078_, p_338079_) -> {
@@ -86,6 +409,14 @@
              }
          });
      }
+@@ -548,6 +_,7 @@
+ 
+         this.pendingBlockEntities.clear();
+         this.upgradeData.upgrade(this);
++        this.postProcessingDone = true; // Paper - rewrite chunk system
+     }
+ 
+     @Nullable
 @@ -604,6 +_,7 @@
      }
  
@@ -102,7 +433,50 @@
          this.blockEntities.values().forEach(p_187988_ -> {
              if (this.level instanceof ServerLevel serverlevel) {
                  this.addGameEventListener(p_187988_, serverlevel);
-@@ -662,6 +_,14 @@
+@@ -637,24 +_,24 @@
+             this.removeBlockEntityTicker(p_156407_.getBlockPos());
+         } else {
+             this.tickersInLevel
+-                .compute(
+-                    p_156407_.getBlockPos(),
+-                    (p_187963_, p_187964_) -> {
+-                        TickingBlockEntity tickingblockentity = this.createTicker(p_156407_, blockentityticker);
+-                        if (p_187964_ != null) {
+-                            p_187964_.rebind(tickingblockentity);
+-                            return (LevelChunk.RebindableTickingBlockEntityWrapper)p_187964_;
+-                        } else if (this.isInLevel()) {
+-                            LevelChunk.RebindableTickingBlockEntityWrapper levelchunk$rebindabletickingblockentitywrapper = new LevelChunk.RebindableTickingBlockEntityWrapper(
+-                                tickingblockentity
+-                            );
+-                            this.level.addBlockEntityTicker(levelchunk$rebindabletickingblockentitywrapper);
+-                            return levelchunk$rebindabletickingblockentitywrapper;
+-                        } else {
+-                            return null;
+-                        }
+-                    }
+-                );
++                    .compute(
++                            p_156407_.getBlockPos(),
++                            (p_187963_, p_187964_) -> {
++                                TickingBlockEntity tickingblockentity = this.createTicker(p_156407_, blockentityticker);
++                                if (p_187964_ != null) {
++                                    p_187964_.rebind(tickingblockentity);
++                                    return (LevelChunk.RebindableTickingBlockEntityWrapper)p_187964_;
++                                } else if (this.isInLevel()) {
++                                    LevelChunk.RebindableTickingBlockEntityWrapper levelchunk$rebindabletickingblockentitywrapper = new LevelChunk.RebindableTickingBlockEntityWrapper(
++                                            tickingblockentity
++                                    );
++                                    this.level.addBlockEntityTicker(levelchunk$rebindabletickingblockentitywrapper);
++                                    return levelchunk$rebindabletickingblockentitywrapper;
++                                } else {
++                                    return null;
++                                }
++                            }
++                    );
+         }
+     }
+ 
+@@ -662,14 +_,24 @@
          return new LevelChunk.BoundTickingBlockEntity<>(p_156376_, p_156377_);
      }
  
@@ -117,7 +491,17 @@
      class BoundTickingBlockEntity<T extends BlockEntity> implements TickingBlockEntity {
          private final T blockEntity;
          private final BlockEntityTicker<T> ticker;
-@@ -679,6 +_,7 @@
+         private boolean loggedInvalidBlockState;
++        private final BlockPos cachedPos; // Leaf - Cache tile entity position
+ 
+         BoundTickingBlockEntity(T p_156433_, BlockEntityTicker<T> p_156434_) {
+             this.blockEntity = p_156433_;
+             this.ticker = p_156434_;
++            this.cachedPos = this.blockEntity.getBlockPos(); // Leaf - Cache tile entity position
+         }
+ 
+         @Override
+@@ -679,20 +_,20 @@
                  if (LevelChunk.this.isTicking(blockpos)) {
                      try {
                          ProfilerFiller profilerfiller = LevelChunk.this.level.getProfiler();
@@ -125,19 +509,102 @@
                          profilerfiller.push(this::getType);
                          BlockState blockstate = LevelChunk.this.getBlockState(blockpos);
                          if (this.blockEntity.getType().isValid(blockstate)) {
+                             this.ticker.tick(LevelChunk.this.level, this.blockEntity.getBlockPos(), blockstate, this.blockEntity);
+                             this.loggedInvalidBlockState = false;
+-                        } else if (!this.loggedInvalidBlockState) {
+-                            this.loggedInvalidBlockState = true;
+-                            LevelChunk.LOGGER
+-                                .warn(
+-                                    "Block entity {} @ {} state {} invalid for ticking:",
+-                                    LogUtils.defer(this::getType),
+-                                    LogUtils.defer(this::getPos),
+-                                    blockstate
+-                                );
++                            // Paper start - Remove the Block Entity if it's invalid
++                        } else {
++                            LevelChunk.this.removeBlockEntity(this.getPos());
++                            if (!this.loggedInvalidBlockState) {
++                                this.loggedInvalidBlockState = true;
++                                LevelChunk.LOGGER.warn("Block entity {} @ {} state {} invalid for ticking:", LogUtils.defer(this::getType), LogUtils.defer(this::getPos), blockstate);
++                            }
++                            // Paper end - Remove the Block Entity if it's invalid
+                         }
+ 
+                         profilerfiller.pop();
 @@ -700,7 +_,15 @@
                          CrashReport crashreport = CrashReport.forThrowable(throwable, "Ticking block entity");
                          CrashReportCategory crashreportcategory = crashreport.addCategory("Block entity being ticked");
                          this.blockEntity.fillCrashReportCategory(crashreportcategory);
+-                        throw new ReportedException(crashreport);
 +
 +                        if (net.neoforged.neoforge.common.NeoForgeConfig.SERVER.removeErroringBlockEntities.get()) {
 +                            LOGGER.error("{}", crashreport.getFriendlyReport(net.minecraft.ReportType.CRASH));
 +                            blockEntity.setRemoved();
 +                            LevelChunk.this.removeBlockEntity(blockEntity.getBlockPos());
 +                        } else
-                         throw new ReportedException(crashreport);
++                            throw new ReportedException(crashreport);
 +                    } finally {
 +                        net.neoforged.neoforge.server.timings.TimeTracker.BLOCK_ENTITY_UPDATE.trackEnd(blockEntity);
                      }
                  }
              }
+@@ -713,8 +_,9 @@
+ 
+         @Override
+         public BlockPos getPos() {
+-            return this.blockEntity.getBlockPos();
++            return this.cachedPos; // Leaf - Cache tile entity position
+         }
++
+ 
+         @Override
+         public String getType() {
+@@ -740,13 +_,29 @@
+ 
+     class RebindableTickingBlockEntityWrapper implements TickingBlockEntity {
+         private TickingBlockEntity ticker;
++        private BlockPos cachedPos; // Leaf - Cache tile entity position
++        private @Nullable BlockEntity blockEntityReference = null; // Leaf - Improve BlockEntity ticking isRemoved check
+ 
+         RebindableTickingBlockEntityWrapper(TickingBlockEntity p_156447_) {
+             this.ticker = p_156447_;
++            this.cachedPos = this.ticker.getPos(); // Leaf - Cache tile entity position
++            // Leaf start - Improve BlockEntity ticking isRemoved check
++            if (p_156447_ instanceof BoundTickingBlockEntity<?> boundTicker) {
++                blockEntityReference = boundTicker.blockEntity;
++            }
++            // Leaf end - Improve BlockEntity ticking isRemoved check
+         }
+ 
+         void rebind(TickingBlockEntity p_156450_) {
+             this.ticker = p_156450_;
++            this.cachedPos = this.ticker.getPos(); // Leaf - Cache tile entity position
++            // Leaf start - Improve BlockEntity ticking isRemoved check
++            if (p_156450_ instanceof BoundTickingBlockEntity<?> boundTicker) {
++                blockEntityReference = boundTicker.blockEntity;
++            } else {
++                blockEntityReference = null;
++            }
++            // Leaf end - Improve BlockEntity ticking isRemoved check
+         }
+ 
+         @Override
+@@ -756,12 +_,17 @@
+ 
+         @Override
+         public boolean isRemoved() {
++            // Leaf start - Improve BlockEntity ticking isRemoved check
++            if (blockEntityReference != null) {
++                return blockEntityReference.isRemoved();
++            }
++            // Leaf end - Improve BlockEntity ticking isRemoved check
+             return this.ticker.isRemoved();
+         }
+ 
+         @Override
+         public BlockPos getPos() {
+-            return this.ticker.getPos();
++            return this.cachedPos; // Leaf - Cache tile entity position
+         }
+ 
+         @Override

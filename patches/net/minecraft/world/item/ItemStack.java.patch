@@ -1,5 +1,189 @@
 --- a/net/minecraft/world/item/ItemStack.java
 +++ b/net/minecraft/world/item/ItemStack.java
+@@ -92,41 +_,41 @@
+ import org.apache.commons.lang3.mutable.MutableBoolean;
+ import org.slf4j.Logger;
+ 
+-public final class ItemStack implements DataComponentHolder, net.neoforged.neoforge.common.MutableDataComponentHolder, net.neoforged.neoforge.common.extensions.IItemStackExtension {
++public final class ItemStack implements DataComponentHolder, net.neoforged.neoforge.common.extensions.IItemStackExtension, net.neoforged.neoforge.common.MutableDataComponentHolder, net.caffeinemc.mods.lithium.common.util.change_tracking.ChangePublisher<ItemStack>, net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<PatchedDataComponentMap> { // Leaf - Lithium - equipment tracking
+     public static final Codec<Holder<Item>> ITEM_NON_AIR_CODEC = BuiltInRegistries.ITEM
+-        .holderByNameCodec()
+-        .validate(
+-            p_330100_ -> p_330100_.is(Items.AIR.builtInRegistryHolder())
+-                    ? DataResult.error(() -> "Item must not be minecraft:air")
+-                    : DataResult.success(p_330100_)
+-        );
++            .holderByNameCodec()
++            .validate(
++                    p_330100_ -> p_330100_.is(Items.AIR.builtInRegistryHolder())
++                            ? DataResult.error(() -> "Item must not be minecraft:air")
++                            : DataResult.success(p_330100_)
++            );
+     public static final Codec<ItemStack> CODEC = Codec.lazyInitialized(
+-        () -> RecordCodecBuilder.create(
+-                p_347288_ -> p_347288_.group(
+-                            ITEM_NON_AIR_CODEC.fieldOf("id").forGetter(ItemStack::getItemHolder),
+-                            ExtraCodecs.intRange(1, 99).fieldOf("count").orElse(1).forGetter(ItemStack::getCount),
+-                            DataComponentPatch.CODEC
+-                                .optionalFieldOf("components", DataComponentPatch.EMPTY)
+-                                .forGetter(p_330103_ -> p_330103_.components.asPatch())
+-                        )
+-                        .apply(p_347288_, ItemStack::new)
++            () -> RecordCodecBuilder.create(
++                    p_347288_ -> p_347288_.group(
++                                    ITEM_NON_AIR_CODEC.fieldOf("id").forGetter(ItemStack::getItemHolder),
++                                    ExtraCodecs.intRange(1, 99).fieldOf("count").orElse(1).forGetter(ItemStack::getCount),
++                                    DataComponentPatch.CODEC
++                                            .optionalFieldOf("components", DataComponentPatch.EMPTY)
++                                            .forGetter(p_330103_ -> p_330103_.components.asPatch())
++                            )
++                            .apply(p_347288_, ItemStack::new)
+             )
+     );
+     public static final Codec<ItemStack> SINGLE_ITEM_CODEC = Codec.lazyInitialized(
+-        () -> RecordCodecBuilder.create(
+-                p_337931_ -> p_337931_.group(
+-                            ITEM_NON_AIR_CODEC.fieldOf("id").forGetter(ItemStack::getItemHolder),
+-                            DataComponentPatch.CODEC
+-                                .optionalFieldOf("components", DataComponentPatch.EMPTY)
+-                                .forGetter(p_332616_ -> p_332616_.components.asPatch())
+-                        )
+-                        .apply(p_337931_, (p_332614_, p_332615_) -> new ItemStack(p_332614_, 1, p_332615_))
++            () -> RecordCodecBuilder.create(
++                    p_337931_ -> p_337931_.group(
++                                    ITEM_NON_AIR_CODEC.fieldOf("id").forGetter(ItemStack::getItemHolder),
++                                    DataComponentPatch.CODEC
++                                            .optionalFieldOf("components", DataComponentPatch.EMPTY)
++                                            .forGetter(p_332616_ -> p_332616_.components.asPatch())
++                            )
++                            .apply(p_337931_, (p_332614_, p_332615_) -> new ItemStack(p_332614_, 1, p_332615_))
+             )
+     );
+     public static final Codec<ItemStack> STRICT_CODEC = CODEC.validate(ItemStack::validateStrict);
+     public static final Codec<ItemStack> STRICT_SINGLE_ITEM_CODEC = SINGLE_ITEM_CODEC.validate(ItemStack::validateStrict);
+     public static final Codec<ItemStack> OPTIONAL_CODEC = ExtraCodecs.optionalEmptyMap(CODEC)
+-        .xmap(p_330099_ -> p_330099_.orElse(ItemStack.EMPTY), p_330101_ -> p_330101_.isEmpty() ? Optional.empty() : Optional.of(p_330101_));
++            .xmap(p_330099_ -> p_330099_.orElse(ItemStack.EMPTY), p_330101_ -> p_330101_.isEmpty() ? Optional.empty() : Optional.of(p_330101_));
+     public static final Codec<ItemStack> SIMPLE_ITEM_CODEC = ITEM_NON_AIR_CODEC.xmap(ItemStack::new, ItemStack::getItemHolder);
+     public static final StreamCodec<RegistryFriendlyByteBuf, ItemStack> OPTIONAL_STREAM_CODEC = new StreamCodec<RegistryFriendlyByteBuf, ItemStack>() {
+         private static final StreamCodec<RegistryFriendlyByteBuf, Holder<Item>> ITEM_STREAM_CODEC = ByteBufCodecs.holderRegistry(Registries.ITEM);
+@@ -171,10 +_,10 @@
+         }
+     };
+     public static final StreamCodec<RegistryFriendlyByteBuf, List<ItemStack>> OPTIONAL_LIST_STREAM_CODEC = OPTIONAL_STREAM_CODEC.apply(
+-        ByteBufCodecs.collection(NonNullList::createWithCapacity)
++            ByteBufCodecs.collection(NonNullList::createWithCapacity)
+     );
+     public static final StreamCodec<RegistryFriendlyByteBuf, List<ItemStack>> LIST_STREAM_CODEC = STREAM_CODEC.apply(
+-        ByteBufCodecs.collection(NonNullList::createWithCapacity)
++            ByteBufCodecs.collection(NonNullList::createWithCapacity)
+     );
+     private static final Logger LOGGER = LogUtils.getLogger();
+     public static final ItemStack EMPTY = new ItemStack((Void)null);
+@@ -188,14 +_,101 @@
+     @Nullable
+     private Entity entityRepresentation;
+ 
++    // Leaf start - Lithium - equipment tracking
++    @Nullable
++    private net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<ItemStack> subscriber;
++    private int subscriberData;
++
++    @Override
++    public void subscribe(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<ItemStack> subscriber, int subscriberData) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot subscribe to an empty ItemStack!");
++        }
++
++        if (this.subscriber == null) {
++            this.startTrackingChanges();
++        }
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.combine(this.subscriber, this.subscriberData, subscriber, subscriberData);
++        if (this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.Multi<?>) {
++            this.subscriberData = 0;
++        } else {
++            this.subscriberData = subscriberData;
++        }
++    }
++
++    @Override
++    public int unsubscribe(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<ItemStack> subscriber) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot unsubscribe from an empty ItemStack!");
++        }
++
++        int retval = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.dataOf(this.subscriber, subscriber, this.subscriberData);
++        this.subscriberData = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.dataWithout(this.subscriber, subscriber, this.subscriberData);
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.without(this.subscriber, subscriber);
++
++        if (this.subscriber == null) {
++            this.components.unsubscribe(this);
++        }
++        return retval;
++    }
++
++    @Override
++    public void unsubscribeWithData(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<ItemStack> subscriber, int subscriberData) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot unsubscribe from an empty ItemStack!");
++        }
++
++        this.subscriberData = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.dataWithout(this.subscriber, subscriber, this.subscriberData, subscriberData, true);
++        this.subscriber = net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.without(this.subscriber, subscriber, subscriberData, true);
++
++        if (this.subscriber == null) {
++            this.components.unsubscribe(this);
++        }
++    }
++
++    @Override
++    public boolean isSubscribedWithData(net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber<ItemStack> subscriber, int subscriberData) {
++        if (this.isEmpty()) {
++            throw new IllegalStateException("Cannot be subscribed to an empty ItemStack!");
++        }
++
++        return net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.containsSubscriber(this.subscriber, this.subscriberData, subscriber, subscriberData);
++    }
++
++    @Override
++    public void forceUnsubscribe(PatchedDataComponentMap publisher, int subscriberData) {
++        if (publisher != this.components) {
++            throw new IllegalStateException("Invalid publisher, expected " + this.components + " but got " + publisher);
++        }
++        this.subscriber.forceUnsubscribe(this, this.subscriberData);
++        this.subscriber = null;
++        this.subscriberData = 0;
++    }
++
++    @Override
++    public void notify(PatchedDataComponentMap publisher, int subscriberData) {
++        if (publisher != this.components) {
++            throw new IllegalStateException("Invalid publisher, expected " + this.components + " but got " + publisher);
++        }
++
++        if (this.subscriber != null) {
++            this.subscriber.notify(this, this.subscriberData);
++        }
++    }
++
++    private void startTrackingChanges() {
++        this.components.subscribe(this, 0);
++    }
++    // Leaf end - Lithium - equipment tracking
++
+     private static DataResult<ItemStack> validateStrict(ItemStack p_340966_) {
+         DataResult<Unit> dataresult = validateComponents(p_340966_.getComponents());
+         if (dataresult.isError()) {
+             return dataresult.map(p_340777_ -> p_340966_);
+         } else {
+             return p_340966_.getCount() > p_340966_.getMaxStackSize()
+-                ? DataResult.error(() -> "Item stack with stack size of " + p_340966_.getCount() + " was larger than maximum: " + p_340966_.getMaxStackSize())
+-                : DataResult.success(p_340966_);
++                    ? DataResult.error(() -> "Item stack with stack size of " + p_340966_.getCount() + " was larger than maximum: " + p_340966_.getMaxStackSize())
++                    : DataResult.success(p_340966_);
+         }
+     }
+ 
 @@ -234,6 +_,10 @@
          return !this.isEmpty() ? this.components.asPatch() : DataComponentPatch.EMPTY;
      }
@@ -11,6 +195,15 @@
      public ItemStack(ItemLike p_41599_) {
          this(p_41599_, 1);
      }
+@@ -286,7 +_,7 @@
+ 
+     public static Optional<ItemStack> parse(HolderLookup.Provider p_331096_, Tag p_330238_) {
+         return CODEC.parse(p_331096_.createSerializationContext(NbtOps.INSTANCE), p_330238_)
+-            .resultOrPartial(p_330102_ -> LOGGER.error("Tried to load invalid item: '{}'", p_330102_));
++                .resultOrPartial(p_330102_ -> LOGGER.error("Tried to load invalid item: '{}'", p_330102_));
+     }
+ 
+     public static ItemStack parseOptional(HolderLookup.Provider p_330543_, CompoundTag p_330539_) {
 @@ -339,7 +_,7 @@
      }
  
@@ -121,15 +314,39 @@
                  }
  
                  int i = this.getDamageValue() + p_220158_;
-@@ -456,7 +_,7 @@
+@@ -454,10 +_,10 @@
+     public void hurtAndBreak(int p_41623_, LivingEntity p_41624_, EquipmentSlot p_319898_) {
+         if (p_41624_.level() instanceof ServerLevel serverlevel) {
              this.hurtAndBreak(
-                 p_41623_,
-                 serverlevel,
+-                p_41623_,
+-                serverlevel,
 -                p_41624_ instanceof ServerPlayer serverplayer ? serverplayer : null,
-+                p_41624_,
-                 p_348383_ -> p_41624_.onEquippedItemBroken(p_348383_, p_319898_)
+-                p_348383_ -> p_41624_.onEquippedItemBroken(p_348383_, p_319898_)
++                    p_41623_,
++                    serverlevel,
++                    p_41624_,
++                    p_348383_ -> p_41624_.onEquippedItemBroken(p_348383_, p_319898_)
              );
          }
+     }
+@@ -594,7 +_,7 @@
+ 
+     public static MapCodec<ItemStack> lenientOptionalFieldOf(String p_338501_) {
+         return CODEC.lenientOptionalFieldOf(p_338501_)
+-            .xmap(p_323389_ -> p_323389_.orElse(EMPTY), p_323388_ -> p_323388_.isEmpty() ? Optional.empty() : Optional.of(p_323388_));
++                .xmap(p_323389_ -> p_323389_.orElse(EMPTY), p_323388_ -> p_323388_.isEmpty() ? Optional.empty() : Optional.of(p_323388_));
+     }
+ 
+     public static int hashItemAndComponents(@Nullable ItemStack p_331961_) {
+@@ -715,7 +_,7 @@
+     }
+ 
+     public <T extends TooltipProvider> void addToTooltip(
+-        DataComponentType<T> p_331344_, Item.TooltipContext p_341231_, Consumer<Component> p_331885_, TooltipFlag p_331177_
++            DataComponentType<T> p_331344_, Item.TooltipContext p_341231_, Consumer<Component> p_331885_, TooltipFlag p_331177_
+     ) {
+         T t = (T)this.get(p_331344_);
+         if (t != null) {
 @@ -728,7 +_,7 @@
              return List.of();
          } else {
@@ -166,6 +383,70 @@
      private void addAttributeTooltips(Consumer<Component> p_330796_, @Nullable Player p_330530_) {
          ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
          if (itemattributemodifiers.showInTooltip()) {
+@@ -821,7 +_,7 @@
+ 
+         double d1;
+         if (p_331252_.operation() == AttributeModifier.Operation.ADD_MULTIPLIED_BASE
+-            || p_331252_.operation() == AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL) {
++                || p_331252_.operation() == AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL) {
+             d1 = d0 * 100.0;
+         } else if (p_330626_.is(Attributes.KNOCKBACK_RESISTANCE)) {
+             d1 = d0 * 10.0;
+@@ -831,33 +_,33 @@
+ 
+         if (flag) {
+             p_331062_.accept(
+-                CommonComponents.space()
+-                    .append(
+-                        Component.translatable(
+-                            "attribute.modifier.equals." + p_331252_.operation().id(),
+-                            ItemAttributeModifiers.ATTRIBUTE_MODIFIER_FORMAT.format(d1),
+-                            Component.translatable(p_330626_.value().getDescriptionId())
+-                        )
+-                    )
+-                    .withStyle(ChatFormatting.DARK_GREEN)
++                    CommonComponents.space()
++                            .append(
++                                    Component.translatable(
++                                            "attribute.modifier.equals." + p_331252_.operation().id(),
++                                            ItemAttributeModifiers.ATTRIBUTE_MODIFIER_FORMAT.format(d1),
++                                            Component.translatable(p_330626_.value().getDescriptionId())
++                                    )
++                            )
++                            .withStyle(ChatFormatting.DARK_GREEN)
+             );
+         } else if (d0 > 0.0) {
+             p_331062_.accept(
+-                Component.translatable(
+-                        "attribute.modifier.plus." + p_331252_.operation().id(),
+-                        ItemAttributeModifiers.ATTRIBUTE_MODIFIER_FORMAT.format(d1),
+-                        Component.translatable(p_330626_.value().getDescriptionId())
+-                    )
+-                    .withStyle(p_330626_.value().getStyle(true))
++                    Component.translatable(
++                                    "attribute.modifier.plus." + p_331252_.operation().id(),
++                                    ItemAttributeModifiers.ATTRIBUTE_MODIFIER_FORMAT.format(d1),
++                                    Component.translatable(p_330626_.value().getDescriptionId())
++                            )
++                            .withStyle(p_330626_.value().getStyle(true))
+             );
+         } else if (d0 < 0.0) {
+             p_331062_.accept(
+-                Component.translatable(
+-                        "attribute.modifier.take." + p_331252_.operation().id(),
+-                        ItemAttributeModifiers.ATTRIBUTE_MODIFIER_FORMAT.format(-d1),
+-                        Component.translatable(p_330626_.value().getDescriptionId())
+-                    )
+-                    .withStyle(p_330626_.value().getStyle(false))
++                    Component.translatable(
++                                    "attribute.modifier.take." + p_331252_.operation().id(),
++                                    ItemAttributeModifiers.ATTRIBUTE_MODIFIER_FORMAT.format(-d1),
++                                    Component.translatable(p_330626_.value().getDescriptionId())
++                            )
++                            .withStyle(p_330626_.value().getStyle(false))
+             );
+         }
+     }
 @@ -897,6 +_,17 @@
          return !this.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY).isEmpty();
      }
@@ -184,57 +465,89 @@
      public ItemEnchantments getEnchantments() {
          return this.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
      }
-@@ -922,6 +_,12 @@
+@@ -922,22 +_,40 @@
      }
  
      public void forEachModifier(EquipmentSlotGroup p_348610_, BiConsumer<Holder<Attribute>, AttributeModifier> p_348516_) {
+-        ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+-        if (!itemattributemodifiers.modifiers().isEmpty()) {
+-            itemattributemodifiers.forEach(p_348610_, p_348516_);
+-        } else {
+-            this.getItem().getDefaultAttributeModifiers().forEach(p_348610_, p_348516_);
 +        // Neo: Reflect real attribute modifiers when doing iteration
 +        this.getAttributeModifiers().forEach(p_348610_, p_348516_);
 +
 +        if (false) {
-+        // Start disabled vanilla code
++            // Start disabled vanilla code
 +
-         ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
-         if (!itemattributemodifiers.modifiers().isEmpty()) {
-             itemattributemodifiers.forEach(p_348610_, p_348516_);
-@@ -929,10 +_,19 @@
-             this.getItem().getDefaultAttributeModifiers().forEach(p_348610_, p_348516_);
++            ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
++            if (!itemattributemodifiers.modifiers().isEmpty()) {
++                itemattributemodifiers.forEach(p_348610_, p_348516_);
++            } else {
++                this.getItem().getDefaultAttributeModifiers().forEach(p_348610_, p_348516_);
++            }
++
++            // end disabled vanilla code
          }
  
-+        // end disabled vanilla code
-+        }
-+
          EnchantmentHelper.forEachModifier(this, p_348610_, p_348516_);
      }
  
      public void forEachModifier(EquipmentSlot p_332001_, BiConsumer<Holder<Attribute>, AttributeModifier> p_330882_) {
+-        ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+-        if (!itemattributemodifiers.modifiers().isEmpty()) {
+-            itemattributemodifiers.forEach(p_332001_, p_330882_);
+-        } else {
+-            this.getItem().getDefaultAttributeModifiers().forEach(p_332001_, p_330882_);
 +        // Neo: Reflect real attribute modifiers when doing iteration
 +        this.getAttributeModifiers().forEach(p_332001_, p_330882_);
 +
 +        if (false) {
-+        // Start disabled vanilla code
++            // Start disabled vanilla code
 +
-         ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
-         if (!itemattributemodifiers.modifiers().isEmpty()) {
-             itemattributemodifiers.forEach(p_332001_, p_330882_);
-@@ -940,6 +_,9 @@
-             this.getItem().getDefaultAttributeModifiers().forEach(p_332001_, p_330882_);
++            ItemAttributeModifiers itemattributemodifiers = this.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
++            if (!itemattributemodifiers.modifiers().isEmpty()) {
++                itemattributemodifiers.forEach(p_332001_, p_330882_);
++            } else {
++                this.getItem().getDefaultAttributeModifiers().forEach(p_332001_, p_330882_);
++            }
++
++            // end disabled vanilla code
          }
  
-+        // end disabled vanilla code
-+        }
-+
          EnchantmentHelper.forEachModifier(this, p_332001_, p_330882_);
-     }
- 
-@@ -951,7 +_,7 @@
+@@ -951,8 +_,8 @@
  
          MutableComponent mutablecomponent1 = ComponentUtils.wrapInSquareBrackets(mutablecomponent);
          if (!this.isEmpty()) {
 -            mutablecomponent1.withStyle(this.getRarity().color())
+-                .withStyle(p_220170_ -> p_220170_.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_ITEM, new HoverEvent.ItemStackInfo(this))));
 +            mutablecomponent1.withStyle(this.getRarity().getStyleModifier())
-                 .withStyle(p_220170_ -> p_220170_.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_ITEM, new HoverEvent.ItemStackInfo(this))));
++                    .withStyle(p_220170_ -> p_220170_.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_ITEM, new HoverEvent.ItemStackInfo(this))));
          }
+ 
+         return mutablecomponent1;
+@@ -981,6 +_,21 @@
+     }
+ 
+     public void setCount(int p_41765_) {
++        // Leaf start - Lithium - equipment tracking
++        if (count != this.count) {
++            if (this.subscriber instanceof net.caffeinemc.mods.lithium.common.util.change_tracking.ChangeSubscriber.CountChangeSubscriber<ItemStack> countChangeSubscriber) {
++                countChangeSubscriber.notifyCount(this, this.subscriberData, count);
++            }
++            if (count == 0) {
++                this.components.unsubscribe(this);
++                if (this.subscriber != null) {
++                    this.subscriber.forceUnsubscribe(this, this.subscriberData);
++                    this.subscriber = null;
++                    this.subscriberData = 0;
++                }
++            }
++        }
++        // Leaf end - Lithium - equipment tracking
+         this.count = p_41765_;
+     }
  
 @@ -1014,6 +_,8 @@
          this.getItem().onUseTick(p_41732_, p_41733_, this, p_41734_);
