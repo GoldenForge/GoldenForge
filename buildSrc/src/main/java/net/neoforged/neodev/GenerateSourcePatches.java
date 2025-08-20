@@ -20,8 +20,14 @@ import javax.inject.Inject;
 import java.io.IOException;
 
 abstract class GenerateSourcePatches extends DefaultTask {
+    @Optional
     @InputFile
     public abstract RegularFileProperty getOriginalJar();
+
+    @Optional
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract DirectoryProperty getOriginalSources();
 
     @InputDirectory
     @PathSensitive(PathSensitivity.RELATIVE)
@@ -42,7 +48,7 @@ abstract class GenerateSourcePatches extends DefaultTask {
     public void generateSourcePatches() throws IOException {
         var builder = DiffOperation.builder()
                 .logTo(getLogger()::lifecycle)
-                .baseInput(MultiInput.detectedArchive(getOriginalJar().get().getAsFile().toPath()))
+                .baseInput(getOriginalSources().isPresent() ? MultiInput.folder(getOriginalSources().get().getAsFile().toPath()) : MultiInput.detectedArchive(getOriginalJar().get().getAsFile().toPath()))
                 .changedInput(MultiInput.folder(getModifiedSources().get().getAsFile().toPath()))
                 .patchesOutput(getPatchesJar().isPresent() ? MultiOutput.detectedArchive(getPatchesJar().get().getAsFile().toPath()) : MultiOutput.folder(getPatchesFolder().getAsFile().get().toPath()))
                 .autoHeader(true)

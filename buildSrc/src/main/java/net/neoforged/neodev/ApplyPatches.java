@@ -12,6 +12,7 @@ import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.InputFile;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.OutputFile;
 import org.gradle.api.tasks.PathSensitive;
@@ -29,8 +30,14 @@ import java.io.IOException;
  */
 @DisableCachingByDefault(because = "Not worth caching")
 abstract class ApplyPatches extends DefaultTask {
+    @Optional
     @InputFile
     public abstract RegularFileProperty getOriginalJar();
+
+    @Optional
+    @InputDirectory
+    @PathSensitive(PathSensitivity.NONE)
+    public abstract RegularFileProperty getOriginalSources();
 
     @InputDirectory
     @PathSensitive(PathSensitivity.NONE)
@@ -56,7 +63,7 @@ abstract class ApplyPatches extends DefaultTask {
 
         var builder = PatchOperation.builder()
                 .logTo(getLogger()::lifecycle)
-                .baseInput(MultiInput.detectedArchive(getOriginalJar().get().getAsFile().toPath()))
+                .baseInput(getOriginalSources().isPresent() ? MultiInput.folder(getOriginalSources().get().getAsFile().toPath()) : MultiInput.detectedArchive(getOriginalJar().get().getAsFile().toPath()))
                 .patchesInput(MultiInput.folder(getPatchesFolder().get().getAsFile().toPath()))
                 .patchedOutput(MultiOutput.detectedArchive(getPatchedJar().get().getAsFile().toPath()))
                 .rejectsOutput(MultiOutput.folder(getRejectsFolder().get().getAsFile().toPath()))

@@ -34,6 +34,9 @@ project(':base').projectDir = file('projects/base')
     include ':neoforge'
 project(':neoforge').projectDir = file('projects/neoforge')
 
+include ':goldenforge'
+project(':goldenforge').projectDir = file('projects/goldenforge')
+
 include ':tests'
 project(":tests").projectDir = file("tests")
 

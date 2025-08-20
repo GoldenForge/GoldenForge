@@ -1,0 +1,10 @@
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -672,6 +_,7 @@
+             }
+ 
+             net.neoforged.neoforge.server.ServerLifecycleHooks.handleServerStarted(this);
++            this.LOGGER.info("Testing the new patches system !!");
+             this.nextTickTimeNanos = Util.getNanos();
+             this.statusIcon = this.loadStatusIcon().orElse(null);
+             this.status = this.buildServerStatus();
