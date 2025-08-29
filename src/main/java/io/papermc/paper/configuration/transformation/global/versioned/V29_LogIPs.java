@@ -1,0 +1,42 @@
+package io.papermc.paper.configuration.transformation.global.versioned;
+
+import net.minecraft.server.*;
+import net.minecraft.server.dedicated.*;
+import org.checkerframework.checker.nullness.qual.*;
+import org.spongepowered.configurate.*;
+import org.spongepowered.configurate.transformation.*;
+
+import java.util.*;
+
+import static org.spongepowered.configurate.NodePath.*;
+
+public class V29_LogIPs implements TransformAction {
+
+    private static final int VERSION = 29;
+    private static final NodePath PATH = path("logging", "log-player-ip-addresses");
+    private static final V29_LogIPs INSTANCE = new V29_LogIPs();
+
+    private V29_LogIPs() {
+    }
+
+    public static void apply(final ConfigurationTransformation.VersionedBuilder builder) {
+        builder.addVersion(VERSION, ConfigurationTransformation.builder().addAction(PATH, INSTANCE).build());
+    }
+
+    @Override
+    public Object @Nullable [] visitPath(final NodePath path, final ConfigurationNode value) throws ConfigurateException {
+        final DedicatedServer server = ((DedicatedServer) MinecraftServer.getServer());
+
+        final boolean val = value.getBoolean(server.settings.getProperties().logIPs);
+        server.settings.update((config) -> {
+            final Properties newProps = new Properties(config.properties);
+            newProps.setProperty("log-ips", String.valueOf(val));
+            return config.reload(server.registryAccess(), newProps);
+        });
+
+        value.raw(null);
+
+        return null;
+    }
+
+}

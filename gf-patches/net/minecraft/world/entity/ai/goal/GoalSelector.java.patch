@@ -1,0 +1,34 @@
+--- a/net/minecraft/world/entity/ai/goal/GoalSelector.java
++++ b/net/minecraft/world/entity/ai/goal/GoalSelector.java
+@@ -28,6 +_,8 @@
+     private final Supplier<ProfilerFiller> profiler;
+     private final EnumSet<Goal.Flag> disabledFlags = EnumSet.noneOf(Goal.Flag.class);
+ 
++    private int curRate; // Paper - EAR 2
++
+     public GoalSelector(Supplier<ProfilerFiller> p_25351_) {
+         this.profiler = p_25351_;
+     }
+@@ -40,6 +_,22 @@
+     public void removeAllGoals(Predicate<Goal> p_262575_) {
+         this.availableGoals.removeIf(p_262564_ -> p_262575_.test(p_262564_.getGoal()));
+     }
++
++    // Paper start - EAR 2
++    public boolean inactiveTick() {
++        this.curRate++;
++        return this.curRate % 3 == 0; // TODO newGoalRate was already unused in 1.20.4, check if this is correct
++    }
++
++    public boolean hasTasks() {
++        for (WrappedGoal task : this.availableGoals) {
++            if (task.isRunning()) {
++                return true;
++            }
++        }
++        return false;
++    }
++    // Paper end - EAR 2
+ 
+     public void removeGoal(Goal p_25364_) {
+         for (WrappedGoal wrappedgoal : this.availableGoals) {

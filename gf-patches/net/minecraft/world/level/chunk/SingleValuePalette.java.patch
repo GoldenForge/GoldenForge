@@ -1,0 +1,52 @@
+--- a/net/minecraft/world/level/chunk/SingleValuePalette.java
++++ b/net/minecraft/world/level/chunk/SingleValuePalette.java
+@@ -8,12 +_,24 @@
+ import net.minecraft.network.VarInt;
+ import org.apache.commons.lang3.Validate;
+ 
+-public class SingleValuePalette<T> implements Palette<T> {
++public class SingleValuePalette<T> implements Palette<T>, ca.spottedleaf.moonrise.patches.fast_palette.FastPalette<T> { // Paper - optimise palette reads
+     private final IdMap<T> registry;
+     @Nullable
+     private T value;
+     private final PaletteResize<T> resizeHandler;
+ 
++    // Paper start - optimise palette reads
++    private T[] rawPalette;
++
++    @Override
++    public final T[] moonrise$getRawPalette(final ca.spottedleaf.moonrise.patches.fast_palette.FastPaletteData<T> container) {
++        if (this.rawPalette != null) {
++            return this.rawPalette;
++        }
++        return this.rawPalette = (T[])new Object[] { this.value };
++    }
++    // Paper end - optimise palette reads
++
+     public SingleValuePalette(IdMap<T> p_188207_, PaletteResize<T> p_188208_, List<T> p_188209_) {
+         this.registry = p_188207_;
+         this.resizeHandler = p_188208_;
+@@ -33,6 +_,11 @@
+             return this.resizeHandler.onResize(1, p_188219_);
+         } else {
+             this.value = p_188219_;
++            // Paper start - optimise palette reads
++            if (this.rawPalette != null) {
++                this.rawPalette[0] = p_188219_;
++            }
++            // Paper end - optimise palette reads
+             return 0;
+         }
+     }
+@@ -58,6 +_,11 @@
+     @Override
+     public void read(FriendlyByteBuf p_188223_) {
+         this.value = this.registry.byIdOrThrow(p_188223_.readVarInt());
++        // Paper start - optimise palette reads
++        if (this.rawPalette != null) {
++            this.rawPalette[0] = this.value;
++        }
++        // Paper end - optimise palette reads
+     }
+ 
+     @Override

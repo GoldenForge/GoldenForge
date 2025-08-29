@@ -1,0 +1,49 @@
+--- a/net/minecraft/server/level/Ticket.java
++++ b/net/minecraft/server/level/Ticket.java
+@@ -2,13 +_,32 @@
+ 
+ import java.util.Objects;
+ 
+-public final class Ticket<T> implements Comparable<Ticket<?>> {
++public final class Ticket<T> implements Comparable<Ticket<?>>, ca.spottedleaf.moonrise.patches.chunk_system.ticket.ChunkSystemTicket<T> { // Paper - rewrite chunk system
+     private final TicketType<T> type;
+     private final int ticketLevel;
+-    private final T key;
++    public final T key;
+     private long createdTick;
+ 
+-    protected Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_) {
++    // Paper start - add identifier
++    private T identifier; // Paper - rewrite chunk system
++
++    public Object getIdentifier() {
++        return this.identifier;
++    }
++    // Paper end - add identifier
++
++    @Override
++    public final long moonrise$getRemoveDelay() {
++        return this.createdTick;
++    }
++
++    @Override
++    public final void moonrise$setRemoveDelay(final long removeDelay) {
++        this.createdTick = removeDelay;
++    }
++    // Paper end - rewerite chunk system
++
++    public Ticket(TicketType<T> p_9425_, int p_9426_, T p_9427_) {
+         this(p_9425_, p_9426_, p_9427_, false);
+     }
+ 
+@@ -35,8 +_,8 @@
+             return true;
+         } else {
+             return !(p_9439_ instanceof Ticket<?> ticket)
+-                ? false
+-                : this.ticketLevel == ticket.ticketLevel && Objects.equals(this.type, ticket.type) && Objects.equals(this.key, ticket.key) && this.forceTicks == ticket.forceTicks;
++                    ? false
++                    : this.ticketLevel == ticket.ticketLevel && Objects.equals(this.type, ticket.type) && Objects.equals(this.key, ticket.key) && this.forceTicks == ticket.forceTicks;
+         }
+     }
+ 

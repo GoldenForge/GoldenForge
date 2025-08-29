@@ -1,0 +1,31 @@
+--- a/net/minecraft/world/level/chunk/ProtoChunk.java
++++ b/net/minecraft/world/level/chunk/ProtoChunk.java
+@@ -49,6 +_,19 @@
+     private final ProtoChunkTicks<Block> blockTicks;
+     private final ProtoChunkTicks<Fluid> fluidTicks;
+ 
++    // Paper start - If loaded util
++    @Override
++    public final FluidState getFluidIfLoaded(BlockPos blockposition) {
++        return this.getFluidState(blockposition);
++    }
++
++    @Override
++    public final BlockState getBlockStateIfLoaded(BlockPos blockposition) {
++        return this.getBlockState(blockposition);
++    }
++    // Paper end
++
++
+     public ProtoChunk(ChunkPos p_188167_, UpgradeData p_188168_, LevelHeightAccessor p_188169_, Registry<Biome> p_188170_, @Nullable BlendingData p_188171_) {
+         this(p_188167_, p_188168_, null, new ProtoChunkTicks<>(), new ProtoChunkTicks<>(), p_188169_, p_188170_, p_188171_);
+     }
+@@ -133,7 +_,7 @@
+                     }
+ 
+                     if (LightEngine.hasDifferentLightProperties(this, p_63217_, blockstate, p_63218_)) {
+-                        this.skyLightSources.update(this, i1, j, k1);
++                        // Paper - rewrite chunk system
+                         this.lightEngine.checkBlock(p_63217_);
+                     }
+                 }

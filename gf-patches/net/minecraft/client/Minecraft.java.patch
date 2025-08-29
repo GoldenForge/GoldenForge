@@ -1,0 +1,25 @@
+--- a/net/minecraft/client/Minecraft.java
++++ b/net/minecraft/client/Minecraft.java
+@@ -2058,7 +_,7 @@
+ 
+         try {
+             p_261564_.saveDataTag(p_261470_.registries().compositeAccess(), p_261470_.worldData());
+-            Services services = Services.create(this.authenticationService, this.gameDirectory);
++            Services services = Services.create(this.authenticationService, this.gameDirectory, null, null); // Goldenforge
+             services.profileCache().setExecutor(this);
+             SkullBlockEntity.setup(services, this);
+             GameProfileCache.setUsesAuthentication(false);
+@@ -2116,7 +_,12 @@
+         this.level = p_91157_;
+         this.updateLevelInEngines(p_91157_);
+         if (!this.isLocalServer) {
+-            Services services = Services.create(this.authenticationService, this.gameDirectory);
++            Services services = null;
++            try {
++                services = Services.create(this.authenticationService, this.gameDirectory, null, null);
++            } catch (Exception e) {
++                throw new RuntimeException(e);
++            }
+             services.profileCache().setExecutor(this);
+             SkullBlockEntity.setup(services, this);
+             GameProfileCache.setUsesAuthentication(false);

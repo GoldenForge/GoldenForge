@@ -1,0 +1,269 @@
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -128,7 +_,7 @@
+ import net.minecraft.world.scores.Team;
+ import org.slf4j.Logger;
+ 
+-public abstract class Entity extends net.neoforged.neoforge.attachment.AttachmentHolder implements SyncedDataHolder, Nameable, EntityAccess, CommandSource, ScoreHolder, net.neoforged.neoforge.common.extensions.IEntityExtension {
++public abstract class Entity extends net.neoforged.neoforge.attachment.AttachmentHolder implements SyncedDataHolder, Nameable, EntityAccess, CommandSource, ScoreHolder, net.neoforged.neoforge.common.extensions.IEntityExtension, ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity, ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity { // Paper - rewrite chunk system // Paper - optimise entity tracker
+     private static final Logger LOGGER = LogUtils.getLogger();
+     public static final String ID_TAG = "id";
+     public static final String PASSENGERS_TAG = "Passengers";
+@@ -226,7 +_,7 @@
+     public boolean hasImpulse;
+     @Nullable
+     public PortalProcessor portalProcess;
+-    private int portalCooldown;
++    public int portalCooldown; // Goldenforge - public
+     private boolean invulnerable;
+     protected UUID uuid = Mth.createInsecureUUID(this.random);
+     protected String stringUUID = this.uuid.toString();
+@@ -247,6 +_,198 @@
+     @Nullable
+     private BlockState inBlockState = null;
+ 
++    // CraftBukkit start
++    public boolean forceDrops;
++    public boolean persist = true;
++    public boolean visibleByDefault = true;
++    public boolean valid;
++    public boolean inWorld = false;
++    public boolean generation;
++    @Nullable // Paper - Refresh ProjectileSource for projectiles
++    public boolean lastDamageCancelled; // SPIGOT-5339, SPIGOT-6252, SPIGOT-6777: Keep track if the event was canceled
++    public boolean persistentInvisibility = false;
++    public @Nullable BlockPos lastLavaContact;
++    // Marks an entity, that it was removed by a plugin via Entity#remove
++    // Main use case currently is for SPIGOT-7487, preventing dropping of leash when leash is removed
++    public boolean pluginRemoved = false;
++    protected int numCollisions = 0; // Paper - Cap entity collisions
++    public boolean fromNetherPortal; // Paper - Add option to nerf pigmen from nether portals
++    public boolean spawnedViaMobSpawner; // Paper - Yes this name is similar to above, upstream took the better one
++    // Paper start
++    public @Nullable Vec3 origin;
++    public @Nullable UUID originWorld;
++    // Paper end
++    public boolean freezeLocked = false; // Paper - Freeze Tick Lock API
++    public boolean fixedPose = false; // Paper - Expand Pose API
++    public int totalEntityAge; // Paper - age-like counter for all entities
++    public final io.papermc.paper.entity.activation.ActivationType activationType = io.papermc.paper.entity.activation.ActivationType.activationTypeFor(this); // Paper - EAR 2/tracking ranges
++    // Paper start - EAR 2
++    public final boolean defaultActivationState;
++    public long activatedTick = Integer.MIN_VALUE;
++    public boolean isTemporarilyActive;
++    public long activatedImmunityTick = Integer.MIN_VALUE;
++
++    public void inactiveTick() {
++    }
++    // Paper end - EAR 2
++    // CraftBukkit end
++
++    // Paper start
++    public final AABB getBoundingBoxAt(double x, double y, double z) {
++        return this.dimensions.makeBoundingBox(x, y, z);
++    }
++    // Paper end
++    // Paper start - rewrite chunk system
++    private final boolean isHardColliding = this.moonrise$isHardCollidingUncached();
++    private net.minecraft.server.level.FullChunkStatus chunkStatus;
++    private ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData chunkData;
++    private int sectionX = Integer.MIN_VALUE;
++    private int sectionY = Integer.MIN_VALUE;
++    private int sectionZ = Integer.MIN_VALUE;
++    private boolean updatingSectionStatus;
++
++    @Override
++    public final boolean moonrise$isHardColliding() {
++        return this.isHardColliding;
++    }
++
++    @Override
++    public final net.minecraft.server.level.FullChunkStatus moonrise$getChunkStatus() {
++        return this.chunkStatus;
++    }
++
++    @Override
++    public final void moonrise$setChunkStatus(final net.minecraft.server.level.FullChunkStatus status) {
++        this.chunkStatus = status;
++    }
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData moonrise$getChunkData() {
++        return this.chunkData;
++    }
++
++    @Override
++    public final void moonrise$setChunkData(final ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData chunkData) {
++        this.chunkData = chunkData;
++    }
++
++    @Override
++    public final int moonrise$getSectionX() {
++        return this.sectionX;
++    }
++
++    @Override
++    public final void moonrise$setSectionX(final int x) {
++        this.sectionX = x;
++    }
++
++    @Override
++    public final int moonrise$getSectionY() {
++        return this.sectionY;
++    }
++
++    @Override
++    public final void moonrise$setSectionY(final int y) {
++        this.sectionY = y;
++    }
++
++    @Override
++    public final int moonrise$getSectionZ() {
++        return this.sectionZ;
++    }
++
++    @Override
++    public final void moonrise$setSectionZ(final int z) {
++        this.sectionZ = z;
++    }
++
++    @Override
++    public final boolean moonrise$isUpdatingSectionStatus() {
++        return this.updatingSectionStatus;
++    }
++
++    @Override
++    public final void moonrise$setUpdatingSectionStatus(final boolean to) {
++        this.updatingSectionStatus = to;
++    }
++
++    @Override
++    public final boolean moonrise$hasAnyPlayerPassengers() {
++        if (this.passengers.isEmpty()) {
++            return false;
++        }
++        return this.getIndirectPassengersStream().anyMatch((entity) -> entity instanceof Player);
++    }
++    // Paper end - rewrite chunk system
++    // Paper start - optimise collisions
++    private static float[] calculateStepHeights(final AABB box, final List<VoxelShape> voxels, final List<AABB> aabbs, final float stepHeight,
++                                                final float collidedY) {
++        final FloatArraySet ret = new FloatArraySet();
++
++        for (int i = 0, len = voxels.size(); i < len; ++i) {
++            final VoxelShape shape = voxels.get(i);
++
++            final double[] yCoords = ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)shape).moonrise$rootCoordinatesY();
++            final double yOffset = ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)shape).moonrise$offsetY();
++
++            for (final double yUnoffset : yCoords) {
++                final double y = yUnoffset + yOffset;
++
++                final float step = (float)(y - box.minY);
++
++                if (step > stepHeight) {
++                    break;
++                }
++
++                if (step < 0.0f || !(step != collidedY)) {
++                    continue;
++                }
++
++                ret.add(step);
++            }
++        }
++
++        for (int i = 0, len = aabbs.size(); i < len; ++i) {
++            final AABB shape = aabbs.get(i);
++
++            final float step1 = (float)(shape.minY - box.minY);
++            final float step2 = (float)(shape.maxY - box.minY);
++
++            if (!(step1 < 0.0f) && step1 != collidedY && !(step1 > stepHeight)) {
++                ret.add(step1);
++            }
++
++            if (!(step2 < 0.0f) && step2 != collidedY && !(step2 > stepHeight)) {
++                ret.add(step2);
++            }
++        }
++
++        final float[] steps = ret.toFloatArray();
++        FloatArrays.unstableSort(steps);
++        return steps;
++    }
++    // Paper end - optimise collisions
++    // Paper start - optimise entity tracker
++    private net.minecraft.server.level.ChunkMap.TrackedEntity trackedEntity;
++
++    @Override
++    public final net.minecraft.server.level.ChunkMap.TrackedEntity moonrise$getTrackedEntity() {
++        return this.trackedEntity;
++    }
++
++    @Override
++    public final void moonrise$setTrackedEntity(final net.minecraft.server.level.ChunkMap.TrackedEntity trackedEntity) {
++        this.trackedEntity = trackedEntity;
++    }
++
++    private static void collectIndirectPassengers(final List<Entity> into, final List<Entity> from) {
++        for (final Entity passenger : from) {
++            into.add(passenger);
++            collectIndirectPassengers(into, ((Entity)(Object)passenger).passengers);
++        }
++    }
++    // Paper end - optimise entity tracker
++
+     public Entity(EntityType<?> p_19870_, Level p_19871_) {
+         this.type = p_19870_;
+         this.level = p_19871_;
+@@ -254,6 +_,13 @@
+         this.position = Vec3.ZERO;
+         this.blockPosition = BlockPos.ZERO;
+         this.chunkPosition = ChunkPos.ZERO;
++        // Paper start - EAR 2
++        if (level != null) {
++            this.defaultActivationState = io.papermc.paper.entity.activation.ActivationRange.initializeEntityActivationState(this, level.paperConfig());
++        } else {
++            this.defaultActivationState = false;
++        }
++        // Paper end - EAR 2
+         SynchedEntityData.Builder synchedentitydata$builder = new SynchedEntityData.Builder(this);
+         synchedentitydata$builder.define(DATA_SHARED_FLAGS_ID, (byte)0);
+         synchedentitydata$builder.define(DATA_AIR_SUPPLY_ID, this.getMaxAirSupply());
+@@ -3013,7 +_,17 @@
+     }
+ 
+     public Iterable<Entity> getIndirectPassengers() {
+-        return () -> this.getIndirectPassengersStream().iterator();
++        // Paper start - optimise entity tracker
++        final List<Entity> ret = new ArrayList<>();
++
++        if (this.passengers.isEmpty()) {
++            return ret;
++        }
++
++        collectIndirectPassengers(ret, this.passengers);
++
++        return ret;
++        // Paper end - optimise entity tracker
+     }
+ 
+     public int countPlayerPassengers() {
+@@ -3492,13 +_,10 @@
+         this.levelCallback = p_146849_;
+     }
+ 
+-    @Override
+     public boolean shouldBeSaved() {
+-        if (this.removalReason != null && !this.removalReason.shouldSave()) {
+-            return false;
+-        } else {
+-            return this.isPassenger() ? false : !this.isVehicle() || !this.hasExactlyOnePlayerPassenger();
+-        }
++        return (this.removalReason == null || this.removalReason.shouldSave())
++                && !this.isPassenger()
++                && (!this.isVehicle() || !((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)this).moonrise$hasAnyPlayerPassengers()); // Paper - rewrite chunk system
+     }
+ 
+     @Override

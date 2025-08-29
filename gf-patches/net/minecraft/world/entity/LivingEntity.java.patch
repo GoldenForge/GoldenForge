@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -178,7 +_,7 @@
+     public static final String ATTRIBUTES_FIELD = "attributes";
+     private final AttributeMap attributes;
+     private final CombatTracker combatTracker = new CombatTracker(this);
+-    private final Map<Holder<MobEffect>, MobEffectInstance> activeEffects = Maps.newHashMap();
++    public final Map<Holder<MobEffect>, MobEffectInstance> activeEffects = Maps.newHashMap(); // Goldenforge - public
+     private final NonNullList<ItemStack> lastHandItemStacks = NonNullList.withSize(2, ItemStack.EMPTY);
+     private final NonNullList<ItemStack> lastArmorItemStacks = NonNullList.withSize(4, ItemStack.EMPTY);
+     private ItemStack lastBodyItemStack = ItemStack.EMPTY;
+@@ -214,7 +_,7 @@
+     protected float rotOffs;
+     protected int deathScore;
+     protected float lastHurt;
+-    protected boolean jumping;
++    public boolean jumping; // Goldenforge - public
+     public float xxa;
+     public float yya;
+     public float zza;

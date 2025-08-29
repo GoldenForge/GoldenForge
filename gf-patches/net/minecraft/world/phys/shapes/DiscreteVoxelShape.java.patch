@@ -1,0 +1,428 @@
+--- a/net/minecraft/world/phys/shapes/DiscreteVoxelShape.java
++++ b/net/minecraft/world/phys/shapes/DiscreteVoxelShape.java
+@@ -3,53 +_,108 @@
+ import net.minecraft.core.AxisCycle;
+ import net.minecraft.core.Direction;
+ 
+-public abstract class DiscreteVoxelShape {
++public abstract class DiscreteVoxelShape implements ca.spottedleaf.moonrise.patches.collisions.shape.CollisionDiscreteVoxelShape { // Paper - optimise collisions
+     private static final Direction.Axis[] AXIS_VALUES = Direction.Axis.values();
+     protected final int xSize;
+     protected final int ySize;
+     protected final int zSize;
+ 
+-    protected DiscreteVoxelShape(int p_82787_, int p_82788_, int p_82789_) {
+-        if (p_82787_ >= 0 && p_82788_ >= 0 && p_82789_ >= 0) {
+-            this.xSize = p_82787_;
+-            this.ySize = p_82788_;
+-            this.zSize = p_82789_;
+-        } else {
+-            throw new IllegalArgumentException("Need all positive sizes: x: " + p_82787_ + ", y: " + p_82788_ + ", z: " + p_82789_);
+-        }
+-    }
+-
+-    public boolean isFullWide(AxisCycle p_82823_, int p_82824_, int p_82825_, int p_82826_) {
+-        return this.isFullWide(
+-            p_82823_.cycle(p_82824_, p_82825_, p_82826_, Direction.Axis.X),
+-            p_82823_.cycle(p_82824_, p_82825_, p_82826_, Direction.Axis.Y),
+-            p_82823_.cycle(p_82824_, p_82825_, p_82826_, Direction.Axis.Z)
+-        );
+-    }
+-
+-    public boolean isFullWide(int p_82847_, int p_82848_, int p_82849_) {
+-        if (p_82847_ < 0 || p_82848_ < 0 || p_82849_ < 0) {
+-            return false;
+-        } else {
+-            return p_82847_ < this.xSize && p_82848_ < this.ySize && p_82849_ < this.zSize ? this.isFull(p_82847_, p_82848_, p_82849_) : false;
+-        }
+-    }
+-
+-    public boolean isFull(AxisCycle p_82836_, int p_82837_, int p_82838_, int p_82839_) {
+-        return this.isFull(
+-            p_82836_.cycle(p_82837_, p_82838_, p_82839_, Direction.Axis.X),
+-            p_82836_.cycle(p_82837_, p_82838_, p_82839_, Direction.Axis.Y),
+-            p_82836_.cycle(p_82837_, p_82838_, p_82839_, Direction.Axis.Z)
+-        );
+-    }
+-
+-    public abstract boolean isFull(int p_82829_, int p_82830_, int p_82831_);
+-
+-    public abstract void fill(int p_165998_, int p_165999_, int p_166000_);
++    // Paper start - optimise collisions
++    // ignore race conditions on field read/write: the shape is static, so it doesn't matter
++    private ca.spottedleaf.moonrise.patches.collisions.shape.CachedShapeData cachedShapeData;
++
++    @Override
++    public final ca.spottedleaf.moonrise.patches.collisions.shape.CachedShapeData moonrise$getOrCreateCachedShapeData() {
++        if (this.cachedShapeData != null) {
++            return this.cachedShapeData;
++        }
++
++        final DiscreteVoxelShape discreteVoxelShape = (DiscreteVoxelShape)(Object)this;
++
++        final int sizeX = discreteVoxelShape.getXSize();
++        final int sizeY = discreteVoxelShape.getYSize();
++        final int sizeZ = discreteVoxelShape.getZSize();
++
++        final int maxIndex = sizeX * sizeY * sizeZ; // exclusive
++
++        final int longsRequired = (maxIndex + (Long.SIZE - 1)) >>> 6;
++        long[] voxelSet;
++
++        final boolean isEmpty = discreteVoxelShape.isEmpty();
++
++        if (discreteVoxelShape instanceof BitSetDiscreteVoxelShape bitsetShape) {
++            voxelSet = bitsetShape.storage.toLongArray();
++            if (voxelSet.length < longsRequired) {
++                // happens when the later long values are 0L, so we need to resize
++                voxelSet = java.util.Arrays.copyOf(voxelSet, longsRequired);
++            }
++        } else {
++            voxelSet = new long[longsRequired];
++            if (!isEmpty) {
++                final int mulX = sizeZ * sizeY;
++                for (int x = 0; x < sizeX; ++x) {
++                    for (int y = 0; y < sizeY; ++y) {
++                        for (int z = 0; z < sizeZ; ++z) {
++                            if (discreteVoxelShape.isFull(x, y, z)) {
++                                // index = z + y*size_z + x*(size_z*size_y)
++                                final int index = z + y * sizeZ + x * mulX;
++
++                                voxelSet[index >>> 6] |= 1L << index;
++                            }
++                        }
++                    }
++                }
++            }
++        }
++
++        final boolean hasSingleAABB = sizeX == 1 && sizeY == 1 && sizeZ == 1 && !isEmpty && discreteVoxelShape.isFull(0, 0, 0);
++
++        final int minFullX = discreteVoxelShape.firstFull(Direction.Axis.X);
++        final int minFullY = discreteVoxelShape.firstFull(Direction.Axis.Y);
++        final int minFullZ = discreteVoxelShape.firstFull(Direction.Axis.Z);
++
++        final int maxFullX = discreteVoxelShape.lastFull(Direction.Axis.X);
++        final int maxFullY = discreteVoxelShape.lastFull(Direction.Axis.Y);
++        final int maxFullZ = discreteVoxelShape.lastFull(Direction.Axis.Z);
++
++        return this.cachedShapeData = new ca.spottedleaf.moonrise.patches.collisions.shape.CachedShapeData(
++                sizeX, sizeY, sizeZ, voxelSet,
++                minFullX, minFullY, minFullZ,
++                maxFullX, maxFullY, maxFullZ,
++                isEmpty, hasSingleAABB
++        );
++    }
++    // Paper end - optimise collisions
++
++    protected DiscreteVoxelShape(int sizeX, int sizeY, int sizeZ) {
++        if (sizeX >= 0 && sizeY >= 0 && sizeZ >= 0) {
++            this.xSize = sizeX;
++            this.ySize = sizeY;
++            this.zSize = sizeZ;
++        } else {
++            throw new IllegalArgumentException("Need all positive sizes: x: " + sizeX + ", y: " + sizeY + ", z: " + sizeZ);
++        }
++    }
++
++    public boolean isFullWide(AxisCycle cycle, int x, int y, int z) {
++        return this.isFullWide(cycle.cycle(x, y, z, Direction.Axis.X), cycle.cycle(x, y, z, Direction.Axis.Y), cycle.cycle(x, y, z, Direction.Axis.Z));
++    }
++
++    public boolean isFullWide(int x, int y, int z) {
++        return x >= 0 && y >= 0 && z >= 0 && x < this.xSize && y < this.ySize && z < this.zSize && this.isFull(x, y, z);
++    }
++
++    public boolean isFull(AxisCycle cycle, int x, int y, int z) {
++        return this.isFull(cycle.cycle(x, y, z, Direction.Axis.X), cycle.cycle(x, y, z, Direction.Axis.Y), cycle.cycle(x, y, z, Direction.Axis.Z));
++    }
++
++    public abstract boolean isFull(int x, int y, int z);
++
++    public abstract void fill(int x, int y, int z);
+ 
+     public boolean isEmpty() {
+-        for (Direction.Axis direction$axis : AXIS_VALUES) {
+-            if (this.firstFull(direction$axis) >= this.lastFull(direction$axis)) {
++        for (Direction.Axis axis : AXIS_VALUES) {
++            if (this.firstFull(axis) >= this.lastFull(axis)) {
+                 return true;
+             }
+         }
+@@ -57,20 +_,20 @@
+         return false;
+     }
+ 
+-    public abstract int firstFull(Direction.Axis p_82827_);
+-
+-    public abstract int lastFull(Direction.Axis p_82840_);
+-
+-    public int firstFull(Direction.Axis p_165995_, int p_165996_, int p_165997_) {
+-        int i = this.getSize(p_165995_);
+-        if (p_165996_ >= 0 && p_165997_ >= 0) {
+-            Direction.Axis direction$axis = AxisCycle.FORWARD.cycle(p_165995_);
+-            Direction.Axis direction$axis1 = AxisCycle.BACKWARD.cycle(p_165995_);
+-            if (p_165996_ < this.getSize(direction$axis) && p_165997_ < this.getSize(direction$axis1)) {
+-                AxisCycle axiscycle = AxisCycle.between(Direction.Axis.X, p_165995_);
++    public abstract int firstFull(Direction.Axis axis);
++
++    public abstract int lastFull(Direction.Axis axis);
++
++    public int firstFull(Direction.Axis axis, int from, int to) {
++        int i = this.getSize(axis);
++        if (from >= 0 && to >= 0) {
++            Direction.Axis axis2 = AxisCycle.FORWARD.cycle(axis);
++            Direction.Axis axis3 = AxisCycle.BACKWARD.cycle(axis);
++            if (from < this.getSize(axis2) && to < this.getSize(axis3)) {
++                AxisCycle axisCycle = AxisCycle.between(Direction.Axis.X, axis);
+ 
+                 for (int j = 0; j < i; j++) {
+-                    if (this.isFull(axiscycle, j, p_165996_, p_165997_)) {
++                    if (this.isFull(axisCycle, j, from, to)) {
+                         return j;
+                     }
+                 }
+@@ -84,16 +_,16 @@
+         }
+     }
+ 
+-    public int lastFull(Direction.Axis p_82842_, int p_82843_, int p_82844_) {
+-        if (p_82843_ >= 0 && p_82844_ >= 0) {
+-            Direction.Axis direction$axis = AxisCycle.FORWARD.cycle(p_82842_);
+-            Direction.Axis direction$axis1 = AxisCycle.BACKWARD.cycle(p_82842_);
+-            if (p_82843_ < this.getSize(direction$axis) && p_82844_ < this.getSize(direction$axis1)) {
+-                int i = this.getSize(p_82842_);
+-                AxisCycle axiscycle = AxisCycle.between(Direction.Axis.X, p_82842_);
++    public int lastFull(Direction.Axis axis, int from, int to) {
++        if (from >= 0 && to >= 0) {
++            Direction.Axis axis2 = AxisCycle.FORWARD.cycle(axis);
++            Direction.Axis axis3 = AxisCycle.BACKWARD.cycle(axis);
++            if (from < this.getSize(axis2) && to < this.getSize(axis3)) {
++                int i = this.getSize(axis);
++                AxisCycle axisCycle = AxisCycle.between(Direction.Axis.X, axis);
+ 
+                 for (int j = i - 1; j >= 0; j--) {
+-                    if (this.isFull(axiscycle, j, p_82843_, p_82844_)) {
++                    if (this.isFull(axisCycle, j, from, to)) {
+                         return j + 1;
+                     }
+                 }
+@@ -107,8 +_,8 @@
+         }
+     }
+ 
+-    public int getSize(Direction.Axis p_82851_) {
+-        return p_82851_.choose(this.xSize, this.ySize, this.zSize);
++    public int getSize(Direction.Axis axis) {
++        return axis.choose(this.xSize, this.ySize, this.zSize);
+     }
+ 
+     public int getXSize() {
+@@ -123,120 +_,120 @@
+         return this.getSize(Direction.Axis.Z);
+     }
+ 
+-    public void forAllEdges(DiscreteVoxelShape.IntLineConsumer p_82820_, boolean p_82821_) {
+-        this.forAllAxisEdges(p_82820_, AxisCycle.NONE, p_82821_);
+-        this.forAllAxisEdges(p_82820_, AxisCycle.FORWARD, p_82821_);
+-        this.forAllAxisEdges(p_82820_, AxisCycle.BACKWARD, p_82821_);
++    public void forAllEdges(DiscreteVoxelShape.IntLineConsumer callback, boolean coalesce) {
++        this.forAllAxisEdges(callback, AxisCycle.NONE, coalesce);
++        this.forAllAxisEdges(callback, AxisCycle.FORWARD, coalesce);
++        this.forAllAxisEdges(callback, AxisCycle.BACKWARD, coalesce);
+     }
+ 
+-    private void forAllAxisEdges(DiscreteVoxelShape.IntLineConsumer p_82816_, AxisCycle p_82817_, boolean p_82818_) {
+-        AxisCycle axiscycle = p_82817_.inverse();
+-        int j = this.getSize(axiscycle.cycle(Direction.Axis.X));
+-        int k = this.getSize(axiscycle.cycle(Direction.Axis.Y));
+-        int l = this.getSize(axiscycle.cycle(Direction.Axis.Z));
+-
+-        for (int i1 = 0; i1 <= j; i1++) {
+-            for (int j1 = 0; j1 <= k; j1++) {
+-                int i = -1;
+-
+-                for (int k1 = 0; k1 <= l; k1++) {
+-                    int l1 = 0;
+-                    int i2 = 0;
+-
+-                    for (int j2 = 0; j2 <= 1; j2++) {
+-                        for (int k2 = 0; k2 <= 1; k2++) {
+-                            if (this.isFullWide(axiscycle, i1 + j2 - 1, j1 + k2 - 1, k1)) {
+-                                l1++;
+-                                i2 ^= j2 ^ k2;
++    private void forAllAxisEdges(DiscreteVoxelShape.IntLineConsumer callback, AxisCycle direction, boolean coalesce) {
++        AxisCycle axisCycle = direction.inverse();
++        int i = this.getSize(axisCycle.cycle(Direction.Axis.X));
++        int j = this.getSize(axisCycle.cycle(Direction.Axis.Y));
++        int k = this.getSize(axisCycle.cycle(Direction.Axis.Z));
++
++        for (int l = 0; l <= i; l++) {
++            for (int m = 0; m <= j; m++) {
++                int n = -1;
++
++                for (int o = 0; o <= k; o++) {
++                    int p = 0;
++                    int q = 0;
++
++                    for (int r = 0; r <= 1; r++) {
++                        for (int s = 0; s <= 1; s++) {
++                            if (this.isFullWide(axisCycle, l + r - 1, m + s - 1, o)) {
++                                p++;
++                                q ^= r ^ s;
+                             }
+                         }
+                     }
+ 
+-                    if (l1 == 1 || l1 == 3 || l1 == 2 && (i2 & 1) == 0) {
+-                        if (p_82818_) {
+-                            if (i == -1) {
+-                                i = k1;
++                    if (p == 1 || p == 3 || p == 2 && (q & 1) == 0) {
++                        if (coalesce) {
++                            if (n == -1) {
++                                n = o;
+                             }
+                         } else {
+-                            p_82816_.consume(
+-                                axiscycle.cycle(i1, j1, k1, Direction.Axis.X),
+-                                axiscycle.cycle(i1, j1, k1, Direction.Axis.Y),
+-                                axiscycle.cycle(i1, j1, k1, Direction.Axis.Z),
+-                                axiscycle.cycle(i1, j1, k1 + 1, Direction.Axis.X),
+-                                axiscycle.cycle(i1, j1, k1 + 1, Direction.Axis.Y),
+-                                axiscycle.cycle(i1, j1, k1 + 1, Direction.Axis.Z)
++                            callback.consume(
++                                    axisCycle.cycle(l, m, o, Direction.Axis.X),
++                                    axisCycle.cycle(l, m, o, Direction.Axis.Y),
++                                    axisCycle.cycle(l, m, o, Direction.Axis.Z),
++                                    axisCycle.cycle(l, m, o + 1, Direction.Axis.X),
++                                    axisCycle.cycle(l, m, o + 1, Direction.Axis.Y),
++                                    axisCycle.cycle(l, m, o + 1, Direction.Axis.Z)
+                             );
+                         }
+-                    } else if (i != -1) {
+-                        p_82816_.consume(
+-                            axiscycle.cycle(i1, j1, i, Direction.Axis.X),
+-                            axiscycle.cycle(i1, j1, i, Direction.Axis.Y),
+-                            axiscycle.cycle(i1, j1, i, Direction.Axis.Z),
+-                            axiscycle.cycle(i1, j1, k1, Direction.Axis.X),
+-                            axiscycle.cycle(i1, j1, k1, Direction.Axis.Y),
+-                            axiscycle.cycle(i1, j1, k1, Direction.Axis.Z)
++                    } else if (n != -1) {
++                        callback.consume(
++                                axisCycle.cycle(l, m, n, Direction.Axis.X),
++                                axisCycle.cycle(l, m, n, Direction.Axis.Y),
++                                axisCycle.cycle(l, m, n, Direction.Axis.Z),
++                                axisCycle.cycle(l, m, o, Direction.Axis.X),
++                                axisCycle.cycle(l, m, o, Direction.Axis.Y),
++                                axisCycle.cycle(l, m, o, Direction.Axis.Z)
+                         );
+-                        i = -1;
++                        n = -1;
+                     }
+                 }
+             }
+         }
+     }
+ 
+-    public void forAllBoxes(DiscreteVoxelShape.IntLineConsumer p_82833_, boolean p_82834_) {
+-        BitSetDiscreteVoxelShape.forAllBoxes(this, p_82833_, p_82834_);
+-    }
+-
+-    public void forAllFaces(DiscreteVoxelShape.IntFaceConsumer p_82811_) {
+-        this.forAllAxisFaces(p_82811_, AxisCycle.NONE);
+-        this.forAllAxisFaces(p_82811_, AxisCycle.FORWARD);
+-        this.forAllAxisFaces(p_82811_, AxisCycle.BACKWARD);
+-    }
+-
+-    private void forAllAxisFaces(DiscreteVoxelShape.IntFaceConsumer p_82813_, AxisCycle p_82814_) {
+-        AxisCycle axiscycle = p_82814_.inverse();
+-        Direction.Axis direction$axis = axiscycle.cycle(Direction.Axis.Z);
+-        int i = this.getSize(axiscycle.cycle(Direction.Axis.X));
+-        int j = this.getSize(axiscycle.cycle(Direction.Axis.Y));
+-        int k = this.getSize(direction$axis);
+-        Direction direction = Direction.fromAxisAndDirection(direction$axis, Direction.AxisDirection.NEGATIVE);
+-        Direction direction1 = Direction.fromAxisAndDirection(direction$axis, Direction.AxisDirection.POSITIVE);
++    public void forAllBoxes(DiscreteVoxelShape.IntLineConsumer consumer, boolean coalesce) {
++        BitSetDiscreteVoxelShape.forAllBoxes(this, consumer, coalesce);
++    }
++
++    public void forAllFaces(DiscreteVoxelShape.IntFaceConsumer consumer) {
++        this.forAllAxisFaces(consumer, AxisCycle.NONE);
++        this.forAllAxisFaces(consumer, AxisCycle.FORWARD);
++        this.forAllAxisFaces(consumer, AxisCycle.BACKWARD);
++    }
++
++    private void forAllAxisFaces(DiscreteVoxelShape.IntFaceConsumer consumer, AxisCycle direction) {
++        AxisCycle axisCycle = direction.inverse();
++        Direction.Axis axis = axisCycle.cycle(Direction.Axis.Z);
++        int i = this.getSize(axisCycle.cycle(Direction.Axis.X));
++        int j = this.getSize(axisCycle.cycle(Direction.Axis.Y));
++        int k = this.getSize(axis);
++        Direction direction2 = Direction.fromAxisAndDirection(axis, Direction.AxisDirection.NEGATIVE);
++        Direction direction3 = Direction.fromAxisAndDirection(axis, Direction.AxisDirection.POSITIVE);
+ 
+         for (int l = 0; l < i; l++) {
+-            for (int i1 = 0; i1 < j; i1++) {
+-                boolean flag = false;
+-
+-                for (int j1 = 0; j1 <= k; j1++) {
+-                    boolean flag1 = j1 != k && this.isFull(axiscycle, l, i1, j1);
+-                    if (!flag && flag1) {
+-                        p_82813_.consume(
+-                            direction,
+-                            axiscycle.cycle(l, i1, j1, Direction.Axis.X),
+-                            axiscycle.cycle(l, i1, j1, Direction.Axis.Y),
+-                            axiscycle.cycle(l, i1, j1, Direction.Axis.Z)
+-                        );
+-                    }
+-
+-                    if (flag && !flag1) {
+-                        p_82813_.consume(
+-                            direction1,
+-                            axiscycle.cycle(l, i1, j1 - 1, Direction.Axis.X),
+-                            axiscycle.cycle(l, i1, j1 - 1, Direction.Axis.Y),
+-                            axiscycle.cycle(l, i1, j1 - 1, Direction.Axis.Z)
+-                        );
+-                    }
+-
+-                    flag = flag1;
++            for (int m = 0; m < j; m++) {
++                boolean bl = false;
++
++                for (int n = 0; n <= k; n++) {
++                    boolean bl2 = n != k && this.isFull(axisCycle, l, m, n);
++                    if (!bl && bl2) {
++                        consumer.consume(
++                                direction2,
++                                axisCycle.cycle(l, m, n, Direction.Axis.X),
++                                axisCycle.cycle(l, m, n, Direction.Axis.Y),
++                                axisCycle.cycle(l, m, n, Direction.Axis.Z)
++                        );
++                    }
++
++                    if (bl && !bl2) {
++                        consumer.consume(
++                                direction3,
++                                axisCycle.cycle(l, m, n - 1, Direction.Axis.X),
++                                axisCycle.cycle(l, m, n - 1, Direction.Axis.Y),
++                                axisCycle.cycle(l, m, n - 1, Direction.Axis.Z)
++                        );
++                    }
++
++                    bl = bl2;
+                 }
+             }
+         }
+     }
+ 
+     public interface IntFaceConsumer {
+-        void consume(Direction p_82854_, int p_82855_, int p_82856_, int p_82857_);
++        void consume(Direction direction, int x, int y, int z);
+     }
+ 
+     public interface IntLineConsumer {
+-        void consume(int p_82859_, int p_82860_, int p_82861_, int p_82862_, int p_82863_, int p_82864_);
++        void consume(int x1, int y1, int z1, int x2, int y2, int z2);
+     }
+ }

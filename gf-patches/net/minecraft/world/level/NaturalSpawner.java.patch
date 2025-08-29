@@ -1,0 +1,37 @@
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -52,7 +_,7 @@
+     public static final int SPAWN_DISTANCE_CHUNK = 8;
+     public static final int SPAWN_DISTANCE_BLOCK = 128;
+     static final int MAGIC_NUMBER = (int)Math.pow(17.0, 2.0);
+-    private static final MobCategory[] SPAWNING_CATEGORIES = Stream.of(MobCategory.values())
++    public static final MobCategory[] SPAWNING_CATEGORIES = Stream.of(MobCategory.values())
+         .filter(p_47037_ -> p_47037_ != MobCategory.MISC)
+         .toArray(MobCategory[]::new);
+ 
+@@ -83,7 +_,7 @@
+                             potentialcalculator.addCharge(entity.blockPosition(), mobspawnsettings$mobspawncost.charge());
+                         }
+ 
+-                        if (entity instanceof Mob) {
++                        if (p_186528_ != null && entity instanceof Mob) {
+                             p_186528_.addMob(p_275163_.getPos(), mobcategory);
+                         }
+ 
+@@ -510,7 +_,7 @@
+             this.spawnPotential.addCharge(blockpos, d0);
+             MobCategory mobcategory = entitytype.getCategory();
+             this.mobCategoryCounts.addTo(mobcategory, 1);
+-            this.localMobCapCalculator.addMob(new ChunkPos(blockpos), mobcategory);
++            if (this.localMobCapCalculator != null) this.localMobCapCalculator.addMob(new ChunkPos(blockpos), mobcategory);
+         }
+ 
+         public int getSpawnableChunkCount() {
+@@ -523,6 +_,7 @@
+ 
+         boolean canSpawnForCategory(MobCategory p_186549_, ChunkPos p_186550_) {
+             int i = p_186549_.getMaxInstancesPerChunk() * this.spawnableChunkCount / NaturalSpawner.MAGIC_NUMBER;
++            if (this.localMobCapCalculator == null) return this.mobCategoryCounts.getInt(p_186549_) < i; // Paper - Optional per player mob spawns
+             return this.mobCategoryCounts.getInt(p_186549_) >= i ? false : this.localMobCapCalculator.canSpawn(p_186549_, p_186550_);
+         }
+     }

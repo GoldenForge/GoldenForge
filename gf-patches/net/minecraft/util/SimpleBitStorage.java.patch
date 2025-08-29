@@ -1,0 +1,210 @@
+--- a/net/minecraft/util/SimpleBitStorage.java
++++ b/net/minecraft/util/SimpleBitStorage.java
+@@ -204,10 +_,24 @@
+     private final long mask;
+     private final int size;
+     private final int valuesPerLong;
+-    private final int divideMul;
+-    private final int divideAdd;
++    private final int divideMul; private final long divideMulUnsigned; // Paper - Perf: Optimize SimpleBitStorage; referenced in b(int) with 2 Integer.toUnsignedLong calls
++    private final int divideAdd; private final long divideAddUnsigned; // Paper - Perf: Optimize SimpleBitStorage
+     private final int divideShift;
+ 
++    // Paper start - optimise bitstorage read/write operations
++    private static final int[] BETTER_MAGIC = new int[33];
++    static {
++        // 20 bits of precision
++        // since index is always [0, 4095] (i.e 12 bits), multiplication by a magic value here (20 bits)
++        // fits exactly in an int and allows us to use integer arithmetic
++        for (int bits = 1; bits < BETTER_MAGIC.length; ++bits) {
++            BETTER_MAGIC[bits] = (int)ca.spottedleaf.concurrentutil.util.IntegerUtil.getUnsignedDivisorMagic(64L / bits, 20);
++        }
++    }
++    private final int magic;
++    private final int mulBits;
++    // Paper end - optimise bitstorage read/write operations
++
+     public SimpleBitStorage(int p_198164_, int p_198165_, int[] p_198166_) {
+         this(p_198164_, p_198165_);
+         int j = 0;
+@@ -248,8 +_,8 @@
+         this.mask = (1L << p_184724_) - 1L;
+         this.valuesPerLong = (char)(64 / p_184724_);
+         int i = 3 * (this.valuesPerLong - 1);
+-        this.divideMul = MAGIC[i + 0];
+-        this.divideAdd = MAGIC[i + 1];
++        this.divideMul = MAGIC[i + 0]; this.divideMulUnsigned = Integer.toUnsignedLong(this.divideMul); // Paper - Perf: Optimize SimpleBitStorage
++        this.divideAdd = MAGIC[i + 1]; this.divideAddUnsigned = Integer.toUnsignedLong(this.divideAdd); // Paper - Perf: Optimize SimpleBitStorage
+         this.divideShift = MAGIC[i + 2];
+         int j = (p_184725_ + this.valuesPerLong - 1) / this.valuesPerLong;
+         if (p_184726_ != null) {
+@@ -261,43 +_,66 @@
+         } else {
+             this.data = new long[j];
+         }
++        // Paper start - optimise bitstorage read/write operations
++        this.magic = BETTER_MAGIC[this.bits];
++        this.mulBits = (64 / this.bits) * this.bits;
++        if (this.size > 4096) {
++            throw new IllegalStateException("Size > 4096 not supported");
++        }
++        // Paper end - optimise bitstorage read/write operations
+     }
+ 
+     private int cellIndex(int p_184740_) {
+-        long i = Integer.toUnsignedLong(this.divideMul);
+-        long j = Integer.toUnsignedLong(this.divideAdd);
+-        return (int)((long)p_184740_ * i + j >> 32 >> this.divideShift);
+-    }
+-
+-    @Override
+-    public int getAndSet(int p_184731_, int p_184732_) {
+-        Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184731_);
+-        Validate.inclusiveBetween(0L, this.mask, (long)p_184732_);
+-        int i = this.cellIndex(p_184731_);
+-        long j = this.data[i];
+-        int k = (p_184731_ - i * this.valuesPerLong) * this.bits;
+-        int l = (int)(j >> k & this.mask);
+-        this.data[i] = j & ~(this.mask << k) | ((long)p_184732_ & this.mask) << k;
+-        return l;
+-    }
+-
+-    @Override
+-    public void set(int p_184742_, int p_184743_) {
+-        Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184742_);
+-        Validate.inclusiveBetween(0L, this.mask, (long)p_184743_);
+-        int i = this.cellIndex(p_184742_);
+-        long j = this.data[i];
+-        int k = (p_184742_ - i * this.valuesPerLong) * this.bits;
+-        this.data[i] = j & ~(this.mask << k) | ((long)p_184743_ & this.mask) << k;
+-    }
+-
+-    @Override
+-    public int get(int p_184729_) {
+-        Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184729_);
+-        int i = this.cellIndex(p_184729_);
+-        long j = this.data[i];
+-        int k = (p_184729_ - i * this.valuesPerLong) * this.bits;
+-        return (int)(j >> k & this.mask);
++        return (int)(p_184740_ * this.divideMulUnsigned + this.divideAddUnsigned >> 32 >> this.divideShift); // Paper - Perf: Optimize SimpleBitStorage
++    }
++
++    @Override
++    public int getAndSet(int p_184731_, int p_184732_) { // Paper - Perf: Optimize SimpleBitStorage
++        // Paper start - optimise bitstorage read/write operations
++        final int full = this.magic * p_184731_; // 20 bits of magic + 12 bits of index = barely int
++        final int divQ = full >>> 20;
++        final int divR = (full & 0xFFFFF) * this.mulBits >>> 20;
++
++        final long[] dataArray = this.data;
++
++        final long data = dataArray[divQ];
++        final long mask = this.mask;
++
++        final long write = data & ~(mask << divR) | ((long)p_184732_ & mask) << divR;
++
++        dataArray[divQ] = write;
++
++        return (int)(data >>> divR & mask);
++        // Paper end - optimise bitstorage read/write operations
++    }
++
++    @Override
++    public void set(int p_184742_, int p_184743_) { // Paper - Perf: Optimize SimpleBitStorage
++        // Paper start - optimise bitstorage read/write operations
++        final int full = this.magic * p_184742_; // 20 bits of magic + 12 bits of index = barely int
++        final int divQ = full >>> 20;
++        final int divR = (full & 0xFFFFF) * this.mulBits >>> 20;
++
++        final long[] dataArray = this.data;
++
++        final long data = dataArray[divQ];
++        final long mask = this.mask;
++
++        final long write = data & ~(mask << divR) | ((long)p_184743_ & mask) << divR;
++
++        dataArray[divQ] = write;
++        // Paper end - optimise bitstorage read/write operations
++    }
++
++    @Override
++    public int get(int p_184729_) { // Paper - Perf: Optimize SimpleBitStorage
++        // Paper start - optimise bitstorage read/write operations
++        final int full = this.magic * p_184729_; // 20 bits of magic + 12 bits of index = barely int
++        final int divQ = full >>> 20;
++        final int divR = (full & 0xFFFFF) * this.mulBits >>> 20;
++
++        return (int)(this.data[divQ] >>> divR & this.mask);
++        // Paper end - optimise bitstorage read/write operations
+     }
+ 
+     @Override
+@@ -361,6 +_,68 @@
+     public BitStorage copy() {
+         return new SimpleBitStorage(this.bits, this.size, (long[])this.data.clone());
+     }
++
++    // Paper start - block counting
++    @Override
++    public final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> moonrise$countEntries() {
++        final int valuesPerLong = this.valuesPerLong;
++        final int bits = this.bits;
++        final long mask = (1L << bits) - 1L;
++        final int size = this.size;
++
++        if (bits <= 6) {
++            final it.unimi.dsi.fastutil.shorts.ShortArrayList[] byId = new it.unimi.dsi.fastutil.shorts.ShortArrayList[1 << bits];
++            final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> ret = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>(1 << bits);
++
++            int index = 0;
++
++            for (long value : this.data) {
++                int li = 0;
++                do {
++                    final int paletteIdx = (int)(value & mask);
++                    value >>= bits;
++                    ++li;
++
++                    final it.unimi.dsi.fastutil.shorts.ShortArrayList coords = byId[paletteIdx];
++                    if (coords != null) {
++                        coords.add((short)index++);
++                        continue;
++                    } else {
++                        final it.unimi.dsi.fastutil.shorts.ShortArrayList newCoords = new it.unimi.dsi.fastutil.shorts.ShortArrayList(64);
++                        byId[paletteIdx] = newCoords;
++                        newCoords.add((short)index++);
++                        ret.put(paletteIdx, newCoords);
++                        continue;
++                    }
++                } while (li < valuesPerLong && index < size);
++            }
++
++            return ret;
++        } else {
++            final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> ret = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>(
++                    1 << 6
++            );
++
++            int index = 0;
++
++            for (long value : this.data) {
++                int li = 0;
++                do {
++                    final int paletteIdx = (int)(value & mask);
++                    value >>= bits;
++                    ++li;
++
++                    ret.computeIfAbsent(paletteIdx, (final int key) -> {
++                        return new it.unimi.dsi.fastutil.shorts.ShortArrayList(64);
++                    }).add((short)index++);
++                } while (li < valuesPerLong && index < size);
++            }
++
++            return ret;
++        }
++    }
++    // Paper end - block counting
++
+ 
+     public static class InitializationException extends RuntimeException {
+         InitializationException(String p_184746_) {

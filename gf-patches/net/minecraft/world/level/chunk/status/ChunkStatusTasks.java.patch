@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/level/chunk/status/ChunkStatusTasks.java
++++ b/net/minecraft/world/level/chunk/status/ChunkStatusTasks.java
+@@ -196,7 +_,7 @@
+                 if (protochunk instanceof ImposterProtoChunk) {
+                     levelchunk = ((ImposterProtoChunk)protochunk).getWrapped();
+                 } else {
+-                    levelchunk = new LevelChunk(serverlevel, protochunk, p_347400_ -> postLoadProtoChunk(serverlevel, protochunk.getEntities()));
++                    levelchunk = new LevelChunk(serverlevel, protochunk, p_347400_ -> postLoadProtoChunk(serverlevel, protochunk.getEntities(), protochunk.getPos())); // Paper - rewrite chunk system
+                     generationchunkholder.replaceProtoChunk(new ImposterProtoChunk(levelchunk, false));
+                 }
+ 
+@@ -223,7 +_,7 @@
+         );
+     }
+ 
+-    private static void postLoadProtoChunk(ServerLevel p_347492_, List<CompoundTag> p_347609_) {
++    public  static void postLoadProtoChunk(ServerLevel p_347492_, List<CompoundTag> p_347609_, ChunkPos pos) { // Goldenforge - public
+         if (!p_347609_.isEmpty()) {
+             p_347492_.addWorldGenChunkEntities(EntityType.loadEntitiesRecursive(p_347609_, p_347492_));
+         }

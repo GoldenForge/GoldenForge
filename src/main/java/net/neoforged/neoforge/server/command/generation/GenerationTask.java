@@ -187,7 +187,7 @@ public class GenerationTask {
         // Help make sure pregen progress does not get completely lost if game crashes/shuts down before pregen is finished.
         if (((this.okCount.get() + this.errorCount.get()) % 1000) == 999) {
             this.server.submit(() -> {
-                this.serverLevel.save(null, false, true);
+                this.serverLevel.save(null, false, true, false);
             });
         }
     }

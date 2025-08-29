@@ -1,0 +1,588 @@
+package io.papermc.paper.configuration;
+
+import com.google.common.collect.*;
+import com.mojang.logging.*;
+import io.papermc.paper.configuration.mapping.*;
+import io.papermc.paper.configuration.serializer.*;
+import io.papermc.paper.configuration.transformation.world.*;
+import io.papermc.paper.configuration.type.*;
+import io.papermc.paper.configuration.type.fallback.*;
+import io.papermc.paper.configuration.type.number.*;
+import it.unimi.dsi.fastutil.objects.*;
+import net.minecraft.Util;
+import net.minecraft.commands.arguments.*;
+import net.minecraft.core.*;
+import net.minecraft.core.registries.*;
+import net.minecraft.resources.*;
+import net.minecraft.world.*;
+import net.minecraft.world.entity.*;
+import net.minecraft.world.entity.boss.enderdragon.*;
+import net.minecraft.world.entity.decoration.*;
+import net.minecraft.world.entity.item.*;
+import net.minecraft.world.entity.monster.*;
+import net.minecraft.world.entity.player.*;
+import net.minecraft.world.item.*;
+import net.minecraft.world.level.*;
+import net.minecraft.world.level.levelgen.feature.*;
+import org.slf4j.*;
+import org.spongepowered.configurate.objectmapping.*;
+import org.spongepowered.configurate.objectmapping.meta.*;
+import org.spongepowered.configurate.serialize.*;
+
+import java.util.*;
+import java.util.function.*;
+import java.util.stream.*;
+
+@SuppressWarnings({"FieldCanBeLocal", "FieldMayBeFinal", "NotNullFieldNotInitialized", "InnerClassMayBeStatic"})
+public class WorldConfiguration extends ConfigurationPart {
+    private static final Logger LOGGER = LogUtils.getLogger();
+    static final int CURRENT_VERSION = 31; // (when you change the version, change the comment, so it conflicts on rebases): migrate spawn loaded configs to gamerule
+
+    private final transient ResourceLocation worldKey;
+
+    WorldConfiguration(final ResourceLocation worldKey) {
+        this.worldKey = worldKey;
+    }
+
+    public boolean isDefault() {
+        return this.worldKey.equals(PaperConfigurations.WORLD_DEFAULTS_KEY);
+    }
+
+    @Setting(Configuration.VERSION_FIELD)
+    public int version = CURRENT_VERSION;
+
+    public SpigotConfigs spigotConfigs;
+
+    public class SpigotConfigs extends ConfigurationPart {
+        public int animalActivationRange = 32;
+        public int monsterActivationRange = 32;
+        public int raiderActivationRange = 64;
+        public int miscActivationRange = 16;
+        // Paper start
+        public int flyingMonsterActivationRange = 32;
+        public int waterActivationRange = 16;
+        public int villagerActivationRange = 32;
+        public int wakeUpInactiveAnimals = 4;
+        public int wakeUpInactiveAnimalsEvery = 60*20;
+        public int wakeUpInactiveAnimalsFor = 5*20;
+        public int wakeUpInactiveMonsters = 8;
+        public int wakeUpInactiveMonstersEvery = 20*20;
+        public int wakeUpInactiveMonstersFor = 5*20;
+        public int wakeUpInactiveVillagers = 4;
+        public int wakeUpInactiveVillagersEvery = 30*20;
+        public int wakeUpInactiveVillagersFor = 5*20;
+        public int wakeUpInactiveFlying = 8;
+        public int wakeUpInactiveFlyingEvery = 10*20;
+        public int wakeUpInactiveFlyingFor = 5*20;
+        public int villagersWorkImmunityAfter = 5*20;
+        public int villagersWorkImmunityFor = 20;
+        public boolean villagersActiveForPanic = true;
+        // Paper end
+        public boolean tickInactiveVillagers = true;
+        public boolean ignoreSpectatorActivation = false;
+
+        public int playerTrackingRange = 128;
+        public int animalTrackingRange = 96;
+        public int monsterTrackingRange = 96;
+        public int miscTrackingRange = 96;
+        public int displayTrackingRange = 128;
+        public int otherTrackingRange = 64;
+    }
+
+    public SmallOptimizations smallOptimizations;
+
+    public class SmallOptimizations extends ConfigurationPart {
+
+        public boolean saveFireworks = true; // Gale - EMC - make saving fireworks configurable
+        public boolean useOptimizedSheepOffspringColor = true; // Gale - carpet-fixes - optimize sheep offspring color
+
+        // Gale start - Airplane - reduce projectile chunk loading
+        public MaxProjectileChunkLoads maxProjectileChunkLoads;
+
+        public class MaxProjectileChunkLoads extends ConfigurationPart {
+
+            public int perTick = 10;
+
+            public PerProjectile perProjectile;
+
+            public class PerProjectile extends ConfigurationPart {
+                public int max = 10;
+                public boolean resetMovementAfterReachLimit = false;
+                public boolean removeFromWorldAfterReachLimit = false;
+            }
+
+        }
+        // Gale end - Airplane - reduce projectile chunk loading
+        public ReducedIntervals reducedIntervals;
+
+        public class ReducedIntervals extends ConfigurationPart {
+
+            public int acquirePoiForStuckEntity = 60; // Gale - Airplane - reduce acquire POI for stuck entities
+            public int checkStuckInWall = 10; // Gale - Pufferfish - reduce in wall checks
+            public int villagerItemRepickup = 100; // Gale - EMC - reduce villager item re-pickup
+
+            public CheckNearbyItem checkNearbyItem;
+
+            public class CheckNearbyItem extends ConfigurationPart {
+
+                // Gale start - EMC - reduce hopper item checks
+                public Hopper hopper;
+
+                public class Hopper extends ConfigurationPart {
+
+                    public int interval = 1;
+
+                    public Minecart minecart;
+
+                    public class Minecart extends ConfigurationPart {
+
+                        public int interval = 1;
+
+                        public TemporaryImmunity temporaryImmunity;
+
+                        public class TemporaryImmunity extends ConfigurationPart {
+                            public int duration = 100;
+                            public int nearbyItemMaxAge = 1200;
+                            public int checkForMinecartNearItemInterval = 20;
+                            public boolean checkForMinecartNearItemWhileActive = false; // Leaf - Reduce active items finding hopper nearby check
+                            public boolean checkForMinecartNearItemWhileInactive = true;
+                            public double maxItemHorizontalDistance = 24.0;
+                            public double maxItemVerticalDistance = 4.0;
+                        }
+
+                    }
+
+                }
+                // Gale end - EMC - reduce hopper item checks
+
+            }
+
+        }
+    }
+
+    public Entities entities;
+
+    public class Entities extends ConfigurationPart {
+        public boolean entitiesTargetWithFollowRange = false;
+        public MobEffects mobEffects;
+
+        public class MobEffects extends ConfigurationPart {
+            public boolean spidersImmuneToPoisonEffect = true;
+            public ImmuneToWitherEffect immuneToWitherEffect;
+
+            public class ImmuneToWitherEffect extends ConfigurationPart {
+                public boolean wither = true;
+                public boolean witherSkeleton = true;
+            }
+        }
+
+        public ArmorStands armorStands;
+
+        public class ArmorStands extends ConfigurationPart {
+            public boolean doCollisionEntityLookups = true;
+            public boolean tick = true;
+        }
+
+        public Markers markers;
+
+        public class Markers extends ConfigurationPart {
+            public boolean tick = true;
+        }
+
+        public Sniffer sniffer;
+
+        public class Sniffer extends ConfigurationPart {
+            public IntOr.Default hatchTime = IntOr.Default.USE_DEFAULT;
+            public IntOr.Default boostedHatchTime = IntOr.Default.USE_DEFAULT;
+        }
+
+        public Spawning spawning;
+
+        public class Spawning extends ConfigurationPart {
+            public boolean filterBadTileEntityNbtFromFallingBlocks = true;
+            public List<NbtPathArgument.NbtPath> filteredEntityTagNbtPaths = NbtPathSerializer.fromString(List.of("Pos", "Motion", "SleepingX", "SleepingY", "SleepingZ"));
+            public boolean disableMobSpawnerSpawnEggTransformation = false;
+            public boolean perPlayerMobSpawns = false;
+            public boolean scanForLegacyEnderDragon = true;
+            @MergeMap
+            public Reference2IntMap<MobCategory> spawnLimits = Util.make(new Reference2IntOpenHashMap<>(NaturalSpawner.SPAWNING_CATEGORIES.length), map -> Arrays.stream(NaturalSpawner.SPAWNING_CATEGORIES).forEach(mobCategory -> map.put(mobCategory, -1)));
+            public DespawnRange.Shape despawnRangeShape = DespawnRange.Shape.ELLIPSOID;
+            @MergeMap
+            public Map<MobCategory, DespawnRangePair> despawnRanges = Arrays.stream(MobCategory.values()).collect(Collectors.toMap(Function.identity(), category -> DespawnRangePair.createDefault()));
+            @MergeMap
+            public Reference2IntMap<MobCategory> ticksPerSpawn = Util.make(new Reference2IntOpenHashMap<>(NaturalSpawner.SPAWNING_CATEGORIES.length), map -> Arrays.stream(NaturalSpawner.SPAWNING_CATEGORIES).forEach(mobCategory -> map.put(mobCategory, -1)));
+
+            @ConfigSerializable
+            public record DespawnRangePair(@Required DespawnRange hard, @Required DespawnRange soft) {
+                public static DespawnRangePair createDefault() {
+                    return new DespawnRangePair(
+                            new DespawnRange(IntOr.Default.USE_DEFAULT),
+                            new DespawnRange(IntOr.Default.USE_DEFAULT)
+                    );
+                }
+            }
+
+            @PostProcess
+            public void precomputeDespawnDistances() throws SerializationException {
+                for (Map.Entry<MobCategory, DespawnRangePair> entry : this.despawnRanges.entrySet()) {
+                    final MobCategory category = entry.getKey();
+                    final DespawnRangePair range = entry.getValue();
+                    range.hard().preComputed(category.getDespawnDistance(), category.getSerializedName());
+                    range.soft().preComputed(category.getNoDespawnDistance(), category.getSerializedName());
+                }
+            }
+            public WaterAnimalSpawnHeight wateranimalSpawnHeight;
+
+            public class WaterAnimalSpawnHeight extends ConfigurationPart {
+                public IntOr.Default maximum = IntOr.Default.USE_DEFAULT;
+                public IntOr.Default minimum = IntOr.Default.USE_DEFAULT;
+            }
+
+            public SlimeSpawnHeight slimeSpawnHeight;
+
+            public class SlimeSpawnHeight extends ConfigurationPart {
+
+                public SurfaceSpawnableSlimeBiome surfaceBiome;
+
+                public class SurfaceSpawnableSlimeBiome extends ConfigurationPart {
+                    public double maximum = 70;
+                    public double minimum = 50;
+                }
+
+                public SlimeChunk slimeChunk;
+
+                public class SlimeChunk extends ConfigurationPart {
+                    public double maximum = 40;
+                }
+            }
+
+            public WanderingTrader wanderingTrader;
+
+            public class WanderingTrader extends ConfigurationPart {
+                public int spawnMinuteLength = 1200;
+                public int spawnDayLength = 24000;
+                public int spawnChanceFailureIncrement = 25;
+                public int spawnChanceMin = 25;
+                public int spawnChanceMax = 75;
+            }
+
+            public boolean allChunksAreSlimeChunks = false;
+            @BelowZeroToEmpty
+            public DoubleOr.Default skeletonHorseThunderSpawnChance = DoubleOr.Default.USE_DEFAULT;
+            public boolean ironGolemsCanSpawnInAir = false;
+            public boolean countAllMobsForSpawning = false;
+            @BelowZeroToEmpty
+            public IntOr.Default monsterSpawnMaxLightLevel = IntOr.Default.USE_DEFAULT;
+            public DuplicateUUID duplicateUuid;
+
+            public class DuplicateUUID extends ConfigurationPart {
+                public DuplicateUUIDMode mode = DuplicateUUIDMode.SAFE_REGEN;
+                public int safeRegenDeleteRange = 32;
+
+                public enum DuplicateUUIDMode {
+                    SAFE_REGEN, DELETE, NOTHING, WARN;
+                }
+            }
+            public AltItemDespawnRate altItemDespawnRate;
+
+            public class AltItemDespawnRate extends ConfigurationPart {
+                public boolean enabled = false;
+                public Reference2IntMap<Item> items = new Reference2IntOpenHashMap<>(Map.of(Items.COBBLESTONE, 300));
+            }
+        }
+
+        public Behavior behavior;
+
+        public class Behavior extends ConfigurationPart {
+            public boolean disableChestCatDetection = false;
+            public boolean spawnerNerfedMobsShouldJump = false;
+            public int experienceMergeMaxValue = -1;
+            public boolean shouldRemoveDragon = false;
+            public boolean zombiesTargetTurtleEggs = true;
+            public boolean piglinsGuardChests = true;
+            public double babyZombieMovementModifier = 0.5;
+            public boolean allowSpiderWorldBorderClimbing = true;
+
+            private static final List<EntityType<?>> ZOMBIE_LIKE = List.of(EntityType.ZOMBIE, EntityType.HUSK, EntityType.ZOMBIE_VILLAGER, EntityType.ZOMBIFIED_PIGLIN);
+            @MergeMap
+            public Map<EntityType<?>, List<Difficulty>> doorBreakingDifficulty = Util.make(new IdentityHashMap<>(), map -> {
+                for (final EntityType<?> type : ZOMBIE_LIKE) {
+                    map.put(type, Arrays.stream(Difficulty.values()).filter(Zombie.DOOR_BREAKING_PREDICATE).toList());
+                }
+                map.put(EntityType.VINDICATOR, Arrays.stream(Difficulty.values()).filter(Vindicator.DOOR_BREAKING_PREDICATE).toList());
+            });
+
+            public boolean disableCreeperLingeringEffect = false;
+            public boolean enderDragonsDeathAlwaysPlacesDragonEgg = false;
+            public boolean phantomsDoNotSpawnOnCreativePlayers = true;
+            public boolean phantomsOnlyAttackInsomniacs = true;
+            public int playerInsomniaStartTicks = 72000;
+            public int phantomsSpawnAttemptMinSeconds = 60;
+            public int phantomsSpawnAttemptMaxSeconds = 119;
+            public boolean parrotsAreUnaffectedByPlayerMovement = false;
+            @BelowZeroToEmpty
+            public DoubleOr.Default zombieVillagerInfectionChance = DoubleOr.Default.USE_DEFAULT;
+            public MobsCanAlwaysPickUpLoot mobsCanAlwaysPickUpLoot;
+
+            public class MobsCanAlwaysPickUpLoot extends ConfigurationPart {
+                public boolean zombies = false;
+                public boolean skeletons = false;
+            }
+
+            public boolean disablePlayerCrits = false;
+            public boolean nerfPigmenFromNetherPortals = false;
+            @Comment("Prevents merging items that are not on the same y level, preventing potential visual artifacts.")
+            public boolean onlyMergeItemsHorizontally = false;
+            public PillagerPatrols pillagerPatrols;
+
+            public class PillagerPatrols extends ConfigurationPart {
+                public boolean disable = false;
+                public double spawnChance = 0.2;
+                public SpawnDelay spawnDelay;
+                public Start start;
+
+                public class SpawnDelay extends ConfigurationPart {
+                    public boolean perPlayer = false;
+                    public int ticks = 12000;
+                }
+
+                public class Start extends ConfigurationPart {
+                    public boolean perPlayer = false;
+                    public int day = 5;
+                }
+            }
+        }
+
+        public TrackingRangeY trackingRangeY;
+
+        public class TrackingRangeY extends ConfigurationPart {
+            public boolean enabled = false;
+            public IntOr.Default player = IntOr.Default.USE_DEFAULT;
+            public IntOr.Default animal = IntOr.Default.USE_DEFAULT;
+            public IntOr.Default monster = IntOr.Default.USE_DEFAULT;
+            public IntOr.Default misc = IntOr.Default.USE_DEFAULT;
+            public IntOr.Default display = IntOr.Default.USE_DEFAULT;
+            public IntOr.Default other = IntOr.Default.USE_DEFAULT;
+
+            public int get(Entity entity, int def) {
+                if (entity instanceof EnderDragon) {
+                    return -1; // Ender dragon is exempt
+                } else if (entity instanceof Display) {
+                    return display.or(def);
+                } else if (entity instanceof Player) {
+                    return player.or(def);
+                } else if (entity instanceof HangingEntity || entity instanceof ItemEntity || entity instanceof ExperienceOrb) {
+                    return misc.or(def);
+                }
+                switch (entity.activationType) {
+                    case ANIMAL, WATER, VILLAGER -> {
+                        return animal.or(def);
+                    }
+                    case MONSTER, FLYING_MONSTER, RAIDER -> {
+                        return monster.or(def);
+                    }
+                    default -> {
+                        return other.or(def);
+                    }
+                }
+            }
+        }
+    }
+
+    public Lootables lootables;
+
+    public class Lootables extends ConfigurationPart {
+        public boolean autoReplenish = false;
+        public boolean restrictPlayerReloot = true;
+        public DurationOrDisabled restrictPlayerRelootTime = DurationOrDisabled.USE_DISABLED;
+        public boolean resetSeedOnFill = true;
+        public int maxRefills = -1;
+        public Duration refreshMin = Duration.of("12h");
+        public Duration refreshMax = Duration.of("2d");
+    }
+
+    public MaxGrowthHeight maxGrowthHeight;
+
+    public class MaxGrowthHeight extends ConfigurationPart {
+        public int cactus = 3;
+        public int reeds = 3;
+        public Bamboo bamboo;
+
+        public class Bamboo extends ConfigurationPart {
+            public int max = 16;
+            public int min = 11;
+        }
+    }
+
+    public Scoreboards scoreboards;
+
+    public class Scoreboards extends ConfigurationPart {
+        public boolean allowNonPlayerEntitiesOnScoreboards = true;
+        public boolean useVanillaWorldScoreboardNameColoring = false;
+    }
+
+    public Environment environment;
+
+    public class Environment extends ConfigurationPart {
+        public boolean disableThunder = false;
+        public boolean disableIceAndSnow = false;
+        public boolean optimizeExplosions = false;
+        public boolean disableExplosionKnockback = false;
+        //public boolean generateFlatBedrock = false;
+        public FrostedIce frostedIce;
+
+        public class FrostedIce extends ConfigurationPart {
+            public boolean enabled = true;
+            public Delay delay;
+
+            public class Delay extends ConfigurationPart {
+                public int min = 20;
+                public int max = 40;
+            }
+        }
+
+        public TreasureMaps treasureMaps;
+        public class TreasureMaps extends ConfigurationPart {
+            public boolean enabled = true;
+            @NestedSetting({"find-already-discovered", "villager-trade"})
+            public boolean findAlreadyDiscoveredVillager = false;
+            @NestedSetting({"find-already-discovered", "loot-tables"})
+            public BooleanOrDefault findAlreadyDiscoveredLootTable = BooleanOrDefault.USE_DEFAULT;
+        }
+
+        public int fireTickDelay = 30;
+        public int waterOverLavaFlowSpeed = 5;
+        public int portalSearchRadius = 128;
+        public int portalCreateRadius = 16;
+        public boolean portalSearchVanillaDimensionScaling = true;
+        public boolean disableTeleportationSuffocationCheck = false;
+        public IntOr.Disabled netherCeilingVoidDamageHeight = IntOr.Disabled.DISABLED;
+        public int maxFluidTicks = 65536;
+        public int maxBlockTicks = 65536;
+        public boolean locateStructuresOutsideWorldBorder = false;
+    }
+
+    public Spawn spawn;
+
+    public class Spawn extends ConfigurationPart {
+        public boolean allowUsingSignsInsideSpawnProtection = false;
+    }
+
+    public Maps maps;
+
+    public class Maps extends ConfigurationPart {
+        public int itemFrameCursorLimit = 128;
+        public int itemFrameCursorUpdateInterval = 10;
+    }
+
+    public Fixes fixes;
+
+    public class Fixes extends ConfigurationPart {
+        public boolean fixItemsMergingThroughWalls = false;
+        public boolean disableUnloadedChunkEnderpearlExploit = true;
+        public boolean preventTntFromMovingInWater = false;
+        public boolean splitOverstackedLoot = true;
+        public IntOr.Disabled fallingBlockHeightNerf = IntOr.Disabled.DISABLED;
+        public IntOr.Disabled tntEntityHeightNerf = IntOr.Disabled.DISABLED;
+    }
+
+    public UnsupportedSettings unsupportedSettings;
+
+    public class UnsupportedSettings extends ConfigurationPart {
+        public boolean fixInvulnerableEndCrystalExploit = true;
+        public boolean disableWorldTickingWhenEmpty = false;
+    }
+
+    public Hopper hopper;
+
+    public class Hopper extends ConfigurationPart {
+        public boolean cooldownWhenFull = true;
+        public boolean disableMoveEvent = false;
+        public boolean ignoreOccludingBlocks = false;
+    }
+
+    public Collisions collisions;
+
+    public class Collisions extends ConfigurationPart {
+        public boolean onlyPlayersCollide = false;
+        public boolean allowVehicleCollisions = true;
+        public boolean fixClimbingBypassingCrammingRule = false;
+        public int maxEntityCollisions = 8;
+        public boolean allowPlayerCrammingDamage = false;
+    }
+
+    public Chunks chunks;
+
+    public class Chunks extends ConfigurationPart {
+        public AutosavePeriod autoSaveInterval = AutosavePeriod.def();
+        public int maxAutoSaveChunksPerTick = 24;
+        public int fixedChunkInhabitedTime = -1;
+        public boolean preventMovingIntoUnloadedChunks = false;
+        public Duration delayChunkUnloadsBy = Duration.of("10s");
+        public Reference2IntMap<EntityType<?>> entityPerChunkSaveLimit = Util.make(new Reference2IntOpenHashMap<>(BuiltInRegistries.ENTITY_TYPE.size()), map -> {
+            map.defaultReturnValue(-1);
+            map.put(EntityType.EXPERIENCE_ORB, -1);
+            map.put(EntityType.SNOWBALL, -1);
+            map.put(EntityType.ENDER_PEARL, -1);
+            map.put(EntityType.ARROW, -1);
+            map.put(EntityType.FIREBALL, -1);
+            map.put(EntityType.SMALL_FIREBALL, -1);
+        });
+        public boolean flushRegionsOnSave = false;
+    }
+
+    public FishingTimeRange fishingTimeRange;
+
+    public class FishingTimeRange extends ConfigurationPart {
+        public int minimum = 100;
+        public int maximum = 600;
+    }
+
+    public TickRates tickRates;
+
+    public class TickRates extends ConfigurationPart {
+        public int grassSpread = 1;
+        public int containerUpdate = 1;
+        public int mobSpawner = 1;
+        public int wetFarmland = 1;
+        public int dryFarmland = 1;
+        public Table<EntityType<?>, String, Integer> sensor = Util.make(HashBasedTable.create(), table -> table.put(EntityType.VILLAGER, "secondarypoisensor", 40));
+        public Table<EntityType<?>, String, Integer> behavior = Util.make(HashBasedTable.create(), table -> table.put(EntityType.VILLAGER, "validatenearbypoi", -1));
+    }
+
+    @Setting(FeatureSeedsGeneration.FEATURE_SEEDS_KEY)
+    public FeatureSeeds featureSeeds;
+
+    public class FeatureSeeds extends ConfigurationPart {
+        @SuppressWarnings("unused") // Is used in FeatureSeedsGeneration
+        @Setting(FeatureSeedsGeneration.GENERATE_KEY)
+        public boolean generateRandomSeedsForAll = false;
+        @Setting(FeatureSeedsGeneration.FEATURES_KEY)
+        public Reference2LongMap<Holder<ConfiguredFeature<?, ?>>> features = new Reference2LongOpenHashMap<>();
+
+        @PostProcess
+        private void postProcess() {
+            this.features.defaultReturnValue(-1);
+        }
+    }
+
+    public CommandBlocks commandBlocks;
+
+    public class CommandBlocks extends ConfigurationPart {
+        public int permissionsLevel = 2;
+        public boolean forceFollowPermLevel = true;
+    }
+
+    public Misc misc;
+
+    public class Misc extends ConfigurationPart {
+        public int lightQueueSize = 20;
+        public boolean updatePathfindingOnBlockUpdate = true;
+        public boolean showSignClickCommandFailureMsgsToPlayer = false;
+        public boolean disableEndCredits = false;
+        public double maxLeashDistance = Leashable.LEASH_TOO_FAR_DIST;
+        public boolean disableSprintInterruptionOnAttack = false;
+        public int shieldBlockingDelay = 5;
+        public boolean disableRelativeProjectileVelocity = false;
+    }
+}

@@ -1,0 +1,11 @@
+--- a/net/minecraft/server/dedicated/DedicatedServerProperties.java
++++ b/net/minecraft/server/dedicated/DedicatedServerProperties.java
+@@ -132,7 +_,7 @@
+         return new DedicatedServerProperties(loadFromFile(p_180930_));
+     }
+ 
+-    protected DedicatedServerProperties reload(RegistryAccess p_139761_, Properties p_139762_) {
++    public DedicatedServerProperties reload(RegistryAccess p_139761_, Properties p_139762_) {
+         return new DedicatedServerProperties(p_139762_);
+     }
+ 

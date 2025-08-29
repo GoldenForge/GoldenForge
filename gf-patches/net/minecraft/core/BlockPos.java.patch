@@ -1,0 +1,13 @@
+--- a/net/minecraft/core/BlockPos.java
++++ b/net/minecraft/core/BlockPos.java
+@@ -630,4 +_,10 @@
+             return new BlockPos(this);
+         }
+     }
++
++    // Paper start - Perf: Optimize isInWorldBounds
++    public final boolean isInsideBuildHeightAndWorldBoundsHorizontal(final net.minecraft.world.level.LevelHeightAccessor levelHeightAccessor) {
++        return this.getX() >= -30000000 && this.getZ() >= -30000000 && this.getX() < 30000000 && this.getZ() < 30000000 && !levelHeightAccessor.isOutsideBuildHeight(this.getY());
++    }
++    // Paper end - Perf: Optimize isInWorldBounds
+ }

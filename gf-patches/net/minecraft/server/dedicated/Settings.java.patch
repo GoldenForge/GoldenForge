@@ -1,0 +1,11 @@
+--- a/net/minecraft/server/dedicated/Settings.java
++++ b/net/minecraft/server/dedicated/Settings.java
+@@ -25,7 +_,7 @@
+ 
+ public abstract class Settings<T extends Settings<T>> {
+     private static final Logger LOGGER = LogUtils.getLogger();
+-    protected final Properties properties;
++    public final Properties properties;
+ 
+     public Settings(Properties p_139801_) {
+         this.properties = p_139801_;

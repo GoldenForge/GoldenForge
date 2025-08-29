@@ -1,0 +1,51 @@
+--- a/net/minecraft/util/ZeroBitStorage.java
++++ b/net/minecraft/util/ZeroBitStorage.java
+@@ -14,20 +_,20 @@
+ 
+     @Override
+     public int getAndSet(int p_184796_, int p_184797_) {
+-        Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184796_);
+-        Validate.inclusiveBetween(0L, 0L, (long)p_184797_);
++        //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184796_); // Paper - Perf: Optimize SimpleBitStorage
++        //Validate.inclusiveBetween(0L, 0L, (long)p_184797_); // Paper - Perf: Optimize SimpleBitStorage
+         return 0;
+     }
+ 
+     @Override
+     public void set(int p_184802_, int p_184803_) {
+-        Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184802_);
+-        Validate.inclusiveBetween(0L, 0L, (long)p_184803_);
++        //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184802_); // Paper - Perf: Optimize SimpleBitStorage
++        //Validate.inclusiveBetween(0L, 0L, (long)p_184803_); // Paper - Perf: Optimize SimpleBitStorage
+     }
+ 
+     @Override
+     public int get(int p_184794_) {
+-        Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184794_);
++        //Validate.inclusiveBetween(0L, (long)(this.size - 1), (long)p_184794_); // Paper - Perf: Optimize SimpleBitStorage
+         return 0;
+     }
+ 
+@@ -62,4 +_,22 @@
+     public BitStorage copy() {
+         return this;
+     }
++
++    // Paper start - block counting
++    @Override
++    public final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> moonrise$countEntries() {
++        final int size = this.size;
++
++        final short[] raw = new short[size];
++        for (int i = 0; i < size; ++i) {
++            raw[i] = (short)i;
++        }
++
++        final it.unimi.dsi.fastutil.shorts.ShortArrayList coordinates = it.unimi.dsi.fastutil.shorts.ShortArrayList.wrap(raw, size);
++
++        final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<it.unimi.dsi.fastutil.shorts.ShortArrayList> ret = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>(1);
++        ret.put(0, coordinates);
++        return ret;
++    }
++    // Paper end - block counting
+ }

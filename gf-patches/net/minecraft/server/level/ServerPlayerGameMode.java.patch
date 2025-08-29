@@ -1,0 +1,19 @@
+--- a/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -27,6 +_,7 @@
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.phys.BlockHitResult;
+ import net.minecraft.world.phys.Vec3;
++import org.goldenforge.GoldenForge;
+ import org.slf4j.Logger;
+ 
+ public class ServerPlayerGameMode {
+@@ -96,7 +_,7 @@
+     }
+ 
+     public void tick() {
+-        this.gameTicks++;
++        this.gameTicks = (int)this.level.getLagCompensationTick(); // CraftBukkit; // Paper - lag compensation
+         if (this.hasDelayedDestroy) {
+             BlockState blockstate = this.level.getBlockState(this.delayedDestroyPos);
+             if (blockstate.isAir()) {
