@@ -1,0 +1,18 @@
+--- a/net/minecraft/server/network/CommonListenerCookie.java
++++ b/net/minecraft/server/network/CommonListenerCookie.java
+@@ -3,13 +_,13 @@
+ import com.mojang.authlib.GameProfile;
+ import net.minecraft.server.level.ClientInformation;
+ 
+-public record CommonListenerCookie(GameProfile gameProfile, int latency, ClientInformation clientInformation, boolean transferred, net.neoforged.neoforge.network.connection.ConnectionType connectionType) {
++public record CommonListenerCookie(GameProfile gameProfile, int latency, ClientInformation clientInformation, boolean transferred, net.neoforged.neoforge.network.connection.ConnectionType connectionType, io.papermc.paper.util.KeepAlive keepAlive) {
+     /**
+      * @deprecated Use {@link #CommonListenerCookie(GameProfile, int, ClientInformation, boolean, net.neoforged.neoforge.network.connection.ConnectionType)} instead, to indicate whether the connection is modded.
+      */
+     @Deprecated
+     public CommonListenerCookie(GameProfile gameProfile, int latency, ClientInformation clientInformation, boolean transferred) {
+-        this(gameProfile, latency, clientInformation, transferred, net.neoforged.neoforge.network.connection.ConnectionType.OTHER);
++        this(gameProfile, latency, clientInformation, transferred, net.neoforged.neoforge.network.connection.ConnectionType.OTHER, new io.papermc.paper.util.KeepAlive()); // Paper
+     }
+ 
+     public static CommonListenerCookie createInitial(GameProfile p_302024_, boolean p_320180_) {

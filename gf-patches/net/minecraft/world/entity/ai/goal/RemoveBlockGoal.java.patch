@@ -1,0 +1,34 @@
+--- a/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
++++ b/net/minecraft/world/entity/ai/goal/RemoveBlockGoal.java
+@@ -134,7 +_,9 @@
+ 
+     @Nullable
+     private BlockPos getPosWithBlock(BlockPos p_25853_, BlockGetter p_25854_) {
+-        if (p_25854_.getBlockState(p_25853_).is(this.blockToRemove)) {
++        net.minecraft.world.level.block.state.BlockState block = p_25854_.getBlockStateIfLoaded(p_25853_); // Paper - Prevent AI rules from loading chunks
++        if (block == null) return null; // Paper - Prevent AI rules from loading chunks
++        if (block.is(this.blockToRemove)) { // Paper - Prevent AI rules from loading chunks
+             return p_25853_;
+         } else {
+             BlockPos[] ablockpos = new BlockPos[]{
+@@ -142,7 +_,8 @@
+             };
+ 
+             for (BlockPos blockpos : ablockpos) {
+-                if (p_25854_.getBlockState(blockpos).is(this.blockToRemove)) {
++                net.minecraft.world.level.block.state.BlockState block2 = p_25854_.getBlockStateIfLoaded(blockPos); // Paper - Prevent AI rules from loading chunks
++                if (block2 != null && block2.is(this.blockToRemove)) { // Paper - Prevent AI rules from loading chunks
+                     return blockpos;
+                 }
+             }
+@@ -153,9 +_,7 @@
+ 
+     @Override
+     protected boolean isValidTarget(LevelReader p_25850_, BlockPos p_25851_) {
+-        ChunkAccess chunkaccess = p_25850_.getChunk(
+-            SectionPos.blockToSectionCoord(p_25851_.getX()), SectionPos.blockToSectionCoord(p_25851_.getZ()), ChunkStatus.FULL, false
+-        );
++        ChunkAccess chunkaccess = p_25850_.getChunkIfLoadedImmediately(p_25851_.getX() >> 4, p_25851_.getZ() >> 4); // Paper - Prevent AI rules from loading chunks
+         return chunkaccess == null
+             ? false
+             : chunkaccess.getBlockState(p_25851_).canEntityDestroy(p_25850_, p_25851_, this.removerMob)

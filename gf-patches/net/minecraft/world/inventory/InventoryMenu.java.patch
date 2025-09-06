@@ -1,0 +1,23 @@
+--- a/net/minecraft/world/inventory/InventoryMenu.java
++++ b/net/minecraft/world/inventory/InventoryMenu.java
+@@ -230,4 +_,20 @@
+     public boolean shouldMoveToInventory(int p_150591_) {
+         return p_150591_ != this.getResultSlotIndex();
+     }
++
++    // Paper start - utility methods for synchronizing slots usually not synchronized by the container menus
++    public void broadcastNonContainerSlotChanges() {
++        for (int i = RESULT_SLOT; i < ARMOR_SLOT_END; i++) {
++            this.broadcastSlotChange(i);
++        }
++        this.broadcastSlotChange(SHIELD_SLOT);
++    }
++
++    private void broadcastSlotChange(int slot) {
++        ItemStack item = this.slots.get(slot).getItem();
++        java.util.function.Supplier<net.minecraft.world.item.ItemStack> supplier = com.google.common.base.Suppliers.memoize(item::copy);
++        this.triggerSlotListeners(slot, item, supplier);
++        this.synchronizeSlotToRemote(slot, item, supplier);
++    }
++    // Paper end - utility methods for synchronizing slots usually not synchronized by the container menus
+ }

@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/entity/projectile/AbstractArrow.java
 +++ b/net/minecraft/world/entity/projectile/AbstractArrow.java
-@@ -57,7 +_,7 @@
+@@ -57,11 +_,11 @@
      private static final int FLAG_NOPHYSICS = 2;
      @Nullable
      private BlockState lastState;
@@ -9,3 +9,8 @@
      protected int inGroundTime;
      public AbstractArrow.Pickup pickup = AbstractArrow.Pickup.DISALLOWED;
      public int shakeTime;
+-    private int life;
++    public int life;
+     private double baseDamage = 2.0;
+     private SoundEvent soundEvent = this.getDefaultHitGroundSoundEvent();
+     @Nullable

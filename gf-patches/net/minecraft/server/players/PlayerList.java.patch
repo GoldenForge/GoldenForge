@@ -8,6 +8,24 @@
          GameProfile gameprofile = p_11263_.getGameProfile();
          GameProfileCache gameprofilecache = this.server.getProfileCache();
          String s;
+@@ -268,6 +_,17 @@
+ 
+         p_11263_.initInventoryMenu();
+ 
++        // Paper start - Send empty chunk, so players aren't stuck in the world loading screen with our chunk system not sending chunks when dead
++        if (p_11263_.isDeadOrDying()) {
++            net.minecraft.core.Holder<net.minecraft.world.level.biome.Biome> plains = serverlevel1.registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.BIOME)
++                    .getOrThrow(net.minecraft.world.level.biome.Biomes.PLAINS);
++            p_11263_.connection.send(new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
++                    new net.minecraft.world.level.chunk.EmptyLevelChunk(serverlevel1, p_11263_.chunkPosition(), plains),
++                    serverlevel1.getLightEngine(), (java.util.BitSet)null, (java.util.BitSet) null)
++            );
++        }
++        // Paper end - Send empty chunk
++
+         net.neoforged.neoforge.attachment.AttachmentSync.syncInitialPlayerAttachments(p_11263_);
+         net.neoforged.neoforge.event.EventHooks.firePlayerLoggedIn( p_11263_ );
+     }
 @@ -674,9 +_,23 @@
      }
  

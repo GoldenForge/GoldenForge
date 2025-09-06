@@ -1,13 +1,252 @@
 --- a/net/minecraft/core/BlockPos.java
 +++ b/net/minecraft/core/BlockPos.java
-@@ -630,4 +_,10 @@
-             return new BlockPos(this);
+@@ -48,15 +_,17 @@
+     };
+     private static final Logger LOGGER = LogUtils.getLogger();
+     public static final BlockPos ZERO = new BlockPos(0, 0, 0);
+-    private static final int PACKED_X_LENGTH = 1 + Mth.log2(Mth.smallestEncompassingPowerOfTwo(30000000));
+-    private static final int PACKED_Z_LENGTH = PACKED_X_LENGTH;
+-    public static final int PACKED_Y_LENGTH = 64 - PACKED_X_LENGTH - PACKED_Z_LENGTH;
+-    private static final long PACKED_X_MASK = (1L << PACKED_X_LENGTH) - 1L;
+-    private static final long PACKED_Y_MASK = (1L << PACKED_Y_LENGTH) - 1L;
+-    private static final long PACKED_Z_MASK = (1L << PACKED_Z_LENGTH) - 1L;
++    // Paper start - Optimize Bit Operations by inlining
++    public static final int PACKED_HORIZONTAL_LENGTH = 26;
++    public static final int PACKED_Y_LENGTH = 12;
++    private static final long PACKED_X_MASK = 67108863;
++    private static final long PACKED_Y_MASK = 4095;
++    private static final long PACKED_Z_MASK = 67108863;
+     private static final int Y_OFFSET = 0;
+-    private static final int Z_OFFSET = PACKED_Y_LENGTH;
+-    private static final int X_OFFSET = PACKED_Y_LENGTH + PACKED_Z_LENGTH;
++    private static final int Z_OFFSET = 12;
++    private static final int X_OFFSET = 38;
++    public static final int MAX_HORIZONTAL_COORDINATE = 33554431;
++    // Paper end - Optimize Bit Operations by inlining
+ 
+     public BlockPos(int p_121869_, int p_121870_, int p_121871_) {
+         super(p_121869_, p_121870_, p_121871_);
+@@ -70,24 +_,24 @@
+         return offset(p_121916_, p_121917_.getStepX(), p_121917_.getStepY(), p_121917_.getStepZ());
+     }
+ 
+-    public static long offset(long p_121911_, int p_121912_, int p_121913_, int p_121914_) {
+-        return asLong(getX(p_121911_) + p_121912_, getY(p_121911_) + p_121913_, getZ(p_121911_) + p_121914_);
+-    }
+-
+-    public static int getX(long p_121984_) {
+-        return (int)(p_121984_ << 64 - X_OFFSET - PACKED_X_LENGTH >> 64 - PACKED_X_LENGTH);
+-    }
+-
+-    public static int getY(long p_122009_) {
+-        return (int)(p_122009_ << 64 - PACKED_Y_LENGTH >> 64 - PACKED_Y_LENGTH);
+-    }
+-
+-    public static int getZ(long p_122016_) {
+-        return (int)(p_122016_ << 64 - Z_OFFSET - PACKED_Z_LENGTH >> 64 - PACKED_Z_LENGTH);
+-    }
+-
+-    public static BlockPos of(long p_122023_) {
+-        return new BlockPos(getX(p_122023_), getY(p_122023_), getZ(p_122023_));
++    public static long offset(long pos, int dx, int dy, int dz) {
++        return asLong((int) (pos >> 38) + dx, (int) ((pos << 52) >> 52) + dy, (int) ((pos << 26) >> 38) + dz); // Paper - simplify/inline
++    }
++
++    public static int getX(long packedPos) {
++        return (int) (packedPos >> 38); // Paper - simplify/inline
++    }
++
++    public static int getY(long packedPos) {
++        return (int) ((packedPos << 52) >> 52); // Paper - simplify/inline
++    }
++
++    public static int getZ(long packedPos) {
++        return (int) ((packedPos << 26) >> 38); // Paper - simplify/inline
++    }
++
++    public static BlockPos of(long packedPos) {
++        return new BlockPos((int) (packedPos >> 38), (int) ((packedPos << 52) >> 52), (int) ((packedPos << 26) >> 38)); // Paper - simplify/inline
+     }
+ 
+     public static BlockPos containing(double p_275310_, double p_275414_, double p_275737_) {
+@@ -114,11 +_,8 @@
+         return asLong(this.getX(), this.getY(), this.getZ());
+     }
+ 
+-    public static long asLong(int p_121883_, int p_121884_, int p_121885_) {
+-        long i = 0L;
+-        i |= ((long)p_121883_ & PACKED_X_MASK) << X_OFFSET;
+-        i |= ((long)p_121884_ & PACKED_Y_MASK) << 0;
+-        return i | ((long)p_121885_ & PACKED_Z_MASK) << Z_OFFSET;
++    public static long asLong(int x, int y, int z) {
++        return ((x & 67108863L) << 38) | ((y &  4095L)) | ((z & 67108863L) << 12); // Paper - inline constants and simplify
+     }
+ 
+     public static long getFlatIndex(long p_122028_) {
+@@ -155,56 +_,86 @@
          }
      }
-+
-+    // Paper start - Perf: Optimize isInWorldBounds
-+    public final boolean isInsideBuildHeightAndWorldBoundsHorizontal(final net.minecraft.world.level.LevelHeightAccessor levelHeightAccessor) {
-+        return this.getX() >= -30000000 && this.getZ() >= -30000000 && this.getX() < 30000000 && this.getZ() < 30000000 && !levelHeightAccessor.isOutsideBuildHeight(this.getY());
+ 
++    @Override
+     public BlockPos above() {
+-        return this.relative(Direction.UP);
+-    }
+-
+-    public BlockPos above(int p_121972_) {
+-        return this.relative(Direction.UP, p_121972_);
+-    }
+-
++        return new BlockPos(this.getX(), this.getY() + 1, this.getZ()); // Paper - Perf: Optimize BlockPosition
 +    }
-+    // Paper end - Perf: Optimize isInWorldBounds
- }
++
++    @Override
++    public BlockPos above(int distance) {
++        return distance == 0 ? this.immutable() : new BlockPos(this.getX(), this.getY() + distance, this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
+     public BlockPos below() {
+-        return this.relative(Direction.DOWN);
+-    }
+-
+-    public BlockPos below(int p_122000_) {
+-        return this.relative(Direction.DOWN, p_122000_);
+-    }
+-
++        return new BlockPos(this.getX(), this.getY() - 1, this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
++    public BlockPos below(int distance) {
++        return distance == 0 ? this.immutable() : new BlockPos(this.getX(), this.getY() - distance, this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
+     public BlockPos north() {
+-        return this.relative(Direction.NORTH);
+-    }
+-
+-    public BlockPos north(int p_122014_) {
+-        return this.relative(Direction.NORTH, p_122014_);
+-    }
+-
++        return new BlockPos(this.getX(), this.getY(), this.getZ() - 1); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
++    public BlockPos north(int distance) {
++        return distance == 0 ? this.immutable() : new BlockPos(this.getX(), this.getY(), this.getZ() - distance); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
+     public BlockPos south() {
+-        return this.relative(Direction.SOUTH);
+-    }
+-
+-    public BlockPos south(int p_122021_) {
+-        return this.relative(Direction.SOUTH, p_122021_);
+-    }
+-
++        return new BlockPos(this.getX(), this.getY(), this.getZ() + 1); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
++    public BlockPos south(int distance) {
++        return distance == 0 ? this.immutable() : new BlockPos(this.getX(), this.getY(), this.getZ() + distance); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
+     public BlockPos west() {
+-        return this.relative(Direction.WEST);
+-    }
+-
+-    public BlockPos west(int p_122026_) {
+-        return this.relative(Direction.WEST, p_122026_);
+-    }
+-
++        return new BlockPos(this.getX() - 1, this.getY(), this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
++    public BlockPos west(int distance) {
++        return distance == 0 ? this.immutable() : new BlockPos(this.getX() - distance, this.getY(), this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
+     public BlockPos east() {
+-        return this.relative(Direction.EAST);
+-    }
+-
+-    public BlockPos east(int p_122031_) {
+-        return this.relative(Direction.EAST, p_122031_);
+-    }
+-
+-    public BlockPos relative(Direction p_121946_) {
+-        return new BlockPos(this.getX() + p_121946_.getStepX(), this.getY() + p_121946_.getStepY(), this.getZ() + p_121946_.getStepZ());
++        return new BlockPos(this.getX() + 1, this.getY(), this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
++    public BlockPos east(int distance) {
++        return distance == 0 ? this.immutable() : new BlockPos(this.getX() + distance, this.getY(), this.getZ()); // Paper - Perf: Optimize BlockPosition
++    }
++
++    @Override
++    public BlockPos relative(Direction direction) {
++        // Paper start - Perf: Optimize BlockPosition
++        switch(direction) {
++            case UP:
++                return new BlockPos(this.getX(), this.getY() + 1, this.getZ());
++            case DOWN:
++                return new BlockPos(this.getX(), this.getY() - 1, this.getZ());
++            case NORTH:
++                return new BlockPos(this.getX(), this.getY(), this.getZ() - 1);
++            case SOUTH:
++                return new BlockPos(this.getX(), this.getY(), this.getZ() + 1);
++            case WEST:
++                return new BlockPos(this.getX() - 1, this.getY(), this.getZ());
++            case EAST:
++                return new BlockPos(this.getX() + 1, this.getY(), this.getZ());
++            default:
++                return new BlockPos(this.getX() + direction.getStepX(), this.getY() + direction.getStepY(), this.getZ() + direction.getStepZ());
++        }
++        // Paper end - Perf: Optimize BlockPosition
+     }
+ 
+     public BlockPos relative(Direction p_121948_, int p_121949_) {
+@@ -540,10 +_,10 @@
+             return super.rotate(p_122138_).immutable();
+         }
+ 
+-        public BlockPos.MutableBlockPos set(int p_122179_, int p_122180_, int p_122181_) {
+-            this.setX(p_122179_);
+-            this.setY(p_122180_);
+-            this.setZ(p_122181_);
++        public BlockPos.MutableBlockPos set(int x, int y, int z) {
++            this.x = x; // Paper - Perf: Manually inline methods in BlockPosition
++            this.y = y; // Paper - Perf: Manually inline methods in BlockPosition
++            this.z = z; // Paper - Perf: Manually inline methods in BlockPosition
+             return this;
+         }
+ 
+@@ -611,17 +_,17 @@
+         }
+ 
+         public BlockPos.MutableBlockPos setX(int p_175341_) {
+-            super.setX(p_175341_);
++            this.x = p_175341_; // Paper - Perf: Manually inline methods in BlockPosition
+             return this;
+         }
+ 
+         public BlockPos.MutableBlockPos setY(int p_175343_) {
+-            super.setY(p_175343_);
++            this.y = p_175343_; // Paper - Perf: Manually inline methods in BlockPosition
+             return this;
+         }
+ 
+         public BlockPos.MutableBlockPos setZ(int p_175345_) {
+-            super.setZ(p_175345_);
++            this.z = p_175345_; // Paper - Perf: Manually inline methods in BlockPosition
+             return this;
+         }
+ 

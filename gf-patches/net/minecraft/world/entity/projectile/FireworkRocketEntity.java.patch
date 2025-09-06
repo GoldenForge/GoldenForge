@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/entity/projectile/FireworkRocketEntity.java
++++ b/net/minecraft/world/entity/projectile/FireworkRocketEntity.java
+@@ -100,6 +_,17 @@
+         return super.shouldRender(p_37083_, p_37084_, p_37085_) && !this.isAttachedToEntity();
+     }
+ 
++    // Paper start - EAR 2
++    @Override
++    public void inactiveTick() {
++        this.life++;
++        if (this.life > this.lifetime) {
++            this.explode();
++        }
++        super.inactiveTick();
++    }
++    // Paper end - EAR 2
++
+     @Override
+     public void tick() {
+         super.tick();

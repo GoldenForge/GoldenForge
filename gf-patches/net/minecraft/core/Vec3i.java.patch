@@ -1,0 +1,26 @@
+--- a/net/minecraft/core/Vec3i.java
++++ b/net/minecraft/core/Vec3i.java
+@@ -16,9 +_,9 @@
+             p_123313_ -> IntStream.of(p_123313_.getX(), p_123313_.getY(), p_123313_.getZ())
+         );
+     public static final Vec3i ZERO = new Vec3i(0, 0, 0);
+-    private int x;
+-    private int y;
+-    private int z;
++    protected int x; // Paper - Perf: Manually inline methods in BlockPosition; protected
++    protected int y; // Paper - Perf: Manually inline methods in BlockPosition; protected
++    protected int z; // Paper - Perf: Manually inline methods in BlockPosition; protected
+ 
+     public static Codec<Vec3i> offsetCodec(int p_194651_) {
+         return CODEC.validate(
+@@ -235,4 +_,10 @@
+     public String toShortString() {
+         return this.getX() + ", " + this.getY() + ", " + this.getZ();
+     }
++
++    // Paper start - Perf: Optimize isInWorldBounds
++    public final boolean isInsideBuildHeightAndWorldBoundsHorizontal(final net.minecraft.world.level.LevelHeightAccessor levelHeightAccessor) {
++        return this.getX() >= -30000000 && this.getZ() >= -30000000 && this.getX() < 30000000 && this.getZ() < 30000000 && !levelHeightAccessor.isOutsideBuildHeight(this.getY());
++    }
++    // Paper end - Perf: Optimize isInWorldBounds
+ }

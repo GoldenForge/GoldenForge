@@ -1,0 +1,26 @@
+--- a/net/minecraft/world/entity/item/ItemEntity.java
++++ b/net/minecraft/world/entity/item/ItemEntity.java
+@@ -124,6 +_,23 @@
+         return 0.04;
+     }
+ 
++    // Paper start - EAR 2
++    @Override
++    public void inactiveTick() {
++        super.inactiveTick();
++        if (this.pickupDelay > 0 && this.pickupDelay != 32767) {
++            this.pickupDelay--;
++        }
++        if (this.age != -32768) {
++            this.age++;
++        }
++
++        if (!this.level().isClientSide && this.age >= this.lifespan) {// Paper - Alternative item-despawn-rate
++            this.discard(); // CraftBukkit - add Bukkit remove cause
++        }
++    }
++    // Paper end - EAR 2
++
+     @Override
+     public void tick() {
+         if (getItem().onEntityItemUpdate(this)) return;

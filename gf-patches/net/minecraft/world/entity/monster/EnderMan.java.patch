@@ -1,0 +1,12 @@
+--- a/net/minecraft/world/entity/monster/EnderMan.java
++++ b/net/minecraft/world/entity/monster/EnderMan.java
+@@ -475,7 +_,8 @@
+             int j = Mth.floor(this.enderman.getY() + randomsource.nextDouble() * 2.0);
+             int k = Mth.floor(this.enderman.getZ() - 1.0 + randomsource.nextDouble() * 2.0);
+             BlockPos blockpos = new BlockPos(i, j, k);
+-            BlockState blockstate = level.getBlockState(blockpos);
++            BlockState blockstate = level.getBlockStateIfLoaded(blockpos); // Paper - Prevent endermen from loading chunks
++            if (blockstate == null) return; // Paper - Prevent endermen from loading chunks
+             BlockPos blockpos1 = blockpos.below();
+             BlockState blockstate1 = level.getBlockState(blockpos1);
+             BlockState blockstate2 = this.enderman.getCarriedBlock();

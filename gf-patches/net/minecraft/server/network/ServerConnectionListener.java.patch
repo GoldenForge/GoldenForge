@@ -1,0 +1,53 @@
+--- a/net/minecraft/server/network/ServerConnectionListener.java
++++ b/net/minecraft/server/network/ServerConnectionListener.java
+@@ -59,6 +_,17 @@
+     public volatile boolean running;
+     private final List<ChannelFuture> channels = Collections.synchronizedList(Lists.newArrayList());
+     final List<Connection> connections = Collections.synchronizedList(Lists.newArrayList());
++    // Paper start - prevent blocking on adding a new connection while the server is ticking
++    private final java.util.Queue<Connection> pending = new java.util.concurrent.ConcurrentLinkedQueue<>();
++    private static final boolean disableFlushConsolidation = Boolean.getBoolean("Paper.disableFlushConsolidate"); // Paper - Optimize network
++    private final void addPending() {
++        Connection connection;
++        while ((connection = pending.poll()) != null) {
++            connections.add(connection);
++            connection.isPending = false; // Paper - Optimize network
++        }
++    }
++    // Paper end - prevent blocking on adding a new connection while the server is ticking
+ 
+     public ServerConnectionListener(MinecraftServer p_9707_) {
+         this.server = p_9707_;
+@@ -89,6 +_,7 @@
+                     } catch (ChannelException channelexception) {
+                     }
+ 
++                    if (!disableFlushConsolidation) p_9729_.pipeline().addFirst(new io.netty.handler.flush.FlushConsolidationHandler()); // Paper - Optimize network
+                     ChannelPipeline channelpipeline = p_9729_.pipeline().addLast("timeout", new ReadTimeoutHandler(READ_TIMEOUT));
+                     if (ServerConnectionListener.this.server.repliesToStatus()) {
+                         channelpipeline.addLast("legacy_query", new LegacyQueryHandler(ServerConnectionListener.this.getServer()));
+@@ -97,7 +_,7 @@
+                     Connection.configureSerialization(channelpipeline, PacketFlow.SERVERBOUND, false, null);
+                     int i = ServerConnectionListener.this.server.getRateLimitPacketsPerSecond();
+                     Connection connection = (Connection)(i > 0 ? new RateKickingConnection(i) : new Connection(PacketFlow.SERVERBOUND));
+-                    ServerConnectionListener.this.connections.add(connection);
++                    ServerConnectionListener.this.pending.add(connection); // Paper - prevent blocking on adding a new connection while the server is ticking
+                     connection.configurePacketHandler(channelpipeline);
+                     connection.setListenerForServerboundHandshake(new ServerHandshakePacketListenerImpl(ServerConnectionListener.this.server, connection));
+                 }
+@@ -149,6 +_,7 @@
+ 
+     public void tick() {
+         synchronized (this.connections) {
++            this.addPending(); // Paper - prevent blocking on adding a new connection while the server is ticking
+             Iterator<Connection> iterator = this.connections.iterator();
+ 
+             while (iterator.hasNext()) {
+@@ -168,6 +_,7 @@
+                             connection.setReadOnly();
+                         }
+                     } else {
++                        if (connection.preparing) continue; // Spigot - Fix a race condition where a NetworkManager could be unregistered just before connection
+                         iterator.remove();
+                         connection.handleDisconnection();
+                     }

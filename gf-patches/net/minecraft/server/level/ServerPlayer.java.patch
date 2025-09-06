@@ -11,10 +11,12 @@
      private static final int NEUTRAL_MOB_DEATH_NOTIFICATION_RADII_XZ = 32;
      private static final int NEUTRAL_MOB_DEATH_NOTIFICATION_RADII_Y = 10;
      private static final int FLY_STAT_RECORDING_SPEED = 25;
-@@ -281,6 +_,39 @@
+@@ -281,6 +_,41 @@
      private int containerCounter;
      public boolean wonGame;
  
++    private int containerUpdateDelay; // Paper - Configurable container update tick rate
++
 +    // Paper start - rewrite chunk system
 +    public boolean isRealPlayer; // Paper
 +
@@ -51,6 +53,24 @@
      public ServerPlayer(MinecraftServer p_254143_, ServerLevel p_254435_, GameProfile p_253651_, ClientInformation p_301997_) {
          super(p_254435_, p_254435_.getSharedSpawnPos(), p_254435_.getSharedSpawnAngle(), p_253651_);
          this.textFilter = p_254143_.createTextFilterForPlayer(this);
+@@ -500,7 +_,16 @@
+             this.invulnerableTime--;
+         }
+ 
+-        this.containerMenu.broadcastChanges();
++        // Paper start - Configurable container update tick rate
++        if (--this.containerUpdateDelay <= 0) {
++            this.containerMenu.broadcastChanges();
++            // Broadcast equipment and crafting slots when the player is in a container, fixes MC-297508
++            if (this.containerMenu != this.inventoryMenu) {
++                this.inventoryMenu.broadcastNonContainerSlotChanges();
++            }
++            this.containerUpdateDelay = this.level().paperConfig().tickRates.containerUpdate;
++        }
++        // Paper end - Configurable container update tick rate
+         if (!this.level().isClientSide && !this.containerMenu.stillValid(this)) {
+             this.closeContainer();
+             this.containerMenu = this.inventoryMenu;
 @@ -552,7 +_,7 @@
  
      public void doTick() {

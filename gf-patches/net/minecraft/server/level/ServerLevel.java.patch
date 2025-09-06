@@ -7,14 +7,6 @@
  import com.google.common.annotations.VisibleForTesting;
  import com.google.common.collect.Lists;
  import com.mojang.datafixers.DataFixer;
-@@ -75,7 +_,6 @@
- import net.minecraft.util.ProgressListener;
- import net.minecraft.util.RandomSource;
- import net.minecraft.util.Unit;
--import net.minecraft.util.datafix.DataFixTypes;
- import net.minecraft.util.profiling.ProfilerFiller;
- import net.minecraft.util.valueproviders.IntProvider;
- import net.minecraft.util.valueproviders.UniformInt;
 @@ -98,7 +_,6 @@
  import net.minecraft.world.entity.animal.Animal;
  import net.minecraft.world.entity.animal.WaterAnimal;
@@ -23,22 +15,17 @@
  import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
  import net.minecraft.world.entity.npc.Npc;
  import net.minecraft.world.entity.player.Player;
-@@ -128,18 +_,14 @@
- import net.minecraft.world.level.chunk.ChunkGenerator;
- import net.minecraft.world.level.chunk.LevelChunk;
- import net.minecraft.world.level.chunk.LevelChunkSection;
--import net.minecraft.world.level.chunk.storage.EntityStorage;
- import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
--import net.minecraft.world.level.chunk.storage.SimpleRegionStorage;
+@@ -134,12 +_,7 @@
  import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
  import net.minecraft.world.level.dimension.LevelStem;
  import net.minecraft.world.level.dimension.end.EndDragonFight;
 -import net.minecraft.world.level.entity.EntityPersistentStorage;
- import net.minecraft.world.level.entity.EntityTickList;
- import net.minecraft.world.level.entity.EntityTypeTest;
- import net.minecraft.world.level.entity.LevelCallback;
- import net.minecraft.world.level.entity.LevelEntityGetter;
+-import net.minecraft.world.level.entity.EntityTickList;
+-import net.minecraft.world.level.entity.EntityTypeTest;
+-import net.minecraft.world.level.entity.LevelCallback;
+-import net.minecraft.world.level.entity.LevelEntityGetter;
 -import net.minecraft.world.level.entity.PersistentEntitySectionManager;
++import net.minecraft.world.level.entity.*;
  import net.minecraft.world.level.gameevent.DynamicGameEventListener;
  import net.minecraft.world.level.gameevent.GameEvent;
  import net.minecraft.world.level.gameevent.GameEventDispatcher;
@@ -51,7 +38,7 @@
      public static final BlockPos END_SPAWN_POINT = new BlockPos(100, 50, 0);
      public static final IntProvider RAIN_DELAY = UniformInt.of(12000, 180000);
      public static final IntProvider RAIN_DURATION = UniformInt.of(12000, 24000);
-@@ -176,12 +_,12 @@
+@@ -176,11 +_,12 @@
      private static final int EMPTY_TIME_NO_TICK = 300;
      private static final int MAX_SCHEDULED_TICKS_PER_TICK = 65536;
      final List<ServerPlayer> players = Lists.newArrayList();
@@ -62,17 +49,22 @@
 +    public final ServerLevelData serverLevelData; // Goldenforge - public
      private int lastSpawnChunkRadius;
      final EntityTickList entityTickList = new EntityTickList();
--    private final PersistentEntitySectionManager<Entity> entityManager;
-+    //private final PersistentEntitySectionManager<Entity> entityManager;
++    // Goldenforge: keep this for spark compat
+     private final PersistentEntitySectionManager<Entity> entityManager;
      private final GameEventDispatcher gameEventDispatcher;
      public boolean noSave;
-     private final SleepStatus sleepStatus;
-@@ -205,6 +_,363 @@
+@@ -205,6 +_,369 @@
      private final boolean tickTime;
      private final RandomSequences randomSequences;
  
 +    public final LevelStorageSource.LevelStorageAccess levelStorageAccess;
 +    // Paper start
++
++    @Override
++    public @Nullable LevelChunk getChunkIfLoaded(int x, int z) {
++        return this.chunkSource.getChunkAtIfLoadedImmediately(x, z); // Paper - Use getChunkIfLoadedImmediately
++    }
++
 +    public final boolean areChunksLoadedForMove(AABB axisalignedbb) {
 +        // copied code from collision methods, so that we can guarantee that they wont load chunks (we don't override
 +        // ICollisionAccess methods for VoxelShapes)
@@ -431,7 +423,7 @@
      public ServerLevel(
          MinecraftServer p_214999_,
          Executor p_215000_,
-@@ -230,24 +_,14 @@
+@@ -230,6 +_,8 @@
              p_215007_,
              p_214999_.getMaxChainedNeighborUpdates()
          );
@@ -440,10 +432,10 @@
          this.tickTime = p_215009_;
          this.server = p_214999_;
          this.serverLevelData = p_215002_;
-         ChunkGenerator chunkgenerator = p_215004_.generator();
+@@ -237,17 +_,18 @@
          boolean flag = p_214999_.forceSynchronousWrites();
          DataFixer datafixer = p_214999_.getFixerUpper();
--        EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(
+         EntityPersistentStorage<Entity> entitypersistentstorage = new EntityStorage(
 -            new SimpleRegionStorage(
 -                new RegionStorageInfo(p_215001_.getLevelId(), p_215003_, "entities"),
 -                p_215001_.getDimensionPath(p_215003_).resolve("entities"),
@@ -453,8 +445,18 @@
 -            ),
 -            this,
 -            p_214999_
--        );
--        this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++                new SimpleRegionStorage(
++                        new RegionStorageInfo(p_215001_.getLevelId(), p_215003_, "entities"),
++                        p_215001_.getDimensionPath(p_215003_).resolve("entities"),
++                        datafixer,
++                        flag,
++                        DataFixTypes.ENTITY_CHUNK
++                ),
++                this,
++                p_214999_
+         );
+         this.entityManager = new PersistentEntitySectionManager<>(Entity.class, new ServerLevel.EntityCallbacks(), entitypersistentstorage);
++        this.entityManager.setEntityGetter(this.moonrise$getEntityLookup());
          this.chunkSource = new ServerChunkCache(
              this,
              p_215001_,
@@ -926,15 +928,14 @@
              ServerLevel.this.entityTickList.add(p_143363_);
          }
  
-@@ -1740,6 +_,7 @@
+@@ -1740,14 +_,13 @@
          }
  
          public void onTrackingStart(Entity p_143371_) {
-+            p_143371_.valid = true; // CraftBukkit
-             ServerLevel.this.getChunkSource().addEntity(p_143371_);
+-            ServerLevel.this.getChunkSource().addEntity(p_143371_);
              if (p_143371_ instanceof ServerPlayer serverplayer) {
                  ServerLevel.this.players.add(serverplayer);
-@@ -1747,7 +_,7 @@
+                 ServerLevel.this.updateSleepingPlayerList();
              }
  
              if (p_143371_ instanceof Mob mob) {
@@ -943,3 +944,35 @@
                      String s = "onTrackingStart called during navigation iteration";
                      Util.logAndPauseIfInIde(
                          "onTrackingStart called during navigation iteration", new IllegalStateException("onTrackingStart called during navigation iteration")
+@@ -1764,9 +_,14 @@
+             }
+ 
+             p_143371_.updateDynamicGameEventListener(DynamicGameEventListener::add);
++            p_143371_.inWorld = true; // CraftBukkit - Mark entity as in world
++            p_143371_.valid = true; // CraftBukkit
++            ServerLevel.this.getChunkSource().addEntity(p_143371_);
+         }
+ 
+         public void onTrackingEnd(Entity p_143375_) {
++            org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
++
+             ServerLevel.this.getChunkSource().removeEntity(p_143375_);
+             if (p_143375_ instanceof ServerPlayer serverplayer) {
+                 ServerLevel.this.players.remove(serverplayer);
+@@ -1774,7 +_,7 @@
+             }
+ 
+             if (p_143375_ instanceof Mob mob) {
+-                if (ServerLevel.this.isUpdatingNavigations) {
++                if (false && ServerLevel.this.isUpdatingNavigations) {
+                     String s = "onTrackingStart called during navigation iteration";
+                     Util.logAndPauseIfInIde(
+                               "onTrackingStart called during navigation iteration", new IllegalStateException("onTrackingStart called during navigation iteration")
+@@ -1791,6 +_,7 @@
+             }
+ 
+             p_143375_.updateDynamicGameEventListener(DynamicGameEventListener::remove);
++            p_143375_.valid = false;
+ 
+             p_143375_.onRemovedFromLevel();
+             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent(p_143375_, ServerLevel.this));

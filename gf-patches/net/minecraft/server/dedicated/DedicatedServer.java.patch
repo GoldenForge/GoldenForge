@@ -22,6 +22,15 @@
          this.setPvpAllowed(dedicatedserverproperties.pvp);
          this.setFlightAllowed(dedicatedserverproperties.allowFlight);
          this.setMotd(dedicatedserverproperties.motd);
+@@ -174,7 +_,7 @@
+         }
+ 
+         if (this.convertOldUsers()) {
+-            this.getProfileCache().save();
++            this.getProfileCache().save(false); // Paper
+         }
+ 
+         if (!OldUsersConverter.serverReadyAfterUserconversion(this)) {
 @@ -209,7 +_,7 @@
                  this.rconThread = RconThread.create(this);
              }

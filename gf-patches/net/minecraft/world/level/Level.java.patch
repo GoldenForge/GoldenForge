@@ -51,7 +51,7 @@
 +
 +    public static @Nullable BlockPos lastPhysicsProblem; // Spigot
 +    private int tileTickPosition;
-+    public final Map<Explosion.CacheKey, Float> explosionDensityCache = new java.util.HashMap<>(); // Paper - Optimize explosions
++    //public final Map<Explosion.CacheKey, Float> explosionDensityCache = new java.util.HashMap<>(); // Paper - Optimize explosions
 +    public java.util.ArrayDeque<net.minecraft.world.level.block.RedstoneTorchBlock.Toggle> redstoneUpdateInfos; // Paper - Faster redstone torch rapid clock removal; Move from Map in BlockRedstoneTorch to here
 +    // Paper start - Use getChunkIfLoadedImmediately
 +    @Override

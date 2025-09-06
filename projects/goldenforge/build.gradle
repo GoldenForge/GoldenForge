@@ -140,6 +140,15 @@ dependencies {
     libraries "org.spongepowered:configurate-yaml:4.2.0-SNAPSHOT"
     libraries "org.spongepowered:configurate-core:4.2.0-SNAPSHOT"
     libraries "io.leangen.geantyref:geantyref:1.3.16"
+
+    compileOnly "curse.maven:snowudertrees-353942:5875647"
+    compileOnly "curse.maven:immersiveportal-355440:6013197"
+    compileOnly "curse.maven:TheOvergrowth-714353:5616081"
+    compileOnly "curse.maven:chunky-485681:5437053"
+    compileOnly "curse.maven:industrialforegoing-266515:6283758"
+    compileOnly "curse.maven:dh-508933:6387706"
+    compileOnly "curse.maven:copycats-968398:6650033"
+    compileOnly "curse.maven:eclipticseasons-1118306:6949140"
 }
 
 neoDev {

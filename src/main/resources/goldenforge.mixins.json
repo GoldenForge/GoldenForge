@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "package": "org.goldenforge.mixins",
+  "plugin": "org.goldenforge.GoldenForgeFixesMixinPlugin",
+  "mixins": [
+    "fixes.snowundertrees.SnowUnderTreesMixin",
+    "fixes.immersiveportal.ImmPtlChunkTicketsMixin",
+    "fixes.immersiveportal.McHelperMixin",
+    "fixes.immersiveportal.CollisionhelperMixin",
+    "fixes.immersiveportal.ServerTeleportationManagerMixin",
+    "fixes.theovergrowth.UtilsMixin",
+    "fixes.theovergrowth.SpawnEntitiesMixin",
+    "fixes.industrialforegoing.ProcessExplosionMixin",
+    "fixes.distanthorizons.BatchGenerationEnvironmentMixin",
+    "fixes.copycatsplus.OutlinedVoxelShapeMixin",
+    "fixes.eclipticseasons.MapCheckerMixin"
+  ],
+  "client": [],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.8"
+}

@@ -1,0 +1,27 @@
+--- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+@@ -60,6 +_,7 @@
+                                     return false;
+                                 } else {
+                                     mutablelong.setValue(p_258294_ + 20L + (long)p_258292_.getRandom().nextInt(20));
++                                    if (p_258293_.getNavigation().isStuck()) mutablelong.add(200); // Paper - Perf: Wait an additional 10s to check again if they're stuck // TODO Modifies Vanilla behavior, add config option
+                                     PoiManager poimanager = p_258292_.getPoiManager();
+                                     long2objectmap.long2ObjectEntrySet().removeIf(p_22338_ -> !p_22338_.getValue().isStillValid(p_258294_));
+                                     Predicate<BlockPos> predicate = p_258266_ -> {
+@@ -73,11 +_,11 @@
+                                             return true;
+                                         }
+                                     };
+-                                    Set<Pair<Holder<PoiType>, BlockPos>> set = poimanager.findAllClosestFirstWithType(
+-                                            p_260007_, predicate, p_258293_.blockPosition(), 48, PoiManager.Occupancy.HAS_SPACE
+-                                        )
+-                                        .limit(5L)
+-                                        .collect(Collectors.toSet());
++                                    // Paper start - optimise POI access
++                                    final java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
++                                    io.papermc.paper.util.PoiAccess.findNearestPoiPositions(poimanager, p_260007_, predicate, p_258293_.blockPosition(), 48, 48*48, PoiManager.Occupancy.HAS_SPACE, false, 5, poiposes);
++                                    final Set<Pair<Holder<PoiType>, BlockPos>> set = new java.util.HashSet<>(poiposes);
++                                    // Paper end - optimise POI access
+                                     Path path = findPathToPois(p_258293_, set);
+                                     if (path != null && path.canReach()) {
+                                         BlockPos blockpos = path.getTarget();

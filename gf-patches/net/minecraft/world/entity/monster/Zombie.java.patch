@@ -9,3 +9,17 @@
      private final BreakDoorGoal breakDoorGoal = new BreakDoorGoal(this, DOOR_BREAKING_PREDICATE);
      private boolean canBreakDoors;
      private int inWaterTime;
+@@ -306,6 +_,13 @@
+                     int j1 = j + Mth.nextInt(this.random, 7, 40) * Mth.nextInt(this.random, -1, 1);
+                     int k1 = k + Mth.nextInt(this.random, 7, 40) * Mth.nextInt(this.random, -1, 1);
+                     BlockPos blockpos = new BlockPos(i1, j1, k1);
++
++                    // Paper start - Prevent reinforcement checks from loading chunks
++                    if (this.level().getChunkIfLoadedImmediately(blockpos.getX() >> 4, blockpos.getZ() >> 4) == null) {
++                        continue;
++                    }
++                    // Paper end - Prevent reinforcement checks from loading chunks
++
+                     EntityType<?> entitytype = zombie.getType();
+                     if (SpawnPlacements.isSpawnPositionOk(entitytype, this.level(), blockpos)
+                         && SpawnPlacements.checkSpawnRules(entitytype, serverlevel, MobSpawnType.REINFORCEMENT, blockpos, this.level().random)) {

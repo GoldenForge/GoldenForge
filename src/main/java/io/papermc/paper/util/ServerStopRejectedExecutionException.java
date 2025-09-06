@@ -1,6 +1,6 @@
 package io.papermc.paper.util;
 
-import java.util.concurrent.*;
+import java.util.concurrent.RejectedExecutionException;
 
 public class ServerStopRejectedExecutionException extends RejectedExecutionException {
     public ServerStopRejectedExecutionException() {

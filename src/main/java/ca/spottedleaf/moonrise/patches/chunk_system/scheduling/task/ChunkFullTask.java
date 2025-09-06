@@ -7,9 +7,17 @@ import ca.spottedleaf.moonrise.patches.chunk_system.level.*;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.*;
 import ca.spottedleaf.moonrise.patches.chunk_system.level.poi.*;
 import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.*;
+import comm.ishland.c2me.rewrites.chunksystem.common.quirks.FlowableFluidUtils;
+import io.papermc.paper.configuration.GlobalConfiguration;
+import it.unimi.dsi.fastutil.shorts.ShortList;
+import it.unimi.dsi.fastutil.shorts.ShortListIterator;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.*;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.*;
 import net.minecraft.world.level.chunk.status.*;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.FluidState;
 import org.slf4j.*;
 
 import java.lang.invoke.*;
@@ -22,12 +30,29 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
     private final ChunkAccess fromChunk;
     private final PrioritisedExecutor.PrioritisedTask convertToFullTask;
 
+    public static final io.papermc.paper.util.IntervalledCounter chunkLoads = new io.papermc.paper.util.IntervalledCounter(java.util.concurrent.TimeUnit.SECONDS.toNanos(15L));
+    public static final io.papermc.paper.util.IntervalledCounter chunkGenerates = new io.papermc.paper.util.IntervalledCounter(java.util.concurrent.TimeUnit.SECONDS.toNanos(15L));
+
     public ChunkFullTask(final ChunkTaskScheduler scheduler, final ServerLevel world, final int chunkX, final int chunkZ,
                          final NewChunkHolder chunkHolder, final ChunkAccess fromChunk, final Priority priority) {
         super(scheduler, world, chunkX, chunkZ);
         this.chunkHolder = chunkHolder;
         this.fromChunk = fromChunk;
         this.convertToFullTask = scheduler.createChunkTask(chunkX, chunkZ, this, priority);
+    }
+
+    public static double genRate(final long time) {
+        synchronized (chunkGenerates) {
+            chunkGenerates.updateCurrentTime(time);
+            return chunkGenerates.getRate();
+        }
+    }
+
+    public static double loadRate(final long time) {
+        synchronized (chunkLoads) {
+            chunkLoads.updateCurrentTime(time);
+            return chunkLoads.getRate();
+        }
     }
 
     @Override
@@ -51,6 +76,17 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
                 ((ChunkSystemPoiManager)this.world.getPoiManager()).moonrise$checkConsistency(this.fromChunk);
             }
 
+            final long time = System.nanoTime();
+            if (this.fromChunk instanceof ImposterProtoChunk wrappedFull) {
+                synchronized (chunkLoads) {
+                    chunkLoads.updateAndAdd(1L, time);
+                }
+            } else {
+                synchronized (chunkGenerates) {
+                    chunkGenerates.updateAndAdd(1L, time);
+                }
+            }
+
             if (this.fromChunk instanceof ImposterProtoChunk wrappedFull) {
                 chunk = wrappedFull.getWrapped();
             } else {
@@ -61,6 +97,9 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
                 });
                 this.chunkHolder.replaceProtoChunk(new ImposterProtoChunk(chunk, false));
             }
+
+            if (GlobalConfiguration.get().chunkSystem.filterFluidPostProcessing)
+                this.filterFluidTicks(chunk, this.world);
 
             ((ChunkSystemLevelChunk)chunk).moonrise$setChunkAndHolder(new ServerChunkCache.ChunkAndHolder(chunk, this.chunkHolder.vanillaChunkHolder));
 
@@ -87,6 +126,30 @@ public final class ChunkFullTask extends ChunkProgressionTask implements Runnabl
             return;
         }
         this.complete(chunk, null);
+    }
+
+    /*
+    Goldenforge: from C2ME
+    filter post processing fluid ticks to prevent huge lag spikes
+     */
+    public void filterFluidTicks(ChunkAccess chunk, ServerLevel world) {
+        ShortList[] postProcessingLists = chunk.getPostProcessing();
+        for (int i = 0; i < postProcessingLists.length; i++) {
+            if (postProcessingLists[i] != null) {
+                for (ShortListIterator iterator = postProcessingLists[i].iterator(); iterator.hasNext(); ) {
+                    Short short_ = iterator.next();
+                    BlockPos blockpos = ProtoChunk.unpackOffsetCoordinates(short_, chunk.getSectionYFromSectionIndex(i), chunk.getPos());
+                    BlockState blockstate = chunk.getBlockState(blockpos);
+                    FluidState fluidstate = blockstate.getFluidState();
+                    if (!fluidstate.isEmpty() && fluidstate.getType() instanceof FlowingFluid) {
+                        if (!FlowableFluidUtils.needsPostProcessing(world, blockpos, blockstate, fluidstate)) {
+                            iterator.remove();
+                        }
+                    }
+
+                }
+            }
+        }
     }
 
     protected volatile boolean scheduled;

@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
++++ b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
+@@ -53,11 +_,12 @@
+                     return true;
+                 }
+             };
+-            Set<Pair<Holder<PoiType>, BlockPos>> set = poimanager.findAllWithType(
+-                    p_217819_ -> p_217819_.is(PoiTypes.HOME), predicate, p_26686_.blockPosition(), 48, PoiManager.Occupancy.ANY
+-                )
+-                .collect(Collectors.toSet());
+-            Path path = AcquirePoi.findPathToPois(p_26686_, set);
++            // Paper start - optimise POI access
++            java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
++            // don't ask me why it's unbounded. ask mojang.
++            io.papermc.paper.util.PoiAccess.findAnyPoiPositions(poimanager, type -> type.is(PoiTypes.HOME), predicate, p_26686_.blockPosition(), 48, PoiManager.Occupancy.ANY, false, Integer.MAX_VALUE, poiposes);
++            Path path = AcquirePoi.findPathToPois(p_26686_, new java.util.HashSet<>(poiposes));
++            // Paper end - optimise POI access
+             if (path != null && path.canReach()) {
+                 BlockPos blockpos = path.getTarget();
+                 Optional<Holder<PoiType>> optional = poimanager.getType(blockpos);

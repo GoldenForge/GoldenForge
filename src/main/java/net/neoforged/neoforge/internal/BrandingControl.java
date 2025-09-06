@@ -67,7 +67,7 @@ public class BrandingControl {
     }
 
     public static String getServerBranding() {
-        return ForgeSnapshotsMod.BRANDING_ID;
+        return org.goldenforge.GoldenForge.getBranding();
     }
 
     public static ResourceManagerReloadListener resourceManagerReloadListener() {

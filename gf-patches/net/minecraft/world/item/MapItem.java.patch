@@ -1,0 +1,13 @@
+--- a/net/minecraft/world/item/MapItem.java
++++ b/net/minecraft/world/item/MapItem.java
+@@ -110,8 +_,8 @@
+                             int j2 = (j / i + k1 - 64) * i;
+                             int k2 = (k / i + l1 - 64) * i;
+                             Multiset<MapColor> multiset = LinkedHashMultiset.create();
+-                            LevelChunk levelchunk = p_42894_.getChunk(SectionPos.blockToSectionCoord(j2), SectionPos.blockToSectionCoord(k2));
+-                            if (!levelchunk.isEmpty()) {
++                            LevelChunk levelchunk = p_42894_.getChunkIfLoaded(SectionPos.blockToSectionCoord(j2), SectionPos.blockToSectionCoord(k2)); // Paper - Maps shouldn't load chunks
++                            if (levelchunk != null && !levelchunk.isEmpty()) { // Paper - Maps shouldn't load chunks
+                                 int l2 = 0;
+                                 double d1 = 0.0;
+                                 if (p_42894_.dimensionType().hasCeiling()) {

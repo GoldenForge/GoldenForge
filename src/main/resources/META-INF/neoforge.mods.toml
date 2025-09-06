@@ -30,3 +30,6 @@ authors="manugame, The ModcraftMC Team"
 description='''
     GoldenForge is an performance and optimization fork of NeoForge.
     '''
+
+[[mixins]]
+config = "goldenforge.mixins.json"

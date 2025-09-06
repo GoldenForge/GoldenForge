@@ -1,0 +1,26 @@
+--- a/net/minecraft/world/entity/AgeableMob.java
++++ b/net/minecraft/world/entity/AgeableMob.java
+@@ -119,6 +_,23 @@
+         super.onSyncedDataUpdated(p_146754_);
+     }
+ 
++    // Paper start - EAR 2
++    @Override
++    public void inactiveTick() {
++        super.inactiveTick();
++        if (this.level().isClientSide) {
++            this.refreshDimensions();
++        } else {
++            int age = this.getAge();
++            if (age < 0) {
++                this.setAge(++age);
++            } else if (age > 0) {
++                this.setAge(--age);
++            }
++        }
++    }
++    // Paper end - EAR 2
++
+     @Override
+     public void aiStep() {
+         super.aiStep();

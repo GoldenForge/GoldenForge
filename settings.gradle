@@ -22,6 +22,9 @@ dependencyResolutionManagement {
     rulesMode = RulesMode.FAIL_ON_PROJECT_RULES
     repositories {
         mavenCentral()
+        maven {
+            url "https://cursemaven.com"
+        }
     }
 }
 

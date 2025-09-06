@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -165,10 +_,12 @@
+@@ -165,14 +_,16 @@
  import net.minecraft.world.level.storage.WorldData;
  import net.minecraft.world.phys.Vec2;
  import net.minecraft.world.phys.Vec3;
@@ -15,6 +15,23 @@
      public static final String VANILLA_BRAND = "vanilla";
      private static final float AVERAGE_TICK_TIME_SMOOTHING = 0.8F;
      private static final int TICK_STATS_SPAN = 100;
+-    private static final long OVERLOADED_THRESHOLD_NANOS = 20L * TimeUtil.NANOSECONDS_PER_SECOND / 20L;
++    private static final long OVERLOADED_THRESHOLD_NANOS = 30L * TimeUtil.NANOSECONDS_PER_SECOND / 20L; // CraftBukkit
+     private static final int OVERLOADED_TICKS_THRESHOLD = 20;
+     private static final long OVERLOADED_WARNING_INTERVAL_NANOS = 10L * TimeUtil.NANOSECONDS_PER_SECOND;
+     private static final int OVERLOADED_TICKS_WARNING_INTERVAL = 100;
+@@ -227,6 +_,11 @@
+     private int playerIdleTimeout;
+     private final long[] tickTimesNanos = new long[100];
+     private long aggregatedTickTimesNanos = 0L;
++    // Paper start - Add tick times API and /mspt command
++    public final TickTimes tickTimes5s = new TickTimes(100);
++    public final TickTimes tickTimes10s = new TickTimes(200);
++    public final TickTimes tickTimes60s = new TickTimes(1200);
++    // Paper end - Add tick times API and /mspt command
+     @Nullable
+     private KeyPair keyPair;
+     @Nullable
 @@ -236,7 +_,7 @@
      private long lastOverloadWarningNanos;
      protected final Services services;
@@ -306,8 +323,61 @@
      }
  
      public String getLocalIp() {
-@@ -667,16 +_,29 @@
+@@ -665,18 +_,82 @@
+         }
+     }
  
++    // Paper start - Further improve server tick loop
++    private static final long SEC_IN_NANO = 1000000000;
++    private static final long MAX_CATCHUP_BUFFER = TICK_TIME * TPS * 60L;
++    private long lastTick = 0;
++    private long catchupTime = 0;
++    public final RollingAverage tps1 = new RollingAverage(60);
++    public final RollingAverage tps5 = new RollingAverage(60 * 5);
++    public final RollingAverage tps15 = new RollingAverage(60 * 15);
++
++    public static class RollingAverage {
++        private final int size;
++        private long time;
++        private java.math.BigDecimal total;
++        private int index = 0;
++        private final java.math.BigDecimal[] samples;
++        private final long[] times;
++
++        RollingAverage(int size) {
++            this.size = size;
++            this.time = size * SEC_IN_NANO;
++            this.total = dec(TPS).multiply(dec(SEC_IN_NANO)).multiply(dec(size));
++            this.samples = new java.math.BigDecimal[size];
++            this.times = new long[size];
++            for (int i = 0; i < size; i++) {
++                this.samples[i] = dec(TPS);
++                this.times[i] = SEC_IN_NANO;
++            }
++        }
++
++        private static java.math.BigDecimal dec(long t) {
++            return new java.math.BigDecimal(t);
++        }
++        public void add(java.math.BigDecimal x, long t) {
++            time -= times[index];
++            total = total.subtract(samples[index].multiply(dec(times[index])));
++            samples[index] = x;
++            times[index] = t;
++            time += t;
++            total = total.add(x.multiply(dec(t)));
++            if (++index == size) {
++                index = 0;
++            }
++        }
++
++        public double getAverage() {
++            return total.divide(dec(time), 30, java.math.RoundingMode.HALF_UP).doubleValue();
++        }
++    }
++    private static final java.math.BigDecimal TPS_BASE = new java.math.BigDecimal(1E9).multiply(new java.math.BigDecimal(SAMPLE_INTERVAL));
++    // Paper end
++
      protected void runServer() {
          try {
 +            long serverStartTime = Util.getNanos(); // Paper
@@ -336,7 +406,7 @@
              while (this.running) {
                  long i;
                  if (!this.isPaused() && this.tickRateManager.isSprinting() && this.tickRateManager.checkShouldSprintThisTick()) {
-@@ -694,6 +_,15 @@
+@@ -694,6 +_,21 @@
                          this.lastOverloadWarningNanos = this.nextTickTimeNanos;
                      }
                  }
@@ -345,6 +415,12 @@
 +                // Paper start - further improve server tick loop
 +                currentTime = Util.getNanos();
 +                if (++MinecraftServer.currentTick % MinecraftServer.SAMPLE_INTERVAL == 0) {
++                    final long diff = currentTime - tickSection;
++                    final java.math.BigDecimal currentTps = TPS_BASE.divide(new java.math.BigDecimal(diff), 30, java.math.RoundingMode.HALF_UP);
++                    tps1.add(currentTps, diff);
++                    tps5.add(currentTps, diff);
++                    tps15.add(currentTps, diff);
++
 +                    tickSection = currentTime;
 +                }
 +                // Paper end - further improve server tick loop
@@ -475,6 +551,18 @@
          if (this.ticksUntilAutosave <= 0) {
              this.ticksUntilAutosave = this.computeNextAutosaveInterval();
              LOGGER.debug("Autosave started");
+@@ -938,6 +_,11 @@
+         this.aggregatedTickTimesNanos += j;
+         this.tickTimesNanos[k] = j;
+         this.smoothedTickTimeMillis = this.smoothedTickTimeMillis * 0.8F + (float)j / (float)TimeUtil.NANOSECONDS_PER_MILLISECOND * 0.19999999F;
++        // Paper start - Add tick times API and /mspt command
++        this.tickTimes5s.add(this.tickCount, j);
++        this.tickTimes10s.add(this.tickCount, j);
++        this.tickTimes60s.add(this.tickCount, j);
++        // Paper end - Add tick times API and /mspt command
+         this.logTickMethodTime(i);
+         this.profiler.pop();
+         net.neoforged.neoforge.event.EventHooks.fireServerTickPost(p_129871_, this);
 @@ -1021,14 +_,34 @@
          this.getFunctions().tick();
          this.profiler.popPush("levels");
@@ -519,21 +607,80 @@
  
              this.profiler.pop();
              this.profiler.pop();
-+            serverlevel.explosionDensityCache.clear(); // Paper - Optimize explosions
++            //serverlevel.explosionDensityCache.clear(); // Paper - Optimize explosions
              perWorldTickTimes.computeIfAbsent(serverlevel.dimension(), k -> new long[100])[this.tickCount % 100] = Util.getNanos() - tickStart;
          }
  
-@@ -1523,6 +_,13 @@
- 
+@@ -1435,7 +_,7 @@
+     @Override
+     public void executeIfPossible(Runnable p_202482_) {
+         if (this.isStopped()) {
+-            throw new RejectedExecutionException("Server already shutting down");
++            throw new io.papermc.paper.util.ServerStopRejectedExecutionException("Server already shutting down"); // Paper - do not prematurely disconnect players on stop
+         } else {
+             super.executeIfPossible(p_202482_);
+         }
+@@ -1524,6 +_,13 @@
          return completablefuture;
      }
-+
+ 
 +    // Paper start - rewrite chunk system
 +    @Override
 +    public boolean isSameThread() {
 +        return ca.spottedleaf.moonrise.common.util.TickThread.isTickThread();
 +    }
 +    // Paper end - rewrite chunk system
- 
++
      public static WorldDataConfiguration configurePackRepository(
          PackRepository p_248681_, WorldDataConfiguration p_341632_, boolean p_249869_, boolean p_341620_
+     ) {
+@@ -1872,6 +_,18 @@
+         }
+     }
+ 
++    public double[] getTPS() {
++        return new double[] {
++                net.minecraft.server.MinecraftServer.getServer().tps1.getAverage(),
++                net.minecraft.server.MinecraftServer.getServer().tps5.getAverage(),
++                net.minecraft.server.MinecraftServer.getServer().tps15.getAverage()
++        };
++    }
++
++    public double getAverageTickTime() {
++        return this.getServer().tickTimes5s.getAverage();
++    }
++
+     private void startMetricsRecordingTick() {
+         if (this.willStartRecordingMetrics) {
+             this.metricsRecorder = ActiveMetricsRecorder.createStarted(
+@@ -2128,4 +_,30 @@
+             };
+         }
+     }
++
++    // Paper start - Add tick times API and /mspt command
++    public static class TickTimes {
++        private final long[] times;
++
++        public TickTimes(int length) {
++            times = new long[length];
++        }
++
++        void add(int index, long time) {
++            times[index % times.length] = time;
++        }
++
++        public long[] getTimes() {
++            return times.clone();
++        }
++
++        public double getAverage() {
++            long total = 0L;
++            for (long value : times) {
++                total += value;
++            }
++            return ((double) total / (double) times.length) * 1.0E-6D;
++        }
++    }
++    // Paper end - Add tick times API and /mspt command
+ }

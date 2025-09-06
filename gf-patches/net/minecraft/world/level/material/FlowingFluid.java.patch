@@ -1,0 +1,241 @@
+--- a/net/minecraft/world/level/material/FlowingFluid.java
++++ b/net/minecraft/world/level/material/FlowingFluid.java
+@@ -45,6 +_,48 @@
+     });
+     private final Map<FluidState, VoxelShape> shapes = Maps.newIdentityHashMap();
+ 
++    // Paper start - fluid method optimisations
++    private FluidState sourceFalling;
++    private FluidState sourceNotFalling;
++
++    private static final int TOTAL_FLOWING_STATES = FALLING.getPossibleValues().size() * LEVEL.getPossibleValues().size();
++    private static final int MIN_LEVEL = LEVEL.getPossibleValues().stream().sorted().findFirst().get().intValue();
++
++    // index = (falling ? 1 : 0) + level*2
++    private FluidState[] flowingLookUp;
++    private volatile boolean init;
++
++    private static final int COLLISION_OCCLUSION_CACHE_SIZE = 2048;
++    private static final ThreadLocal<ca.spottedleaf.moonrise.patches.collisions.util.FluidOcclusionCacheKey[]> COLLISION_OCCLUSION_CACHE = ThreadLocal.withInitial(() -> new ca.spottedleaf.moonrise.patches.collisions.util.FluidOcclusionCacheKey[COLLISION_OCCLUSION_CACHE_SIZE]);
++
++
++    /**
++     * Due to init order, we need to use callbacks to initialise our state
++     */
++    private void init() {
++        synchronized (this) {
++            if (this.init) {
++                return;
++            }
++            this.flowingLookUp = new FluidState[TOTAL_FLOWING_STATES];
++            final FluidState defaultFlowState = this.getFlowing().defaultFluidState();
++            for (int i = 0; i < TOTAL_FLOWING_STATES; ++i) {
++                final int falling = i & 1;
++                final int level = (i >>> 1) + MIN_LEVEL;
++
++                this.flowingLookUp[i] = defaultFlowState.setValue(FALLING, falling == 1 ? Boolean.TRUE : Boolean.FALSE)
++                        .setValue(LEVEL, Integer.valueOf(level));
++            }
++
++            final FluidState defaultFallState = this.getSource().defaultFluidState();
++            this.sourceFalling = defaultFallState.setValue(FALLING, Boolean.TRUE);
++            this.sourceNotFalling = defaultFallState.setValue(FALLING, Boolean.FALSE);
++
++            this.init = true;
++        }
++    }
++    // Paper end - fluid method optimisations
++
+     @Override
+     protected void createFluidStateDefinition(StateDefinition.Builder<Fluid, FluidState> p_76046_) {
+         p_76046_.add(FALLING);
+@@ -147,9 +_,10 @@
+                 Direction direction = entry.getKey();
+                 FluidState fluidstate = entry.getValue();
+                 BlockPos blockpos = p_76016_.relative(direction);
+-                BlockState blockstate = p_256644_.getBlockState(blockpos);
+-                if (this.canSpreadTo(p_256644_, p_76016_, p_76018_, direction, blockpos, blockstate, p_256644_.getFluidState(blockpos), fluidstate.getType())) {
+-                    this.spreadTo(p_256644_, blockpos, blockstate, direction, fluidstate);
++                final BlockState blockStateIfLoaded = p_256644_.getBlockStateIfLoaded(p_76016_); // Paper - Prevent chunk loading from fluid flowing
++                if (blockStateIfLoaded == null) continue; // Paper - Prevent chunk loading from fluid flowing
++                if (this.canSpreadTo(p_256644_, p_76016_, p_76018_, direction, blockpos, blockStateIfLoaded, p_256644_.getFluidState(blockpos), fluidstate.getType())) {
++                    this.spreadTo(p_256644_, blockpos, blockStateIfLoaded, direction, fluidstate);
+                 }
+             }
+         }
+@@ -161,7 +_,8 @@
+ 
+         for (Direction direction : Direction.Plane.HORIZONTAL) {
+             BlockPos blockpos = p_76037_.relative(direction);
+-            BlockState blockstate = p_256464_.getBlockState(blockpos);
++            BlockState blockstate = p_256464_.getBlockStateIfLoaded(p_76037_); // Paper - Prevent chunk loading from fluid flowing
++            if (blockstate == null) continue; // Paper - Prevent chunk loading from fluid flowing
+             FluidState fluidstate = blockstate.getFluidState();
+             if (fluidstate.getType().isSame(this) && this.canPassThroughWall(direction, p_256464_, p_76037_, p_76038_, blockpos, blockstate)) {
+                 if (fluidstate.isSource() && net.neoforged.neoforge.event.EventHooks.canCreateFluidSource(p_256464_, blockpos, blockstate)) {
+@@ -193,49 +_,70 @@
+         }
+     }
+ 
+-    private boolean canPassThroughWall(Direction p_76062_, BlockGetter p_76063_, BlockPos p_76064_, BlockState p_76065_, BlockPos p_76066_, BlockState p_76067_) {
+-        Object2ByteLinkedOpenHashMap<Block.BlockStatePairKey> object2bytelinkedopenhashmap;
+-        if (!p_76065_.getBlock().hasDynamicShape() && !p_76067_.getBlock().hasDynamicShape()) {
+-            object2bytelinkedopenhashmap = OCCLUSION_CACHE.get();
+-        } else {
+-            object2bytelinkedopenhashmap = null;
+-        }
+-
+-        Block.BlockStatePairKey block$blockstatepairkey;
+-        if (object2bytelinkedopenhashmap != null) {
+-            block$blockstatepairkey = new Block.BlockStatePairKey(p_76065_, p_76067_, p_76062_);
+-            byte b0 = object2bytelinkedopenhashmap.getAndMoveToFirst(block$blockstatepairkey);
+-            if (b0 != 127) {
+-                return b0 != 0;
+-            }
+-        } else {
+-            block$blockstatepairkey = null;
+-        }
+-
+-        VoxelShape voxelshape1 = p_76065_.getCollisionShape(p_76063_, p_76064_);
+-        VoxelShape voxelshape = p_76067_.getCollisionShape(p_76063_, p_76066_);
+-        boolean flag = !Shapes.mergedFaceOccludes(voxelshape1, voxelshape, p_76062_);
+-        if (object2bytelinkedopenhashmap != null) {
+-            if (object2bytelinkedopenhashmap.size() == 200) {
+-                object2bytelinkedopenhashmap.removeLastByte();
+-            }
+-
+-            object2bytelinkedopenhashmap.putAndMoveToFirst(block$blockstatepairkey, (byte)(flag ? 1 : 0));
+-        }
+-
+-        return flag;
++    // Paper start - fluid method optimisations
++    public static boolean canPassThroughWall(final Direction direction, final BlockGetter level,
++                                              final BlockPos fromPos, final BlockState fromState,
++                                              final BlockPos toPos, final BlockState toState) {
++        if (((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)fromState).moonrise$emptyCollisionShape() & ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)toState).moonrise$emptyCollisionShape()) {
++            // don't even try to cache simple cases
++            return true;
++        }
++
++        if (((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)fromState).moonrise$occludesFullBlock() | ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)toState).moonrise$occludesFullBlock()) {
++            // don't even try to cache simple cases
++            return false;
++        }
++
++        final ca.spottedleaf.moonrise.patches.collisions.util.FluidOcclusionCacheKey[] cache = ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)fromState).moonrise$hasCache() & ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)toState).moonrise$hasCache() ?
++                COLLISION_OCCLUSION_CACHE.get() : null;
++
++        final int keyIndex
++                = (((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)fromState).moonrise$uniqueId1() ^ ((ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState)toState).moonrise$uniqueId2() ^ ((ca.spottedleaf.moonrise.patches.collisions.util.CollisionDirection)(Object)direction).moonrise$uniqueId())
++                & (COLLISION_OCCLUSION_CACHE_SIZE - 1);
++
++        if (cache != null) {
++            final ca.spottedleaf.moonrise.patches.collisions.util.FluidOcclusionCacheKey cached = cache[keyIndex];
++            if (cached != null && cached.first() == fromState && cached.second() == toState && cached.direction() == direction) {
++                return cached.result();
++            }
++        }
++
++        final VoxelShape shape1 = fromState.getCollisionShape(level, fromPos);
++        final VoxelShape shape2 = toState.getCollisionShape(level, toPos);
++
++        final boolean result = !Shapes.mergedFaceOccludes(shape1, shape2, direction);
++
++        if (cache != null) {
++            // we can afford to replace in-use keys more often due to the excessive caching the collision patch does in mergedFaceOccludes
++            cache[keyIndex] = new ca.spottedleaf.moonrise.patches.collisions.util.FluidOcclusionCacheKey(fromState, toState, direction, result);
++        }
++
++        return result;
+     }
++    // Paper end - fluid method optimisations
+ 
+     public abstract Fluid getFlowing();
+ 
+     public FluidState getFlowing(int p_75954_, boolean p_75955_) {
+-        return this.getFlowing().defaultFluidState().setValue(LEVEL, Integer.valueOf(p_75954_)).setValue(FALLING, Boolean.valueOf(p_75955_));
++        // Paper start - fluid method optimisations
++        final int amount = p_75954_;
++        if (!this.init) {
++            this.init();
++        }
++        final int index = (p_75955_ ? 1 : 0) | ((amount - MIN_LEVEL) << 1);
++        return this.flowingLookUp[index];
++        // Paper end - fluid method optimisations
+     }
+ 
+     public abstract Fluid getSource();
+ 
+     public FluidState getSource(boolean p_76069_) {
+-        return this.getSource().defaultFluidState().setValue(FALLING, Boolean.valueOf(p_76069_));
++        // Paper start - fluid method optimisations
++        if (!this.init) {
++            this.init();
++        }
++        return p_76069_ ? this.sourceFalling : this.sourceNotFalling;
++        // Paper end - fluid method optimisations
+     }
+ 
+     @Override
+@@ -285,10 +_,18 @@
+             if (direction != p_76030_) {
+                 BlockPos blockpos = p_76028_.relative(direction);
+                 short short1 = getCacheKey(p_76032_, blockpos);
+-                Pair<BlockState, FluidState> pair = p_76033_.computeIfAbsent(short1, p_284932_ -> {
+-                    BlockState blockstate1 = p_76027_.getBlockState(blockpos);
+-                    return Pair.of(blockstate1, blockstate1.getFluidState());
+-                });
++                // Paper start - Prevent chunk loading from fluid flowing
++                Pair<BlockState, FluidState> pair = p_76033_.get(short1);
++                if (pair == null) {
++                    BlockState iblockdatax = p_76027_.getBlockStateIfLoaded(blockpos);
++                    if (iblockdatax == null) {
++                        continue;
++                    }
++
++                    pair = Pair.of(iblockdatax, iblockdatax.getFluidState());
++                    p_76033_.put(short1, pair);
++                }
++                // Paper end - Prevent chunk loading from fluid flowing
+                 BlockState blockstate = pair.getFirst();
+                 FluidState fluidstate = pair.getSecond();
+                 if (this.canPassThrough(p_76027_, this.getFlowing(), p_76028_, p_76031_, direction, blockpos, blockstate, fluidstate)) {
+@@ -337,7 +_,7 @@
+             && this.canHoldFluid(p_75964_, p_75969_, p_75970_, p_75965_);
+     }
+ 
+-    private boolean isSourceBlockOfThisType(FluidState p_76097_) {
++    public boolean isSourceBlockOfThisType(FluidState p_76097_) {
+         return p_76097_.getType().isSame(this) && p_76097_.isSource();
+     }
+ 
+@@ -366,10 +_,16 @@
+         for (Direction direction : Direction.Plane.HORIZONTAL) {
+             BlockPos blockpos = p_76081_.relative(direction);
+             short short1 = getCacheKey(p_76081_, blockpos);
+-            Pair<BlockState, FluidState> pair = short2objectmap.computeIfAbsent(short1, p_284929_ -> {
+-                BlockState blockstate1 = p_256191_.getBlockState(blockpos);
+-                return Pair.of(blockstate1, blockstate1.getFluidState());
+-            });
++            // Paper start - Prevent chunk loading from fluid flowing
++            Pair<BlockState, FluidState> pair = (Pair) short2objectmap.get(short1);
++            if (pair == null) {
++                BlockState iblockdatax = p_256191_.getBlockStateIfLoaded(blockpos);
++                if (iblockdatax == null) continue;
++
++                pair = Pair.of(iblockdatax, iblockdatax.getFluidState());
++                short2objectmap.put(short1, pair);
++            }
++            // Paper end - Prevent chunk loading from fluid flowing
+             BlockState blockstate = pair.getFirst();
+             FluidState fluidstate = pair.getSecond();
+             FluidState fluidstate1 = this.getNewLiquid(p_256191_, blockpos, blockstate);
+@@ -435,7 +_,7 @@
+             && this.canHoldFluid(p_75978_, p_75982_, p_75983_, p_75985_);
+     }
+ 
+-    protected abstract int getDropOff(LevelReader p_76087_);
++    public abstract int getDropOff(LevelReader p_76087_);
+ 
+     protected int getSpreadDelay(Level p_75998_, BlockPos p_75999_, FluidState p_76000_, FluidState p_76001_) {
+         return this.getTickDelay(p_75998_);

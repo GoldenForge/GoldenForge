@@ -1,6 +1,7 @@
 package ca.spottedleaf.moonrise.paper;
 
 import ca.spottedleaf.moonrise.common.*;
+import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
 import ca.spottedleaf.moonrise.paper.util.*;
 import com.mojang.datafixers.*;
 import com.mojang.serialization.*;
@@ -12,10 +13,17 @@ import net.minecraft.world.entity.boss.*;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.state.*;
 import net.minecraft.world.level.chunk.*;
+import net.minecraft.world.level.chunk.status.ChunkType;
 import net.minecraft.world.level.chunk.storage.*;
 import net.minecraft.world.level.entity.*;
 import net.minecraft.world.phys.*;
+import net.neoforged.neoforge.common.CommonHooks;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.entity.*;
+import net.neoforged.neoforge.event.EventHooks;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.level.ChunkDataEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
 
 import java.util.*;
 import java.util.function.*;
@@ -26,7 +34,7 @@ public final class GoldenForgeHooks extends BaseChunkSystemHooks implements Plat
 
     @Override
     public String getBrand() {
-        return "Paper";
+        return "GoldenForge";
     }
 
     @Override
@@ -37,28 +45,28 @@ public final class GoldenForgeHooks extends BaseChunkSystemHooks implements Plat
     @Override
     public Predicate<BlockState> maybeHasLightEmission() {
         return (final BlockState state) -> {
-            return state.getLightEmission() != 0;
+            return state.hasDynamicLightEmission() || state.getLightEmission(EmptyBlockGetter.INSTANCE, BlockPos.ZERO) != 0;
         };
     }
 
     @Override
     public boolean hasCurrentlyLoadingChunk() {
-        return false;
+        return true;
     }
 
     @Override
     public LevelChunk getCurrentlyLoadingChunk(final GenerationChunkHolder holder) {
-        return null;
+        return holder.currentlyLoading;
     }
 
     @Override
     public void setCurrentlyLoading(final GenerationChunkHolder holder, final LevelChunk levelChunk) {
-
+        holder.currentlyLoading = levelChunk;
     }
 
     @Override
     public void chunkFullStatusComplete(final LevelChunk newChunk, final ProtoChunk original) {
-
+        NeoForge.EVENT_BUS.post(new ChunkEvent.Load(newChunk, !(original instanceof ImposterProtoChunk)));
     }
 
     @Override
@@ -68,27 +76,32 @@ public final class GoldenForgeHooks extends BaseChunkSystemHooks implements Plat
 
     @Override
     public void onChunkHolderTicketChange(final ServerLevel world, final ChunkHolder holder, final int oldLevel, final int newLevel) {
+        final ChunkPos pos = holder.getPos();
 
+        EventHooks.fireChunkTicketLevelUpdated(
+                world, CoordinateUtils.getChunkKey(pos.x, pos.z),
+                oldLevel, newLevel, holder
+        );
     }
 
     @Override
     public void chunkUnloadFromWorld(final LevelChunk chunk) {
-
+        NeoForge.EVENT_BUS.post(new ChunkEvent.Unload(chunk));
     }
 
     @Override
     public void chunkSyncSave(final ServerLevel world, final ChunkAccess chunk, final CompoundTag data) {
-
+        NeoForge.EVENT_BUS.post(new ChunkDataEvent.Save(chunk, world, data));
     }
 
     @Override
     public void onChunkWatch(final ServerLevel world, final LevelChunk chunk, final ServerPlayer player) {
-
+        EventHooks.fireChunkWatch(player, chunk, world);
     }
 
     @Override
     public void onChunkUnWatch(final ServerLevel world, final ChunkPos chunk, final ServerPlayer player) {
-
+        EventHooks.fireChunkUnWatch(player, chunk, world);
     }
 
     @Override
@@ -132,11 +145,14 @@ public final class GoldenForgeHooks extends BaseChunkSystemHooks implements Plat
 
     @Override
     public void entityMove(final Entity entity, final long oldSection, final long newSection) {
-
+        CommonHooks.onEntityEnterSection(entity, oldSection, newSection);
     }
 
     @Override
     public boolean screenEntity(final ServerLevel world, final Entity entity, final boolean fromDisk, final boolean event) {
+        if (event && NeoForge.EVENT_BUS.post(new EntityJoinLevelEvent(entity, entity.level(), fromDisk)).isCanceled()) {
+            return false;
+        }
         return true;
     }
 
@@ -210,12 +226,12 @@ public final class GoldenForgeHooks extends BaseChunkSystemHooks implements Plat
 
     @Override
     public boolean hasMainChunkLoadHook() {
-        return false;
+        return true;
     }
 
     @Override
     public void mainChunkLoad(final ChunkAccess chunk, final CompoundTag chunkData) {
-
+        NeoForge.EVENT_BUS.post(new ChunkDataEvent.Load(chunk, chunkData, chunk instanceof ProtoChunk ? ChunkType.PROTOCHUNK : ChunkType.LEVELCHUNK));
     }
 
     @Override

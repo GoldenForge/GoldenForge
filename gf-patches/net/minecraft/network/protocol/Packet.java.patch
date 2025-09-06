@@ -1,0 +1,27 @@
+--- a/net/minecraft/network/protocol/Packet.java
++++ b/net/minecraft/network/protocol/Packet.java
+@@ -11,6 +_,24 @@
+ 
+     void handle(T p_131342_);
+ 
++    // Paper start
++    default boolean hasLargePacketFallback() {
++        return false;
++    }
++
++    /**
++     * override {@link #hasLargePacketFallback()} to return true when overriding in subclasses
++     */
++    default boolean packetTooLarge(net.minecraft.network.Connection manager) {
++        return false;
++    }
++
++    @org.jetbrains.annotations.Nullable
++    default java.util.List<Packet<?>> getExtraPackets() {
++        return null;
++    }
++    // Paper end
++
+     default boolean isSkippable() {
+         return false;
+     }

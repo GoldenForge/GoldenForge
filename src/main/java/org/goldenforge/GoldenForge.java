@@ -9,6 +9,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.goldenforge.commands.GoldenForgeCommand;
+import org.goldenforge.tpsmonitor.TpsMonitorManager;
 
 @Mod("goldenforge")
 @OnlyIn(Dist.DEDICATED_SERVER)
@@ -23,7 +25,7 @@ public class GoldenForge {
         LOGGER.info("Loading GoldenForge");
         NeoForge.EVENT_BUS.register(this);
         NeoForge.EVENT_BUS.addListener(this::onCommandsRegister);
-        //NeoForge.EVENT_BUS.register(new TpsMonitorManager());
+        NeoForge.EVENT_BUS.register(new TpsMonitorManager());
 
         if (!ModList.get().isLoaded("goldenforgefixes")) {
             LOGGER.warn("GoldenForgeFixes in not installed, some mod might not work well wihout it. (https://modrinth.com/mod/goldenforge-fixes) ");
@@ -32,6 +34,6 @@ public class GoldenForge {
 
     @SubscribeEvent
     public void onCommandsRegister(RegisterCommandsEvent event) {
-        //GoldenForgeCommand.register(event.getDispatcher());
+        GoldenForgeCommand.register(event.getDispatcher());
     }
 }

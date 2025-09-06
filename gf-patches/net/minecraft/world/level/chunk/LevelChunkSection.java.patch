@@ -123,7 +123,7 @@
 +        this.specialCollidingBlocks = (short)0;
 +        this.tickingBlocks.clear();
 +
-+        if (this.maybeHas((final BlockState state) -> !state.isAir())) {
++        if (this.maybeHas((final BlockState state) -> !state.isEmpty())) {
 +            final PalettedContainer.Data<BlockState> data = this.states.data;
 +            final Palette<BlockState> palette = data.palette();
 +            final int paletteSize = palette.getSize();
@@ -145,7 +145,7 @@
 +
 +                final BlockState state = palette.valueFor(paletteIdx);
 +
-+                if (state.isAir()) {
++                if (state.isEmpty()) {
 +                    continue;
 +                }
 +
@@ -204,3 +204,11 @@
      }
  
      public void readBiomes(FriendlyByteBuf p_275669_) {
+@@ -160,6 +_,7 @@
+     }
+ 
+     public void write(FriendlyByteBuf p_63012_) {
++        org.goldenforge.GoldenForge.LOGGER.info("writting " + this.nonEmptyBlockCount);
+         p_63012_.writeShort(this.nonEmptyBlockCount);
+         this.states.write(p_63012_);
+         this.biomes.write(p_63012_);

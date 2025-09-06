@@ -1,0 +1,56 @@
+--- a/net/minecraft/world/entity/NeutralMob.java
++++ b/net/minecraft/world/entity/NeutralMob.java
+@@ -39,21 +_,38 @@
+             } else {
+                 UUID uuid = p_147287_.getUUID("AngryAt");
+                 this.setPersistentAngerTarget(uuid);
+-                Entity entity = ((ServerLevel)p_147286_).getEntity(uuid);
+-                if (entity != null) {
+-                    if (entity instanceof Mob mob) {
+-                        this.setTarget(mob);
+-                        this.setLastHurtByMob(mob);
+-                    }
+-
+-                    if (entity instanceof Player player) {
+-                        this.setTarget(player);
+-                        this.setLastHurtByPlayer(player);
+-                    }
+-                }
+-            }
+-        }
+-    }
++                // Paper - Prevent entity loading causing async lookups; Moved diff to separate method
++                // If this entity already survived its first tick, e.g. is loaded and ticked in sync, actively
++                // tick the initial persistent anger.
++                // If not, let the first tick on the baseTick call the method later down the line.
++                if (this instanceof Entity entity && !entity.firstTick) this.tickInitialPersistentAnger(p_147286_);
++            }
++        }
++    }
++
++    // Paper start - Prevent entity loading causing async lookups
++    // Update last hurt when ticking
++    default void tickInitialPersistentAnger(Level level) {
++        UUID target = getPersistentAngerTarget();
++        if (target == null) {
++            return;
++        }
++
++        Entity entity = ((ServerLevel) level).getEntity(target);
++
++        if (entity != null) {
++            if (entity instanceof Mob mob) {
++                this.setTarget(mob);
++                this.setLastHurtByMob(mob);
++            }
++
++            if (entity instanceof Player player) {
++                this.setTarget(player);
++                this.setLastHurtByPlayer(player);
++            }
++        }
++    }
++    // Paper end - Prevent entity loading causing async lookups
+ 
+     default void updatePersistentAnger(ServerLevel p_21667_, boolean p_21668_) {
+         LivingEntity livingentity = this.getTarget();

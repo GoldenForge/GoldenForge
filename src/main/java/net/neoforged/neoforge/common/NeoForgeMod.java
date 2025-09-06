@@ -531,6 +531,9 @@ public class NeoForgeMod {
         LOGGER.info(NEOFORGEMOD, "NeoForge mod loading, version {}, for MC {}", NeoForgeVersion.getVersion(), DetectedVersion.BUILT_IN.getName());
         ForgeSnapshotsMod.logStartupWarning();
 
+        if (net.minecraft.SharedConstants.IS_RUNNING_IN_IDE) // for some ready the modloader do not load goldenforge in userdev
+            new org.goldenforge.GoldenForge();
+
         SelfTest.initCommon();
 
         CrashReportCallables.registerCrashCallable("Crash Report UUID", () -> {

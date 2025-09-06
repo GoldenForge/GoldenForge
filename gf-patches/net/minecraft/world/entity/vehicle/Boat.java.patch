@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/entity/vehicle/Boat.java
++++ b/net/minecraft/world/entity/vehicle/Boat.java
+@@ -192,6 +_,7 @@
+ 
+     @Override
+     public void push(Entity p_38373_) {
++        if (!this.level().paperConfig().collisions.allowVehicleCollisions && this.level().paperConfig().collisions.onlyPlayersCollide && !(p_38373_ instanceof Player)) return; // Paper - Collision option for requiring a player participant
+         if (p_38373_ instanceof Boat) {
+             if (p_38373_.getBoundingBox().minY < this.getBoundingBox().maxY) {
+                 super.push(p_38373_);

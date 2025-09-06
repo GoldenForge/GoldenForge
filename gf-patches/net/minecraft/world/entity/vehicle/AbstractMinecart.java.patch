@@ -1,0 +1,10 @@
+--- a/net/minecraft/world/entity/vehicle/AbstractMinecart.java
++++ b/net/minecraft/world/entity/vehicle/AbstractMinecart.java
+@@ -674,6 +_,7 @@
+         }
+         if (!this.level().isClientSide) {
+             if (!p_38165_.noPhysics && !this.noPhysics) {
++                if (!this.level().paperConfig().collisions.allowVehicleCollisions && this.level().paperConfig().collisions.onlyPlayersCollide && !(p_38165_ instanceof Player)) return; // Paper - Collision option for requiring a player participant
+                 if (!this.hasPassenger(p_38165_)) {
+                     double d0 = p_38165_.getX() - this.getX();
+                     double d1 = p_38165_.getZ() - this.getZ();

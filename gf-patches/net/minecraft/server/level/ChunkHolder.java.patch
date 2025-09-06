@@ -251,7 +251,7 @@
              Level level = p_140055_.getLevel();
              if (!this.skyChangedLightSectionFilter.isEmpty() || !this.blockChangedLightSectionFilter.isEmpty()) {
 -                List<ServerPlayer> list = this.playerProvider.getPlayers(this.pos, true);
-+                List<ServerPlayer> list= this.moonrise$getPlayers(true); // Paper - rewrite chunk system
++                List<ServerPlayer> list = this.playerProvider.getPlayers(this.pos, true); // Immersive Portal compat
                  if (!list.isEmpty()) {
                      ClientboundLightUpdatePacket clientboundlightupdatepacket = new ClientboundLightUpdatePacket(
                          p_140055_.getPos(), this.lightEngine, this.skyChangedLightSectionFilter, this.blockChangedLightSectionFilter
@@ -260,7 +260,7 @@
  
              if (this.hasChangedSections) {
 -                List<ServerPlayer> list1 = this.playerProvider.getPlayers(this.pos, false);
-+                List<ServerPlayer> list1 = this.moonrise$getPlayers(false); // Paper - rewrite chunk system
++                List<ServerPlayer> list1 = this.playerProvider.getPlayers(this.pos, false); // Immersive Portal compat
  
                  for (int j = 0; j < this.changedBlocksPerSection.length; j++) {
                      ShortSet shortset = this.changedBlocksPerSection[j];

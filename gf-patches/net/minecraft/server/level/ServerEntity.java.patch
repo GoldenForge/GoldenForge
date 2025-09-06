@@ -1,8 +1,34 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
-@@ -84,6 +_,11 @@
+@@ -62,13 +_,15 @@
+     private Vec3 lastSentMovement;
+     private int tickCount;
+     private int teleportDelay;
+-    private List<Entity> lastPassengers = Collections.emptyList();
++    private List<Entity> lastPassengers = com.google.common.collect.ImmutableList.of(); // Paper - optimize passenger checks
+     private boolean wasRiding;
+     private boolean wasOnGround;
+     @Nullable
+     private List<SynchedEntityData.DataValue<?>> trackedDataValues;
++    private final Set<net.minecraft.server.network.ServerPlayerConnection> trackedPlayers; // Paper
+ 
+-    public ServerEntity(ServerLevel p_8528_, Entity p_8529_, int p_8530_, boolean p_8531_, Consumer<Packet<?>> p_8532_) {
++    public ServerEntity(ServerLevel p_8528_, Entity p_8529_, int p_8530_, boolean p_8531_, Consumer<Packet<?>> p_8532_, final Set<net.minecraft.server.network.ServerPlayerConnection> trackedPlayers) {
++        this.trackedPlayers = trackedPlayers; // Paper
+         this.level = p_8528_;
+         this.broadcast = p_8532_;
+         this.entity = p_8529_;
+@@ -83,7 +_,19 @@
+         this.trackedDataValues = p_8529_.getEntityData().getNonDefaultValues();
      }
  
++    // Paper start - fix desync when a player is added to the tracker
++    private boolean forceStateResync;
++    public void onPlayerAdd() {
++        this.forceStateResync = true;
++    }
++    // Paper end - fix desync when a player is added to the tracker
++
      public void sendChanges() {
 +        // Paper start - optimise collisions
 +        if (((ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity)this.entity).moonrise$isHardColliding()) {
@@ -12,3 +38,48 @@
          List<Entity> list = this.entity.getPassengers();
          if (!list.equals(this.lastPassengers)) {
              this.broadcast.accept(new ClientboundSetPassengersPacket(this.entity));
+@@ -99,13 +_,14 @@
+             this.lastPassengers = list;
+         }
+ 
+-        if (this.entity instanceof ItemFrame itemframe && this.tickCount % 10 == 0) {
++        if (!this.trackedPlayers.isEmpty() && this.entity instanceof ItemFrame itemframe /* && this.tickCount % 10 == 0*/) { // CraftBukkit - moved tickCount below // Paper - Perf: Only tick item frames if players can see it
+             ItemStack itemstack = itemframe.getItem();
+-            if (true) {
+-                MapId mapid = itemstack.get(DataComponents.MAP_ID);
++            if (this.level.paperConfig().maps.itemFrameCursorUpdateInterval > 0 && this.tickCount % this.level.paperConfig().maps.itemFrameCursorUpdateInterval == 0 && itemstack.getItem() instanceof MapItem) { // CraftBukkit - Moved this.tickCounter % 10 logic here so item frames do not enter the other blocks // Paper - Make item frame map cursor update interval configurable
++                MapId mapid = itemframe.cachedMapId; // Paper - Perf: Cache map ids on item frames
+                 MapItemSavedData mapitemsaveddata = MapItem.getSavedData(itemstack, this.level);
+                 if (mapitemsaveddata != null) {
+-                    for (ServerPlayer serverplayer : this.level.players()) {
++                    for (final net.minecraft.server.network.ServerPlayerConnection connection : this.trackedPlayers) { // Paper
++                        final ServerPlayer serverplayer = connection.getPlayer(); // Paper
+                         mapitemsaveddata.tickCarriedBy(serverplayer, itemstack);
+                         Packet<?> packet = mapitemsaveddata.getUpdatePacket(mapid, serverplayer);
+                         if (packet != null) {
+@@ -118,7 +_,7 @@
+             this.sendDirtyEntityData();
+         }
+ 
+-        if (this.tickCount % this.updateInterval == 0 || this.entity.hasImpulse || this.entity.getEntityData().isDirty()) {
++        if (this.forceStateResync || this.tickCount % this.updateInterval == 0 || this.entity.hasImpulse || this.entity.getEntityData().isDirty()) { // Paper - fix desync when a player is added to the tracker
+             if (this.entity.isPassenger()) {
+                 int i1 = Mth.floor(this.entity.getYRot() * 256.0F / 360.0F);
+                 int l1 = Mth.floor(this.entity.getXRot() * 256.0F / 360.0F);
+@@ -147,7 +_,7 @@
+                 long j = this.positionCodec.encodeY(vec31);
+                 long k = this.positionCodec.encodeZ(vec31);
+                 boolean flag2 = i < -32768L || i > 32767L || j < -32768L || j > 32767L || k < -32768L || k > 32767L;
+-                if (flag2 || this.teleportDelay > 400 || this.wasRiding || this.wasOnGround != this.entity.onGround()) {
++                if (this.forceStateResync || flag2 || this.teleportDelay > 400 || this.wasRiding || this.wasOnGround != this.entity.onGround()) { // Paper - fix desync when a player is added to the tracker
+                     this.wasOnGround = this.entity.onGround();
+                     this.teleportDelay = 0;
+                     packet1 = new ClientboundTeleportEntityPacket(this.entity);
+@@ -217,6 +_,7 @@
+             }
+ 
+             this.entity.hasImpulse = false;
++            this.forceStateResync = false; // Paper - fix desync when a player is added to the tracker
+         }
+ 
+         this.tickCount++;

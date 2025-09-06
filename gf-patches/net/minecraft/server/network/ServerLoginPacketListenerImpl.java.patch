@@ -1,0 +1,71 @@
+--- a/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerLoginPacketListenerImpl.java
+@@ -47,11 +_,12 @@
+ public class ServerLoginPacketListenerImpl implements ServerLoginPacketListener, TickablePacketListener {
+     private static final AtomicInteger UNIQUE_THREAD_ID = new AtomicInteger(0);
+     static final Logger LOGGER = LogUtils.getLogger();
++    private static final java.util.concurrent.ExecutorService authenticatorPool = java.util.concurrent.Executors.newCachedThreadPool(new com.google.common.util.concurrent.ThreadFactoryBuilder().setNameFormat("User Authenticator #%d").setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER)).build()); // Paper - Cache authenticator threads
+     private static final int MAX_TICKS_BEFORE_LOGIN = 600;
+     private final byte[] challenge;
+     final MinecraftServer server;
+     final Connection connection;
+-    private volatile ServerLoginPacketListenerImpl.State state = ServerLoginPacketListenerImpl.State.HELLO;
++    public volatile ServerLoginPacketListenerImpl.State state = ServerLoginPacketListenerImpl.State.HELLO;
+     private int tick;
+     @Nullable
+     String requestedUsername;
+@@ -59,6 +_,7 @@
+     private GameProfile authenticatedProfile;
+     private final String serverId = "";
+     private final boolean transferred;
++    private volatile boolean disconnecting = false; // Paper - Fix disconnect still ticking login
+ 
+     public ServerLoginPacketListenerImpl(MinecraftServer p_10027_, Connection p_10028_, boolean p_320815_) {
+         this.server = p_10027_;
+@@ -69,6 +_,7 @@
+ 
+     @Override
+     public void tick() {
++        if (this.disconnecting) return; // Paper - Fix disconnect being called multiple times due to not awaiting for disconnect
+         if (this.state == ServerLoginPacketListenerImpl.State.VERIFYING) {
+             this.verifyLoginAndFinishConnectionSetup(Objects.requireNonNull(this.authenticatedProfile));
+         }
+@@ -93,6 +_,7 @@
+             LOGGER.info("Disconnecting {}: {}", this.getUserName(), p_10054_.getString());
+             this.connection.send(new ClientboundLoginDisconnectPacket(p_10054_));
+             this.connection.disconnect(p_10054_);
++            this.disconnecting = true; // Paper - Fix disconnect still ticking login
+         } catch (Exception exception) {
+             LOGGER.error("Error whilst disconnecting player", (Throwable)exception);
+         }
+@@ -184,7 +_,8 @@
+             throw new IllegalStateException("Protocol error", cryptexception);
+         }
+ 
+-        Thread thread = new Thread("User Authenticator #" + UNIQUE_THREAD_ID.incrementAndGet()) {
++        // Paper start - Cache authenticator threads
++        authenticatorPool.execute(new Runnable() {
+             @Override
+             public void run() {
+                 String s1 = Objects.requireNonNull(ServerLoginPacketListenerImpl.this.requestedUsername, "Player name not initialized");
+@@ -220,9 +_,8 @@
+                     ? ((InetSocketAddress)socketaddress).getAddress()
+                     : null;
+             }
+-        };
+-        thread.setUncaughtExceptionHandler(new DefaultUncaughtExceptionHandler(LOGGER));
+-        thread.start();
++        });
++        // Paper end - Cache authenticator threads
+     }
+ 
+     @Override
+@@ -253,7 +_,7 @@
+         this.disconnect(ServerCommonPacketListenerImpl.DISCONNECT_UNEXPECTED_QUERY);
+     }
+ 
+-    static enum State {
++    public static enum State {
+         HELLO,
+         KEY,
+         AUTHENTICATING,

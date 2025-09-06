@@ -58,6 +58,15 @@
          }
      }
  
+@@ -81,7 +_,7 @@
+         while (iterator.hasNext()) {
+             ScheduledTick<T> scheduledtick = iterator.next();
+             if (p_193184_.test(scheduledtick)) {
+-                iterator.remove();
++                iterator.remove(); this.dirty = true; // Paper - rewrite chunk system
+                 this.ticksPerPosition.remove(scheduledtick);
+             }
+         }
 @@ -98,6 +_,7 @@
  
      public ListTag save(long p_193174_, Function<T, String> p_193175_) {

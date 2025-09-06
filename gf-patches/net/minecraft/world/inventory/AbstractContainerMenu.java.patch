@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/inventory/AbstractContainerMenu.java
++++ b/net/minecraft/world/inventory/AbstractContainerMenu.java
+@@ -207,7 +_,7 @@
+         }
+     }
+ 
+-    private void triggerSlotListeners(int p_150408_, ItemStack p_150409_, Supplier<ItemStack> p_150410_) {
++    public void triggerSlotListeners(int p_150408_, ItemStack p_150409_, Supplier<ItemStack> p_150410_) {
+         ItemStack itemstack = this.lastSlots.get(p_150408_);
+         if (!ItemStack.matches(itemstack, p_150409_)) {
+             ItemStack itemstack1 = p_150410_.get();
+@@ -219,7 +_,7 @@
+         }
+     }
+ 
+-    private void synchronizeSlotToRemote(int p_150436_, ItemStack p_150437_, Supplier<ItemStack> p_150438_) {
++    public void synchronizeSlotToRemote(int p_150436_, ItemStack p_150437_, Supplier<ItemStack> p_150438_) {
+         if (!this.suppressRemoteUpdates) {
+             ItemStack itemstack = this.remoteSlots.get(p_150436_);
+             if (!ItemStack.matches(itemstack, p_150437_)) {

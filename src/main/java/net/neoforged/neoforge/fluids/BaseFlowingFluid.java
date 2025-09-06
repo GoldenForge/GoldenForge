@@ -96,7 +96,7 @@ public abstract class BaseFlowingFluid extends FlowingFluid {
     }
 
     @Override
-    protected int getDropOff(LevelReader worldIn) {
+    public int getDropOff(LevelReader worldIn) {
         return levelDecreasePerBlock;
     }
 
