@@ -1,12 +1,6 @@
 --- a/net/minecraft/server/level/ServerEntity.java
 +++ b/net/minecraft/server/level/ServerEntity.java
-@@ -62,13 +_,15 @@
-     private Vec3 lastSentMovement;
-     private int tickCount;
-     private int teleportDelay;
--    private List<Entity> lastPassengers = Collections.emptyList();
-+    private List<Entity> lastPassengers = com.google.common.collect.ImmutableList.of(); // Paper - optimize passenger checks
-     private boolean wasRiding;
+@@ -67,8 +_,10 @@
      private boolean wasOnGround;
      @Nullable
      private List<SynchedEntityData.DataValue<?>> trackedDataValues;

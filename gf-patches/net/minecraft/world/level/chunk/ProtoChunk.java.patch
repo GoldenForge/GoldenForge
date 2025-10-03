@@ -20,6 +20,32 @@
      public ProtoChunk(ChunkPos p_188167_, UpgradeData p_188168_, LevelHeightAccessor p_188169_, Registry<Biome> p_188170_, @Nullable BlendingData p_188171_) {
          this(p_188167_, p_188168_, null, new ProtoChunkTicks<>(), new ProtoChunkTicks<>(), p_188169_, p_188170_, p_188171_);
      }
+@@ -85,14 +_,19 @@
+ 
+     @Override
+     public BlockState getBlockState(BlockPos p_63264_) {
+-        int i = p_63264_.getY();
+-        if (this.isOutsideBuildHeight(i)) {
++        // Paper start
++        return this.getBlockState(p_63264_.getX(), p_63264_.getY(), p_63264_.getZ());
++    }
++
++    public BlockState getBlockState(final int x, final int y, final int z) {
++        // Paper end
++        if (this.isOutsideBuildHeight(y)) {
+             return Blocks.VOID_AIR.defaultBlockState();
+         } else {
+-            LevelChunkSection levelchunksection = this.getSection(this.getSectionIndex(i));
+-            return levelchunksection.hasOnlyAir()
+-                ? Blocks.AIR.defaultBlockState()
+-                : levelchunksection.getBlockState(p_63264_.getX() & 15, i & 15, p_63264_.getZ() & 15);
++            // Paper start
++            LevelChunkSection section = this.getSections()[this.getSectionIndex(y)];
++            return section.hasOnlyAir() ? Blocks.AIR.defaultBlockState() : section.getBlockState(x & 15, y & 15, z & 15);
++            // Paper end
+         }
+     }
+ 
 @@ -133,7 +_,7 @@
                      }
  

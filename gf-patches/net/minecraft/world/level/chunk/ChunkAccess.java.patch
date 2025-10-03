@@ -137,6 +137,15 @@
      }
  
      private static void replaceMissingSections(Registry<Biome> p_281389_, LevelChunkSection[] p_282796_) {
+@@ -123,6 +_,8 @@
+         return GameEventListenerRegistry.NOOP;
+     }
+ 
++    public abstract BlockState getBlockState(final int x, final int y, final int z); // Paper
++
+     @Nullable
+     public abstract BlockState setBlockState(BlockPos p_62087_, BlockState p_62088_, boolean p_62089_);
+ 
 @@ -144,7 +_,7 @@
      }
  

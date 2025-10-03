@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/chunk/EmptyLevelChunk.java
 +++ b/net/minecraft/world/level/chunk/EmptyLevelChunk.java
-@@ -21,6 +_,40 @@
+@@ -21,10 +_,51 @@
          this.biome = p_204424_;
      }
  
@@ -41,3 +41,14 @@
      @Override
      public BlockState getBlockState(BlockPos p_62625_) {
          return Blocks.VOID_AIR.defaultBlockState();
+     }
++
++    // Paper start
++    @Override
++    public BlockState getBlockState(final int x, final int y, final int z) {
++        return Blocks.VOID_AIR.defaultBlockState();
++    }
++    // Paper end
+ 
+     @Nullable
+     @Override

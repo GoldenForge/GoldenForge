@@ -8,7 +8,7 @@
 -    private boolean keepAlivePending;
 -    private long keepAliveChallenge;
 +    //private long keepAliveTime; // Paper - improve keepalives
-+    //private boolean keepAlivePending; // Paper - improve keepalives
++    private boolean keepAlivePending; // Paper - improve keepalives // Goldenforge: keep this for connectivity mod compat
 +    //private long keepAliveChallenge; // Paper - improve keepalives
      private long closedListenerTime;
      private boolean closed = false;

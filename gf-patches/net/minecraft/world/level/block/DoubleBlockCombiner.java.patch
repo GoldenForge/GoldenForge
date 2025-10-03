@@ -1,0 +1,16 @@
+--- a/net/minecraft/world/level/block/DoubleBlockCombiner.java
++++ b/net/minecraft/world/level/block/DoubleBlockCombiner.java
+@@ -34,7 +_,12 @@
+                 return new DoubleBlockCombiner.NeighborCombineResult.Single<>(s);
+             } else {
+                 BlockPos blockpos = p_52829_.relative(p_52825_.apply(p_52827_));
+-                BlockState blockstate = p_52828_.getBlockState(blockpos);
++                // Paper start - Don't load Chunks from Hoppers and other things
++                BlockState blockstate = p_52828_.getBlockStateIfLoaded(blockpos);
++                if (blockstate == null) {
++                    return new DoubleBlockCombiner.NeighborCombineResult.Single<>(s);
++                }
++                // Paper end - Don't load Chunks from Hoppers and other things
+                 if (blockstate.is(p_52827_.getBlock())) {
+                     DoubleBlockCombiner.BlockType doubleblockcombiner$blocktype1 = p_52824_.apply(blockstate);
+                     if (doubleblockcombiner$blocktype1 != DoubleBlockCombiner.BlockType.SINGLE

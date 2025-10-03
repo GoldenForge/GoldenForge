@@ -9,11 +9,10 @@
      private final LevelChunk wrapped;
      private final boolean allowWrites;
  
-@@ -46,6 +_,48 @@
-         this.wrapped = p_187920_;
+@@ -47,6 +_,48 @@
          this.allowWrites = p_187921_;
      }
-+
+ 
 +    // Paper start - rewrite chunk system
 +    @Override
 +    public ca.spottedleaf.moonrise.patches.starlight.light.SWMRNibbleArray[] starlight$getBlockNibbles() {
@@ -55,6 +54,21 @@
 +        ((ca.spottedleaf.moonrise.patches.starlight.chunk.StarlightChunk)this.wrapped).starlight$setBlockEmptinessMap(emptinessMap);
 +    }
 +    // Paper end - rewrite chunk system
- 
++
      @Nullable
      @Override
+     public BlockEntity getBlockEntity(BlockPos p_62744_) {
+@@ -57,6 +_,13 @@
+     public BlockState getBlockState(BlockPos p_62749_) {
+         return this.wrapped.getBlockState(p_62749_);
+     }
++
++    // Paper start
++    @Override
++    public final BlockState getBlockState(final int x, final int y, final int z) {
++        return this.wrapped.getBlockStateFinal(x, y, z);
++    }
++    // Paper end
+ 
+     @Override
+     public FluidState getFluidState(BlockPos p_62736_) {
