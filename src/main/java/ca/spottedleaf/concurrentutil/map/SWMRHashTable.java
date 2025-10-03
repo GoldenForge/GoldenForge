@@ -4,18 +4,8 @@ import ca.spottedleaf.concurrentutil.util.CollectionUtil;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import ca.spottedleaf.concurrentutil.util.HashUtil;
 import ca.spottedleaf.concurrentutil.util.IntegerUtil;
-import ca.spottedleaf.concurrentutil.util.Validate;
 import java.lang.invoke.VarHandle;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
-import java.util.Spliterator;
-import java.util.Spliterators;
+import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BiPredicate;
@@ -174,7 +164,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @param other The specified map.
      */
     public SWMRHashTable(final int capacity, final float loadFactor, final Map<K, V> other) {
-        this(Math.max(Validate.notNull(other, "Null map").size(), capacity), loadFactor);
+        this(Math.max(Objects.requireNonNull(other, "Null map").size(), capacity), loadFactor);
         this.putAll(other);
     }
 
@@ -324,7 +314,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * {@inheritDoc}
      */
     @Override
-    public Iterator<Entry<K, V>> iterator() {
+    public Iterator<Map.Entry<K, V>> iterator() {
         return new EntryIterator<>(this.getTableAcquire(), this);
     }
 
@@ -332,8 +322,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * {@inheritDoc}
      */
     @Override
-    public void forEach(final Consumer<? super Entry<K, V>> action) {
-        Validate.notNull(action, "Null action");
+    public void forEach(final Consumer<? super Map.Entry<K, V>> action) {
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<K, V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -348,7 +338,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public void forEach(final BiConsumer<? super K, ? super V> action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<K, V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -365,7 +355,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @param action The specified consumer.
      */
     public void forEachKey(final Consumer<? super K> action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<K, V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -380,7 +370,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @param action The specified consumer.
      */
     public void forEachValue(final Consumer<? super V> action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<K, V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -397,7 +387,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V get(final Object key) {
-        Validate.notNull(key, "Null key");
+        Objects.requireNonNull(key, "Null key");
 
         //noinspection unchecked
         final TableEntry<K, V> entry = this.getEntryForOpaque((K)key);
@@ -409,7 +399,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public boolean containsKey(final Object key) {
-        Validate.notNull(key, "Null key");
+        Objects.requireNonNull(key, "Null key");
 
         // note: we need to use getValueAcquire, so that the reads from this map are ordered by acquire semantics
         return this.get(key) != null;
@@ -422,7 +412,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @return {@code true} if this map contains an entry with the specified key and value.
      */
     public boolean contains(final Object key, final Object value) {
-        Validate.notNull(key, "Null key");
+        Objects.requireNonNull(key, "Null key");
 
         //noinspection unchecked
         final TableEntry<K, V> entry = this.getEntryForOpaque((K)key);
@@ -440,7 +430,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public boolean containsValue(final Object value) {
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(value, "Null value");
 
         final TableEntry<K, V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -460,7 +450,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V getOrDefault(final Object key, final V defaultValue) {
-        Validate.notNull(key, "Null key");
+        Objects.requireNonNull(key, "Null key");
 
         //noinspection unchecked
         final TableEntry<K, V> entry = this.getEntryForOpaque((K)key);
@@ -499,7 +489,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
     }
 
     @Override
-    public Set<Entry<K, V>> entrySet() {
+    public Set<Map.Entry<K, V>> entrySet() {
         return this.entrySet == null ? this.entrySet = new EntrySet<>(this) : this.entrySet;
     }
 
@@ -622,7 +612,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @return The total number of key-value pairs removed from this map.
      */
     public int removeIf(final BiPredicate<K, V> predicate) {
-        Validate.notNull(predicate, "Null predicate");
+        Objects.requireNonNull(predicate, "Null predicate");
 
         int removed = 0;
 
@@ -674,8 +664,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @param predicate The predicate to test key-value pairs against.
      * @return The total number of key-value pairs removed from this map.
      */
-    public int removeEntryIf(final Predicate<? super Entry<K, V>> predicate) {
-        Validate.notNull(predicate, "Null predicate");
+    public int removeEntryIf(final Predicate<? super Map.Entry<K, V>> predicate) {
+        Objects.requireNonNull(predicate, "Null predicate");
 
         int removed = 0;
 
@@ -726,8 +716,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V put(final K key, final V value) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(value, "Null value");
 
         return this.put(key, value, false);
     }
@@ -737,8 +727,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V putIfAbsent(final K key, final V value) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(value, "Null value");
 
         return this.put(key, value, true);
     }
@@ -748,8 +738,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public boolean remove(final Object key, final Object value) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(value, "Null value");
 
         final TableEntry<K, V>[] table = this.getTablePlain();
         final int hash = SWMRHashTable.getHash(key);
@@ -824,7 +814,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V remove(final Object key) {
-        Validate.notNull(key, "Null key");
+        Objects.requireNonNull(key, "Null key");
 
         return this.remove(key, SWMRHashTable.getHash(key));
     }
@@ -834,9 +824,9 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public boolean replace(final K key, final V oldValue, final V newValue) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(oldValue, "Null oldValue");
-        Validate.notNull(newValue, "Null newValue");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(oldValue, "Null oldValue");
+        Objects.requireNonNull(newValue, "Null newValue");
 
         final TableEntry<K, V> entry = this.getEntryForPlain(key);
         if (entry == null) {
@@ -857,8 +847,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V replace(final K key, final V value) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(value, "Null value");
 
         final TableEntry<K, V> entry = this.getEntryForPlain(key);
         if (entry == null) {
@@ -875,7 +865,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public void replaceAll(final BiFunction<? super K, ? super V, ? extends V> function) {
-        Validate.notNull(function, "Null function");
+        Objects.requireNonNull(function, "Null function");
 
         final TableEntry<K, V>[] table = this.getTablePlain();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -897,7 +887,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public void putAll(final Map<? extends K, ? extends V> map) {
-        Validate.notNull(map, "Null map");
+        Objects.requireNonNull(map, "Null map");
 
         final int size = map.size();
         this.checkResize(Math.max(this.getSizePlain() + size/2, size)); /* preemptively resize */
@@ -922,8 +912,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V compute(final K key, final BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(remappingFunction, "Null remappingFunction");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(remappingFunction, "Null remappingFunction");
 
         final int hash = SWMRHashTable.getHash(key);
         final TableEntry<K, V>[] table = this.getTablePlain();
@@ -975,8 +965,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V computeIfPresent(final K key, final BiFunction<? super K, ? super V, ? extends V> remappingFunction) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(remappingFunction, "Null remappingFunction");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(remappingFunction, "Null remappingFunction");
 
         final int hash = SWMRHashTable.getHash(key);
         final TableEntry<K, V>[] table = this.getTablePlain();
@@ -1012,8 +1002,8 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V computeIfAbsent(final K key, final Function<? super K, ? extends V> mappingFunction) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(mappingFunction, "Null mappingFunction");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(mappingFunction, "Null mappingFunction");
 
         final int hash = SWMRHashTable.getHash(key);
         final TableEntry<K, V>[] table = this.getTablePlain();
@@ -1051,9 +1041,9 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      */
     @Override
     public V merge(final K key, final V value, final BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-        Validate.notNull(key, "Null key");
-        Validate.notNull(value, "Null value");
-        Validate.notNull(remappingFunction, "Null remappingFunction");
+        Objects.requireNonNull(key, "Null key");
+        Objects.requireNonNull(value, "Null value");
+        Objects.requireNonNull(remappingFunction, "Null remappingFunction");
 
         final int hash = SWMRHashTable.getHash(key);
         final TableEntry<K, V>[] table = this.getTablePlain();
@@ -1094,7 +1084,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
     }
 
-    protected static final class TableEntry<K, V> implements Entry<K, V> {
+    protected static final class TableEntry<K, V> implements Map.Entry<K, V> {
 
         protected static final VarHandle TABLE_ENTRY_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(TableEntry[].class);
 
@@ -1315,14 +1305,14 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
     }
 
-    protected static final class EntryIterator<K, V> extends TableEntryIterator<K, V, Entry<K, V>> {
+    protected static final class EntryIterator<K, V> extends TableEntryIterator<K, V, Map.Entry<K, V>> {
 
         protected EntryIterator(final TableEntry<K, V>[] table, final SWMRHashTable<K, V> map) {
             super(table, map);
         }
 
         @Override
-        public Entry<K, V> next() {
+        public Map.Entry<K, V> next() {
             final TableEntry<K, V> curr = this.advanceEntry();
 
             if (curr == null) {
@@ -1353,7 +1343,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public boolean removeAll(final Collection<?> collection) {
-            Validate.notNull(collection, "Null collection");
+            Objects.requireNonNull(collection, "Null collection");
 
             boolean modified = false;
             for (final Object element : collection) {
@@ -1379,7 +1369,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public boolean containsAll(final Collection<?> collection) {
-            Validate.notNull(collection, "Null collection");
+            Objects.requireNonNull(collection, "Null collection");
 
             for (final Object element : collection) {
                 if (!this.contains(element)) {
@@ -1457,7 +1447,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
     }
 
-    protected static final class EntrySet<K, V> extends ViewSet<K, V, Entry<K, V>> implements Set<Entry<K, V>> {
+    protected static final class EntrySet<K, V> extends ViewSet<K, V, Map.Entry<K, V>> implements Set<Map.Entry<K, V>> {
 
         protected EntrySet(final SWMRHashTable<K, V> map) {
             super(map);
@@ -1483,28 +1473,28 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
 
         @Override
-        public boolean removeIf(final Predicate<? super Entry<K, V>> filter) {
-            Validate.notNull(filter, "Null filter");
+        public boolean removeIf(final Predicate<? super Map.Entry<K, V>> filter) {
+            Objects.requireNonNull(filter, "Null filter");
 
             return this.map.removeEntryIf(filter) != 0;
         }
 
         @Override
         public boolean retainAll(final Collection<?> collection) {
-            Validate.notNull(collection, "Null collection");
+            Objects.requireNonNull(collection, "Null collection");
 
-            return this.map.removeEntryIf((final Entry<K, V> entry) -> {
+            return this.map.removeEntryIf((final Map.Entry<K, V> entry) -> {
                 return !collection.contains(entry);
             }) != 0;
         }
 
         @Override
-        public Iterator<Entry<K, V>> iterator() {
+        public Iterator<Map.Entry<K, V>> iterator() {
             return new EntryIterator<>(this.map.getTableAcquire(), this.map);
         }
 
         @Override
-        public void forEach(final Consumer<? super Entry<K, V>> action) {
+        public void forEach(final Consumer<? super Map.Entry<K, V>> action) {
             this.map.forEach(action);
         }
 
@@ -1546,28 +1536,28 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public void forEach(final Consumer<? super K> action) {
-            Validate.notNull(action, "Null action");
+            Objects.requireNonNull(action, "Null action");
 
             this.map.forEachKey(action);
         }
 
         @Override
         public boolean contains(final Object key) {
-            Validate.notNull(key, "Null key");
+            Objects.requireNonNull(key, "Null key");
 
             return this.map.containsKey(key);
         }
 
         @Override
         public boolean remove(final Object key) {
-            Validate.notNull(key, "Null key");
+            Objects.requireNonNull(key, "Null key");
 
             return this.map.remove(key) != null;
         }
 
         @Override
         public boolean retainAll(final Collection<?> collection) {
-            Validate.notNull(collection, "Null collection");
+            Objects.requireNonNull(collection, "Null collection");
 
             return this.map.removeIf((final K key, final V value) -> {
                 return !collection.contains(key);
@@ -1576,7 +1566,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public boolean removeIf(final Predicate<? super K> filter) {
-            Validate.notNull(filter, "Null filter");
+            Objects.requireNonNull(filter, "Null filter");
 
             return this.map.removeIf((final K key, final V value) -> {
                 return filter.test(key);
@@ -1602,21 +1592,21 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public void forEach(final Consumer<? super V> action) {
-            Validate.notNull(action, "Null action");
+            Objects.requireNonNull(action, "Null action");
 
             this.map.forEachValue(action);
         }
 
         @Override
         public boolean contains(final Object object) {
-            Validate.notNull(object, "Null object");
+            Objects.requireNonNull(object, "Null object");
 
             return this.map.containsValue(object);
         }
 
         @Override
         public boolean remove(final Object object) {
-            Validate.notNull(object, "Null object");
+            Objects.requireNonNull(object, "Null object");
 
             final Iterator<V> itr = this.iterator();
             while (itr.hasNext()) {
@@ -1632,7 +1622,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public boolean removeIf(final Predicate<? super V> filter) {
-            Validate.notNull(filter, "Null filter");
+            Objects.requireNonNull(filter, "Null filter");
 
             return this.map.removeIf((final K key, final V value) -> {
                 return filter.test(value);
@@ -1641,7 +1631,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
 
         @Override
         public boolean retainAll(final Collection<?> collection) {
-            Validate.notNull(collection, "Null collection");
+            Objects.requireNonNull(collection, "Null collection");
 
             return this.map.removeIf((final K key, final V value) -> {
                 return !collection.contains(value);

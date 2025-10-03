@@ -4,9 +4,9 @@ import ca.spottedleaf.concurrentutil.function.BiLongObjectConsumer;
 import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
 import ca.spottedleaf.concurrentutil.util.HashUtil;
 import ca.spottedleaf.concurrentutil.util.IntegerUtil;
-import ca.spottedleaf.concurrentutil.util.Validate;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
 
@@ -142,7 +142,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * @param other The specified map.
      */
     public SWMRLong2ObjectHashTable(final int capacity, final float loadFactor, final SWMRLong2ObjectHashTable<V> other) {
-        this(Math.max(Validate.notNull(other, "Null map").size(), capacity), loadFactor);
+        this(Math.max(Objects.requireNonNull(other, "Null map").size(), capacity), loadFactor);
         this.putAll(other);
     }
 
@@ -291,7 +291,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * {@inheritDoc}
      */
     public void forEach(final Consumer<? super TableEntry<V>> action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -305,7 +305,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * {@inheritDoc}
      */
     public void forEach(final BiLongObjectConsumer<? super V> action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -322,7 +322,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * @param action The specified consumer.
      */
     public void forEachKey(final LongConsumer action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -337,7 +337,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * @param action The specified consumer.
      */
     public void forEachValue(final Consumer<? super V> action) {
-        Validate.notNull(action, "Null action");
+        Objects.requireNonNull(action, "Null action");
 
         final TableEntry<V>[] table = this.getTableAcquire();
         for (int i = 0, len = table.length; i < len; ++i) {
@@ -496,7 +496,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * {@inheritDoc}
      */
     public V put(final long key, final V value) {
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(value, "Null value");
 
         return this.put(key, value, false);
     }
@@ -505,7 +505,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * {@inheritDoc}
      */
     public V putIfAbsent(final long key, final V value) {
-        Validate.notNull(value, "Null value");
+        Objects.requireNonNull(value, "Null value");
 
         return this.put(key, value, true);
     }
@@ -591,7 +591,7 @@ public class SWMRLong2ObjectHashTable<V> {
      * {@inheritDoc}
      */
     public void putAll(final SWMRLong2ObjectHashTable<? extends V> map) {
-        Validate.notNull(map, "Null map");
+        Objects.requireNonNull(map, "Null map");
 
         final int size = map.size();
         this.checkResize(Math.max(this.getSizePlain() + size/2, size)); /* preemptively resize */
@@ -612,53 +612,53 @@ public class SWMRLong2ObjectHashTable<V> {
 
     public static final class TableEntry<V> {
 
-        protected static final VarHandle TABLE_ENTRY_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(TableEntry[].class);
+        private static final VarHandle TABLE_ENTRY_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(TableEntry[].class);
 
-        protected final long key;
-        protected V value;
+        private final long key;
+        private V value;
 
-        protected TableEntry<V> next;
+        private TableEntry<V> next;
 
-        protected static final VarHandle VALUE_HANDLE = ConcurrentUtil.getVarHandle(TableEntry.class, "value", Object.class);
-        protected static final VarHandle NEXT_HANDLE = ConcurrentUtil.getVarHandle(TableEntry.class, "next", TableEntry.class);
+        private static final VarHandle VALUE_HANDLE = ConcurrentUtil.getVarHandle(TableEntry.class, "value", Object.class);
+        private static final VarHandle NEXT_HANDLE = ConcurrentUtil.getVarHandle(TableEntry.class, "next", TableEntry.class);
 
         /* value */
 
-        protected final V getValuePlain() {
+        private V getValuePlain() {
             //noinspection unchecked
             return (V)VALUE_HANDLE.get(this);
         }
 
-        protected final V getValueAcquire() {
+        private V getValueAcquire() {
             //noinspection unchecked
             return (V)VALUE_HANDLE.getAcquire(this);
         }
 
-        protected final void setValueRelease(final V to) {
+        private void setValueRelease(final V to) {
             VALUE_HANDLE.setRelease(this, to);
         }
 
         /* next */
 
-        protected final TableEntry<V> getNextPlain() {
+        private TableEntry<V> getNextPlain() {
             //noinspection unchecked
             return (TableEntry<V>)NEXT_HANDLE.get(this);
         }
 
-        protected final TableEntry<V> getNextOpaque() {
+        private TableEntry<V> getNextOpaque() {
             //noinspection unchecked
             return (TableEntry<V>)NEXT_HANDLE.getOpaque(this);
         }
 
-        protected final void setNextPlain(final TableEntry<V> next) {
+        private void setNextPlain(final TableEntry<V> next) {
             NEXT_HANDLE.set(this, next);
         }
 
-        protected final void setNextRelease(final TableEntry<V> next) {
+        private void setNextRelease(final TableEntry<V> next) {
             NEXT_HANDLE.setRelease(this, next);
         }
 
-        protected TableEntry(final long key, final V value) {
+        private TableEntry(final long key, final V value) {
             this.key = key;
             this.value = value;
         }
