@@ -3,6 +3,7 @@ package ca.spottedleaf.concurrentutil.executor.thread;
 import ca.spottedleaf.concurrentutil.list.COWArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Arrays;
 import java.util.function.Consumer;
 

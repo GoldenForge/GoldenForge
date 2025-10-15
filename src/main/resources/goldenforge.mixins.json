@@ -13,7 +13,8 @@
     "fixes.industrialforegoing.ProcessExplosionMixin",
     "fixes.distanthorizons.BatchGenerationEnvironmentMixin",
     "fixes.copycatsplus.OutlinedVoxelShapeMixin",
-    "fixes.eclipticseasons.MapCheckerMixin"
+    "fixes.eclipticseasons.MapCheckerMixin",
+    "patches.collisions.ShapesMixin"
   ],
   "client": [],
   "injectors": {

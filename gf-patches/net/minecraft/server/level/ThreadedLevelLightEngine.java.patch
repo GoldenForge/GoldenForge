@@ -1,6 +1,6 @@
 --- a/net/minecraft/server/level/ThreadedLevelLightEngine.java
 +++ b/net/minecraft/server/level/ThreadedLevelLightEngine.java
-@@ -23,15 +_,127 @@
+@@ -23,15 +_,144 @@
  import net.minecraft.world.level.lighting.LevelLightEngine;
  import org.slf4j.Logger;
  
@@ -59,8 +59,25 @@
 +        final java.util.Map<net.minecraft.world.level.ChunkPos, Long> ticketIds = new java.util.HashMap<>();
 +        final ServerLevel world = (ServerLevel)this.starlight$getLightEngine().getWorld();
 +
++        if (chunks.isEmpty()) {
++            if (onComplete != null) {
++                onComplete.accept(0);
++            }
++            return 0;
++        }
++
++        int minX = Integer.MAX_VALUE;
++        int minZ = Integer.MAX_VALUE;
++        int maxZ = Integer.MIN_VALUE;
++        int maxX = Integer.MIN_VALUE;
++
 +        for (final java.util.Iterator<net.minecraft.world.level.ChunkPos> iterator = chunks.iterator(); iterator.hasNext();) {
 +            final ChunkPos pos = iterator.next();
++
++            minX = Math.min(pos.x, minX);
++            minZ = Math.min(pos.z, minZ);
++            maxX = Math.max(pos.x, maxX);
++            maxZ = Math.max(pos.z, maxZ);
 +
 +            final Long id = ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.getNextChunkRelightId();
 +            ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)world).moonrise$getChunkTaskScheduler().chunkHolderManager.addTicketAtLevel(ca.spottedleaf.moonrise.patches.chunk_system.scheduling.ChunkTaskScheduler.CHUNK_RELIGHT, pos, ca.spottedleaf.moonrise.patches.starlight.light.StarLightInterface.LIGHT_TICKET_LEVEL, id);
@@ -76,7 +93,7 @@
 +            }
 +        }
 +
-+        ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)world).moonrise$getChunkTaskScheduler().radiusAwareScheduler.queueInfiniteRadiusTask(() -> {
++        ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)world).moonrise$getChunkTaskScheduler().radiusAwareScheduler.queueTask(minX, minZ, maxX, maxZ, () -> {
 +            ThreadedLevelLightEngine.this.starlight$getLightEngine().relightChunks(
 +                    chunks,
 +                    (final ChunkPos pos) -> {

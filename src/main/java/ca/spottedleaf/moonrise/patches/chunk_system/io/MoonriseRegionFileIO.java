@@ -1,26 +1,38 @@
 package ca.spottedleaf.moonrise.patches.chunk_system.io;
 
-import ca.spottedleaf.concurrentutil.collection.*;
-import ca.spottedleaf.concurrentutil.completable.*;
-import ca.spottedleaf.concurrentutil.executor.*;
-import ca.spottedleaf.concurrentutil.executor.queue.*;
-import ca.spottedleaf.concurrentutil.function.*;
-import ca.spottedleaf.concurrentutil.map.*;
-import ca.spottedleaf.concurrentutil.util.*;
-import ca.spottedleaf.moonrise.common.util.*;
-import ca.spottedleaf.moonrise.patches.chunk_system.level.*;
-import it.unimi.dsi.fastutil.objects.*;
-import net.minecraft.nbt.*;
-import net.minecraft.server.*;
-import net.minecraft.server.level.*;
-import net.minecraft.world.level.chunk.storage.*;
-import org.slf4j.*;
-
-import java.io.*;
-import java.lang.invoke.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import java.util.function.*;
+import ca.spottedleaf.concurrentutil.collection.MultiThreadedQueue;
+import ca.spottedleaf.concurrentutil.completable.CallbackCompletable;
+import ca.spottedleaf.concurrentutil.completable.Completable;
+import ca.spottedleaf.concurrentutil.executor.Cancellable;
+import ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor;
+import ca.spottedleaf.concurrentutil.executor.queue.AreaDependentQueue;
+import ca.spottedleaf.concurrentutil.executor.queue.PrioritisedTaskQueue;
+import ca.spottedleaf.concurrentutil.function.BiLong1Function;
+import ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable;
+import ca.spottedleaf.concurrentutil.util.ConcurrentUtil;
+import ca.spottedleaf.concurrentutil.util.Priority;
+import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
+import ca.spottedleaf.moonrise.common.util.TickThread;
+import ca.spottedleaf.moonrise.common.util.WorldUtil;
+import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel;
+import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.storage.RegionFile;
+import net.minecraft.world.level.chunk.storage.RegionFileStorage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public final class MoonriseRegionFileIO {
 
@@ -67,7 +79,7 @@ public final class MoonriseRegionFileIO {
          * @param type The RegionFile type.
          * @param data The result to set.
          */
-        public void setData(final RegionFileType type, final CompoundTag data) {
+        public void setData(final MoonriseRegionFileIO.RegionFileType type, final CompoundTag data) {
             final int index = type.ordinal();
 
             if (this.hasResult[index]) {
@@ -84,7 +96,7 @@ public final class MoonriseRegionFileIO {
          * @param type The RegionFile type.
          * @param throwable The result to set.
          */
-        public void setThrowable(final RegionFileType type, final Throwable throwable) {
+        public void setThrowable(final MoonriseRegionFileIO.RegionFileType type, final Throwable throwable) {
             final int index = type.ordinal();
 
             if (this.hasResult[index]) {
@@ -101,7 +113,7 @@ public final class MoonriseRegionFileIO {
          *
          * @return Whether a result exists for {@code type}.
          */
-        public boolean hasResult(final RegionFileType type) {
+        public boolean hasResult(final MoonriseRegionFileIO.RegionFileType type) {
             return this.hasResult[type.ordinal()];
         }
 
@@ -114,7 +126,7 @@ public final class MoonriseRegionFileIO {
          * @return The data result for the specified type. If the result is a {@code Throwable},
          * then returns {@code null}.
          */
-        public CompoundTag getData(final RegionFileType type) {
+        public CompoundTag getData(final MoonriseRegionFileIO.RegionFileType type) {
             final int index = type.ordinal();
 
             if (!this.hasResult[index]) {
@@ -133,7 +145,7 @@ public final class MoonriseRegionFileIO {
          * @return The throwable result for the specified type. If the result is an {@code CompoundTag},
          * then returns {@code null}.
          */
-        public Throwable getThrowable(final RegionFileType type) {
+        public Throwable getThrowable(final MoonriseRegionFileIO.RegionFileType type) {
             final int index = type.ordinal();
 
             if (!this.hasResult[index]) {
@@ -234,10 +246,10 @@ public final class MoonriseRegionFileIO {
      * @param chunkZ Specified chunk z.
      * @param priority New priority.
      *
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #raisePriority(ServerLevel, int, int, Priority)
+     * @see #raisePriority(ServerLevel, int, int, RegionFileType, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, RegionFileType, Priority)
      */
     public static void setPriority(final ServerLevel world, final int chunkX, final int chunkZ,
                                    final Priority priority) {
@@ -257,10 +269,10 @@ public final class MoonriseRegionFileIO {
      * @param type Specified regionfile type.
      * @param priority New priority.
      *
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #raisePriority(ServerLevel, int, int, Priority)
+     * @see #raisePriority(ServerLevel, int, int, RegionFileType, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, RegionFileType, Priority)
      */
     public static void setPriority(final ServerLevel world, final int chunkX, final int chunkZ, final RegionFileType type,
                                    final Priority priority) {
@@ -280,10 +292,10 @@ public final class MoonriseRegionFileIO {
      * @param chunkZ Specified chunk z.
      * @param priority New priority.
      *
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #setPriority(ServerLevel, int, int, Priority)
+     * @see #setPriority(ServerLevel, int, int, RegionFileType, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, RegionFileType, Priority)
      */
     public static void raisePriority(final ServerLevel world, final int chunkX, final int chunkZ,
                                      final Priority priority) {
@@ -301,10 +313,10 @@ public final class MoonriseRegionFileIO {
      * @param type Specified regionfile type.
      * @param priority New priority.
      *
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #lowerPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #setPriority(ServerLevel, int, int, Priority)
+     * @see #setPriority(ServerLevel, int, int, RegionFileType, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, Priority)
+     * @see #lowerPriority(ServerLevel, int, int, RegionFileType, Priority)
      */
     public static void raisePriority(final ServerLevel world, final int chunkX, final int chunkZ, final RegionFileType type,
                                      final Priority priority) {
@@ -324,10 +336,10 @@ public final class MoonriseRegionFileIO {
      * @param chunkZ Specified chunk z.
      * @param priority New priority.
      *
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #raisePriority(ServerLevel, int, int, Priority)
+     * @see #raisePriority(ServerLevel, int, int, RegionFileType, Priority)
+     * @see #setPriority(ServerLevel, int, int, Priority)
+     * @see #setPriority(ServerLevel, int, int, RegionFileType, Priority)
      */
     public static void lowerPriority(final ServerLevel world, final int chunkX, final int chunkZ,
                                      final Priority priority) {
@@ -345,10 +357,10 @@ public final class MoonriseRegionFileIO {
      * @param type Specified regionfile type.
      * @param priority New priority.
      *
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #raisePriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #setPriority(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #raisePriority(ServerLevel, int, int, Priority)
+     * @see #raisePriority(ServerLevel, int, int, RegionFileType, Priority)
+     * @see #setPriority(ServerLevel, int, int, Priority)
+     * @see #setPriority(ServerLevel, int, int, RegionFileType, Priority)
      */
     public static void lowerPriority(final ServerLevel world, final int chunkX, final int chunkZ, final RegionFileType type,
                                      final Priority priority) {
@@ -411,10 +423,10 @@ public final class MoonriseRegionFileIO {
     public static void scheduleSave(final ServerLevel world, final int chunkX, final int chunkZ, final CompoundTag data,
                                     final RegionFileType type, final Priority priority) {
         scheduleSave(
-            world, chunkX, chunkZ,
-            (final BiConsumer<CompoundTag, Throwable> consumer) -> {
-                consumer.accept(data, null);
-            }, null, type, priority
+                world, chunkX, chunkZ,
+                (final BiConsumer<CompoundTag, Throwable> consumer) -> {
+                    consumer.accept(data, null);
+                }, null, type, priority
         );
     }
 
@@ -487,26 +499,26 @@ public final class MoonriseRegionFileIO {
         final boolean[] created = new boolean[1];
         final ChunkIOTask.InProgressWrite write = new ChunkIOTask.InProgressWrite(writeTask);
         final ChunkIOTask task = taskController.chunkTasks.compute(CoordinateUtils.getChunkKey(chunkX, chunkZ),
-            (final long keyInMap, final ChunkIOTask taskRunning) -> {
-                if (taskRunning == null || taskRunning.failedWrite) {
-                    // no task is scheduled or the previous write failed - meaning we need to overwrite it
+                (final long keyInMap, final ChunkIOTask taskRunning) -> {
+                    if (taskRunning == null || taskRunning.failedWrite) {
+                        // no task is scheduled or the previous write failed - meaning we need to overwrite it
 
-                    // create task
-                    final ChunkIOTask newTask = new ChunkIOTask(
-                        world, taskController, chunkX, chunkZ, priority, new ChunkIOTask.InProgressRead()
-                    );
+                        // create task
+                        final ChunkIOTask newTask = new ChunkIOTask(
+                                world, taskController, chunkX, chunkZ, priority, new ChunkIOTask.InProgressRead()
+                        );
 
-                    newTask.pushPendingWrite(write);
+                        newTask.pushPendingWrite(write);
 
-                    created[0] = true;
+                        created[0] = true;
 
-                    return newTask;
+                        return newTask;
+                    }
+
+                    taskRunning.pushPendingWrite(write);
+
+                    return taskRunning;
                 }
-
-                taskRunning.pushPendingWrite(write);
-
-                return taskRunning;
-            }
         );
 
         write.schedule(task, scheduler);
@@ -521,7 +533,7 @@ public final class MoonriseRegionFileIO {
 
     /**
      * Schedules a load to be executed asynchronously. This task will load all regionfile types, and then call
-     * {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean)}
+     * {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean)}
      * for single load.
      * <p>
      *     Impl notes:
@@ -539,12 +551,12 @@ public final class MoonriseRegionFileIO {
      * @param intendingToBlock Whether the caller is intending to block on completion. This only affects the cost
      *                         of this call.
      *
-     * @return The {@link ca.spottedleaf.concurrentutil.executor.Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
+     * @return The {@link Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
      *
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean)
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean, Priority)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, RegionFileType...)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, Priority, RegionFileType...)
      */
     public static Cancellable loadAllChunkData(final ServerLevel world, final int chunkX, final int chunkZ,
                                                final Consumer<RegionFileData> onComplete, final boolean intendingToBlock) {
@@ -553,7 +565,7 @@ public final class MoonriseRegionFileIO {
 
     /**
      * Schedules a load to be executed asynchronously. This task will load all regionfile types, and then call
-     * {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)}
+     * {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean, Priority)}
      * for single load.
      * <p>
      *     Impl notes:
@@ -572,12 +584,12 @@ public final class MoonriseRegionFileIO {
      *                         of this call.
      * @param priority The minimum priority to load the data at.
      *
-     * @return The {@link ca.spottedleaf.concurrentutil.executor.Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
+     * @return The {@link Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
      *
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean)
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean, Priority)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, RegionFileType...)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, Priority, RegionFileType...)
      */
     public static Cancellable loadAllChunkData(final ServerLevel world, final int chunkX, final int chunkZ,
                                                final Consumer<RegionFileData> onComplete, final boolean intendingToBlock,
@@ -587,7 +599,7 @@ public final class MoonriseRegionFileIO {
 
     /**
      * Schedules a load to be executed asynchronously. This task will load data for the specified regionfile type(s), and
-     * then call {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean)}
+     * then call {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean)}
      * for single load.
      * <p>
      *     Impl notes:
@@ -606,12 +618,12 @@ public final class MoonriseRegionFileIO {
      *                         of this call.
      * @param types The regionfile type(s) to load.
      *
-     * @return The {@link ca.spottedleaf.concurrentutil.executor.Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
+     * @return The {@link Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
      *
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean)
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean, Priority)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean, Priority)
      */
     public static Cancellable loadChunkData(final ServerLevel world, final int chunkX, final int chunkZ,
                                             final Consumer<RegionFileData> onComplete, final boolean intendingToBlock,
@@ -621,7 +633,7 @@ public final class MoonriseRegionFileIO {
 
     /**
      * Schedules a load to be executed asynchronously. This task will load data for the specified regionfile type(s), and
-     * then call {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)}
+     * then call {@code onComplete}. This is a bulk load operation, see {@link #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean, Priority)}
      * for single load.
      * <p>
      *     Impl notes:
@@ -641,12 +653,12 @@ public final class MoonriseRegionFileIO {
      * @param types The regionfile type(s) to load.
      * @param priority The minimum priority to load the data at.
      *
-     * @return The {@link ca.spottedleaf.concurrentutil.executor.Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
+     * @return The {@link Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
      *
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean)
-     * @see #loadDataAsync(net.minecraft.server.level.ServerLevel, int, int, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType, java.util.function.BiConsumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean)
+     * @see #loadDataAsync(ServerLevel, int, int, RegionFileType, BiConsumer, boolean, Priority)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean, Priority)
      */
     public static Cancellable loadChunkData(final ServerLevel world, final int chunkX, final int chunkZ,
                                             final Consumer<RegionFileData> onComplete, final boolean intendingToBlock,
@@ -667,17 +679,17 @@ public final class MoonriseRegionFileIO {
         for (int i = 0; i < expectedCompletions; ++i) {
             final RegionFileType type = types[i];
             reads[i] = MoonriseRegionFileIO.loadDataAsync(world, chunkX, chunkZ, type,
-                (final CompoundTag data, final Throwable throwable) -> {
-                    if (throwable != null) {
-                        ret.setThrowable(type, throwable);
-                    } else {
-                        ret.setData(type, data);
-                    }
+                    (final CompoundTag data, final Throwable throwable) -> {
+                        if (throwable != null) {
+                            ret.setThrowable(type, throwable);
+                        } else {
+                            ret.setData(type, data);
+                        }
 
-                    if (completions.incrementAndGet() == expectedCompletions) {
-                        onComplete.accept(ret);
-                    }
-                }, intendingToBlock, priority);
+                        if (completions.incrementAndGet() == expectedCompletions) {
+                            onComplete.accept(ret);
+                        }
+                    }, intendingToBlock, priority);
         }
 
         return new CancellableReads(reads);
@@ -702,12 +714,12 @@ public final class MoonriseRegionFileIO {
      * @param intendingToBlock Whether the caller is intending to block on completion. This only affects the cost
      *                         of this call.
      *
-     * @return The {@link ca.spottedleaf.concurrentutil.executor.Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
+     * @return The {@link Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
      *
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, RegionFileType...)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, Priority, RegionFileType...)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean, Priority)
      */
     public static Cancellable loadDataAsync(final ServerLevel world, final int chunkX, final int chunkZ,
                                             final RegionFileType type, final BiConsumer<CompoundTag, Throwable> onComplete,
@@ -735,12 +747,12 @@ public final class MoonriseRegionFileIO {
      *                         of this call.
      * @param priority Minimum priority to load the data at.
      *
-     * @return The {@link ca.spottedleaf.concurrentutil.executor.Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
+     * @return The {@link Cancellable} for this chunk load. Cancelling it will not affect other loads for the same chunk data.
      *
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
-     * @see #loadChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority, ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO.RegionFileType...)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean)
-     * @see #loadAllChunkData(net.minecraft.server.level.ServerLevel, int, int, java.util.function.Consumer, boolean, ca.spottedleaf.concurrentutil.util.Priority)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, RegionFileType...)
+     * @see #loadChunkData(ServerLevel, int, int, Consumer, boolean, Priority, RegionFileType...)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean)
+     * @see #loadAllChunkData(ServerLevel, int, int, Consumer, boolean, Priority)
      */
     public static Cancellable loadDataAsync(final ServerLevel world, final int chunkX, final int chunkZ,
                                             final RegionFileType type, final BiConsumer<CompoundTag, Throwable> onComplete,
@@ -756,7 +768,7 @@ public final class MoonriseRegionFileIO {
 
                 // set up task
                 final ChunkIOTask newTask = new ChunkIOTask(
-                    world, taskController, chunkX, chunkZ, priority, new ChunkIOTask.InProgressRead()
+                        world, taskController, chunkX, chunkZ, priority, new ChunkIOTask.InProgressRead()
                 );
                 newTask.inProgressRead.addToAsyncWaiters(onComplete);
 
@@ -837,7 +849,7 @@ public final class MoonriseRegionFileIO {
      *
      * @return The chunk data for the chunk. Note that a {@code null} result means the chunk or regionfile does not exist on disk.
      *
-     * @throws java.io.IOException If the load fails for any reason
+     * @throws IOException If the load fails for any reason
      */
     public static CompoundTag loadData(final ServerLevel world, final int chunkX, final int chunkZ, final RegionFileType type,
                                        final Priority priority) throws IOException {
@@ -857,7 +869,7 @@ public final class MoonriseRegionFileIO {
             throw new IOException(ex);
         }
     }
-    
+
     private static final class CancellableRead implements Cancellable {
 
         private BiConsumer<CompoundTag, Throwable> callback;
@@ -1026,7 +1038,7 @@ public final class MoonriseRegionFileIO {
         public void scheduleReadIO() {
             final PrioritisedExecutor.PrioritisedTask task;
             synchronized (this) {
-                task = this.regionDataController.ioScheduler.createTask(this.chunkX, this.chunkZ, this::performReadIO, this.priority);
+                task = this.regionDataController.createRegionIoTask(this.chunkX, this.chunkZ, this::performReadIO, this.priority);
                 this.currentTask = task;
             }
             task.queue();
@@ -1231,7 +1243,7 @@ public final class MoonriseRegionFileIO {
         private void scheduleWriteIO(final InProgressWrite inProgressWrite) {
             final PrioritisedExecutor.PrioritisedTask task;
             synchronized (this) {
-                task = this.regionDataController.ioScheduler.createTask(this.chunkX, this.chunkZ, () -> {
+                task = this.regionDataController.createRegionIoTask(this.chunkX, this.chunkZ, () -> {
                     ChunkIOTask.this.runWriteIO(inProgressWrite);
                 }, this.priority);
                 this.currentTask = task;
@@ -1403,8 +1415,8 @@ public final class MoonriseRegionFileIO {
 
         public final RegionFileType type;
         private final PrioritisedExecutor compressionExecutor;
-        private final IOScheduler ioScheduler;
         private final ConcurrentLong2ReferenceChainedHashTable<ChunkIOTask> chunkTasks = new ConcurrentLong2ReferenceChainedHashTable<>();
+        private final AreaDependentQueue regionIoQueue;
 
         private final AtomicLong inProgressTasks = new AtomicLong();
 
@@ -1412,7 +1424,13 @@ public final class MoonriseRegionFileIO {
                                     final PrioritisedExecutor compressionExecutor) {
             this.type = type;
             this.compressionExecutor = compressionExecutor;
-            this.ioScheduler = new IOScheduler(ioExecutor);
+            this.regionIoQueue = new AreaDependentQueue(ioExecutor, 5); // same as regionfile shift
+        }
+
+
+        public PrioritisedExecutor.PrioritisedTask createRegionIoTask(final int chunkX, final int chunkZ, final Runnable run,
+                                                                      final Priority priority) {
+            return this.regionIoQueue.createTask(chunkX >> 5, chunkZ >> 5, 0, run, priority);
         }
 
         final void startTask(final ChunkIOTask task) {
@@ -1461,237 +1479,6 @@ public final class MoonriseRegionFileIO {
 
             public void run(final RegionFile regionFile) throws IOException;
 
-        }
-    }
-
-    private static final class IOScheduler {
-
-        private final ConcurrentLong2ReferenceChainedHashTable<RegionIOTasks> regionTasks = new ConcurrentLong2ReferenceChainedHashTable<>();
-        private final PrioritisedExecutor executor;
-
-        public IOScheduler(final PrioritisedExecutor executor) {
-            this.executor = executor;
-        }
-
-        public PrioritisedExecutor.PrioritisedTask createTask(final int chunkX, final int chunkZ,
-                                                              final Runnable run, final Priority priority) {
-            final PrioritisedExecutor.PrioritisedTask[] ret = new PrioritisedExecutor.PrioritisedTask[1];
-            final long subOrder = this.executor.generateNextSubOrder();
-            this.regionTasks.compute(CoordinateUtils.getChunkKey(chunkX >> REGION_FILE_SHIFT, chunkZ >> REGION_FILE_SHIFT),
-                    (final long regionKey, final RegionIOTasks existing) -> {
-                final RegionIOTasks res;
-                if (existing != null) {
-                    res = existing;
-                } else {
-                    res = new RegionIOTasks(regionKey, IOScheduler.this);
-                }
-
-                ret[0] = res.createTask(run, priority, subOrder);
-
-                return res;
-            });
-
-            return ret[0];
-        }
-    }
-
-    private static final class RegionIOTasks implements Runnable {
-
-        private static final Logger LOGGER = LoggerFactory.getLogger(RegionIOTasks.class);
-
-        private final PrioritisedTaskQueue queue = new PrioritisedTaskQueue();
-        private final long regionKey;
-        private final IOScheduler ioScheduler;
-        private long createdTasks;
-        private long executedTasks;
-
-        private PrioritisedExecutor.PrioritisedTask task;
-
-        public RegionIOTasks(final long regionKey, final IOScheduler ioScheduler) {
-            this.regionKey = regionKey;
-            this.ioScheduler = ioScheduler;
-        }
-
-        public PrioritisedExecutor.PrioritisedTask createTask(final Runnable run, final Priority priority,
-                                                              final long subOrder) {
-            ++this.createdTasks;
-            return new WrappedTask(this.queue.createTask(run, priority, subOrder));
-        }
-
-        private void adjustTaskPriority() {
-            final PrioritisedTaskQueue.PrioritySubOrderPair priority = this.queue.getHighestPrioritySubOrder();
-            if (this.task == null) {
-                if (priority == null) {
-                    return;
-                }
-                this.task = this.ioScheduler.executor.createTask(this, priority.priority(), priority.subOrder());
-                this.task.queue();
-            } else {
-                if (priority == null) {
-                    throw new IllegalStateException();
-                } else {
-                    this.task.setPriorityAndSubOrder(priority.priority(), priority.subOrder());
-                }
-            }
-        }
-
-        @Override
-        public void run() {
-            final Runnable run;
-            synchronized (this) {
-                run = this.queue.pollTask();
-            }
-
-            try {
-                run.run();
-            } finally {
-                synchronized (this) {
-                    this.task = null;
-                    this.adjustTaskPriority();
-                }
-                this.ioScheduler.regionTasks.compute(this.regionKey, (final long keyInMap, final RegionIOTasks tasks) -> {
-                    if (tasks != RegionIOTasks.this) {
-                        throw new IllegalStateException("Region task mismatch");
-                    }
-                    ++tasks.executedTasks;
-                    if (tasks.createdTasks != tasks.executedTasks) {
-                        return tasks;
-                    }
-
-                    if (tasks.task != null) {
-                        throw new IllegalStateException("Task may not be null when created==executed");
-                    }
-
-                    return null;
-                });
-            }
-        }
-
-        private final class WrappedTask implements PrioritisedExecutor.PrioritisedTask {
-
-            private final PrioritisedExecutor.PrioritisedTask wrapped;
-
-            public WrappedTask(final PrioritisedExecutor.PrioritisedTask wrap) {
-                this.wrapped = wrap;
-            }
-
-            @Override
-            public PrioritisedExecutor getExecutor() {
-                return RegionIOTasks.this.ioScheduler.executor;
-            }
-
-            @Override
-            public boolean queue() {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.queue()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean isQueued() {
-                return this.wrapped.isQueued();
-            }
-
-            @Override
-            public boolean cancel() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public boolean execute() {
-                throw new UnsupportedOperationException();
-            }
-
-            @Override
-            public Priority getPriority() {
-                return this.wrapped.getPriority();
-            }
-
-            @Override
-            public boolean setPriority(final Priority priority) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.setPriority(priority) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean raisePriority(final Priority priority) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.raisePriority(priority) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean lowerPriority(final Priority priority) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.lowerPriority(priority) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public long getSubOrder() {
-                return this.wrapped.getSubOrder();
-            }
-
-            @Override
-            public boolean setSubOrder(final long subOrder) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.setSubOrder(subOrder) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean raiseSubOrder(final long subOrder) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.raiseSubOrder(subOrder) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean lowerSubOrder(final long subOrder) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.lowerSubOrder(subOrder) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
-
-            @Override
-            public boolean setPriorityAndSubOrder(final Priority priority, final long subOrder) {
-                synchronized (RegionIOTasks.this) {
-                    if (this.wrapped.setPriorityAndSubOrder(priority, subOrder) && this.wrapped.isQueued()) {
-                        RegionIOTasks.this.adjustTaskPriority();
-                        return true;
-                    }
-                    return false;
-                }
-            }
         }
     }
 }

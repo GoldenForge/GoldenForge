@@ -204,11 +204,3 @@
      }
  
      public void readBiomes(FriendlyByteBuf p_275669_) {
-@@ -160,6 +_,7 @@
-     }
- 
-     public void write(FriendlyByteBuf p_63012_) {
-+        org.goldenforge.GoldenForge.LOGGER.info("writting " + this.nonEmptyBlockCount);
-         p_63012_.writeShort(this.nonEmptyBlockCount);
-         this.states.write(p_63012_);
-         this.biomes.write(p_63012_);

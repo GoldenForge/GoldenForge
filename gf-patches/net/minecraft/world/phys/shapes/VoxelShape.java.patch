@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/phys/shapes/VoxelShape.java
 +++ b/net/minecraft/world/phys/shapes/VoxelShape.java
-@@ -15,275 +_,864 @@
+@@ -15,275 +_,876 @@
  import net.minecraft.world.phys.BlockHitResult;
  import net.minecraft.world.phys.Vec3;
  
@@ -165,13 +165,13 @@
 +
 +        if (direction.getAxisDirection() == Direction.AxisDirection.POSITIVE) {
 +            if (DoubleMath.fuzzyEquals(this.max(axis), 1.0, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON)) {
-+                ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, this.shape.getSize(axis) - 1, true)); // Goldenforge
++                ret = ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.sliceShape((VoxelShape)(Object)this, axis, this.shape.getSize(axis) - 1);
 +            } else {
 +                ret = Shapes.empty();
 +            }
 +        } else {
 +            if (DoubleMath.fuzzyEquals(this.min(axis), 0.0, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON)) {
-+                ret = tryForceBlock(new SliceShape((VoxelShape)(Object)this, axis, 0, true)); // Goldenforge
++                ret = ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.sliceShape((VoxelShape)(Object)this, axis, 0);
 +            } else {
 +                ret = Shapes.empty();
 +            }
@@ -180,23 +180,6 @@
 +        cache[direction.ordinal()] = ret;
 +
 +        return ret;
-+    }
-+
-+    private static VoxelShape tryForceBlock(final VoxelShape other) {
-+        if (other == Shapes.block()) {
-+            return other;
-+        }
-+
-+        final AABB otherAABB = ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)other).moonrise$getSingleAABBRepresentation();
-+        if (otherAABB == null) {
-+            return other;
-+        }
-+
-+        if (((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)Shapes.block()).moonrise$getSingleAABBRepresentation().equals(otherAABB)) {
-+            return Shapes.block();
-+        }
-+
-+        return other;
 +    }
 +
 +    private boolean computeOccludesFullBlock() {
@@ -296,18 +279,21 @@
 +        return result;
 +    }
 +
-+    private static DoubleList offsetList(final DoubleList src, final double by) {
-+        if (src instanceof OffsetDoubleList offsetDoubleList) {
-+            return new OffsetDoubleList(offsetDoubleList.delegate, by + offsetDoubleList.offset);
++    private static DoubleList offsetList(final double[] src, final double by) {
++        final it.unimi.dsi.fastutil.doubles.DoubleArrayList wrap = it.unimi.dsi.fastutil.doubles.DoubleArrayList.wrap(src);
++        if (by == 0.0) {
++            return wrap;
 +        }
-+        return new OffsetDoubleList(src, by);
++        return new OffsetDoubleList(wrap, by);
 +    }
 +
 +    private List<AABB> toAabbsUncached() {
-+        final List<AABB> ret = new java.util.ArrayList<>();
++        final List<AABB> ret;
 +        if (this.singleAABBRepresentation != null) {
++            ret = new java.util.ArrayList<>(1);
 +            ret.add(this.singleAABBRepresentation);
 +        } else {
++            ret = new java.util.ArrayList<>();
 +            final double[] coordsX = this.rootCoordinatesX;
 +            final double[] coordsY = this.rootCoordinatesY;
 +            final double[] coordsZ = this.rootCoordinatesZ;
@@ -428,6 +414,26 @@
 +
 +        final double minDistance = minDistanceArr[0];
 +        return new BlockHitResult(from.add(minDistance * diffX, minDistance * diffY, minDistance * diffZ), direction, offset, false);
++    }
++
++    private VoxelShape calculateFaceDirect(final Direction direction, final Direction.Axis axis, final double[] coords, final double offset) {
++        if (coords.length == 2 &&
++                DoubleMath.fuzzyEquals(coords[0] + offset, 0.0, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON) &&
++                DoubleMath.fuzzyEquals(coords[1] + offset, 1.0, ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON)) {
++            return (VoxelShape)(Object)this;
++        }
++
++        final boolean positiveDir = direction.getAxisDirection() == Direction.AxisDirection.POSITIVE;
++
++        // see findIndex
++        final int index = ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.findFloor(
++                coords, offset, (positiveDir ? (1.0 - ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON) : (0.0 + ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.COLLISION_EPSILON)),
++                0, coords.length - 1
++        );
++
++        return ca.spottedleaf.moonrise.patches.collisions.CollisionUtil.sliceShape(
++                (VoxelShape)(Object)this, axis, index
++        );
 +    }
 +    // Paper end - optimise collisions
 +
@@ -569,7 +575,7 @@
 -        return (VoxelShape)(this.isEmpty()
 -            ? Shapes.empty()
 -            : new ArrayVoxelShape(
-+    public VoxelShape move(double x, double y, double z) {
++    public VoxelShape move(double xOffset, double yOffset, double zOffset) {
 +        // Paper start - optimise collisions
 +        if (this.isEmpty) {
 +            return Shapes.empty();
@@ -581,14 +587,14 @@
 -                new OffsetDoubleList(this.getCoords(Direction.Axis.Y), p_83218_),
 -                new OffsetDoubleList(this.getCoords(Direction.Axis.Z), p_83219_)
 -            ));
-+                offsetList(this.getCoords(Direction.Axis.X), x),
-+                offsetList(this.getCoords(Direction.Axis.Y), y),
-+                offsetList(this.getCoords(Direction.Axis.Z), z)
++                offsetList(this.rootCoordinatesX, this.offsetX + xOffset),
++                offsetList(this.rootCoordinatesY, this.offsetY + yOffset),
++                offsetList(this.rootCoordinatesZ, this.offsetZ + zOffset)
 +        );
 +
 +        final ca.spottedleaf.moonrise.patches.collisions.shape.CachedToAABBs cachedToAABBs = this.cachedToAABBs;
 +        if (cachedToAABBs != null) {
-+            ((VoxelShape)(Object)ret).cachedToAABBs = ca.spottedleaf.moonrise.patches.collisions.shape.CachedToAABBs.offset(cachedToAABBs, x, y, z);
++            ((VoxelShape)(Object)ret).cachedToAABBs = ca.spottedleaf.moonrise.patches.collisions.shape.CachedToAABBs.offset(cachedToAABBs, xOffset, yOffset, zOffset);
 +        }
 +
 +        return ret;
@@ -947,17 +953,23 @@
 +    }
 +
 +    private VoxelShape calculateFace(Direction direction) {
-+        Direction.Axis axis = direction.getAxis();
-+        DoubleList doubleList = this.getCoords(axis);
-+        if (doubleList.size() == 2
-+                && DoubleMath.fuzzyEquals(doubleList.getDouble(0), 0.0, 1.0E-7)
-+                && DoubleMath.fuzzyEquals(doubleList.getDouble(1), 1.0, 1.0E-7)) {
-+            return this;
-+        } else {
-+            Direction.AxisDirection axisDirection = direction.getAxisDirection();
-+            int i = this.findIndex(axis, axisDirection == Direction.AxisDirection.POSITIVE ? 0.9999999 : 1.0E-7);
-+            return new SliceShape(this, axis, i, true); // Goldenforge
++        // Paper start - optimise collisions
++        final Direction.Axis axis = direction.getAxis();
++        switch (axis) {
++            case X: {
++                return this.calculateFaceDirect(direction, axis, this.rootCoordinatesX, this.offsetX);
++            }
++            case Y: {
++                return this.calculateFaceDirect(direction, axis, this.rootCoordinatesY, this.offsetY);
++            }
++            case Z: {
++                return this.calculateFaceDirect(direction, axis, this.rootCoordinatesZ, this.offsetZ);
++            }
++            default: {
++                throw new IllegalStateException("Unknown axis: " + axis);
++            }
 +        }
++        // Paper end - optimise collisions
 +    }
 +
 +    // Paper start - optimise collisions

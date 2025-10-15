@@ -67,7 +67,7 @@ public class TpsMonitorManager {
             tpsColor = "§4";
         }
 
-        double mspt = MinecraftServer.getServer().getAverageTickTime();
+        double mspt = MinecraftServer.getServer().getMSPTData5s().avg();
         String msptColor;
         if (mspt < 40) {
             msptColor = "§2";
