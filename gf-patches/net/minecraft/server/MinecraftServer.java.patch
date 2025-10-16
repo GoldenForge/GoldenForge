@@ -392,7 +392,7 @@
      }
  
      public String getLocalIp() {
-@@ -665,35 +_,181 @@
+@@ -665,35 +_,180 @@
          }
      }
  
@@ -526,7 +526,6 @@
              }
  
              net.neoforged.neoforge.server.ServerLifecycleHooks.handleServerStarted(this);
-+            this.LOGGER.info("Testing the new patches system !!");
              this.nextTickTimeNanos = Util.getNanos();
 +            this.initTickSchedule(); // Paper - improve tick loop
              this.statusIcon = this.loadStatusIcon().orElse(null);
