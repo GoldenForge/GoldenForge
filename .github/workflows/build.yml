@@ -2,7 +2,7 @@ name: Goldenforge nightly builds
 on:
   push:
     branches:
-      - dev/1.21.1/new-patch-system
+      - 1.21.1
 jobs:
   build:
     runs-on: [self-hosted, goldenforge]
