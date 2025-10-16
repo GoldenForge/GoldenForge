@@ -137,8 +137,8 @@ dependencies {
     implementation(jarJar(project(":neoforge-coremods")))
 
     //goldenforge
-    libraries "org.spongepowered:configurate-yaml:4.2.0-SNAPSHOT"
-    libraries "org.spongepowered:configurate-core:4.2.0-SNAPSHOT"
+    libraries "org.spongepowered:configurate-yaml:4.2.0"
+    libraries "org.spongepowered:configurate-core:4.2.0"
     libraries "io.leangen.geantyref:geantyref:1.3.16"
 
     compileOnly "curse.maven:snowudertrees-353942:5875647"
