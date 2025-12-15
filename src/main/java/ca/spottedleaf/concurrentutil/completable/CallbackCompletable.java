@@ -21,7 +21,7 @@ public final class CallbackCompletable<T> {
     }
 
     /**
-     * Note: Can only use after calling {@link #addAsynchronousWaiter(BiConsumer)}, as this function performs zero
+     * Note: Can only use after calling {@link #addAsynchronousWaiter(java.util.function.BiConsumer)}, as this function performs zero
      * synchronisation
      */
     public T getResult() {
@@ -29,7 +29,7 @@ public final class CallbackCompletable<T> {
     }
 
     /**
-     * Note: Can only use after calling {@link #addAsynchronousWaiter(BiConsumer)}, as this function performs zero
+     * Note: Can only use after calling {@link #addAsynchronousWaiter(java.util.function.BiConsumer)}, as this function performs zero
      * synchronisation
      */
     public Throwable getThrowable() {

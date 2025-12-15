@@ -102,7 +102,7 @@ public final class ScheduledTaskThreadPool {
      * Schedules the specified task to be executed on this thread pool.
      * @param tick Specified task
      * @throws IllegalStateException If the task is already scheduled
-     * @see SchedulableTick
+     * @see ca.spottedleaf.concurrentutil.scheduler.ScheduledTaskThreadPool.SchedulableTick
      */
     public void schedule(final SchedulableTick tick) {
 
@@ -111,7 +111,7 @@ public final class ScheduledTaskThreadPool {
     /**
      * Indicates that intermediate tasks are available to be executed by the task.
      * @param tick The specified task
-     * @see SchedulableTick
+     * @see ca.spottedleaf.concurrentutil.scheduler.ScheduledTaskThreadPool.SchedulableTick
      */
     public void notifyTasks(final SchedulableTick tick) {
 
@@ -139,10 +139,10 @@ public final class ScheduledTaskThreadPool {
      * advantage of downtime to reduce the intermediate task load from tasks once they begin ticking.
      * </p>
      * <p>
-     * It is guaranteed that {@link #runTick()} and {@link #runTasks(BooleanSupplier)} are never
+     * It is guaranteed that {@link #runTick()} and {@link #runTasks(java.util.function.BooleanSupplier)} are never
      * invoked in parallel.
-     * It is required that when intermediate tasks are scheduled, that {@link ScheduledTaskThreadPool#notifyTasks(SchedulableTick)}
-     * is invoked for any scheduled task - otherwise, {@link #runTasks(BooleanSupplier)} may not be invoked to
+     * It is required that when intermediate tasks are scheduled, that {@link ScheduledTaskThreadPool#notifyTasks(ca.spottedleaf.concurrentutil.scheduler.ScheduledTaskThreadPool.SchedulableTick)}
+     * is invoked for any scheduled task - otherwise, {@link #runTasks(java.util.function.BooleanSupplier)} may not be invoked to
      * parse intermediate tasks.
      * </p>
      */

@@ -28,8 +28,8 @@ import java.util.function.Predicate;
  * <h2>Atomicity of functional methods</h2>
  * <p>
  * Functional methods are functions declared in this class which possibly perform a write (remove, replace, or modify)
- * to an entry in this map as a result of invoking a function on an input parameter. For example, {@link #compute(long, BiLong1Function)},
- * {@link #merge(long, Object, BiFunction)} and {@link #removeIf(long, Predicate)} are examples of functional methods.
+ * to an entry in this map as a result of invoking a function on an input parameter. For example, {@link #compute(long, ca.spottedleaf.concurrentutil.function.BiLong1Function)},
+ * {@link #merge(long, Object, java.util.function.BiFunction)} and {@link #removeIf(long, java.util.function.Predicate)} are examples of functional methods.
  * Functional methods will be performed atomically, that is, the input parameter is guaranteed to only be invoked at most
  * once per function call. The consequence of this behavior however is that a critical lock for a bin entry is held, which
  * means that if the input parameter invocation makes additional calls to write into this hash table that the result
@@ -198,7 +198,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> implements Iterable<Con
 
     /**
      * Returns the possible node associated with the key, or {@code null} if there is no such node. The node
-     * returned may have a {@code null} {@link TableEntry#value}, in which case the node is a placeholder for
+     * returned may have a {@code null} {@link ca.spottedleaf.concurrentutil.map.ConcurrentLong2ReferenceChainedHashTable.TableEntry#value}, in which case the node is a placeholder for
      * a compute/computeIfAbsent call. The placeholder node should not be considered mapped in order to preserve
      * happens-before relationships between writes and reads in the map.
      */
@@ -912,7 +912,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> implements Iterable<Con
     }
 
     /**
-     * See {@link java.util.concurrent.ConcurrentMap#compute(Object, BiFunction)}
+     * See {@link java.util.concurrent.ConcurrentMap#compute(Object, java.util.function.BiFunction)}
      * <p>
      * This function is a "functional methods" as defined by {@link ConcurrentLong2ReferenceChainedHashTable}.
      * </p>
@@ -1026,7 +1026,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> implements Iterable<Con
     }
 
     /**
-     * See {@link java.util.concurrent.ConcurrentMap#computeIfAbsent(Object, Function)}
+     * See {@link java.util.concurrent.ConcurrentMap#computeIfAbsent(Object, java.util.function.Function)}
      * <p>
      * This function is a "functional methods" as defined by {@link ConcurrentLong2ReferenceChainedHashTable}.
      * </p>
@@ -1125,7 +1125,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> implements Iterable<Con
     }
 
     /**
-     * See {@link java.util.concurrent.ConcurrentMap#computeIfPresent(Object, BiFunction)}
+     * See {@link java.util.concurrent.ConcurrentMap#computeIfPresent(Object, java.util.function.BiFunction)}
      * <p>
      * This function is a "functional methods" as defined by {@link ConcurrentLong2ReferenceChainedHashTable}.
      * </p>
@@ -1193,7 +1193,7 @@ public class ConcurrentLong2ReferenceChainedHashTable<V> implements Iterable<Con
     }
 
     /**
-     * See {@link java.util.concurrent.ConcurrentMap#merge(Object, Object, BiFunction)}
+     * See {@link java.util.concurrent.ConcurrentMap#merge(Object, Object, java.util.function.BiFunction)}
      * <p>
      * This function is a "functional methods" as defined by {@link ConcurrentLong2ReferenceChainedHashTable}.
      * </p>

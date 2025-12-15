@@ -178,7 +178,7 @@ public final class SchedulerThreadPool {
      * Schedules the specified task to be executed on this thread pool.
      * @param task Specified task
      * @throws IllegalStateException If the task is already scheduled
-     * @see SchedulableTick
+     * @see ca.spottedleaf.concurrentutil.scheduler.SchedulerThreadPool.SchedulableTick
      */
     public void schedule(final SchedulableTick task) {
         synchronized (this.scheduleLock) {
@@ -276,7 +276,7 @@ public final class SchedulerThreadPool {
      * Note: currently a no-op
      * </p>
      * @param task The specified task
-     * @see SchedulableTick
+     * @see ca.spottedleaf.concurrentutil.scheduler.SchedulerThreadPool.SchedulableTick
      */
     public void notifyTasks(final SchedulableTick task) {
         // Not implemented
@@ -295,13 +295,13 @@ public final class SchedulerThreadPool {
      * advantage of downtime to reduce the intermediate task load from tasks once they begin ticking.
      * </p>
      * <p>
-     * It is guaranteed that {@link #runTick()} and {@link #runTasks(BooleanSupplier)} are never
+     * It is guaranteed that {@link #runTick()} and {@link #runTasks(java.util.function.BooleanSupplier)} are never
      * invoked in parallel.
-     * It is required that when intermediate tasks are scheduled, that {@link SchedulerThreadPool#notifyTasks(SchedulableTick)}
-     * is invoked for any scheduled task - otherwise, {@link #runTasks(BooleanSupplier)} may not be invoked to
+     * It is required that when intermediate tasks are scheduled, that {@link SchedulerThreadPool#notifyTasks(ca.spottedleaf.concurrentutil.scheduler.SchedulerThreadPool.SchedulableTick)}
+     * is invoked for any scheduled task - otherwise, {@link #runTasks(java.util.function.BooleanSupplier)} may not be invoked to
      * parse intermediate tasks.
      * </p>
-     * @deprecated To be replaced by {@link ScheduledTaskThreadPool.SchedulableTick}
+     * @deprecated To be replaced by {@link ca.spottedleaf.concurrentutil.scheduler.ScheduledTaskThreadPool.SchedulableTick}
      */
     @Deprecated
     public static abstract class SchedulableTick {
@@ -337,7 +337,7 @@ public final class SchedulerThreadPool {
 
         /**
          * If this task is scheduled, then this may only be invoked during {@link #runTick()},
-         * and {@link #runTasks(BooleanSupplier)}
+         * and {@link #runTasks(java.util.function.BooleanSupplier)}
          */
         protected final void setScheduledStart(final long value) {
             this.scheduledStart = value;

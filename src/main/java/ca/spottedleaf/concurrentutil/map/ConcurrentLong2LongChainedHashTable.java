@@ -24,7 +24,7 @@ import java.util.function.LongPredicate;
  * <p>
  * Functional methods are functions declared in this class which possibly perform a write (remove, replace, or modify)
  * to an entry in this map as a result of invoking a function on an input parameter. For example,
- * {@link #removeIf(long, LongPredicate)} is an example of functional a method. Functional methods will be performed atomically,
+ * {@link #removeIf(long, java.util.function.LongPredicate)} is an example of functional a method. Functional methods will be performed atomically,
  * that is, the input parameter is guaranteed to only be invoked at most once per function call. The consequence of this
  * behavior however is that a critical lock for a bin entry is held, which means that if the input parameter invocation
  * makes additional calls to write into this hash table that the result is undefined and deadlock-prone.
@@ -185,7 +185,7 @@ public class ConcurrentLong2LongChainedHashTable implements Iterable<ConcurrentL
 
     /**
      * Returns the possible node associated with the key, or {@code null} if there is no such node. The node
-     * returned may have a {@code null} {@link TableEntry#value}, in which case the node is a placeholder for
+     * returned may have a {@code null} {@link ca.spottedleaf.concurrentutil.map.ConcurrentLong2LongChainedHashTable.TableEntry#value}, in which case the node is a placeholder for
      * a compute/computeIfAbsent call. The placeholder node should not be considered mapped in order to preserve
      * happens-before relationships between writes and reads in the map.
      */
@@ -1356,12 +1356,12 @@ public class ConcurrentLong2LongChainedHashTable implements Iterable<ConcurrentL
 
     public static final class TableEntry {
 
-        private static final VarHandle TABLE_ENTRY_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(ConcurrentLong2LongChainedHashTable.TableEntry[].class);
+        private static final VarHandle TABLE_ENTRY_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(TableEntry[].class);
 
         private final long key;
 
         private volatile long value;
-        private static final VarHandle VALUE_HANDLE = ConcurrentUtil.getVarHandle(ConcurrentLong2LongChainedHashTable.TableEntry.class, "value", long.class);
+        private static final VarHandle VALUE_HANDLE = ConcurrentUtil.getVarHandle(TableEntry.class, "value", long.class);
 
         private long getValuePlain() {
             return (long)VALUE_HANDLE.get(this);
@@ -1387,26 +1387,26 @@ public class ConcurrentLong2LongChainedHashTable implements Iterable<ConcurrentL
             VALUE_HANDLE.setVolatile(this, value);
         }
 
-        private volatile ConcurrentLong2LongChainedHashTable.TableEntry next;
-        private static final VarHandle NEXT_HANDLE = ConcurrentUtil.getVarHandle(ConcurrentLong2LongChainedHashTable.TableEntry.class, "next", ConcurrentLong2LongChainedHashTable.TableEntry.class);
+        private volatile TableEntry next;
+        private static final VarHandle NEXT_HANDLE = ConcurrentUtil.getVarHandle(TableEntry.class, "next", TableEntry.class);
 
-        private ConcurrentLong2LongChainedHashTable.TableEntry getNextPlain() {
-            return (ConcurrentLong2LongChainedHashTable.TableEntry)NEXT_HANDLE.get(this);
+        private TableEntry getNextPlain() {
+            return (TableEntry)NEXT_HANDLE.get(this);
         }
 
-        private ConcurrentLong2LongChainedHashTable.TableEntry getNextVolatile() {
-            return (ConcurrentLong2LongChainedHashTable.TableEntry)NEXT_HANDLE.getVolatile(this);
+        private TableEntry getNextVolatile() {
+            return (TableEntry)NEXT_HANDLE.getVolatile(this);
         }
 
-        private void setNextPlain(final ConcurrentLong2LongChainedHashTable.TableEntry next) {
+        private void setNextPlain(final TableEntry next) {
             NEXT_HANDLE.set(this, next);
         }
 
-        private void setNextRelease(final ConcurrentLong2LongChainedHashTable.TableEntry next) {
+        private void setNextRelease(final TableEntry next) {
             NEXT_HANDLE.setRelease(this, next);
         }
 
-        private void setNextVolatile(final ConcurrentLong2LongChainedHashTable.TableEntry next) {
+        private void setNextVolatile(final TableEntry next) {
             NEXT_HANDLE.setVolatile(this, next);
         }
 

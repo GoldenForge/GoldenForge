@@ -136,7 +136,7 @@ public final class BalancedPrioritisedThreadPool {
 
     /**
      * Shuts down this thread pool, optionally waiting for all tasks to be executed.
-     * This function will invoke {@link PrioritisedExecutor#shutdown()} on all created executors on this
+     * This function will invoke {@link ca.spottedleaf.concurrentutil.executor.PrioritisedExecutor#shutdown()} on all created executors on this
      * thread pool.
      * @param wait Whether to wait for tasks to be executed
      */
@@ -198,6 +198,10 @@ public final class BalancedPrioritisedThreadPool {
                     thread.start();
                 }
             }
+        }
+
+        for (final WorkerThread thread : this.threads.getArray()) {
+            thread.notifyTasks();
         }
     }
 

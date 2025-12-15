@@ -23,14 +23,14 @@ public interface PrioritisedExecutor {
     /**
      * Executes the next available task.
      * <p>
-     *     If there is a task with priority {@link Priority#BLOCKING} available, then that such task is executed.
+     *     If there is a task with priority {@link ca.spottedleaf.concurrentutil.util.Priority#BLOCKING} available, then that such task is executed.
      * </p>
      * <p>
-     *     If there is a task with priority {@link Priority#IDLE} available then that task is only executed
+     *     If there is a task with priority {@link ca.spottedleaf.concurrentutil.util.Priority#IDLE} available then that task is only executed
      *     when there are no other tasks available with a higher priority.
      * </p>
      * <p>
-     *     If there are no tasks that have priority {@link Priority#BLOCKING} or {@link Priority#IDLE}, then
+     *     If there are no tasks that have priority {@link ca.spottedleaf.concurrentutil.util.Priority#BLOCKING} or {@link ca.spottedleaf.concurrentutil.util.Priority#IDLE}, then
      *     this function will be biased to execute tasks that have higher priorities.
      * </p>
      *
@@ -62,7 +62,7 @@ public interface PrioritisedExecutor {
     public boolean isShutdown();
 
     /**
-     * Queues or executes a task at {@link Priority#NORMAL} priority.
+     * Queues or executes a task at {@link ca.spottedleaf.concurrentutil.util.Priority#NORMAL} priority.
      * @param task The task to run.
      *
      * @throws IllegalStateException If this executor has shutdown.
@@ -104,7 +104,7 @@ public interface PrioritisedExecutor {
                                      final long stream);
 
     /**
-     * Creates, but does not queue or execute, a task at {@link Priority#NORMAL} priority.
+     * Creates, but does not queue or execute, a task at {@link ca.spottedleaf.concurrentutil.util.Priority#NORMAL} priority.
      * @param task The task to run.
      *
      * @throws NullPointerException If the task is null
@@ -114,7 +114,7 @@ public interface PrioritisedExecutor {
     public PrioritisedTask createTask(final Runnable task);
 
     /**
-     * Creates, but does not queue or execute, a task at {@link Priority#NORMAL} priority.
+     * Creates, but does not queue or execute, a task at {@link ca.spottedleaf.concurrentutil.util.Priority#NORMAL} priority.
      *
      * @param task The task to run.
      * @param priority The priority for the task.
@@ -127,7 +127,7 @@ public interface PrioritisedExecutor {
     public PrioritisedTask createTask(final Runnable task, final Priority priority);
 
     /**
-     * Creates, but does not queue or execute, a task at {@link Priority#NORMAL} priority.
+     * Creates, but does not queue or execute, a task at {@link ca.spottedleaf.concurrentutil.util.Priority#NORMAL} priority.
      *
      * @param task The task to run.
      * @param priority The priority for the task.
@@ -185,7 +185,7 @@ public interface PrioritisedExecutor {
         public boolean execute();
 
         /**
-         * Returns the current priority. Note that {@link Priority#COMPLETING} will be returned
+         * Returns the current priority. Note that {@link ca.spottedleaf.concurrentutil.util.Priority#COMPLETING} will be returned
          * if this task is completing or has completed.
          */
         public Priority getPriority();

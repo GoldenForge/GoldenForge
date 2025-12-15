@@ -14,7 +14,7 @@ import java.util.function.Predicate;
  * This queue should out-perform {@link java.util.concurrent.ConcurrentLinkedQueue} in high-contention reads/writes, and is
  * not any slower in lower contention reads/writes.
  * <p>
- * Note that this queue breaks the specification laid out by {@link Collection}, see {@link #preventAdds()} and {@link Collection#add(Object)}.
+ * Note that this queue breaks the specification laid out by {@link java.util.Collection}, see {@link #preventAdds()} and {@link java.util.Collection#add(Object)}.
  * </p>
  * <p><b>
  * This queue will only unlink linked nodes through the {@link #peek()} and {@link #poll()} methods, and this is only if
@@ -140,7 +140,7 @@ public class MultiThreadedQueue<E> implements Queue<E> {
     /**
      * {@inheritDoc}
      * <p>
-     * Contrary to the specification of {@link Collection#add}, this method will fail to add the element to this queue
+     * Contrary to the specification of {@link java.util.Collection#add}, this method will fail to add the element to this queue
      * and return {@code false} if this queue is add-blocked.
      * </p>
      */

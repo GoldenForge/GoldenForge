@@ -314,7 +314,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * {@inheritDoc}
      */
     @Override
-    public Iterator<Map.Entry<K, V>> iterator() {
+    public Iterator<Entry<K, V>> iterator() {
         return new EntryIterator<>(this.getTableAcquire(), this);
     }
 
@@ -322,7 +322,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * {@inheritDoc}
      */
     @Override
-    public void forEach(final Consumer<? super Map.Entry<K, V>> action) {
+    public void forEach(final Consumer<? super Entry<K, V>> action) {
         Objects.requireNonNull(action, "Null action");
 
         final TableEntry<K, V>[] table = this.getTableAcquire();
@@ -489,7 +489,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
     }
 
     @Override
-    public Set<Map.Entry<K, V>> entrySet() {
+    public Set<Entry<K, V>> entrySet() {
         return this.entrySet == null ? this.entrySet = new EntrySet<>(this) : this.entrySet;
     }
 
@@ -664,7 +664,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
      * @param predicate The predicate to test key-value pairs against.
      * @return The total number of key-value pairs removed from this map.
      */
-    public int removeEntryIf(final Predicate<? super Map.Entry<K, V>> predicate) {
+    public int removeEntryIf(final Predicate<? super Entry<K, V>> predicate) {
         Objects.requireNonNull(predicate, "Null predicate");
 
         int removed = 0;
@@ -1084,7 +1084,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
     }
 
-    protected static final class TableEntry<K, V> implements Map.Entry<K, V> {
+    protected static final class TableEntry<K, V> implements Entry<K, V> {
 
         protected static final VarHandle TABLE_ENTRY_ARRAY_HANDLE = ConcurrentUtil.getArrayHandle(TableEntry[].class);
 
@@ -1305,14 +1305,14 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
     }
 
-    protected static final class EntryIterator<K, V> extends TableEntryIterator<K, V, Map.Entry<K, V>> {
+    protected static final class EntryIterator<K, V> extends TableEntryIterator<K, V, Entry<K, V>> {
 
         protected EntryIterator(final TableEntry<K, V>[] table, final SWMRHashTable<K, V> map) {
             super(table, map);
         }
 
         @Override
-        public Map.Entry<K, V> next() {
+        public Entry<K, V> next() {
             final TableEntry<K, V> curr = this.advanceEntry();
 
             if (curr == null) {
@@ -1447,7 +1447,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
     }
 
-    protected static final class EntrySet<K, V> extends ViewSet<K, V, Map.Entry<K, V>> implements Set<Map.Entry<K, V>> {
+    protected static final class EntrySet<K, V> extends ViewSet<K, V, Entry<K, V>> implements Set<Entry<K, V>> {
 
         protected EntrySet(final SWMRHashTable<K, V> map) {
             super(map);
@@ -1473,7 +1473,7 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         }
 
         @Override
-        public boolean removeIf(final Predicate<? super Map.Entry<K, V>> filter) {
+        public boolean removeIf(final Predicate<? super Entry<K, V>> filter) {
             Objects.requireNonNull(filter, "Null filter");
 
             return this.map.removeEntryIf(filter) != 0;
@@ -1483,18 +1483,18 @@ public class SWMRHashTable<K, V> implements Map<K, V>, Iterable<Map.Entry<K, V>>
         public boolean retainAll(final Collection<?> collection) {
             Objects.requireNonNull(collection, "Null collection");
 
-            return this.map.removeEntryIf((final Map.Entry<K, V> entry) -> {
+            return this.map.removeEntryIf((final Entry<K, V> entry) -> {
                 return !collection.contains(entry);
             }) != 0;
         }
 
         @Override
-        public Iterator<Map.Entry<K, V>> iterator() {
+        public Iterator<Entry<K, V>> iterator() {
             return new EntryIterator<>(this.map.getTableAcquire(), this.map);
         }
 
         @Override
-        public void forEach(final Consumer<? super Map.Entry<K, V>> action) {
+        public void forEach(final Consumer<? super Entry<K, V>> action) {
             this.map.forEach(action);
         }
 
