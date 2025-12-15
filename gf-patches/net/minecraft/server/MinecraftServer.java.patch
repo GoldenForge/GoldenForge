@@ -28,7 +28,7 @@
      private static final int OVERLOADED_TICKS_THRESHOLD = 20;
      private static final long OVERLOADED_WARNING_INTERVAL_NANOS = 10L * TimeUtil.NANOSECONDS_PER_SECOND;
      private static final int OVERLOADED_TICKS_WARNING_INTERVAL = 100;
-@@ -236,7 +_,7 @@
+@@ -236,11 +_,12 @@
      private long lastOverloadWarningNanos;
      protected final Services services;
      private long lastServerStatus;
@@ -37,7 +37,12 @@
      private long lastTickNanos = Util.getNanos();
      private long taskExecutionStartNanos = Util.getNanos();
      private long idleTimeNanos;
-@@ -262,10 +_,112 @@
+     protected long nextTickTimeNanos = Util.getNanos();
++    private boolean waitingForNextTick = false;
+     private long delayedTasksMaxNextTickTimeNanos;
+     private boolean mayHaveDelayedTasks;
+     private final PackRepository packRepository;
+@@ -262,10 +_,113 @@
      private volatile boolean isSaving;
      private static final AtomicReference<RuntimeException> fatalException = new AtomicReference<>();
  
@@ -79,6 +84,7 @@
 +    private long lastTickStart;
 +    private long currentTickStart;
 +    private long scheduledTickStart;
++    private long taskExecutionTime;
 +    private final Object statsLock = new Object();
 +    private @Nullable double[] tps;
 +    private @Nullable ca.spottedleaf.moonrise.common.time.TickData.MSPTData msptData5s;
@@ -392,7 +398,7 @@
      }
  
      public String getLocalIp() {
-@@ -665,35 +_,180 @@
+@@ -665,35 +_,179 @@
          }
      }
  
@@ -425,9 +431,11 @@
 +                0L,
 +                now,
 +                0L,
-+                false,
-+                true
++                this.taskExecutionTime,
++                0L,
++                false
 +        );
++        this.taskExecutionTime = 0L;
 +
 +        this.addTickTime(time);
 +    }
@@ -475,44 +483,41 @@
 +        final ProfilerFiller profiler = this.profiler;
 +
 +        profiler.push("moonrise:execute_tasks_until_tick");
++        this.waitingForNextTick = true;
 +        // implement waitForTasks
 +        final boolean isLoggingEnabled = this.isTickTimeLoggingEnabled();
-+        final long deadline = this.nextTickTimeNanos;
-+        for (;;) {
-+            final long start = Util.getNanos();
-+            if (start - deadline >= 0L) {
-+                // start is ahead of deadline
-+                break;
-+            }
-+
-+            // execute tasks while there are tasks and there is time left
-+            // note: we do not need to bypass the task execution check here (like managedBlock) since it checks time
-+            while (this.pollTask() && (Util.getNanos() - deadline < 0L));
-+
-+            final long now = Util.getNanos();
-+
-+            // record execution time
-+            this.addTickTime(
-+                    new ca.spottedleaf.moonrise.common.time.TickTime(
-+                            ca.spottedleaf.concurrentutil.scheduler.SchedulerThreadPool.DEADLINE_NOT_SET, ca.spottedleaf.concurrentutil.scheduler.SchedulerThreadPool.DEADLINE_NOT_SET,
-+                            start, 0L,
-+                            now, 0L,
-+                            false,
-+                            false
-+                    )
-+            );
-+
-+            // wait for unpark or deadline
-+            final long toWait = deadline - now;
-+            if (toWait > 0L) {
-+                LockSupport.parkNanos("waiting for tick or tasks", toWait);
-+                if (isLoggingEnabled) {
-+                    this.idleTimeNanos += Util.getNanos() - now;
++        try {
++            final long deadline = this.nextTickTimeNanos;
++            for (;;) {
++                final long start = Util.getNanos();
++                if (start - deadline >= 0L) {
++                    // start is ahead of deadline
++                    break;
 +                }
-+            } else {
-+                // done
-+                break;
++
++                // execute tasks while there are tasks and there is time left
++                // note: we do not need to bypass the task execution check here (like managedBlock) since it checks time
++                while (this.pollTask() && (Util.getNanos() - deadline < 0L));
++
++                final long now = Util.getNanos();
++
++                // record execution time
++                this.taskExecutionTime += (now - start);
++
++                // wait for unpark or deadline
++                final long toWait = deadline - now;
++                if (toWait > 0L) {
++                    LockSupport.parkNanos("waiting for tick or tasks", toWait);
++                    if (isLoggingEnabled) {
++                        this.idleTimeNanos += Util.getNanos() - now;
++                    }
++                } else {
++                    // done
++                    break;
++                }
 +            }
++        } finally {
++            this.waitingForNextTick = false;
 +        }
 +        profiler.pop();
 +    }
@@ -636,7 +641,36 @@
      }
  
      public static boolean throwIfFatalException() {
-@@ -837,6 +_,17 @@
+@@ -822,21 +_,39 @@
+     }
+ 
+     protected void waitUntilNextTick() {
+-        this.runAllTasks();
+-        this.managedBlock(() -> !this.haveTime());
++        // Paper - improve tick loop - moved to start of tick
++        this.waitingForNextTick = true;
++
++        try {
++            this.managedBlock(() -> Util.getNanos() - this.nextTickTimeNanos >= 0L); // Paper - improve tick loop - do not oversleep
++        } finally {
++            this.waitingForNextTick = false;
++        }
+     }
+ 
+     @Override
+     public void waitForTasks() {
+-        boolean flag = this.isTickTimeLoggingEnabled();
+-        long i = flag ? Util.getNanos() : 0L;
+-        super.waitForTasks();
+-        if (flag) {
+-            this.idleTimeNanos = this.idleTimeNanos + (Util.getNanos() - i);
++        boolean isTickTimeLoggingEnabled = this.isTickTimeLoggingEnabled();
++        long l = isTickTimeLoggingEnabled ? Util.getNanos() : 0L;
++        long l1 = this.waitingForNextTick ? this.nextTickTimeNanos - Util.getNanos() : 100000L;
++        LockSupport.parkNanos("waiting for tasks", l1);
++        if (isTickTimeLoggingEnabled) {
++            this.idleTimeNanos = this.idleTimeNanos + (Util.getNanos() - l);
+         }
      }
  
      protected TickTask wrapRunnable(Runnable p_129852_) {
