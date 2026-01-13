@@ -16,7 +16,7 @@
  
      public ClientboundLevelChunkPacketData(LevelChunk p_195651_) {
          this.heightmaps = new CompoundTag();
-@@ -40,8 +_,18 @@
+@@ -40,11 +_,60 @@
          this.buffer = new byte[calculateChunkSize(p_195651_)];
          extractChunkData(new FriendlyByteBuf(this.getWriteBuffer()), p_195651_);
          this.blockEntitiesData = Lists.newArrayList();
@@ -35,3 +35,45 @@
              this.blockEntitiesData.add(ClientboundLevelChunkPacketData.BlockEntityInfo.create(entry1.getValue()));
          }
      }
++
++    // Leaf start - Async chunk sending
++    public ClientboundLevelChunkPacketData(LevelChunk levelChunk, BlockEntity[] blockEntities, CompoundTag heightmaps) {
++        this.heightmaps = heightmaps;
++
++        if (Thread.currentThread() instanceof org.dreeam.leaf.async.chunk.AsyncChunkSendThread) {
++            int size = calculateChunkSize(levelChunk);
++            ByteBuf buffer = Unpooled.buffer(size);
++            extractChunkData(new FriendlyByteBuf(buffer), levelChunk);
++            // make sure all sections is latest
++            while (size != buffer.writerIndex()) {
++                buffer.writerIndex(0);
++                size = calculateChunkSize(levelChunk);
++                extractChunkData(new FriendlyByteBuf(buffer), levelChunk);
++            }
++            byte[] array = it.unimi.dsi.fastutil.bytes.ByteArrays.setLength(buffer.array(), buffer.writerIndex());
++            this.buffer = array;
++        } else {
++            this.buffer = new byte[calculateChunkSize(levelChunk)];
++            extractChunkData(new FriendlyByteBuf(this.getWriteBuffer()), levelChunk);
++        }
++
++        this.blockEntitiesData = Lists.newArrayList();
++        int totalTileEntities = 0; // Paper - Handle oversized block entities in chunks
++
++        for (BlockEntity blockEntity : blockEntities) {
++            // Paper start - Handle oversized block entities in chunks
++            if (++totalTileEntities > BLOCK_ENTITY_LIMIT) {
++                net.minecraft.network.protocol.Packet<ClientGamePacketListener> packet = blockEntity.getUpdatePacket();
++                if (packet != null) {
++                    this.extraPackets.add(packet);
++                    continue;
++                }
++            }
++            // Paper end - Handle oversized block entities in chunks
++            this.blockEntitiesData.add(ClientboundLevelChunkPacketData.BlockEntityInfo.create(blockEntity));
++        }
++    }
++    // Leaf end - Async chunk sending
+ 
+     public ClientboundLevelChunkPacketData(RegistryFriendlyByteBuf p_320343_, int p_195654_, int p_195655_) {
+         this.heightmaps = p_320343_.readNbt();

@@ -10,6 +10,7 @@ import ca.spottedleaf.moonrise.patches.chunk_system.scheduling.*;
 import ca.spottedleaf.moonrise.patches.chunk_system.ticket.*;
 import ca.spottedleaf.moonrise.patches.chunk_system.util.*;
 import com.google.gson.*;
+import io.papermc.paper.configuration.GlobalConfiguration;
 import it.unimi.dsi.fastutil.longs.*;
 import net.minecraft.network.protocol.*;
 import net.minecraft.network.protocol.game.*;
@@ -423,7 +424,15 @@ public final class RegionizedPlayerChunkLoader {
             // Note: drop isAlive() check so that chunks properly unload client-side when the player dies
             ((ChunkSystemChunkHolder)((ChunkSystemServerLevel)this.world).moonrise$getChunkTaskScheduler().chunkHolderManager
                 .getChunkHolder(chunkX, chunkZ).vanillaChunkHolder).moonrise$removeReceivedChunk(this.player);
-            this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ)));
+            // Leaf start - Async chunk sending
+            if (GlobalConfiguration.get().asyncChunkSend.enabled) {
+                org.dreeam.leaf.async.chunk.AsyncChunkSend.POOL.execute(
+                        () -> this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ)))
+                );
+            } else {
+                this.player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(chunkX, chunkZ)));
+            }
+            // Leaf end - Async chunk sending
         }
 
         private final SingleUserAreaMap<PlayerChunkLoaderData> broadcastMap = new SingleUserAreaMap<>(this) {

@@ -1,11 +1,74 @@
 --- a/net/minecraft/server/network/PlayerChunkSender.java
 +++ b/net/minecraft/server/network/PlayerChunkSender.java
-@@ -73,7 +_,7 @@
+@@ -2,6 +_,7 @@
+ 
+ import com.google.common.collect.Comparators;
+ import com.mojang.logging.LogUtils;
++import io.papermc.paper.configuration.GlobalConfiguration;
+ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+ import it.unimi.dsi.fastutil.longs.LongSet;
+ import java.util.Comparator;
+@@ -59,13 +_,29 @@
+                     if (!list.isEmpty()) {
+                         ServerGamePacketListenerImpl servergamepacketlistenerimpl = p_296009_.connection;
+                         this.unacknowledgedBatches++;
+-                        servergamepacketlistenerimpl.send(ClientboundChunkBatchStartPacket.INSTANCE);
++                        // Leaf start - Async chunk sending
++                        if (GlobalConfiguration.get().asyncChunkSend.enabled) {
++                            org.dreeam.leaf.async.chunk.AsyncChunkSend.POOL.execute(
++                                    () -> servergamepacketlistenerimpl.send(ClientboundChunkBatchStartPacket.INSTANCE)
++                            );
++                        } else {
++                            servergamepacketlistenerimpl.send(ClientboundChunkBatchStartPacket.INSTANCE);
++                        }
++                        // Leaf end - Async chunk sending
+ 
+                         for (LevelChunk levelchunk : list) {
+                             sendChunk(servergamepacketlistenerimpl, serverlevel, levelchunk);
+                         }
+ 
+-                        servergamepacketlistenerimpl.send(new ClientboundChunkBatchFinishedPacket(list.size()));
++                        // Leaf start - Async chunk sending
++                        if (GlobalConfiguration.get().asyncChunkSend.enabled) {
++                            org.dreeam.leaf.async.chunk.AsyncChunkSend.POOL.execute(
++                                    () -> servergamepacketlistenerimpl.send(new ClientboundChunkBatchFinishedPacket(list.size()))
++                            );
++                        } else {
++                            servergamepacketlistenerimpl.send(new ClientboundChunkBatchFinishedPacket(list.size()));
++                        }
++                        // Leaf end - Async chunk sending
+                         this.batchQuota = this.batchQuota - (float)list.size();
+                     }
+                 }
+@@ -73,10 +_,27 @@
          }
      }
  
 -    private static void sendChunk(ServerGamePacketListenerImpl p_295237_, ServerLevel p_294963_, LevelChunk p_295144_) {
+-        p_295237_.send(p_295144_.getAuxLightManager(p_295144_.getPos()).sendLightDataTo(
+-                new ClientboundLevelChunkWithLightPacket(p_295144_, p_294963_.getLightEngine(), null, null)
+-        ));
 +    public static void sendChunk(ServerGamePacketListenerImpl p_295237_, ServerLevel p_294963_, LevelChunk p_295144_) { // Goldenforge - public
-         p_295237_.send(p_295144_.getAuxLightManager(p_295144_.getPos()).sendLightDataTo(
-                 new ClientboundLevelChunkWithLightPacket(p_295144_, p_294963_.getLightEngine(), null, null)
-         ));
++        // Leaf start - Async chunk sending
++        if (GlobalConfiguration.get().asyncChunkSend.enabled) {
++            var blockEntities = p_295144_.blockEntities.values().toArray(new net.minecraft.world.level.block.entity.BlockEntity[0]);
++            var heightmaps = new net.minecraft.nbt.CompoundTag();
++
++            for (var entry : p_295144_.getHeightmaps()) {
++                if (entry.getKey().sendToClient()) {
++                    heightmaps.put(entry.getKey().getSerializationKey(), new net.minecraft.nbt.LongArrayTag(entry.getValue().getRawData()));
++                }
++            }
++            org.dreeam.leaf.async.chunk.AsyncChunkSend.POOL.execute(
++                    () -> p_295237_.send(new ClientboundLevelChunkWithLightPacket(p_295144_, p_294963_.getLightEngine(), null, null, blockEntities, heightmaps))
++            );
++        } else {
++            p_295237_.send(p_295144_.getAuxLightManager(p_295144_.getPos()).sendLightDataTo(
++                    new ClientboundLevelChunkWithLightPacket(p_295144_, p_294963_.getLightEngine(), null, null)
++            ));
++        }
++        // Leaf end - Async chunk sending
++
+         ChunkPos chunkpos = p_295144_.getPos();
+         DebugPackets.sendPoiPacketsForChunk(p_294963_, chunkpos);
+         net.neoforged.neoforge.event.EventHooks.fireChunkSent(p_295237_.player, p_295144_, p_294963_);
