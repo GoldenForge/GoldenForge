@@ -1,0 +1,20 @@
+--- a/net/minecraft/world/level/levelgen/Beardifier.java
++++ b/net/minecraft/world/level/levelgen/Beardifier.java
+@@ -139,8 +_,15 @@
+     }
+ 
+     protected static double getBuryContribution(double p_340947_, double p_340921_, double p_341266_) {
+-        double d0 = Mth.length(p_340947_, p_340921_, p_341266_);
+-        return Mth.clampedMap(d0, 0.0, 6.0, 1.0, 0.0);
++        // Leaf start - C2ME - Optimize world gen math
++        // Optimize method for beardifier
++        double len = Math.sqrt(p_340947_ * p_340947_ + p_340921_ * p_340921_ + p_341266_ * p_341266_);
++        if (len > 6.0) {
++            return 0.0;
++        } else {
++            return 1.0 - len / 6.0;
++        }
++        // Leaf end - C2ME - Optimize world gen math
+     }
+ 
+     protected static double getBeardContribution(int p_223926_, int p_223927_, int p_223928_, int p_223929_) {

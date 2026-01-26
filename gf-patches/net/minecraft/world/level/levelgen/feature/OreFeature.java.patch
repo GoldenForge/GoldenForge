@@ -1,0 +1,11 @@
+--- a/net/minecraft/world/level/levelgen/feature/OreFeature.java
++++ b/net/minecraft/world/level/levelgen/feature/OreFeature.java
+@@ -69,7 +_,7 @@
+         int p_225185_
+     ) {
+         int i = 0;
+-        BitSet bitset = new BitSet(p_225184_ * p_225185_ * p_225184_);
++        BitSet bitset = org.dreeam.leaf.util.cache.CachedOrNewBitsGetter.getCachedOrNewBitSet(p_225184_ * p_225185_ * p_225184_); // Leaf - C2ME - Reduce Allocations
+         BlockPos.MutableBlockPos blockpos$mutableblockpos = new BlockPos.MutableBlockPos();
+         int j = p_225174_.size;
+         double[] adouble = new double[j * 4];
