@@ -13,6 +13,15 @@
  
      public static Codec<Vec3i> offsetCodec(int p_194651_) {
          return CODEC.validate(
+@@ -49,7 +_,7 @@
+ 
+     @Override
+     public int hashCode() {
+-        return (this.getY() + this.getZ() * 31) * 31 + this.getX();
++        return org.dreeam.leaf.util.Vec3iHasher.hash(this.x, this.y, this.z); // Leaf - Optimize Vec3i hashing
+     }
+ 
+     public int compareTo(Vec3i p_123330_) {
 @@ -235,4 +_,10 @@
      public String toShortString() {
          return this.getX() + ", " + this.getY() + ", " + this.getZ();
