@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - 1.21.1
-      - dev/1.21.1/new-patch-system
 jobs:
   build:
     runs-on: [self-hosted, goldenforge]
