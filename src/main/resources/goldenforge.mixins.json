@@ -14,6 +14,8 @@
     "fixes.distanthorizons.BatchGenerationEnvironmentMixin",
     "fixes.copycatsplus.OutlinedVoxelShapeMixin",
     "fixes.eclipticseasons.MapCheckerMixin",
+    "fixes.codechickenlib.IndexedVoxelShapeMixin",
+    "fixes.codechickenlib.MultiIndexedVoxelShapeMixin",
     "patches.collisions.ShapesMixin"
   ],
   "client": [],

@@ -149,6 +149,7 @@ dependencies {
     compileOnly "curse.maven:dh-508933:6387706"
     compileOnly "curse.maven:copycats-968398:6650033"
     compileOnly "curse.maven:eclipticseasons-1118306:6949140"
+    compileOnly "curse.maven:codechickenlib-242818:7281427"
 }
 
 neoDev {
