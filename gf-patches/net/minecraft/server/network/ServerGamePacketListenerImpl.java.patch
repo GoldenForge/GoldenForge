@@ -310,7 +310,7 @@
 -                                Vec3 vec3 = new Vec3(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5);
 -                                this.player.setOnGroundWithMovement(p_9874_.isOnGround(), vec3);
 -                                this.player.doCheckFallDamage(this.player.getX() - d3, this.player.getY() - d4, this.player.getZ() - d5, p_9874_.isOnGround());
-+                                    && d7 > io.papermc.paper.configuration.GlobalConfiguration.get().misc.movedWronglyThreshold // Spigot
++                                    && d7 > 0.0625
 +                                    && !this.player.isSleeping()
 +                                    && !this.player.gameMode.isCreative()
 +                                    && this.player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
