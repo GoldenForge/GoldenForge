@@ -1,6 +1,6 @@
 --- a/net/minecraft/world/level/lighting/LevelLightEngine.java
 +++ b/net/minecraft/world/level/lighting/LevelLightEngine.java
-@@ -9,145 +_,103 @@
+@@ -9,145 +_,110 @@
  import net.minecraft.world.level.chunk.DataLayer;
  import net.minecraft.world.level.chunk.LightChunkGetter;
  
@@ -8,10 +8,10 @@
 +public class LevelLightEngine implements LightEventListener, ca.spottedleaf.moonrise.patches.starlight.light.StarLightLightingProvider { // Paper - rewrite chunk system
      public static final int LIGHT_SECTION_PADDING = 1;
      protected final LevelHeightAccessor levelHeightAccessor;
--    @Nullable
--    private final LightEngine<?, ?> blockEngine;
--    @Nullable
--    private final LightEngine<?, ?> skyEngine;
+     @Nullable
+     private final LightEngine<?, ?> blockEngine;
+     @Nullable
+     private final LightEngine<?, ?> skyEngine;
 +    // Paper start - rewrite chunk system
 +    protected final ca.spottedleaf.moonrise.patches.starlight.light.StarLightInterface lightEngine;
 +
@@ -48,6 +48,9 @@
 +            this.lightEngine = new ca.spottedleaf.moonrise.patches.starlight.light.StarLightInterface(null, p_75807_, p_75806_, (LevelLightEngine)(Object)this);
 +        }
 +        // Paper end - rewrite chunk system
++        // intentionally destroy mods hooking into old light engine state
++        this.blockEngine = null;
++        this.skyEngine = null;
      }
  
      @Override
