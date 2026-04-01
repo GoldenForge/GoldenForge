@@ -38,6 +38,54 @@
                              if (mobspawnsettings$spawnerdata == null) {
                                  Optional<MobSpawnSettings.SpawnerData> optional = getRandomSpawnMobAt(
                                      p_47040_, structuremanager, chunkgenerator, p_47039_, p_47040_.random, blockpos$mutableblockpos
+@@ -453,6 +_,47 @@
+         boolean test(EntityType<?> p_47107_, BlockPos p_47108_, ChunkAccess p_47109_);
+     }
+ 
++    // Leaf start - optimize mob spawning
++    // Copied and modified from `createState`
++    public static NaturalSpawner.SpawnState createStateAsync(
++            int spawnableChunkCount, Iterable<Entity> entities, ServerLevel level
++    ) {
++        // Paper end - Optional per player mob spawns
++        PotentialCalculator potentialCalculator = new PotentialCalculator();
++        Object2IntOpenHashMap<MobCategory> map = new Object2IntOpenHashMap<>();
++        //it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<int[]> chunkCap = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
++        boolean countAllMobsForSpawning = level.paperConfig().entities.spawning.countAllMobsForSpawning;
++        for (Entity entity : entities) {
++            if (!(entity instanceof Mob mob && (mob.isPersistenceRequired() || mob.requiresCustomPersistence()))) {
++                MobCategory category = entity.getType().getCategory();
++                if (category != MobCategory.MISC) {
++//                    // Paper start - Only count natural spawns
++//                    if (!countAllMobsForSpawning &&
++//                            !(entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.NATURAL ||
++//                                    entity.spawnReason == org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.CHUNK_GEN)) {
++//                        continue;
++//                    }
++//                    // Paper end - Only count natural spawns
++                    BlockPos blockPos = entity.blockPosition();
++                    LevelChunk chunk = level.chunkSource.fullChunks.get(ChunkPos.asLong(blockPos));
++                    if (chunk != null) {
++                        MobSpawnSettings.MobSpawnCost mobSpawnCost = getRoughBiome(blockPos, chunk).getMobSettings().getMobSpawnCost(entity.getType());
++                        if (mobSpawnCost != null) {
++                            potentialCalculator.addCharge(entity.blockPosition(), mobSpawnCost.charge());
++                        }
++
++                        map.addTo(category, 1);
++                        final int index = entity.getType().getCategory().ordinal();
++                        //++chunkCap.computeIfAbsent(chunk.coordinateKey, k -> new int[net.minecraft.server.level.ServerPlayer.MOBCATEGORY_TOTAL_ENUMS])[index];
++                    }
++                }
++            }
++        }
++
++        return new NaturalSpawner.SpawnState(spawnableChunkCount, map, potentialCalculator, null);
++    }
++    // Leaf end - optimize mob spawning
++
+     public static class SpawnState {
+         private final int spawnableChunkCount;
+         private final Object2IntOpenHashMap<MobCategory> mobCategoryCounts;
 @@ -510,7 +_,7 @@
              this.spawnPotential.addCharge(blockpos, d0);
              MobCategory mobcategory = entitytype.getCategory();

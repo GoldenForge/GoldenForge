@@ -1,67 +1,67 @@
 package gg.pufferfish.pufferfish.util;
 
-import org.goldenforge.*;
+import it.unimi.dsi.fastutil.PriorityQueue;
+import it.unimi.dsi.fastutil.objects.ObjectArrayFIFOQueue;
+import net.minecraft.Util;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.util.concurrent.locks.LockSupport;
 
 public class AsyncExecutor implements Runnable {
-	
-	private final java.util.Queue<Runnable> jobs = com.google.common.collect.Queues.newArrayDeque();
-	private final java.util.concurrent.locks.Lock mutex = new java.util.concurrent.locks.ReentrantLock();
-	private final java.util.concurrent.locks.Condition cond = mutex.newCondition();
-	private final Thread thread;
+
+	private final Logger LOGGER = LogManager.getLogger("Leaf");
+	private final PriorityQueue<Runnable> jobs = new ObjectArrayFIFOQueue<>();
+	public final Thread thread;
 	private volatile boolean killswitch = false;
-	
+
 	public AsyncExecutor(String threadName) {
-		this.thread = new Thread(this, threadName);
+		this.thread = Thread.ofPlatform()
+				.name(threadName)
+				.priority(Thread.NORM_PRIORITY - 1)
+				.daemon(false)
+				.uncaughtExceptionHandler(Util::onThreadException)
+				.unstarted(this);
 	}
-	
+
 	public void start() {
 		thread.start();
 	}
-	
-	public void kill() {
+
+	public void join(long millis) throws InterruptedException {
 		killswitch = true;
-		cond.signalAll();
+		LockSupport.unpark(thread);
+		thread.join(millis);
 	}
-	
+
 	public void submit(Runnable runnable) {
-		mutex.lock();
-		try {
-			jobs.offer(runnable);
-			cond.signalAll();
-		} finally {
-			mutex.unlock();
+		synchronized (jobs) {
+			jobs.enqueue(runnable);
 		}
+		LockSupport.unpark(thread);
 	}
-	
+
 	@Override
 	public void run() {
 		while (!killswitch) {
 			try {
-				Runnable runnable = takeRunnable();
-				if (runnable != null) {
-					runnable.run();
+				Runnable runnable = null;
+
+				synchronized (jobs) {
+					if (!jobs.isEmpty()) {
+						runnable = jobs.dequeue();
+					}
 				}
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
+
+				if (runnable == null) {
+					LockSupport.park();
+					continue;
+				}
+
+				runnable.run();
 			} catch (Exception e) {
-                GoldenForge.LOGGER.error("Failed to execute async job for thread {}", thread.getName());
+				LOGGER.error("Failed to execute async job for thread {}", thread.getName(), e);
 			}
 		}
 	}
-	
-	private Runnable takeRunnable() throws InterruptedException {
-		mutex.lock();
-		try {
-			while (jobs.isEmpty() && !killswitch) {
-				cond.await();
-			}
-			
-			if (jobs.isEmpty()) return null; // We've set killswitch
-			
-			return jobs.remove();
-		} finally {
-			mutex.unlock();
-		}
-	}
-	
 }
