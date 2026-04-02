@@ -1,6 +1,6 @@
 --- a/net/minecraft/util/thread/BlockableEventLoop.java
 +++ b/net/minecraft/util/thread/BlockableEventLoop.java
-@@ -28,6 +_,23 @@
+@@ -28,6 +_,40 @@
          MetricsRegistry.INSTANCE.add(this);
      }
  
@@ -18,6 +18,23 @@
 +            }
 +            this.doRunTask(run);
 +        }
++    }
++
++    public boolean runTaskIf(final java.util.function.Predicate<? super R> predicate) {
++        if (!this.isSameThread()) {
++            throw new IllegalStateException();
++        }
++
++        final R run = this.pendingRunnables.peek();
++        if (run == null || (predicate != null && !predicate.test(run))) {
++            return false;
++        }
++
++        this.pendingRunnables.remove();
++
++        this.doRunTask(run);
++
++        return true;
 +    }
 +    // Paper end
 +

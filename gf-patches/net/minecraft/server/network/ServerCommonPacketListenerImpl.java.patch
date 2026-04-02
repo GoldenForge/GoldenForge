@@ -116,12 +116,16 @@
              }
          }
  
-@@ -200,7 +_,7 @@
+@@ -200,7 +_,11 @@
      public void disconnect(DisconnectionDetails p_350316_) {
          this.connection.send(new ClientboundDisconnectPacket(p_350316_.reason()), PacketSendListener.thenRun(() -> this.connection.disconnect(p_350316_)));
          this.connection.setReadOnly();
 -        this.server.executeBlocking(this.connection::handleDisconnection);
 +        this.server.scheduleOnMain(this.connection::handleDisconnection); // Paper
++    }
++
++    public final boolean isDisconnected() {
++        return (!this.connection.isConnected()) || this.processedDisconnect; // Paper - Fix duplication bugs
      }
  
      protected boolean isSingleplayerOwner() {

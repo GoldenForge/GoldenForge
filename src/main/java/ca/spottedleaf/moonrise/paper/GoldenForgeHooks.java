@@ -207,6 +207,16 @@ public final class GoldenForgeHooks extends BaseChunkSystemHooks implements Plat
     }
 
     @Override
+    public int configMinChunkUnloadCount(final ServerLevel world) {
+        return 50;
+    }
+
+    @Override
+    public double configMinChunkUnloadFraction(final ServerLevel world) {
+        return 0.05;
+    }
+
+    @Override
     public boolean configFixMC159283() {
         return true;
     }

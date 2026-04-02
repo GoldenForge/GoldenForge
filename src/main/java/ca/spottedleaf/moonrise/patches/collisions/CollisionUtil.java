@@ -1,29 +1,48 @@
 package ca.spottedleaf.moonrise.patches.collisions;
 
-import ca.spottedleaf.moonrise.common.util.*;
-import ca.spottedleaf.moonrise.patches.block_counting.*;
-import ca.spottedleaf.moonrise.patches.chunk_system.entity.*;
-import ca.spottedleaf.moonrise.patches.chunk_system.world.*;
-import ca.spottedleaf.moonrise.patches.collisions.block.*;
-import ca.spottedleaf.moonrise.patches.collisions.shape.*;
-import it.unimi.dsi.fastutil.doubles.*;
-import net.minecraft.core.*;
-import net.minecraft.util.*;
-import net.minecraft.world.entity.*;
-import net.minecraft.world.entity.vehicle.*;
-import net.minecraft.world.item.*;
-import net.minecraft.world.level.*;
-import net.minecraft.world.level.block.*;
-import net.minecraft.world.level.block.state.*;
-import net.minecraft.world.level.border.*;
-import net.minecraft.world.level.chunk.*;
-import net.minecraft.world.level.chunk.status.*;
-import net.minecraft.world.level.material.*;
-import net.minecraft.world.phys.*;
-import net.minecraft.world.phys.shapes.*;
-
-import java.util.*;
-import java.util.function.*;
+import ca.spottedleaf.moonrise.common.util.WorldUtil;
+import ca.spottedleaf.moonrise.patches.chunk_system.world.ChunkSystemEntityGetter;
+import ca.spottedleaf.moonrise.patches.collisions.block.CollisionBlockState;
+import ca.spottedleaf.moonrise.patches.chunk_system.entity.ChunkSystemEntity;
+import ca.spottedleaf.moonrise.patches.collisions.shape.CachedShapeData;
+import ca.spottedleaf.moonrise.patches.collisions.shape.CollisionDiscreteVoxelShape;
+import ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape;
+import ca.spottedleaf.moonrise.patches.block_counting.BlockCountingChunkSection;
+import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
+import it.unimi.dsi.fastutil.doubles.DoubleList;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.CollisionGetter;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.border.WorldBorder;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkSource;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.ArrayVoxelShape;
+import net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.DiscreteVoxelShape;
+import net.minecraft.world.phys.shapes.EntityCollisionContext;
+import net.minecraft.world.phys.shapes.OffsetDoubleList;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.SliceShape;
+import net.minecraft.world.phys.shapes.VoxelShape;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 
 public final class CollisionUtil {
 
@@ -48,7 +67,7 @@ public final class CollisionUtil {
         double z = (double)(chunkZ << 4);
         // use a bounding box bigger than the chunk to prevent entities from entering it on move
         return new AABB(x - 3*COLLISION_EPSILON, Double.NEGATIVE_INFINITY, z - 3*COLLISION_EPSILON,
-            x + (16.0 + 3*COLLISION_EPSILON), Double.POSITIVE_INFINITY, z + (16.0 + 3*COLLISION_EPSILON));
+                x + (16.0 + 3*COLLISION_EPSILON), Double.POSITIVE_INFINITY, z + (16.0 + 3*COLLISION_EPSILON));
     }
 
     /*
@@ -64,27 +83,27 @@ public final class CollisionUtil {
                                               final double maxY1, final double maxZ1, final double minX2, final double minY2,
                                               final double minZ2, final double maxX2, final double maxY2, final double maxZ2) {
         return (minX1 - maxX2) < -COLLISION_EPSILON && (maxX1 - minX2) > COLLISION_EPSILON &&
-               (minY1 - maxY2) < -COLLISION_EPSILON && (maxY1 - minY2) > COLLISION_EPSILON &&
-               (minZ1 - maxZ2) < -COLLISION_EPSILON && (maxZ1 - minZ2) > COLLISION_EPSILON;
+                (minY1 - maxY2) < -COLLISION_EPSILON && (maxY1 - minY2) > COLLISION_EPSILON &&
+                (minZ1 - maxZ2) < -COLLISION_EPSILON && (maxZ1 - minZ2) > COLLISION_EPSILON;
     }
 
     public static boolean voxelShapeIntersect(final AABB box, final double minX, final double minY, final double minZ,
                                               final double maxX, final double maxY, final double maxZ) {
         return (box.minX - maxX) < -COLLISION_EPSILON && (box.maxX - minX) > COLLISION_EPSILON &&
-               (box.minY - maxY) < -COLLISION_EPSILON && (box.maxY - minY) > COLLISION_EPSILON &&
-               (box.minZ - maxZ) < -COLLISION_EPSILON && (box.maxZ - minZ) > COLLISION_EPSILON;
+                (box.minY - maxY) < -COLLISION_EPSILON && (box.maxY - minY) > COLLISION_EPSILON &&
+                (box.minZ - maxZ) < -COLLISION_EPSILON && (box.maxZ - minZ) > COLLISION_EPSILON;
     }
 
     public static boolean voxelShapeIntersect(final AABB box1, final AABB box2) {
         return (box1.minX - box2.maxX) < -COLLISION_EPSILON && (box1.maxX - box2.minX) > COLLISION_EPSILON &&
-               (box1.minY - box2.maxY) < -COLLISION_EPSILON && (box1.maxY - box2.minY) > COLLISION_EPSILON &&
-               (box1.minZ - box2.maxZ) < -COLLISION_EPSILON && (box1.maxZ - box2.minZ) > COLLISION_EPSILON;
+                (box1.minY - box2.maxY) < -COLLISION_EPSILON && (box1.maxY - box2.minY) > COLLISION_EPSILON &&
+                (box1.minZ - box2.maxZ) < -COLLISION_EPSILON && (box1.maxZ - box2.minZ) > COLLISION_EPSILON;
     }
 
     // assume !isEmpty(target) && abs(source_move) >= COLLISION_EPSILON
     public static double collideX(final AABB target, final AABB source, final double source_move) {
         if ((source.minY - target.maxY) < -COLLISION_EPSILON && (source.maxY - target.minY) > COLLISION_EPSILON &&
-            (source.minZ - target.maxZ) < -COLLISION_EPSILON && (source.maxZ - target.minZ) > COLLISION_EPSILON) {
+                (source.minZ - target.maxZ) < -COLLISION_EPSILON && (source.maxZ - target.minZ) > COLLISION_EPSILON) {
             if (source_move >= 0.0) {
                 final double max_move = target.minX - source.maxX; // < 0.0 if no strict collision
                 if (max_move < -COLLISION_EPSILON) {
@@ -105,7 +124,7 @@ public final class CollisionUtil {
     // assume !isEmpty(target) && abs(source_move) >= COLLISION_EPSILON
     public static double collideY(final AABB target, final AABB source, final double source_move) {
         if ((source.minX - target.maxX) < -COLLISION_EPSILON && (source.maxX - target.minX) > COLLISION_EPSILON &&
-            (source.minZ - target.maxZ) < -COLLISION_EPSILON && (source.maxZ - target.minZ) > COLLISION_EPSILON) {
+                (source.minZ - target.maxZ) < -COLLISION_EPSILON && (source.maxZ - target.minZ) > COLLISION_EPSILON) {
             if (source_move >= 0.0) {
                 final double max_move = target.minY - source.maxY; // < 0.0 if no strict collision
                 if (max_move < -COLLISION_EPSILON) {
@@ -126,7 +145,7 @@ public final class CollisionUtil {
     // assume !isEmpty(target) && abs(source_move) >= COLLISION_EPSILON
     public static double collideZ(final AABB target, final AABB source, final double source_move) {
         if ((source.minX - target.maxX) < -COLLISION_EPSILON && (source.maxX - target.minX) > COLLISION_EPSILON &&
-            (source.minY - target.maxY) < -COLLISION_EPSILON && (source.maxY - target.minY) > COLLISION_EPSILON) {
+                (source.minY - target.maxY) < -COLLISION_EPSILON && (source.maxY - target.minY) > COLLISION_EPSILON) {
             if (source_move >= 0.0) {
                 final double max_move = target.minZ - source.maxZ; // < 0.0 if no strict collision
                 if (max_move < -COLLISION_EPSILON) {
@@ -164,7 +183,7 @@ public final class CollisionUtil {
 
     private static VoxelShape sliceShapeVanilla(final VoxelShape src, final Direction.Axis axis,
                                                 final int index) {
-        return new SliceShape(src, axis, index, true); // Goldenforge
+        return new SliceShape(src, axis, index);
     }
 
     private static DoubleList offsetList(final double[] src, final double by) {
@@ -219,8 +238,8 @@ public final class CollisionUtil {
 
                 // test if result would be full box
                 if (coords_y.length == 2 && coords_z.length == 2 &&
-                    (coords_y[0] + off_y) == 0.0 && (coords_y[1] + off_y) == 1.0 &&
-                    (coords_z[0] + off_z) == 0.0 && (coords_z[1] + off_z) == 1.0) {
+                        (coords_y[0] + off_y) == 0.0 && (coords_y[1] + off_y) == 1.0 &&
+                        (coords_z[0] + off_z) == 0.0 && (coords_z[1] + off_z) == 1.0) {
                     // note: size_y == size_z == 1
                     final int bitIdx = 0 + 0*size_z + index*(size_z*size_y);
                     return (bitset[bitIdx >>> 6] & (1L << bitIdx)) == 0L ? Shapes.empty() : Shapes.block();
@@ -251,8 +270,8 @@ public final class CollisionUtil {
 
                 // test if result would be full box
                 if (coords_x.length == 2 && coords_z.length == 2 &&
-                    (coords_x[0] + off_x) == 0.0 && (coords_x[1] + off_x) == 1.0 &&
-                    (coords_z[0] + off_z) == 0.0 && (coords_z[1] + off_z) == 1.0) {
+                        (coords_x[0] + off_x) == 0.0 && (coords_x[1] + off_x) == 1.0 &&
+                        (coords_z[0] + off_z) == 0.0 && (coords_z[1] + off_z) == 1.0) {
                     // note: size_x == size_z == 1
                     final int bitIdx = 0 + index*size_z + 0*(size_z*size_y);
                     return (bitset[bitIdx >>> 6] & (1L << bitIdx)) == 0L ? Shapes.empty() : Shapes.block();
@@ -283,8 +302,8 @@ public final class CollisionUtil {
 
                 // test if result would be full box
                 if (coords_x.length == 2 && coords_y.length == 2 &&
-                    (coords_x[0] + off_x) == 0.0 && (coords_x[1] + off_x) == 1.0 &&
-                    (coords_y[0] + off_y) == 0.0 && (coords_y[1] + off_y) == 1.0) {
+                        (coords_x[0] + off_x) == 0.0 && (coords_x[1] + off_x) == 1.0 &&
+                        (coords_y[0] + off_y) == 0.0 && (coords_y[1] + off_y) == 1.0) {
                     // note: size_x == size_y == 1
                     final int bitIdx = index + 0*size_z + 0*(size_z*size_y);
                     return (bitset[bitIdx >>> 6] & (1L << bitIdx)) == 0L ? Shapes.empty() : Shapes.block();
@@ -332,7 +351,7 @@ public final class CollisionUtil {
                     shape.zMax = Math.max(shape.zMax, z + 1);
 
                     shape.storage.set(
-                        z + y*local_len_z + x*shape_mul_x
+                            z + y*local_len_z + x*shape_mul_x
                     );
                 }
 
@@ -348,7 +367,7 @@ public final class CollisionUtil {
         }
 
         return shape.isEmpty() ? Shapes.empty() : new ArrayVoxelShape(
-            shape, list_x, list_y, list_z
+                shape, list_x, list_y, list_z
         );
     }
 
@@ -1596,7 +1615,7 @@ public final class CollisionUtil {
                     }
 
                     ret.append("(").append(x).append(",").append(y).append(",").append(z)
-                        .append("): shape1: ").append(isFull1).append(", shape2: ").append(isFull2);
+                            .append("): shape1: ").append(isFull1).append(", shape2: ").append(isFull2);
                 }
             }
         }
@@ -1968,8 +1987,8 @@ public final class CollisionUtil {
                                 final int blockX = currX | (currChunkX << 4);
 
                                 final int edgeCount = hasSpecial ? ((blockX == minBlockX || blockX == maxBlockX) ? 1 : 0) +
-                                    ((blockY == minBlockY || blockY == maxBlockY) ? 1 : 0) +
-                                    ((blockZ == minBlockZ || blockZ == maxBlockZ) ? 1 : 0) : 0;
+                                                                   ((blockY == minBlockY || blockY == maxBlockY) ? 1 : 0) +
+                                                                   ((blockZ == minBlockZ || blockZ == maxBlockZ) ? 1 : 0) : 0;
                                 if (edgeCount == 3) {
                                     continue;
                                 }
@@ -1991,8 +2010,17 @@ public final class CollisionUtil {
                                     AABB singleAABB = ((CollisionVoxelShape)blockCollision).moonrise$getSingleAABBRepresentation();
                                     if (singleAABB != null) {
                                         singleAABB = singleAABB.move((double)blockX, (double)blockY, (double)blockZ);
-                                        if (!voxelShapeIntersect(aabb, singleAABB)) {
-                                            continue;
+
+                                        // Not using the epsilon violates the collision rules but this is what Vanilla does.
+                                        // Check BlockCollisions.class
+                                        if (blockCollision == Shapes.block()) {
+                                            if (!aabb.intersects(singleAABB)) {
+                                                continue;
+                                            }
+                                        } else {
+                                            if (!voxelShapeIntersect(aabb, singleAABB)) {
+                                                continue;
+                                            }
                                         }
 
                                         if (predicate != null) {
@@ -2087,10 +2115,10 @@ public final class CollisionUtil {
                                         final Predicate<Entity> entityPredicate) {
         if ((collisionFlags & COLLISION_FLAG_CHECK_ONLY) != 0) {
             return getCollisionsForBlocksOrWorldBorder(world, entity, aabb, intoVoxel, intoAABB, collisionFlags, blockPredicate)
-                || getEntityHardCollisions(world, entity, aabb, intoAABB, collisionFlags, entityPredicate);
+                    || getEntityHardCollisions(world, entity, aabb, intoAABB, collisionFlags, entityPredicate);
         } else {
             return getCollisionsForBlocksOrWorldBorder(world, entity, aabb, intoVoxel, intoAABB, collisionFlags, blockPredicate)
-                | getEntityHardCollisions(world, entity, aabb, intoAABB, collisionFlags, entityPredicate);
+                    | getEntityHardCollisions(world, entity, aabb, intoAABB, collisionFlags, entityPredicate);
         }
     }
 

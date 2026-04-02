@@ -1124,7 +1124,7 @@ public final class ChunkHolderManager {
         int unloadCountTentative = 0;
         for (final ChunkUnloadQueue.SectionToUnload sectionRef : unloadSectionsForRegion) {
             final ChunkUnloadQueue.UnloadSection section
-                = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
+                    = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
 
             if (section == null) {
                 // removed concurrently
@@ -1145,7 +1145,10 @@ public final class ChunkHolderManager {
         // We do need to process updates here so that any addTicket that is synchronised before this call does not go missed.
         this.processTicketUpdates();
 
-        final int toUnloadCount = Math.max(50, (int)(unloadCountTentative * 0.05));
+        final int toUnloadCount = Math.max(
+                PlatformHooks.get().configMinChunkUnloadCount(this.world),
+                (int)Math.round(unloadCountTentative * Math.clamp(PlatformHooks.get().configMinChunkUnloadFraction(this.world), 0.0, 1.0))
+        );
         int processedCount = 0;
 
         for (final ChunkUnloadQueue.SectionToUnload sectionRef : unloadSectionsForRegion) {
@@ -1161,7 +1164,7 @@ public final class ChunkHolderManager {
                 final ReentrantAreaLock.Node scheduleLock = this.taskScheduler.schedulingLockArea.lock(sectionLowerX, sectionLowerZ);
                 try {
                     final ChunkUnloadQueue.UnloadSection section
-                        = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
+                            = this.unloadQueue.getSectionUnsynchronized(sectionRef.sectionX(), sectionRef.sectionZ());
 
                     if (section == null) {
                         // removed concurrently

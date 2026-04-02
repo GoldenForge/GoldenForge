@@ -15,7 +15,7 @@
      public ServerGamePacketListenerImpl(MinecraftServer p_9770_, Connection p_9771_, ServerPlayer p_9772_, CommonListenerCookie p_301978_) {
          super(p_9770_, p_9771_, p_301978_);
          this.chunkSender = new PlayerChunkSender(p_9771_.isMemoryConnection());
-@@ -243,7 +_,7 @@
+@@ -243,11 +_,12 @@
          p_9772_.connection = this;
          p_9772_.getTextFilter().join();
          this.signedMessageDecoder = SignedMessageChain.Decoder.unsigned(p_9772_.getUUID(), p_9770_::enforceSecureProfile);
@@ -24,6 +24,11 @@
      }
  
      @Override
+     public void tick() {
++        if (this.isDisconnected()) return; // Paper
+         if (this.ackBlockChangesUpTo > -1) {
+             this.send(new ClientboundBlockChangedAckPacket(this.ackBlockChangesUpTo));
+             this.ackBlockChangesUpTo = -1;
 @@ -397,9 +_,9 @@
                  double d0 = entity.getX();
                  double d1 = entity.getY();

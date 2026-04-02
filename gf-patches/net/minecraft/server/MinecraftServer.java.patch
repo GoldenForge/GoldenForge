@@ -306,7 +306,7 @@
              flag = true;
          }
  
-@@ -586,7 +_,27 @@
+@@ -586,7 +_,28 @@
          this.stopServer();
      }
  
@@ -322,6 +322,7 @@
 +    // CraftBukkit end
 +
      public void stopServer() {
++        if (Thread.currentThread() == this.serverThread) this.executeAllRecentInternalTasks(); // Paper - execute tasks on stop
 +        // CraftBukkit start - prevent double stopping on multiple threads
 +        synchronized(this.stopLock) {
 +            if (this.hasStopped) return;
@@ -570,7 +571,7 @@
 +                    );
 +
 +                    // adjust ticksBehind so that it is not greater-than catchup
-+                    if (ticksBehind > catchup) {
++                    if (ticksBehind - catchup > 0L) {
 +                        final long difference = ticksBehind - catchup;
 +                        this.tickSchedule.advanceBy(difference, i);
                      }
@@ -642,7 +643,7 @@
      }
  
      public static boolean throwIfFatalException() {
-@@ -822,21 +_,39 @@
+@@ -822,26 +_,58 @@
      }
  
      protected void waitUntilNextTick() {
@@ -689,6 +690,26 @@
          return new TickTask(this.tickCount, p_129852_);
      }
  
+     protected boolean shouldRun(TickTask p_129883_) {
+-        return p_129883_.getTick() + 3 < this.tickCount || this.haveTime();
++        // Paper start - improve tick loop - do not stall queued tasks
++        // note: make this overflow safe as well
++        return this.tickCount - p_129883_.getTick() > 0 ||
++                /*
++                 * Ensure that we execute any task as long as we are waiting for the next tick.
++                 * The Vanilla server will use managedBlock when awaiting the next tick, but
++                 * we do not. The Vanilla managedBlock function will bypass task execution
++                 * checks, and in order to ensure we execute tasks like Vanilla we need to also
++                 * bypass task execution checks.
++                 * This fixes {@link #recordTaskExecutionTimeWhileWaiting} not executing tasks
++                 * that it should be executing.
++                 */
++                this.waitingForNextTick ||
++                this.haveTime();
++        // Paper end - improve tick loop - do not stall queued tasks
+     }
+ 
+     @Override
 @@ -853,17 +_,18 @@
  
      private boolean pollTaskInternal() {
