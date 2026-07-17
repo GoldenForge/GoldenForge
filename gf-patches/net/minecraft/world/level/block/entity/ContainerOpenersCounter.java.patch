@@ -1,0 +1,50 @@
+--- a/net/minecraft/world/level/block/entity/ContainerOpenersCounter.java
++++ b/net/minecraft/world/level/block/entity/ContainerOpenersCounter.java
+@@ -22,7 +_,19 @@
+ 
+     protected abstract boolean isOwnContainer(Player p_155451_);
+ 
++    // Paper start - delay open/close callbacks
++    public boolean delayCallbacks() {
++        return true; // Goldenforge: always delay callbacks of modded containers
++    }
++    // Paper end - delay open/close callbacks
++
+     public void incrementOpeners(Player p_155453_, Level p_155454_, BlockPos p_155455_, BlockState p_155456_) {
++        // Paper start - delay open/close callbacks
++        if (this.delayCallbacks()) {
++            scheduleRecheck(p_155454_, p_155455_, p_155456_, 1);
++            return;
++        }
++        // Paper end - delay open/close callbacks
+         int i = this.openCount++;
+         if (i == 0) {
+             this.onOpen(p_155454_, p_155455_, p_155456_);
+@@ -35,6 +_,12 @@
+     }
+ 
+     public void decrementOpeners(Player p_155469_, Level p_155470_, BlockPos p_155471_, BlockState p_155472_) {
++        // Paper start - delay open/close callbacks
++        if (this.delayCallbacks()) {
++            scheduleRecheck(p_155470_, p_155471_, p_155472_, 1);
++            return;
++        }
++        // Paper end - delay open/close callbacks
+         int i = this.openCount--;
+         if (this.openCount == 0) {
+             this.onClose(p_155470_, p_155471_, p_155472_);
+@@ -85,7 +_,12 @@
+         return this.openCount;
+     }
+ 
+-    private static void scheduleRecheck(Level p_155481_, BlockPos p_155482_, BlockState p_155483_) {
+-        p_155481_.scheduleTick(p_155482_, p_155483_.getBlock(), 5);
++    private static void scheduleRecheck(final Level level, final BlockPos blockPos, final BlockState blockState) {
++        // Paper start - delay open/close callbacks
++        scheduleRecheck(level, blockPos, blockState, 5);
++    }
++    private static void scheduleRecheck(final Level level, final BlockPos blockPos, final BlockState blockState, final int delay) {
++        level.scheduleTick(blockPos, blockState.getBlock(), delay);
++        // Paper end - delay open/close callbacks
+     }
+ }
