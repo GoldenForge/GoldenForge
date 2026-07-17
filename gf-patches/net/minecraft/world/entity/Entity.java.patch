@@ -636,13 +636,18 @@
          if (this.removalReason == null) {
              this.removalReason = p_146876_;
          }
-@@ -3479,7 +_,7 @@
+@@ -3479,11 +_,11 @@
              this.stopRiding();
          }
  
 -        this.getPassengers().forEach(Entity::stopRiding);
 +        if (this.removalReason != Entity.RemovalReason.UNLOADED_TO_CHUNK) this.getPassengers().forEach(Entity::stopRiding);// Paper - rewrite chunk system
          this.levelCallback.onRemove(p_146876_);
+     }
+ 
+-    protected void unsetRemoved() {
++    public void unsetRemoved() {
+         this.removalReason = null;
      }
  
 @@ -3492,13 +_,10 @@

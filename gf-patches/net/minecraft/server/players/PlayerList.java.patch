@@ -8,6 +8,17 @@
          GameProfile gameprofile = p_11263_.getGameProfile();
          GameProfileCache gameprofilecache = this.server.getProfileCache();
          String s;
+@@ -190,8 +_,8 @@
+                 leveldata.isHardcore(),
+                 this.server.levelKeys(),
+                 this.getMaxPlayers(),
+-                this.viewDistance,
+-                this.simulationDistance,
++                io.papermc.paper.FeatureHooks.getViewDistance(serverlevel1), // Paper - view distance
++                io.papermc.paper.FeatureHooks.getSimulationDistance(serverlevel1), // Paper - simulation distance
+                 flag1,
+                 !flag,
+                 flag2,
 @@ -268,6 +_,17 @@
  
          p_11263_.initInventoryMenu();
@@ -26,6 +37,38 @@
          net.neoforged.neoforge.attachment.AttachmentSync.syncInitialPlayerAttachments(p_11263_);
          net.neoforged.neoforge.event.EventHooks.firePlayerLoggedIn( p_11263_ );
      }
+@@ -454,14 +_,15 @@
+         dimensiontransition = event.getDimensionTransition();
+ 
+         ServerLevel serverlevel = dimensiontransition.newLevel();
+-        ServerPlayer serverplayer = new ServerPlayer(this.server, serverlevel, p_11237_.getGameProfile(), p_11237_.clientInformation());
++        //ServerPlayer serverplayer = new ServerPlayer(this.server, serverlevel, p_11237_.getGameProfile(), p_11237_.clientInformation());*
++        ServerPlayer serverplayer = p_11237_; // Paper - TODO - recreate instance
+         serverplayer.connection = p_11237_.connection;
+         serverplayer.restoreFrom(p_11237_, p_11238_);
+         serverplayer.setId(p_11237_.getId());
+         serverplayer.setMainArm(p_11237_.getMainArm());
+ 
+         // Neo: Allow the event to control if the original spawn position is copied
+-        if (event.copyOriginalSpawnPosition()) {
++        if (false && event.copyOriginalSpawnPosition()) { // Paper - Once we not reuse the player entity, this can be flipped again but without the events being fired
+             serverplayer.copyRespawnPosition(p_11237_);
+         }
+ 
+@@ -469,6 +_,13 @@
+             serverplayer.addTag(s);
+         }
+ 
++        // Paper start - Once we not reuse the player entity we can remove this.
++        if (!p_11238_) p_11237_.reset();
++        serverplayer.setServerLevel(serverlevel);
++        serverplayer.unsetRemoved();
++        serverplayer.setShiftKeyDown(false);
++        // Paper end
++
+         Vec3 vec3 = dimensiontransition.pos();
+         serverplayer.moveTo(vec3.x, vec3.y, vec3.z, dimensiontransition.yRot(), dimensiontransition.xRot());
+         if (dimensiontransition.missingRespawnBlock()) {
 @@ -674,9 +_,23 @@
      }
  
