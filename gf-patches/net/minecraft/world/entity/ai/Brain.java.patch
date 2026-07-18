@@ -1,0 +1,189 @@
+--- a/net/minecraft/world/entity/ai/Brain.java
++++ b/net/minecraft/world/entity/ai/Brain.java
+@@ -46,14 +_,21 @@
+     static final Logger LOGGER = LogUtils.getLogger();
+     private final Supplier<Codec<Brain<E>>> codec;
+     private static final int SCHEDULE_UPDATE_DELAY = 20;
+-    private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> memories = Maps.newHashMap();
+-    private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> sensors = Maps.newLinkedHashMap();
+-    private final Map<Integer, Map<Activity, Set<BehaviorControl<? super E>>>> availableBehaviorsByPriority = Maps.newTreeMap();
++    // Leaf start - Replace brain maps with optimized collection
++    private final Map<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>> memories = new it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap<>();
++    private final Map<SensorType<? extends Sensor<? super E>>, Sensor<? super E>> sensors = new it.unimi.dsi.fastutil.objects.Reference2ReferenceArrayMap<>();
++    private final Map<Integer, Map<Activity, Set<BehaviorControl<? super E>>>> availableBehaviorsByPriority = new it.unimi.dsi.fastutil.objects.Object2ObjectRBTreeMap<>();
+     private Schedule schedule = Schedule.EMPTY;
+-    private final Map<Activity, Set<Pair<MemoryModuleType<?>, MemoryStatus>>> activityRequirements = Maps.newHashMap();
+-    private final Map<Activity, Set<MemoryModuleType<?>>> activityMemoriesToEraseWhenStopped = Maps.newHashMap();
+-    private Set<Activity> coreActivities = Sets.newHashSet();
+-    private final Set<Activity> activeActivities = Sets.newHashSet();
++    public static final Map[] EMPTY_MAP_ARRAY = {};
++    public static final Set[] EMPTY_SET_ARRAY = {};
++    public static final org.dreeam.leaf.util.map.BehaviorControlArraySet[] EMPTY_BEHAVIOR_ARRAY = {};
++    private Map<Activity, Set<BehaviorControl<? super E>>>[] availableBehaviorsByPriorityArray = EMPTY_MAP_ARRAY;
++    private org.dreeam.leaf.util.map.BehaviorControlArraySet<? super E>[] activeBehaviors = EMPTY_BEHAVIOR_ARRAY;
++    private final Map<Activity, Set<Pair<MemoryModuleType<?>, MemoryStatus>>> activityRequirements = new org.dreeam.leaf.util.map.ActivityArrayMap<>(EMPTY_SET_ARRAY);
++    private final Map<Activity, Set<MemoryModuleType<?>>> activityMemoriesToEraseWhenStopped = new org.dreeam.leaf.util.map.ActivityArrayMap<>(EMPTY_SET_ARRAY);
++    private Set<Activity> coreActivities = Set.of();
++    private final Set<Activity> activeActivities = new org.dreeam.leaf.util.map.ActivityBitSet();
++    // Leaf end - Replace brain maps with optimized collection
+     private Activity defaultActivity = Activity.IDLE;
+     private long lastScheduleUpdate = -9999L;
+ 
+@@ -148,6 +_,8 @@
+         for (Brain.MemoryValue<?> memoryvalue : p_21857_) {
+             memoryvalue.setMemoryInternal(this);
+         }
++
++        ((it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap<MemoryModuleType<?>, Optional<? extends ExpirableValue<?>>>) this.memories).trim(); // Leaf - Replace brain maps with optimized collection
+     }
+ 
+     public <T> DataResult<T> serializeStart(DynamicOps<T> p_21915_) {
+@@ -164,6 +_,8 @@
+ 
+     public void clearMemories() {
+         this.memories.keySet().forEach(p_276103_ -> this.memories.put((MemoryModuleType<?>)p_276103_, Optional.empty()));
++        this.availableBehaviorsByPriorityArray = EMPTY_MAP_ARRAY; // Leaf - Replace brain maps with optimized collection
++        this.activeBehaviors = EMPTY_BEHAVIOR_ARRAY; // Leaf - Replace brain maps with optimized collection
+     }
+ 
+     public <U> void eraseMemory(MemoryModuleType<U> p_21937_) {
+@@ -371,15 +_,18 @@
+ 
+         for (Pair<Integer, ? extends BehaviorControl<? super E>> pair : p_21909_) {
+             this.availableBehaviorsByPriority
+-                .computeIfAbsent(pair.getFirst(), p_21917_ -> Maps.newHashMap())
+-                .computeIfAbsent(p_21908_, p_21972_ -> Sets.newLinkedHashSet())
++                .computeIfAbsent(pair.getFirst(), p_21917_ -> new org.dreeam.leaf.util.map.ActivityArrayMap<>((Set<BehaviorControl<? super E>>[]) EMPTY_SET_ARRAY)) // Leaf - Replace brain maps with optimized collection
++                .computeIfAbsent(p_21908_, p_21972_ -> new org.dreeam.leaf.util.map.BehaviorControlArraySet<>()) // Leaf - Replace brain maps with optimized collection
+                 .add((BehaviorControl<? super E>)pair.getSecond());
+         }
++        if (this.activeBehaviors != EMPTY_BEHAVIOR_ARRAY) this.activeBehaviors = EMPTY_BEHAVIOR_ARRAY; // Leaf - Replace brain maps with optimized collection
+     }
+ 
+     @VisibleForTesting
+     public void removeAllBehaviors() {
+         this.availableBehaviorsByPriority.clear();
++        this.availableBehaviorsByPriorityArray = EMPTY_MAP_ARRAY; // Leaf - Replace brain maps with optimized collection
++        this.activeBehaviors = EMPTY_BEHAVIOR_ARRAY; // Leaf - Replace brain maps with optimized collection
+     }
+ 
+     public boolean isActive(Activity p_21955_) {
+@@ -426,36 +_,97 @@
+     }
+ 
+     public void stopAll(ServerLevel p_21934_, E p_21935_) {
+-        long i = p_21935_.level().getGameTime();
++        long timestamp = p_21935_.level().getGameTime();
+ 
+-        for (BehaviorControl<? super E> behaviorcontrol : this.getRunningBehaviors()) {
+-            behaviorcontrol.doStop(p_21934_, p_21935_, i);
+-        }
++        // Leaf start - Replace brain maps with optimized collection
++        if (this.availableBehaviorsByPriorityArray.length != this.availableBehaviorsByPriority.size()) {
++            this.availableBehaviorsByPriorityArray = this.availableBehaviorsByPriority.values().toArray(EMPTY_MAP_ARRAY);
++        }
++        for (Map<Activity, Set<BehaviorControl<? super E>>> map : availableBehaviorsByPriorityArray) {
++            var map1 = (org.dreeam.leaf.util.map.ActivityArrayMap<Set<BehaviorControl<? super E>>>) map;
++            for (int index = 0, size = map1.size(); index < size; index++) {
++                var behaviorControls = (org.dreeam.leaf.util.map.BehaviorControlArraySet<? super E>) map1.v[index];
++                var behaviorControlsRaw = behaviorControls.raw();
++                for (int i = 0, size1 = behaviorControls.size(); i < size1; i++) {
++                    BehaviorControl<? super E> behavior = behaviorControlsRaw[i];
++                    if (behavior.getStatus() == Behavior.Status.RUNNING) {
++                        behavior.doStop(p_21934_, p_21935_, timestamp);
++                        behaviorControls.dec();
++                    }
++                }
++            }
++        }
++        // Leaf end - Replace brain maps with optimized collection
+     }
+ 
+     private void startEachNonRunningBehavior(ServerLevel p_21958_, E p_21959_) {
+-        long i = p_21958_.getGameTime();
++        long time = p_21958_.getGameTime();
+ 
+-        for (Map<Activity, Set<BehaviorControl<? super E>>> map : this.availableBehaviorsByPriority.values()) {
+-            for (Entry<Activity, Set<BehaviorControl<? super E>>> entry : map.entrySet()) {
+-                Activity activity = entry.getKey();
+-                if (this.activeActivities.contains(activity)) {
+-                    for (BehaviorControl<? super E> behaviorcontrol : entry.getValue()) {
+-                        if (behaviorcontrol.getStatus() == Behavior.Status.STOPPED) {
+-                            behaviorcontrol.tryStart(p_21958_, p_21959_, i);
+-                        }
+-                    }
+-                }
+-            }
+-        }
++        // Leaf start - Replace brain maps with optimized collection
++        if (this.availableBehaviorsByPriorityArray.length != this.availableBehaviorsByPriority.size()) {
++            this.availableBehaviorsByPriorityArray = this.availableBehaviorsByPriority.values().toArray(EMPTY_MAP_ARRAY);
++        }
++        var aact = (org.dreeam.leaf.util.map.ActivityBitSet) this.activeActivities;
++        if (activeBehaviors == EMPTY_BEHAVIOR_ARRAY || aact.unsetDirty()) {
++            var list = it.unimi.dsi.fastutil.objects.ReferenceArrayList.wrap(activeBehaviors);
++            list.clear();
++            int activeSet = aact.bitSet();
++            for (Map<Activity, Set<BehaviorControl<? super E>>> behavioursByActivities : availableBehaviorsByPriorityArray) {
++                for (int index = 0; index < org.dreeam.leaf.util.RegistryTypeManager.ACTIVITY_SIZE; index++) {
++                    if ((activeSet & (1 << index)) == 0) {
++                        continue;
++                    }
++                    var ele = ((org.dreeam.leaf.util.map.ActivityArrayMap<Set<BehaviorControl<? super E>>>) behavioursByActivities).getValue(index);
++                    if (ele == null) {
++                        continue;
++                    }
++                    list.add((org.dreeam.leaf.util.map.BehaviorControlArraySet<? super E>) ele);
++                }
++            }
++            activeBehaviors = it.unimi.dsi.fastutil.objects.ObjectArrays.setLength(list.elements(), list.size());
++        }
++        for (int index = 0, size = activeBehaviors.length; index < size; index++) {
++            var behaviorControls = activeBehaviors[index];
++            var behaviorControlsRaw = behaviorControls.raw();
++            for (int i = 0, size1 = behaviorControls.size(); i < size1; i++) {
++                BehaviorControl<? super E> behavior = behaviorControlsRaw[i];
++                if (behavior.getStatus() == Behavior.Status.STOPPED) {
++                    if (behavior.tryStart(p_21958_, p_21959_, time)) {
++                        behaviorControls.inc();
++                    }
++                }
++            }
++        }
++        // Leaf end - Replace brain maps with optimized collection
+     }
+ 
+     private void tickEachRunningBehavior(ServerLevel p_21964_, E p_21965_) {
+-        long i = p_21964_.getGameTime();
++        long timestamp = p_21964_.getGameTime();
+ 
+-        for (BehaviorControl<? super E> behaviorcontrol : this.getRunningBehaviors()) {
+-            behaviorcontrol.tickOrStop(p_21964_, p_21965_, i);
+-        }
++        // Leaf start - Replace brain maps with optimized collection
++        if (this.availableBehaviorsByPriorityArray.length != this.availableBehaviorsByPriority.size()) {
++            this.availableBehaviorsByPriorityArray = this.availableBehaviorsByPriority.values().toArray(new Map[0]);
++        }
++        for (Map<Activity, Set<BehaviorControl<? super E>>> map : availableBehaviorsByPriorityArray) {
++            var map1 = (org.dreeam.leaf.util.map.ActivityArrayMap<Set<BehaviorControl<? super E>>>) map;
++            for (int index = 0, size = map1.size(); index < size; index++) {
++                var behaviorControls = (org.dreeam.leaf.util.map.BehaviorControlArraySet<? super E>) map1.v[index];
++                if (!behaviorControls.running()) {
++                    continue;
++                }
++                BehaviorControl<? super E>[] behaviorControlsRaw = behaviorControls.raw();
++                for (int i = 0, size1 = behaviorControls.size(); i < size1; i++) {
++                    BehaviorControl<? super E> behavior = behaviorControlsRaw[i];
++                    if (behavior.getStatus() == Behavior.Status.RUNNING) {
++                        behavior.tickOrStop(p_21964_, p_21965_, timestamp);
++                        if (behavior.getStatus() == Behavior.Status.STOPPED) {
++                            behaviorControls.dec();
++                        }
++                    }
++                }
++            }
++        }
++        // Leaf end - Replace brain maps with optimized collection
+     }
+ 
+     private boolean activityRequirementsAreMet(Activity p_21970_) {

@@ -1,0 +1,25 @@
+--- a/net/minecraft/world/entity/schedule/Activity.java
++++ b/net/minecraft/world/entity/schedule/Activity.java
+@@ -32,10 +_,12 @@
+     public static final Activity DIG = register("dig");
+     private final String name;
+     private final int hashCode;
++    public final int id; // Leaf - Replace brain maps with optimized collection
+ 
+-    public Activity(String p_37997_) {
++    public Activity(String p_37997_, int id) { // Leaf - Replace brain maps with optimized collection
+         this.name = p_37997_;
+         this.hashCode = p_37997_.hashCode();
++        this.id = id; // Leaf - Replace brain maps with optimized collection
+     }
+ 
+     public String getName() {
+@@ -43,7 +_,7 @@
+     }
+ 
+     private static Activity register(String p_38000_) {
+-        return Registry.register(BuiltInRegistries.ACTIVITY, p_38000_, new Activity(p_38000_));
++        return Registry.register(BuiltInRegistries.ACTIVITY, p_38000_, new Activity(p_38000_, BuiltInRegistries.ACTIVITY.size())); // Leaf - Replace brain maps with optimized collection
+     }
+ 
+     @Override
