@@ -31,7 +31,7 @@
      public static final Codec<ResourceKey<Level>> RESOURCE_KEY_CODEC = ResourceKey.codec(Registries.DIMENSION);
      public static final ResourceKey<Level> OVERWORLD = ResourceKey.create(Registries.DIMENSION, ResourceLocation.withDefaultNamespace("overworld"));
      public static final ResourceKey<Level> NETHER = ResourceKey.create(Registries.DIMENSION, ResourceLocation.withDefaultNamespace("the_nether"));
-@@ -120,6 +_,633 @@
+@@ -120,6 +_,648 @@
      private final java.util.ArrayList<BlockEntity> freshBlockEntities = new java.util.ArrayList<>();
      private final java.util.ArrayList<BlockEntity> pendingFreshBlockEntities = new java.util.ArrayList<>();
  
@@ -605,13 +605,33 @@
 +    private final int sectionsCount;
 +
 +    @Override
++    public int getMinBuildHeight() {
++        return this.minY;
++    }
++
++    @Override
 +    public int getHeight() {
 +        return this.height;
 +    }
 +
 +    @Override
++    public int getMaxBuildHeight() {
++        return this.maxY;
++    }
++
++    @Override
 +    public int getSectionsCount() {
 +        return this.sectionsCount;
++    }
++
++    @Override
++    public int getMinSection() {
++        return this.minSectionY;
++    }
++
++    @Override
++    public int getMaxSection() {
++        return this.maxSectionY;
 +    }
 +
 +    @Override
@@ -637,11 +657,6 @@
 +    @Override
 +    public int getSectionYFromSectionIndex(final int sectionIdx) {
 +        return sectionIdx + this.minSectionY;
-+    }
-+
-+    @Override
-+    public int getMinBuildHeight() {
-+        return this.minY;
 +    }
 +
 +    // Paper end - getblock optimisations - cache world height/sections
@@ -673,10 +688,10 @@
 +        final DimensionType dimType = p_270240_.value();
 +        this.minY = dimType.minY();
 +        this.height = dimType.height();
-+        this.maxY = this.minY + this.height - 1;
++        this.maxY = this.minY + this.height;
 +        this.minSectionY = this.minY >> 4;
 +        this.maxSectionY = this.maxY >> 4;
-+        this.sectionsCount = this.maxSectionY - this.minSectionY + 1;
++        this.sectionsCount = this.maxSectionY - this.minSectionY;
 +        // Paper end - getblock optimisations - cache world height/sections
          this.profiler = p_270692_;
          this.levelData = p_270739_;
