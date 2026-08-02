@@ -6,20 +6,10 @@
      private final int hashCode;
 +    public final int id; // Leaf - Replace brain maps with optimized collection
  
--    public Activity(String p_37997_) {
-+    public Activity(String p_37997_, int id) { // Leaf - Replace brain maps with optimized collection
+     public Activity(String p_37997_) {
          this.name = p_37997_;
          this.hashCode = p_37997_.hashCode();
-+        this.id = id; // Leaf - Replace brain maps with optimized collection
++        this.id = BuiltInRegistries.ACTIVITY.size();
      }
  
      public String getName() {
-@@ -43,7 +_,7 @@
-     }
- 
-     private static Activity register(String p_38000_) {
--        return Registry.register(BuiltInRegistries.ACTIVITY, p_38000_, new Activity(p_38000_));
-+        return Registry.register(BuiltInRegistries.ACTIVITY, p_38000_, new Activity(p_38000_, BuiltInRegistries.ACTIVITY.size())); // Leaf - Replace brain maps with optimized collection
-     }
- 
-     @Override
